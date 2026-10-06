@@ -722,6 +722,14 @@ Item {
                                             anchors.leftMargin: Theme.spSm; anchors.rightMargin: Theme.spSm
                                             spacing: Theme.spXs
                                             Text {
+                                                id: chipKey
+                                                objectName: "week-due-key"
+                                                // The key goes first when the chip
+                                                // is narrow, so the title keeps
+                                                // some words: at 125 % every chip
+                                                // read "APP-105 …" (SCALE-7).
+                                                visible: dueChip.width - 2 * Theme.spSm - chipKey.implicitWidth
+                                                         - chipPri.implicitWidth - 2 * Theme.spXs >= Theme.px(64)
                                                 // A mirrored issue reads by its
                                                 // tracker key, not the synthetic
                                                 // heap id (HEAP-117).
@@ -734,6 +742,7 @@ Item {
                                                 font.pixelSize: Theme.fsXs
                                             }
                                             Text {
+                                                objectName: "week-due-title"
                                                 Layout.fillWidth: true
                                                 // A planned day (no deadline here) reads
                                                 // as planned, not as due.
@@ -745,6 +754,7 @@ Item {
                                             }
                                             // Priority by shape too (APP-185).
                                             Text {
+                                                id: chipPri
                                                 objectName: "week-due-priority"
                                                 text: Theme.priorityMark(modelData.priority)
                                                 color: Theme.priorityColor(modelData.priority)
@@ -1136,10 +1146,19 @@ Item {
                                     font.pixelSize: Theme.fsXs
                                 }
                                 RowLayout {
+                                    id: evLine
                                     width: parent.width
                                     spacing: Theme.spXs
+                                    // On one line the time and the context give
+                                    // way before the title does: a 15-minute
+                                    // meeting beside a focus block read "15:00"
+                                    // and nothing else (SCALE-7). The time is on
+                                    // the block's edge in the grid anyway.
+                                    readonly property bool roomy: evLine.width - evTime.implicitWidth - Theme.spXs >= Theme.px(64)
                                     Text {
-                                        visible: weEv.compact
+                                        id: evTime
+                                        objectName: "week-event-time"
+                                        visible: weEv.compact && evLine.roomy
                                         text: Theme.fmtHour(weEv.effStart)
                                         color: Theme.textMuted
                                         font.family: Theme.fontUi
@@ -1147,7 +1166,7 @@ Item {
                                         font.pixelSize: Theme.fsXs
                                     }
                                     Text {
-                                        visible: (weEv.modelData.context || "").length > 0
+                                        visible: (weEv.modelData.context || "").length > 0 && evLine.roomy
                                         text: weEv.modelData.context
                                         color: Theme.textMuted
                                         font.pixelSize: Theme.fsXs
@@ -1155,7 +1174,7 @@ Item {
                                         Layout.maximumWidth: parent.width * 0.5
                                     }
                                     Rectangle {
-                                        visible: (weEv.modelData.context || "").length > 0
+                                        visible: (weEv.modelData.context || "").length > 0 && evLine.roomy
                                         Layout.preferredWidth: 5; Layout.preferredHeight: 5
                                         radius: 2.5
                                         color: Theme.eventColor(weEv.modelData.type)

@@ -268,17 +268,22 @@ Item {
     }
 
     // Every bucket's rows in display order, flat, for the virtualised list.
-    // `first` marks the row that carries its bucket's label.
+    // `first` marks the row that carries its bucket's label, `last` the
+    // row that makes room for it when the bucket is shorter than its label;
+    // `firstIndex` is where the bucket starts in this list.
     readonly property var flatRows: {
         const out = [];
         for (const k of root.bucketOrder) {
             const list = root.groups[k] || [];
             if (list.length === 0) continue;
             const rows = root.bucketRows(k, list);
+            const firstIndex = out.length;
             for (let i = 0; i < rows.length; i++) {
                 const r = rows[i];
                 r.bucketId = k;
                 r.first = i === 0;
+                r.last = i === rows.length - 1;
+                r.firstIndex = firstIndex;
                 out.push(r);
             }
         }
@@ -395,11 +400,95 @@ Item {
                 required property int index
                 readonly property var rd: root.flatRows[index] ?? null
                 readonly property bool first: !!(rd && rd.first)
+                readonly property bool last: !!(rd && rd.last)
                 readonly property var meta: rd ? root.bucketMeta[rd.bucketId] : null
                 readonly property var list: rd ? (root.groups[rd.bucketId] || []) : []
+                readonly property real _ownH: (rowLoader.item ? (rowLoader.item as Item).implicitHeight : 0) + (first ? 14 : 0) + 6
+                // The bucket's label runs down beside its rows instead of
+                // making the first row as tall as itself: that row is often a
+                // date sub-header, and the label (two or three lines at
+                // 125-150 %) left an empty band between it and the first task
+                // (SCALE-5). Only a bucket shorter than its label grows, at its
+                // last row, so the label never runs into the next bucket.
+                // This row's own label column lays out the same as the first
+                // row's (same bucket, same lines shown).
+                readonly property real _labelRoom: {
+                    if (!last || !rd) return 0;
+                    const labelBottom = 14 + labelCol.implicitHeight + Theme.spSm;
+                    if (first) return Math.max(0, labelBottom - _ownH);
+                    const head = rowItem.ListView.view.itemAtIndex(rd.firstIndex);
+                    if (!head) return 0;
+                    return Math.max(0, labelBottom - (rowItem.y + _ownH - head.y));
+                }
                 width: rowList.width
-                height: Math.max(first ? labelCol.implicitHeight : 0, rowLoader.item ? rowLoader.item.implicitHeight : 0)
-                        + (first ? 14 : 0) + 6
+                height: _ownH + _labelRoom
+
+                // Left side — label / marker, on the bucket's first row only.
+                // Placed beside the rows rather than in this layout, so it
+                // can run down past a short first row (SCALE-5).
+                ColumnLayout {
+                    id: labelCol
+                    objectName: "timeline-label-col"
+                    // One width for every bucket (design audit DES-12): a
+                    // preferred width alone let "На следующей неделе" push
+                    // its column wider, and that bucket's rows started
+                    // ~32px right of the others. A long name wraps instead.
+                    x: Theme.inset
+                    y: rowItem.first ? 14 : 0
+                    // Grows with the scale: at 150 % a fixed 160 broke
+                    // "На следующей неделе" mid-word.
+                    width: Theme.px(160)
+                    spacing: Theme.spXs
+                    // On the bucket's last row it is only measured (see
+                    // _labelRoom).
+                    opacity: rowItem.first ? 1 : 0
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.spMd
+                        Rectangle {
+                            Layout.alignment: Qt.AlignTop
+                            Layout.preferredWidth: Theme.px(26); Layout.preferredHeight: Theme.px(26)
+                            radius: Theme.px(26) / 2
+                            color: rowItem.meta ? rowItem.meta.color : "transparent"
+                            Text {
+                                anchors.centerIn: parent
+                                text: rowItem.meta ? rowItem.meta.icon : ""
+                                color: Theme.textOnAccent
+                                font.weight: Theme.fwTitle
+                                font.pixelSize: Theme.fsMd
+                            }
+                        }
+                        Text {
+                            text: rowItem.meta ? rowItem.meta.name : ""
+                            color: rowItem.rd.bucketId === "overdue" ? Theme.danger
+                                 : rowItem.rd.bucketId === "today" ? Theme.accentStrong
+                                 : Theme.text
+                            font.pixelSize: Theme.fsLg
+                            font.weight: Theme.fwTitle
+                            Layout.fillWidth: true
+                            wrapMode: Text.Wrap
+                        }
+                    }
+                    Text {
+                        visible: (rowItem.first || rowItem.last)
+                                 && (rowItem.rd.bucketId === "overdue" || rowItem.rd.bucketId === "today" || rowItem.rd.bucketId === "tomorrow")
+                                 && rowItem.list.length > 0 && rowItem.list[0].when && rowItem.list[0].when.getTime
+                        text: rowItem.list.length > 0 && rowItem.list[0].when && rowItem.list[0].when.getTime
+                              ? I18n.relang(AppController.shortDate(rowItem.list[0].when)) : ""
+                        color: Theme.textMuted
+                        font.pixelSize: Theme.fsSm
+                        leftPadding: Theme.px(26) + Theme.spMd
+                    }
+                    Text {
+                        visible: rowItem.first || rowItem.last
+                        text: I18n.tasks(rowItem.list.length)
+                        color: Theme.textDim
+                        font.family: Theme.fontUi
+                        font.features: Theme.tabularNums
+                        font.pixelSize: Theme.fsSm
+                        leftPadding: Theme.px(26) + Theme.spMd
+                    }
+                }
 
                 RowLayout {
                     anchors.fill: parent
@@ -408,65 +497,10 @@ Item {
                     anchors.bottomMargin: Theme.spSm
                     spacing: Theme.sp2xl
 
-                    // Left side — label / marker, on the bucket's first row only
-                    ColumnLayout {
-                        id: labelCol
-                        objectName: "timeline-label-col"
-                        // One width for every bucket (design audit DES-12): a
-                        // preferred width alone let "На следующей неделе" push
-                        // its column wider, and that bucket's rows started
-                        // ~32px right of the others. A long name wraps instead.
-                        Layout.preferredWidth: 160
-                        Layout.minimumWidth: 160
-                        Layout.maximumWidth: 160
-                        Layout.alignment: Qt.AlignTop
-                        spacing: Theme.spXs
-                        opacity: rowItem.first ? 1 : 0
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Theme.spMd
-                            Rectangle {
-                                Layout.alignment: Qt.AlignTop
-                                width: 26; height: 26; radius: 13
-                                color: rowItem.meta ? rowItem.meta.color : "transparent"
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: rowItem.meta ? rowItem.meta.icon : ""
-                                    color: Theme.textOnAccent
-                                    font.weight: Theme.fwTitle
-                                    font.pixelSize: Theme.fsMd
-                                }
-                            }
-                            Text {
-                                text: rowItem.meta ? rowItem.meta.name : ""
-                                color: rowItem.rd.bucketId === "overdue" ? Theme.danger
-                                     : rowItem.rd.bucketId === "today" ? Theme.accentStrong
-                                     : Theme.text
-                                font.pixelSize: Theme.fsLg
-                                font.weight: Theme.fwTitle
-                                Layout.fillWidth: true
-                                wrapMode: Text.Wrap
-                            }
-                        }
-                        Text {
-                            visible: rowItem.first
-                                     && (rowItem.rd.bucketId === "overdue" || rowItem.rd.bucketId === "today" || rowItem.rd.bucketId === "tomorrow")
-                                     && rowItem.list.length > 0 && rowItem.list[0].when && rowItem.list[0].when.getTime
-                            text: rowItem.list.length > 0 && rowItem.list[0].when && rowItem.list[0].when.getTime
-                                  ? I18n.relang(AppController.shortDate(rowItem.list[0].when)) : ""
-                            color: Theme.textMuted
-                            font.pixelSize: Theme.fsSm
-                            leftPadding: 34
-                        }
-                        Text {
-                            visible: rowItem.first
-                            text: I18n.tasks(rowItem.list.length)
-                            color: Theme.textDim
-                            font.family: Theme.fontUi
-                            font.features: Theme.tabularNums
-                            font.pixelSize: Theme.fsSm
-                            leftPadding: 34
-                        }
+                    Item {
+                        Layout.preferredWidth: Theme.px(160)
+                        Layout.minimumWidth: Theme.px(160)
+                        Layout.maximumWidth: Theme.px(160)
                     }
 
                     Loader {

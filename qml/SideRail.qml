@@ -15,7 +15,10 @@ Rectangle {
     // Wide enough for its labels at any interface scale (APP-183): at 150 %
     // a fixed 216 cut "Blocked" and "Hotkeys" to an ellipsis.
     readonly property int expandedWidth: Theme.px(216)
-    readonly property int collapsedWidth: 56
+    // The 36px icon cell plus the rail's margins, which grow with the
+    // scale: a fixed 56 left the cell 30px wide at 125 %, so the icons and
+    // their count badges were cut by the rail's edge (SCALE-1).
+    readonly property int collapsedWidth: 36 + 2 * Theme.spLg
     // implicitWidth, not width: a Layout writes width itself, which would
     // break a binding on it.
     implicitWidth: expanded ? expandedWidth : collapsedWidth
@@ -80,22 +83,37 @@ Rectangle {
     // Everything above the bottom group scrolls when the window is too short
     // for it — with saved views in the list, a laptop screen was — instead of
     // the lower buttons being cut off. The keyboard's row is kept in view.
-    function _revealFocus() {
-        const w = root.Window.window;
-        const f = w ? w.activeFocusItem : null;
+    function _reveal(f: Item) {
         for (let p = f; p; p = p.parent) {
             if (p !== railUpper) continue;
             const y = f.mapToItem(railUpper, 0, 0).y;
             if (y < railScroll.contentY)
                 railScroll.contentY = Math.max(0, y - Theme.spMd);
             else if (y + f.height > railScroll.contentY + railScroll.height)
-                railScroll.contentY = Math.min(railScroll.contentHeight - railScroll.height, y + f.height - railScroll.height + Theme.spMd);
+                railScroll.contentY = Math.max(0, Math.min(railScroll.contentHeight - railScroll.height, y + f.height - railScroll.height + Theme.spMd));
             return;
+        }
+    }
+    function _revealFocus() {
+        const w = root.Window.window;
+        root._reveal(w ? w.activeFocusItem : null);
+    }
+    // The open view's row too (SCALE-1): opening Notes on a short window
+    // left its highlighted row cut in half below the fold.
+    function _revealActive() {
+        const name = "rail-" + AppController.currentView;
+        for (let i = 0; i < railUpper.children.length; i++) {
+            const c = railUpper.children[i];
+            if (c.objectName === name) { root._reveal(c); return; }
         }
     }
     Connections {
         target: root.Window.window
         function onActiveFocusItemChanged() { root._revealFocus(); }
+    }
+    Connections {
+        target: AppController
+        function onCurrentViewChanged() { Qt.callLater(root._revealActive); }
     }
 
     ColumnLayout {
@@ -115,7 +133,10 @@ Rectangle {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             interactive: contentHeight > height
-            ScrollBar.vertical: ThinScrollBar {}
+            onHeightChanged: Qt.callLater(root._revealActive)
+            // When the rows do not fit, the thumb stays drawn and the cut
+            // edge fades, so the list says it goes on (SCALE-1).
+            ScrollBar.vertical: ThinScrollBar { objectName: "rail-scrollbar"; cue: true }
 
             ColumnLayout {
                 id: railUpper
@@ -558,5 +579,15 @@ Rectangle {
             ToolTip.text: btn._combo.length ? btn.tooltipText + "   " + btn._combo : btn.tooltipText
             ToolTip.delay: 400
         }
+    }
+
+    // Over the list, not in it: parented to the Flickable itself (not
+    // its content), so it stays put while the rows scroll.
+    ScrollFade {
+        objectName: "rail-fade"
+        parent: railScroll
+        anchors.fill: parent
+        flick: railScroll
+        color: Theme.panel
     }
 }

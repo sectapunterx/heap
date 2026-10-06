@@ -213,6 +213,9 @@ Item {
     // with the right panel open it used to be hidden with no way back, which
     // left no way to reach another note at all.
     property string _listPref: "auto"
+    // A header too narrow for its words (150 % beside the right panel)
+    // packs tighter and says "Links" with its "#" alone (SCALE-3).
+    readonly property bool _headerTight: root.width < Theme.px(640)
     readonly property bool _listShown: _listPref === "auto" ? root.width > 560 : _listPref === "shown"
     function toggleList() { root._listPref = root._listShown ? "hidden" : "shown"; }
 
@@ -605,10 +608,17 @@ Item {
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: Theme.inset; anchors.rightMargin: Theme.inset
-                spacing: Theme.sp2xl
+                spacing: root._headerTight ? Theme.spMd : Theme.sp2xl
                 Rectangle { width: 4; height: 28; radius: 2; color: Theme.accent }
+                // The title gives way first when the header runs short — at
+                // 150 % with the right panel open the mode toggle was pushed
+                // past the view's edge, "Preview" under the panel (SCALE-3).
                 ColumnLayout {
+                    objectName: "notes-title-col"
                     spacing: 1
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: Theme.px(80)
+                    Layout.maximumWidth: Math.min(implicitWidth, root.width * 0.4)
                     // Which note this is: the header used to say
                     // "Notes · scratchpad" whatever was open.
                     Text {
@@ -618,9 +628,11 @@ Item {
                         font.pixelSize: Theme.fsLg
                         font.weight: Theme.fwHeading
                         elide: Text.ElideRight
-                        Layout.maximumWidth: root.width * 0.4
+                        Layout.fillWidth: true
                     }
                     Text {
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
                         text: {
                             const s = root._stats;
                             const saved = root._savedAgo;
@@ -723,7 +735,7 @@ Item {
                     Text {
                         id: blToggleTxt
                         anchors.centerIn: parent
-                        text: I18n.t("notes.links")
+                        text: root._headerTight ? "#" : I18n.t("notes.links")
                         color: root.showBacklinks ? Theme.textOnAccent : Theme.textMuted
                         font.pixelSize: Theme.fsSm
                         font.weight: Theme.fwTitle
@@ -731,7 +743,7 @@ Item {
                     ClickArea {
                         id: blToggleMA
                         label: I18n.t("notes.links")
-                        showTip: false
+                        showTip: root._headerTight
                         role: Accessible.CheckBox
                         checkable: true
                         checked: root.showBacklinks
@@ -745,7 +757,9 @@ Item {
                 // Each segment as wide as its word needs (APP-189): a fixed
                 // 64px cut longer translations.
                 Rectangle {
+                    objectName: "notes-mode-toggle"
                     Layout.preferredWidth: segRow.implicitWidth + 2 * Theme.sp2xs
+                    Layout.minimumWidth: segRow.implicitWidth + 2 * Theme.sp2xs
                     Layout.preferredHeight: Theme.px(26)
                     radius: Theme.radiusMd
                     color: Theme.panel2
@@ -766,7 +780,8 @@ Item {
                                 id: segBtn
                                 required property var modelData
                                 readonly property bool active: root.viewMode === modelData.id
-                                width: Math.max(Theme.px(64), segTxt.implicitWidth + 2 * Theme.spLg)
+                                width: root._headerTight ? segTxt.implicitWidth + 2 * Theme.spMd
+                                                         : Math.max(Theme.px(64), segTxt.implicitWidth + 2 * Theme.spLg)
                                 height: parent.height
                                 radius: Theme.radiusSm
                                 color: active ? Theme.accentSoft
@@ -1325,7 +1340,7 @@ Item {
 
                     Rectangle {
                         visible: modelData.kind === "person"
-                        width: 22; height: 22; radius: 11
+                        width: Theme.px(22); height: width; radius: width / 2
                         color: modelData.color || Theme.accent
                         Text {
                             anchors.centerIn: parent

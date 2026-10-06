@@ -569,11 +569,25 @@ Item {
                 anchors.leftMargin: Theme.inset; anchors.rightMargin: Theme.inset
                 spacing: Theme.sp2xl
 
+                // Title and search give way when the header runs short (at
+                // 150 % with the right panel open the search was cut mid-word
+                // and the tabs squeezed to no padding, SCALE-3); the tabs keep
+                // their words.
                 ColumnLayout {
+                    objectName: "docs-title-col"
                     spacing: 1
                     Layout.alignment: Qt.AlignVCenter
-                    Text { text: I18n.t("docs.header"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Theme.fwHeading }
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: Theme.px(80)
+                    Layout.maximumWidth: implicitWidth
                     Text {
+                        Layout.fillWidth: true
+                        text: I18n.t("docs.header"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Theme.fwHeading
+                        elide: Text.ElideRight
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
                         text: I18n.t("docs.counts").arg(root.totalDocs()).arg(root.snippets.length).arg(root.contacts.length)
                         color: Theme.textDim
                         font.family: Theme.fontUi
@@ -590,12 +604,16 @@ Item {
                         delegate: Rectangle {
                             required property var modelData
                             objectName: "docs-tab-" + modelData
-                            width: 96; height: 26
+                            // As wide as its word needs: a fixed 96 let a
+                            // longer word run past the frame (SCALE-3).
+                            width: Math.max(Theme.px(96), tabTxt.implicitWidth + 2 * Theme.spLg)
+                            height: Theme.px(26)
                             color: root.tab === modelData ? Theme.withAlpha(Theme.accent, 0.16)
                                  : tabMA.hovered ? Theme.panel3 : Theme.panel2
                             border.color: root.tab === modelData ? Theme.accent : Theme.border
                             border.width: 1
                             Text {
+                                id: tabTxt
                                 anchors.centerIn: parent
                                 text: I18n.t("docs.tab." + modelData)
                                 color: root.tab === modelData ? Theme.text : Theme.textDim
@@ -619,8 +637,12 @@ Item {
 
                 // Search
                 Rectangle {
-                    Layout.preferredWidth: 320
-                    Layout.preferredHeight: 28
+                    objectName: "docs-search-box"
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: Theme.px(320)
+                    Layout.maximumWidth: Theme.px(320)
+                    Layout.minimumWidth: Theme.px(140)
+                    Layout.preferredHeight: Theme.px(28)
                     radius: Theme.radiusMd
                     color: Theme.panel2
                     border.color: Theme.border
@@ -861,7 +883,9 @@ Item {
 
                             Item {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 44
+                                // Grows with the type: two lines at 150 % are
+                                // taller than 44 (SCALE-3).
+                                Layout.preferredHeight: Math.max(44, secHeadRow.implicitHeight)
                                 id: secAnchor
                                 objectName: "sec-" + secCol.section.id
 
@@ -900,15 +924,22 @@ Item {
                                 }
 
                                 RowLayout {
+                                    id: secHeadRow
                                     anchors.fill: parent
                                     spacing: Theme.spXl
                                     Rectangle { width: 4; height: 32; radius: 2; color: secCol.section.accent }
+                                    // Gives way to the count and "+ Add", and
+                                    // says it was cut with an ellipsis (SCALE-3).
                                     ColumnLayout {
                                         spacing: 0
                                         Layout.fillWidth: true
                                         RowLayout {
                                             spacing: Theme.spSm
+                                            Layout.fillWidth: true
                                             Text {
+                                                Layout.fillWidth: true
+                                                Layout.maximumWidth: implicitWidth
+                                                elide: Text.ElideRight
                                                 text: secCol.section.title
                                                 color: Theme.text
                                                 font.pixelSize: Theme.fsLg
@@ -932,9 +963,13 @@ Item {
                                                 onActivated: root.deleteSection(secCol.section.id)
                                             }
                                         }
-                                        Text { text: secCol.section.subtitle; color: Theme.textMuted; font.pixelSize: Theme.fsMd }
+                                        Text {
+                                            objectName: "docs-section-subtitle"
+                                            Layout.fillWidth: true
+                                            elide: Text.ElideRight
+                                            text: secCol.section.subtitle; color: Theme.textMuted; font.pixelSize: Theme.fsMd
+                                        }
                                     }
-                                    Item { Layout.fillWidth: true }
                                     Text {
                                         visible: (secCol.section.sortBy || "manual") !== "manual"
                                         text: {
@@ -1775,7 +1810,8 @@ Item {
             anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spLg
             spacing: Theme.spLg
             Rectangle {
-                width: 32; height: 32; radius: 16
+                objectName: "docs-contact-avatar"
+                width: Theme.px(32); height: width; radius: width / 2
                 color: cc.c.color || Theme.accent
                 Text {
                     anchors.centerIn: parent

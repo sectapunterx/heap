@@ -409,6 +409,7 @@ qt_add_qml_module(heap_core
         qml/StandupDraftDialog.qml
         qml/HelpContent.qml
         qml/ThinScrollBar.qml
+        qml/ScrollFade.qml
         qml/Brand.qml
         qml/BrandLogo.qml
         qml/SplashScreen.qml

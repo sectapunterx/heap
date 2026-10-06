@@ -9,6 +9,12 @@ ScrollBar {
     id: sb
     policy: ScrollBar.AsNeeded
     minimumSize: 0.06
+    // A list whose last rows are off-screen says so at rest (SCALE-1/2):
+    // with the thumb hidden until hover, a clipped nav row read as the
+    // end of the list. Off by default — most scroll areas show their
+    // overflow in their content.
+    property bool cue: false
+    readonly property bool overflowing: sb.size > 0 && sb.size < 1
 
     contentItem: Rectangle {
         implicitWidth: 6
@@ -17,7 +23,8 @@ ScrollBar {
         color: sb.pressed ? Theme.withAlpha(Theme.text, 0.45)
              : sb.hovered ? Theme.withAlpha(Theme.text, 0.30)
              :              Theme.withAlpha(Theme.text, 0.18)
-        opacity: sb.policy === ScrollBar.AlwaysOn || sb.active || sb.hovered ? 1 : 0
+        opacity: sb.policy === ScrollBar.AlwaysOn || sb.active || sb.hovered ? 1
+               : sb.cue && sb.overflowing ? 1 : 0
         Behavior on opacity {
             NumberAnimation {
                 duration: sb.active || sb.hovered ? Theme.durPop : Theme.durPopOut
