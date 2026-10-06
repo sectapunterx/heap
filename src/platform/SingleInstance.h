@@ -57,6 +57,12 @@ class SingleInstance : public QObject {
   // The local-socket name for a data dir (exposed for tests).
   static QString serverName(const QString& dataDir);
 
+  // Hands `message` to a heap already running on `dataDir`, without taking
+  // the lock or creating anything there. False when none answers. For a
+  // notification click naming a throwaway profile (APP-155): it may reach a
+  // heap that is running, never start one in a folder a URI chose.
+  static bool forwardOnly(const QString& dataDir, const QByteArray& message);
+
  signals:
   // Another launch asked this one to come forward; `message` is what it sent.
   void messageReceived(const QByteArray& message);

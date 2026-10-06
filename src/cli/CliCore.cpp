@@ -118,7 +118,8 @@ ParsedArgs parseArgs(const QStringList& args) {
   // Window-launch switches that may ride along with --help/--version; known
   // here so they are not refused, and otherwise ignored.
   const QCommandLineOption perfLog(QStringLiteral("perf-log"), QString());
-  parser.addOptions({help, version, dataDir, profile, status, format, json, perfLog});
+  const QCommandLineOption minimized(QStringLiteral("minimized"), QString());
+  parser.addOptions({help, version, dataDir, profile, status, format, json, perfLog, minimized});
 
   QStringList withProgram = args;
   withProgram.prepend(QStringLiteral("heap"));

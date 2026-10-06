@@ -470,6 +470,14 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"onboarding.startedFresh", {"Demo cleared — your workspace is empty", "Демо очищено — рабочее пространство пустое"}},
       {"branch.required", {"Set a branch — required by Settings", "Укажите ветку — этого требуют настройки"}},
       {"deadline.snoozed", {"%1: deadline snoozed", "%1: дедлайн отложен"}},
+      {"notify.action.open", {"Open", "Открыть"}},
+      {"notify.action.done", {"Mark done", "Готово"}},
+      {"notify.snoozedUntil", {"Reminder snoozed until %1", "Напоминание отложено до %1"}},
+      {"notify.reminderTitle", {"Reminder", "Напоминание"}},
+      {"notify.test.title", {"heap. test reminder", "heap. — проверка напоминания"}},
+      {"notify.test.body", {"Buttons work like on a real reminder.", "Кнопки работают как у настоящего напоминания."}},
+      {"settings.system.startAtLogin.failed",
+       {"Could not change the login start: the system refused", "Не удалось изменить автозапуск: система не дала"}},
       // Timeline row badge — the only date arithmetic rendered from C++.
       {"deadline.overdue", {"%1d overdue", "просрочено на %1 д"}},
       {"deadline.overdueLong", {"%1 overdue", "просрочено на %1"}},
@@ -710,39 +718,52 @@ AppController::AppController(QObject* parent) :
   // opt-outs. Kept as a signal so existing call-sites (`emit
   // notification(...)`) keep working — the lambda just forwards to the
   // NotificationCenter without action buttons (it carries no task id).
-  connect(this, &AppController::notification, this, [this](const QString& title, const QString& body, const QString& kind) {
-    if(s_headless) {
-      return;  // nobody to show it to; a held one would be saved as pending
-    }
-    // Quiet hours hold a notification until they end rather than dropping
-    // it. A meeting or the standup is an appointment and goes through.
-    const bool appointment = kind == QStringLiteral("meeting") || kind == QStringLiteral("standup");
-    if(!appointment && inQuietHours(QDateTime::currentDateTime())) {
-      holdNotification({title, body, kind, QString()});
-      return;
-    }
-    const QVariantMap notif = settingsMap().value("notifications").toMap();
-    // Only raise an OS toast when the window is NOT focused. When the app is
-    // active the in-app Toast bar (emitted below) already surfaces the message;
-    // showing both is the "notification appears twice on Windows" bug (HEAP-47)
-    // — one styled in-app toast plus one plain system balloon.
-    const bool appActive = QGuiApplication::applicationState() == Qt::ApplicationActive;
-    if(notif.value("desktopNotif", true).toBool() && m_notifier && !appActive) {
-      heap::notify::Notification n;
-      n.id = QStringLiteral("info:") + QString::number(QDateTime::currentMSecsSinceEpoch());
-      n.title = title;
-      n.body = body;
-      n.iconPath = QStringLiteral(":/brand/icon/heap-icon.svg");
-      n.category = kind;
-      m_notifier->post(n);
-    }
-    if(notif.value("soundOnPing", false).toBool()) {
-      QApplication::beep();
-    }
-    // The title is what says why ("Starting now", "Deadline in 1 hour"); the
-    // in-app toast used to show only the body, a bare task title.
-    emit toast(title.isEmpty() ? body : title + QStringLiteral(" · ") + body);
-  });
+  connect(this,
+          &AppController::notification,
+          this,
+          [this](const QString& title, const QString& body, const QString& kind, const QString& routeId) {
+            if(s_headless) {
+              return;  // nobody to show it to; a held one would be saved as pending
+            }
+            // Quiet hours hold a notification until they end rather than dropping
+            // it. A meeting or the standup is an appointment and goes through.
+            const bool appointment = kind == QStringLiteral("meeting") || kind == QStringLiteral("standup");
+            if(!appointment && inQuietHours(QDateTime::currentDateTime())) {
+              holdNotification({title, body, kind, QString()});
+              return;
+            }
+            const QVariantMap notif = settingsMap().value("notifications").toMap();
+            // Only raise an OS toast when the window is NOT focused. When the app is
+            // active the in-app Toast bar (emitted below) already surfaces the message;
+            // showing both is the "notification appears twice on Windows" bug (HEAP-47)
+            // — one styled in-app toast plus one plain system balloon.
+            const bool appActive = QGuiApplication::applicationState() == Qt::ApplicationActive;
+            if(!routeId.isEmpty()) {
+              // Remembered so a snooze brings the same words back (APP-155).
+              ShownReminder& shown = m_shownReminders[routeId];
+              shown.title = title;
+              shown.body = body;
+              shown.kind = kind;
+            }
+            if(notif.value("desktopNotif", true).toBool() && m_notifier && !appActive) {
+              heap::notify::Notification n;
+              n.id = routeId.isEmpty() ? QStringLiteral("info:") + QString::number(QDateTime::currentMSecsSinceEpoch()) : routeId;
+              n.title = title;
+              n.body = body;
+              n.iconPath = QStringLiteral(":/brand/icon/heap-icon.svg");
+              n.category = kind;
+              if(!routeId.isEmpty() && m_notifier->supportsActions()) {
+                n.actions = reminderActions(kind);
+              }
+              m_notifier->post(n);
+            }
+            if(notif.value("soundOnPing", false).toBool()) {
+              QApplication::beep();
+            }
+            // The title is what says why ("Starting now", "Deadline in 1 hour"); the
+            // in-app toast used to show only the body, a bare task title.
+            emit toast(title.isEmpty() ? body : title + QStringLiteral(" · ") + body);
+          });
 
   // Invalidate the status-count cache from the model's own signals, so every
   // mutation path is covered without each one having to remember.
@@ -809,6 +830,7 @@ AppController::AppController(QObject* parent) :
 
   loadStateOnStart();
   loadSentReminders();
+  loadSnoozes();
   m_automationTimer->start();
 
   // An unwritable data folder (a --data-dir under Program Files, a read-only
@@ -11969,6 +11991,10 @@ void AppController::runAutomationAt(const QDateTime& now) {
   // delivers it. A meeting or the standup is an appointment and is not held.
   const bool quiet = inQuietHours(now);
 
+  // 2b. Reminders put off by a snooze button come back (APP-155); each goes
+  // through the same quiet-hours rule as a fresh one.
+  fireDueSnoozes(now);
+
   // 3. Deadline reminders — once when the deadline comes inside the lead, once
   // more when it has passed.
   if(notif.value("deadlineReminders", true).toBool() && !quiet) {
@@ -12023,7 +12049,10 @@ void AppController::runAutomationAt(const QDateTime& now) {
     for(const heap::cal::DueReminder& due : heap::cal::dueMeetingReminders(occurrences, now, lead, sentReminderKeys())) {
       markReminderSent(due.key, now);
       const QString title = due.minutesLeft <= 0 ? tr_("notify.meetingNow") : tr_("notify.meetingSoon").arg(due.minutesLeft);
-      notify(title, due.title.isEmpty() ? tr_("event.newDefault") : due.title, QStringLiteral("meeting"));
+      // The key ends in the occurrence's start: "Open" goes to that day.
+      const QString routeId = heap::notify::routingId(QStringLiteral("meeting"), due.eventId);
+      m_shownReminders[routeId].date = QDateTime::fromString(due.key.section(QChar('@'), -1), Qt::ISODate).date();
+      emit notification(title, due.title.isEmpty() ? tr_("event.newDefault") : due.title, QStringLiteral("meeting"), routeId);
     }
   }
 
@@ -12042,9 +12071,12 @@ void AppController::runAutomationAt(const QDateTime& now) {
       st.end = st.start + 0.25;
       for(const heap::cal::DueReminder& due : heap::cal::dueMeetingReminders({st}, now, lead, sentReminderKeys())) {
         markReminderSent(due.key, now);
-        notify(tr_("notify.standupTitle"),
-               due.minutesLeft <= 0 ? tr_("notify.meetingNow") : tr_("notify.standupBody").arg(due.minutesLeft),
-               QStringLiteral("standup"));
+        const QString routeId = heap::notify::routingId(QStringLiteral("standup"), QStringLiteral("standup"));
+        m_shownReminders[routeId].date = today;
+        emit notification(tr_("notify.standupTitle"),
+                          due.minutesLeft <= 0 ? tr_("notify.meetingNow") : tr_("notify.standupBody").arg(due.minutesLeft),
+                          QStringLiteral("standup"),
+                          routeId);
       }
     }
   }
@@ -12465,11 +12497,13 @@ void AppController::notifyTaskAt(
   n.body = body;
   n.iconPath = QStringLiteral(":/brand/icon/heap-icon.svg");
   n.category = kind;
+  ShownReminder& shown = m_shownReminders[n.id];
+  shown.title = title;
+  shown.body = body;
+  shown.kind = kind;
 
   if(m_notifier->supportsActions()) {
-    n.actions = {{QStringLiteral("snooze1h"), QStringLiteral("Snooze 1h")},
-                 {QStringLiteral("done"), QStringLiteral("Mark done")},
-                 {QStringLiteral("open"), QStringLiteral("Open")}};
+    n.actions = reminderActions(kind);
   }
   m_notifier->post(n);
 
@@ -12524,18 +12558,26 @@ void AppController::onNotifierAction(const QString& notificationId, const QStrin
   if(taskId.isEmpty()) {
     return;
   }
+  // A snooze puts the reminder off and leaves the task as it is (APP-155):
+  // the deadline is the user's, a button on a toast does not move it.
+  const QVariantMap notif = settingsMap().value(QStringLiteral("notifications")).toMap();
+  const int snoozeMinutes =
+      heap::notify::snoozeMinutesFor(actionId,
+                                     notif.value(QStringLiteral("snoozeShortMin"), heap::notify::kDefaultSnoozeShortMin).toInt(),
+                                     notif.value(QStringLiteral("snoozeLongMin"), heap::notify::kDefaultSnoozeLongMin).toInt());
+  if(snoozeMinutes > 0) {
+    snoozeReminderAt(notificationId, snoozeMinutes, QDateTime::currentDateTime());
+    return;
+  }
+  if(actionId == QLatin1String(heap::notify::kOpen)) {
+    openReminder(notificationId);
+    return;
+  }
   // Reminders cover every profile; acting on one opens the workspace it is in.
   activateProfileOfTask(taskId);
-
-  if(actionId == QStringLiteral("snooze1h")) {
-    snoozeDeadline(taskId, 3600);
-  } else if(actionId == QStringLiteral("done")) {
+  if(actionId == QLatin1String(heap::notify::kDone)) {
     if(m_tasks.indexOfId(taskId) >= 0) {
       moveTask(taskId, QStringLiteral("done"));
-    }
-  } else if(actionId == QStringLiteral("open")) {
-    if(m_tasks.indexOfId(taskId) >= 0) {
-      emit openTaskRequested(taskId);
     }
   }
 }
@@ -12558,10 +12600,5 @@ void AppController::activateProfileOfTask(const QString& taskId) {
 }
 
 void AppController::onNotifierActivated(const QString& notificationId) {
-  const auto [kind, taskId] = heap::notify::parseRoutingId(notificationId);
-  Q_UNUSED(kind);
-  activateProfileOfTask(taskId);
-  if(!taskId.isEmpty() && m_tasks.indexOfId(taskId) >= 0) {
-    emit openTaskRequested(taskId);
-  }
+  openReminder(notificationId);
 }
