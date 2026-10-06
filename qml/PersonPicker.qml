@@ -24,6 +24,12 @@ Popup {
 
     // Emitted with a PersonEditor draft — Main hands it straight to the editor.
     signal draftRequested(var draft)
+    // Pick mode (APP-158, "waiting on…"): choosing someone answers with their
+    // Person id instead of opening the editor. A contact with no Person yet,
+    // or a new name, becomes one first.
+    property bool pickOnly: false
+    property string title: I18n.t("people.pick.title")
+    signal personPicked(string personId)
 
     // Every candidate, as pingCandidates() returned it. Re-read on each open:
     // a Mattermost sync or an edit in Docs may have changed the list since.
@@ -69,6 +75,27 @@ Popup {
     }
 
     function _accept() {
+        if (root.pickOnly) {
+            let draft = null;
+            if (root.current < root.matches.length) {
+                const c = root.matches[root.current];
+                if (c.personId && AppController.personById(c.personId).id) {
+                    root.close();
+                    root.personPicked(c.personId);
+                    return;
+                }
+                draft = AppController.pingDraftFor(c);
+            } else if (root.canCreate) {
+                draft = AppController.newContactDraft(root.query.trim());
+            }
+            // Someone you are waiting on is someone you have asked.
+            if (draft && draft._isNew) draft.state = "pinged";
+            if (draft && AppController.savePerson(draft)) {
+                root.close();
+                root.personPicked(draft.id);
+            }
+            return;
+        }
         if (root.current < root.matches.length) {
             root.draftRequested(AppController.pingDraftFor(root.matches[root.current]));
             root.close();
@@ -99,7 +126,7 @@ Popup {
 
         Text {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.topMargin: Theme.sp2xl
-            text: I18n.t("people.pick.title")
+            text: root.title
             color: Theme.text
             font.pixelSize: Theme.fsLg
             font.weight: Font.DemiBold

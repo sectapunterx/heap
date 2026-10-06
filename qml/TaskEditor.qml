@@ -36,6 +36,8 @@ Popup {
     property string _error: ""
     readonly property bool _archived: !!(root.draft && root.draft.archived)
     property bool isNew: false
+    // The "seen this before" hint under the description was clicked (APP-159).
+    signal seenBeforeActivated(var hit)
     // "edit" | "preview" for the description. Starts on edit — the editor is
     // where you go to change things.
     property string descMode: "edit"
@@ -1104,6 +1106,13 @@ Popup {
                             }
                         }
                     }
+                    // A pasted error this workspace has met before (APP-159).
+                    SeenBeforeHint {
+                        Layout.fillWidth: true
+                        text: descField.text
+                        excludeTaskId: root._originalId
+                        onActivated: (hit) => root.seenBeforeActivated(hit)
+                    }
                     // The checkbox write goes through the editor's own document,
                     // so ticking an item in the preview edits the text the Save
                     // button will store — and does it as one undo step.
@@ -1162,6 +1171,49 @@ Popup {
                         Layout.fillWidth: true
                         model: root._attachments
                         onRemoveRequested: (attachmentId) => root.removeAttachment(attachmentId)
+                    }
+                }
+
+                // ── Waiting on a reply (APP-158): who this task waits on ──
+                // Only for a saved task, and only once the heads-up is on in
+                // Settings → Safety net. Applies at once, like the timer.
+                RowLayout {
+                    id: waitingRow
+                    objectName: "te-waiting"
+                    readonly property var link: AppController.waitingOn[root._originalId]
+                    visible: !root.isNew && root._originalId.length > 0
+                             && !!(AppController.safety && AppController.safety.waitingOn)
+                    Layout.fillWidth: true
+                    Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+                    spacing: Theme.spSm
+                    FieldLabel { text: I18n.t("waiting.label").toUpperCase() }
+                    Text {
+                        objectName: "te-waiting-who"
+                        Layout.fillWidth: true
+                        text: waitingRow.link
+                              ? I18n.t("waiting.since").arg(waitingRow.link.name).arg(waitingRow.link.days)
+                              : I18n.t("waiting.none")
+                        textFormat: Text.PlainText
+                        color: waitingRow.link ? Theme.text : Theme.textDim
+                        font.pixelSize: Theme.fsSm
+                        elide: Text.ElideRight
+                    }
+                    PillButton {
+                        objectName: "te-waiting-pick"
+                        text: waitingRow.link ? I18n.t("waiting.change") : I18n.t("waiting.pick")
+                        onClicked: waitingPicker.open_()
+                    }
+                    PillButton {
+                        objectName: "te-waiting-clear"
+                        visible: !!waitingRow.link
+                        text: I18n.t("waiting.clear")
+                        onClicked: AppController.clearWaitingOn(root._originalId)
+                    }
+                    PersonPicker {
+                        id: waitingPicker
+                        pickOnly: true
+                        title: I18n.t("waiting.pickTitle")
+                        onPersonPicked: (personId) => AppController.setWaitingOn(root._originalId, personId)
                     }
                 }
 

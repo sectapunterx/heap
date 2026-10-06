@@ -1,5 +1,6 @@
 #pragma once
 
+#include "safety/WaitingOn.h"
 #include "views/SavedView.h"
 
 #include <QAbstractListModel>
@@ -338,6 +339,9 @@ struct Profile {
   QVector<heap::savedviews::SavedView> savedViews;
   // Status moves, oldest first (profile key `statusLog`; absent = none).
   QVector<StatusChange> statusLog;
+  // Tasks waiting on someone's reply (APP-158; profile key `waitingOn`,
+  // absent = none). See safety/WaitingOn.h.
+  QVector<WaitingOn> waitingOn;
   // Keys of the profile object this build does not read, carried through a
   // save untouched (PLAT-26). Only filled for a document at the current schema.
   QJsonObject extra;
