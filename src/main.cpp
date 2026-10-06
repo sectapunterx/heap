@@ -376,6 +376,12 @@ int main(int argc, char* argv[]) {
   std::signal(SIGINT, quitOnSignal);
   std::signal(SIGTERM, quitOnSignal);
 
+  // Qt Quick draws text from distance fields by default: no hinting, so at
+  // 100% scale the small UI sizes come out soft and smeared. Native rendering
+  // uses the platform rasterizer (DirectWrite / CoreText / FreeType) and keeps
+  // stems on the pixel grid. The cost is scaled text: a card lifted for a drag
+  // (scale 1.03) blurs slightly until it is dropped.
+  QQuickWindow::setTextRenderType(QQuickWindow::NativeTextRendering);
   QQmlApplicationEngine engine;
   engine.rootContext()->setContextProperty("INITIAL_VIEW", cli.initialView);
   // A snooze clicked while heap was closed starts it in the tray: the click

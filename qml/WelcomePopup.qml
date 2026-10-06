@@ -402,7 +402,8 @@ Popup {
             Text {
                 text: I18n.t("welcome.tour.footer")
                 color: Theme.textDim
-                font.family: Theme.fontMono
+                font.family: Theme.fontUi
+                font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsXs
             }
             Item { Layout.fillWidth: true }

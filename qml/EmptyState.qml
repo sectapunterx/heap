@@ -28,8 +28,8 @@ Column {
         source: root.icon.length > 0 ? "qrc:/brand/icons/" + root.icon + ".svg" : ""
         width: root._iconSize
         height: root._iconSize
-        sourceSize.width: root._iconSize * 2
-        sourceSize.height: root._iconSize * 2
+        sourceSize.width: root._iconSize
+        sourceSize.height: root._iconSize
         color: Theme.textDim
     }
     Text {

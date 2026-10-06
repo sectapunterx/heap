@@ -79,7 +79,8 @@ Rectangle {
             Text {
                 text: root.refDate.getFullYear()
                 color: Theme.textDim
-                font.family: Theme.fontMono
+                font.family: Theme.fontUi
+                font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsSm
             }
             Item { Layout.fillWidth: true }
@@ -156,7 +157,8 @@ Rectangle {
                         Text {
                             text: parent.parent.modelData.getDate()
                             color: parent.parent.isToday ? Theme.accentStrong : Theme.text
-                            font.family: Theme.fontMono
+                            font.family: Theme.fontUi
+                            font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsLg
                             font.weight: Font.Medium
                             horizontalAlignment: Text.AlignHCenter

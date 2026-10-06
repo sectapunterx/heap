@@ -328,6 +328,10 @@ QtObject {
                                      ? _installedFont(_appearance.fontUI, Brand.fontSans) : Brand.fontSans
     readonly property string fontMono: legacyDefaultFontsMono.indexOf(_appearance.fontMono) < 0
                                        ? _installedFont(_appearance.fontMono, Brand.fontMono) : Brand.fontMono
+    // Mono is for what is typed or copied: ticket ids, branches, keys, code,
+    // paths. Counts, times and dates stay in the UI face with fixed-width
+    // digits, so columns of numbers still line up without the mono texture.
+    readonly property var tabularNums: ({ "tnum": 1 })
 
     function withAlpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a); }
 

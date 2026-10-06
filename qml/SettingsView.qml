@@ -346,7 +346,8 @@ Item {
                         return handle ? s : s.replace(/\s*·\s*$/, "");
                     }
                     color: Theme.textDim
-                    font.family: Theme.fontMono
+                    font.family: Theme.fontUi
+                    font.features: Theme.tabularNums
                     font.pixelSize: Theme.fsXs
                 }
 
@@ -453,8 +454,8 @@ Item {
                                         source: modelData.icon
                                         Layout.preferredWidth: 16
                                         Layout.preferredHeight: 16
-                                        sourceSize.width: 32
-                                        sourceSize.height: 32
+                                        sourceSize.width: 16
+                                        sourceSize.height: 16
                                         color: root.activeSection === modelData.id ? Theme.accentStrong : Theme.textMuted
                                     }
                                     Text {
@@ -545,7 +546,8 @@ Item {
                 Text {
                     text: I18n.t("settings.footer.stable").arg(AppController.appVersion)
                     color: Theme.textDim
-                    font.family: Theme.fontMono
+                    font.family: Theme.fontUi
+                    font.features: Theme.tabularNums
                     font.pixelSize: Theme.fsXs
                 }
             }
@@ -611,8 +613,8 @@ Item {
                             Layout.preferredWidth: 22
                             Layout.preferredHeight: 22
                             Layout.alignment: Qt.AlignVCenter
-                            sourceSize.width: 44
-                            sourceSize.height: 44
+                            sourceSize.width: 22
+                            sourceSize.height: 22
                             color: Theme.textMuted
                         }
                         Text {
@@ -1148,7 +1150,8 @@ Item {
             horizontalAlignment: Text.AlignRight
             text: Math.round(sliderRow.value) + sliderRow.unit
             color: Theme.text
-            font.family: Theme.fontMono
+            font.family: Theme.fontUi
+            font.features: Theme.tabularNums
             font.pixelSize: Theme.fsSm
         }
     }
@@ -1249,7 +1252,8 @@ Item {
                                     return (parts[0] ? parts[0][0] : "") + (parts[1] ? parts[1][0] : "");
                                 }
                                 color: Theme.textOnAccent
-                                font.family: Theme.fontMono
+                                font.family: Theme.fontUi
+                                font.features: Theme.tabularNums
                                 font.pixelSize: Theme.fsLg
                                 font.weight: Font.DemiBold
                             }
@@ -2213,7 +2217,7 @@ Item {
                                             visible: parent.logo !== ""
                                             anchors.centerIn: parent
                                             width: 18; height: 18
-                                            sourceSize.width: 36; sourceSize.height: 36
+                                            sourceSize.width: 18; sourceSize.height: 18
                                             source: parent.logo !== "" ? "qrc:/brand/icons/" + parent.logo + ".svg" : ""
                                             // On the brand colour, not the accent:
                                             // textOnAccent was 2.8:1 on Jira red (DES-25).
@@ -2239,7 +2243,7 @@ Item {
                                         text: !intCard.isConn ? I18n.t("common.disconnected")
                                               : (intCard.offline ? I18n.t("settings.integrations.offline") : I18n.t("common.connected"))
                                         color: !intCard.isConn ? Theme.textDim : (intCard.offline ? Theme.warning : Theme.success)
-                                        font.family: Theme.fontMono; font.pixelSize: Theme.fsSm
+                                        font.family: Theme.fontUi; font.features: Theme.tabularNums; font.pixelSize: Theme.fsSm
                                     }
                                     Text {
                                         text: intCard.open ? "▾" : "▸"   // ▾ / ▸
@@ -3261,7 +3265,8 @@ Item {
         Text {
             text: aboutRow.value
             color: Theme.text
-            font.family: Theme.fontMono
+            font.family: Theme.fontUi
+            font.features: Theme.tabularNums
             font.pixelSize: Theme.fsSm
             Layout.fillWidth: true
             horizontalAlignment: aboutRow.stacked ? Text.AlignLeft : Text.AlignRight

@@ -298,7 +298,8 @@ Item {
                                 return y + "-" + m + "-" + dd + " · " + I18n.events(root._eventsToday);
                             }
                             color: Theme.textDim
-                            font.family: Theme.fontMono
+                            font.family: Theme.fontUi
+                            font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsSm
                         }
                     }
@@ -310,7 +311,8 @@ Item {
                         // short form does, and the tooltip keeps the rest.
                         text: I18n.t("day.dragHint.short")
                         color: Theme.textDim
-                        font.family: Theme.fontMono
+                        font.family: Theme.fontUi
+                        font.features: Theme.tabularNums
                         font.pixelSize: Theme.fsSm
                         elide: Text.ElideRight
                         Layout.fillWidth: true
@@ -396,7 +398,8 @@ Item {
                                     text: (Seg.dayOffset(bar.modelData, AppController.selectedDate) + 1)
                                           + "/" + Seg.dayCount(bar.modelData)
                                     color: Theme.textDim
-                                    font.family: Theme.fontMono
+                                    font.family: Theme.fontUi
+                                    font.features: Theme.tabularNums
                                     font.pixelSize: Theme.fsSm
                                 }
                             }
@@ -476,7 +479,8 @@ Item {
                                 horizontalAlignment: Text.AlignRight
                                 text: Theme.fmtHour(root.hoursStart + parent.index)
                                 color: Theme.textDim
-                                font.family: Theme.fontMono
+                                font.family: Theme.fontUi
+                                font.features: Theme.tabularNums
                                 font.pixelSize: Theme.fsXs
                             }
                             Rectangle {
@@ -616,7 +620,8 @@ Item {
                                     return Theme.fmtHour(a) + " – " + Theme.fmtHour(b);
                                 }
                                 color: Theme.text
-                                font.family: Theme.fontMono
+                                font.family: Theme.fontUi
+                                font.features: Theme.tabularNums
                                 font.pixelSize: Theme.fsSm
                             }
                         }
@@ -773,7 +778,8 @@ Item {
                                         visible: !evRect.compactRow
                                         text: Theme.fmtHour(evRect.effStart) + " – " + Theme.fmtHour(evRect.effEnd)
                                         color: Theme.textMuted
-                                        font.family: Theme.fontMono
+                                        font.family: Theme.fontUi
+                                        font.features: Theme.tabularNums
                                         font.pixelSize: Theme.fsXs
                                     }
                                     Text {
@@ -788,7 +794,8 @@ Item {
                                         visible: evRect.profileInfo !== null && evRect.height > 70
                                         text: evRect.profileInfo ? evRect.profileInfo.name : ""
                                         color: evRect.profileInfo ? evRect.profileInfo.color : Theme.textDim
-                                        font.family: Theme.fontMono
+                                        font.family: Theme.fontUi
+                                        font.features: Theme.tabularNums
                                         font.pixelSize: Theme.fsXs
                                         elide: Text.ElideRight
                                         width: parent.width

@@ -115,7 +115,8 @@ Rectangle {
                     Text {
                         text: profilePill.active.name || I18n.t("topbar.profile.fallback")
                         color: Theme.text
-                        font.family: Theme.fontMono
+                        font.family: Theme.fontUi
+                        font.features: Theme.tabularNums
                         font.pixelSize: Theme.fsMd
                         font.weight: Font.Medium
                         // A long profile name pushed "+ Task" and the panel
@@ -273,7 +274,8 @@ Rectangle {
                             return "PR #" + n + " " + st + d;
                         }
                         color: Theme.accentStrong
-                        font.family: Theme.fontMono
+                        font.family: Theme.fontUi
+                        font.features: Theme.tabularNums
                         font.pixelSize: Theme.fsXs
                         font.weight: Font.DemiBold
                     }
@@ -315,7 +317,8 @@ Rectangle {
                             return "CI …";
                         }
                         color: Theme.text
-                        font.family: Theme.fontMono
+                        font.family: Theme.fontUi
+                        font.features: Theme.tabularNums
                         font.pixelSize: Theme.fsXs
                         font.weight: Font.DemiBold
                     }
@@ -354,7 +357,8 @@ Rectangle {
                         anchors.centerIn: parent
                         text: "×"
                         color: dismissMA.hovered ? Theme.accentStrong : Theme.textDim
-                        font.family: Theme.fontMono
+                        font.family: Theme.fontUi
+                        font.features: Theme.tabularNums
                         font.pixelSize: Theme.fsLg
                     }
                     ClickArea {
@@ -409,7 +413,8 @@ Rectangle {
                     objectName: "topbar-immersion-time"
                     text: immersionPill._elapsed()
                     color: Theme.accentStrong
-                    font.family: Theme.fontMono
+                    font.family: Theme.fontUi
+                    font.features: Theme.tabularNums
                     font.pixelSize: Theme.fsXs
                 }
             }

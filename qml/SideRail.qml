@@ -451,8 +451,8 @@ Rectangle {
                 source: btn.iconSource
                 width: btn.iconSize
                 height: btn.iconSize
-                sourceSize.width: btn.iconSize * 2
-                sourceSize.height: btn.iconSize * 2
+                sourceSize.width: btn.iconSize
+                sourceSize.height: btn.iconSize
                 color: btn._fg
             }
             Text {
@@ -508,7 +508,8 @@ Rectangle {
                 anchors.centerIn: parent
                 text: btn.countText
                 color: Theme.textOn(btn.countColor)
-                font.family: Theme.fontMono
+                font.family: Theme.fontUi
+                font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsXs
                 font.weight: Font.DemiBold
             }

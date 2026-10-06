@@ -318,7 +318,8 @@ Item {
                                 .arg(I18n.tasks(root.totalShown()))
                                 .arg(AppController.today.toLocaleDateString(I18n.locale, "yyyy-MM-dd"))
                         color: Theme.textDim
-                        font.family: Theme.fontMono
+                        font.family: Theme.fontUi
+                        font.features: Theme.tabularNums
                         font.pixelSize: Theme.fsSm
                     }
                 }
@@ -458,7 +459,8 @@ Item {
                             visible: rowItem.first
                             text: I18n.tasks(rowItem.list.length)
                             color: Theme.textDim
-                            font.family: Theme.fontMono
+                            font.family: Theme.fontUi
+                            font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsSm
                             leftPadding: 34
                         }
@@ -517,7 +519,8 @@ Item {
                     Text {
                         text: hdr.rd ? hdr.rd.label : ""
                         color: Theme.textMuted
-                        font.family: Theme.fontMono
+                        font.family: Theme.fontUi
+                        font.features: Theme.tabularNums
                         font.pixelSize: Theme.fsSm
                         font.weight: Font.DemiBold
                         font.capitalization: Font.MixedCase
@@ -658,7 +661,8 @@ Item {
                                 anchors.centerIn: parent
                                 text: "▸ " + (root.scheduleMap[tlRow.t.id] || "")
                                 color: Theme.accentStrong
-                                font.family: Theme.fontMono
+                                font.family: Theme.fontUi
+                                font.features: Theme.tabularNums
                                 font.pixelSize: Theme.fsXs
                             }
                         }
@@ -674,7 +678,8 @@ Item {
                                      ? String(at.getHours()).padStart(2, "0") + ":" + String(at.getMinutes()).padStart(2, "0")
                                      : "")
                             color: Theme.textMuted
-                            font.family: Theme.fontMono
+                            font.family: Theme.fontUi
+                            font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsSm
                         }
                         Text {
@@ -683,7 +688,8 @@ Item {
                                  : (tlRow.rd ? tlRow.rd.bucketId : "") === "today" ? Theme.accentStrong
                                  : (tlRow.rd ? tlRow.rd.bucketId : "") === "tomorrow" ? Theme.warning
                                  : Theme.textMuted
-                            font.family: Theme.fontMono
+                            font.family: Theme.fontUi
+                            font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsSm
                             font.weight: (tlRow.rd ? tlRow.rd.bucketId : "") === "overdue" || (tlRow.rd ? tlRow.rd.bucketId : "") === "today" ? Font.DemiBold : Font.Normal
                         }
