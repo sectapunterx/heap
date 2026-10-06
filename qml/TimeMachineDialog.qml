@@ -196,9 +196,8 @@ Dialog {
                     bottomPadding: Theme.spXs
                     text: root.dayLabel(section)
                     color: Theme.textDim
-                    font.pixelSize: Theme.fsXs
+                    font.pixelSize: Theme.fsSm
                     font.weight: Theme.fwTitle
-                    font.capitalization: Font.AllUppercase
                 }
 
                 delegate: Rectangle {
@@ -353,9 +352,8 @@ Dialog {
                     Text {
                         text: I18n.t("tm.profiles")
                         color: Theme.textDim
-                        font.pixelSize: Theme.fsXs
+                        font.pixelSize: Theme.fsSm
                         font.weight: Theme.fwTitle
-                        font.capitalization: Font.AllUppercase
                     }
                     Repeater {
                         model: root.preview.profiles || []
@@ -399,9 +397,8 @@ Dialog {
                     Text {
                         text: I18n.t("tm.missing")
                         color: Theme.textDim
-                        font.pixelSize: Theme.fsXs
+                        font.pixelSize: Theme.fsSm
                         font.weight: Theme.fwTitle
-                        font.capitalization: Font.AllUppercase
                     }
                     Text {
                         visible: (root.preview.missing || []).length === 0
@@ -423,9 +420,8 @@ Dialog {
                         visible: (root.preview.changed || []).length > 0
                         text: I18n.t("tm.changed")
                         color: Theme.textDim
-                        font.pixelSize: Theme.fsXs
+                        font.pixelSize: Theme.fsSm
                         font.weight: Theme.fwTitle
-                        font.capitalization: Font.AllUppercase
                     }
                     Repeater {
                         model: root.preview.changed || []

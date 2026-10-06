@@ -28,7 +28,7 @@ Rectangle {
     // Indexed by JS day-of-week (0=Sun..6=Sat), from the app language.
     readonly property var dowLabelsByJsDow: {
         const out = [];
-        for (let i = 0; i < 7; i++) out.push(I18n.dayNameUpper(i));
+        for (let i = 0; i < 7; i++) out.push(I18n.dayName(i));
         return out;
     }
     // How many occurrences touch `d`. The stored rows were counted before, so
@@ -149,8 +149,7 @@ Rectangle {
                         Text {
                             text: root.dowLabelsByJsDow[parent.parent.modelData.getDay()]
                             color: Theme.textDim
-                            font.pixelSize: Theme.fsXs
-                            font.letterSpacing: 1
+                            font.pixelSize: Theme.fsSm
                             horizontalAlignment: Text.AlignHCenter
                             width: parent.parent.width
                         }

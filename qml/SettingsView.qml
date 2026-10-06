@@ -506,9 +506,8 @@ Item {
                             Text {
                                 text: I18n.t("settings.debug.label")
                                 color: Theme.warning
-                                font.pixelSize: Theme.fsXs
+                                font.pixelSize: Theme.fsSm
                                 font.weight: Theme.fwTitle
-                                font.letterSpacing: 1
                             }
                             Text {
                                 text: I18n.t("settings.debug.showUnimpl")
@@ -661,7 +660,6 @@ Item {
                                 color: Theme.warning
                                 font.pixelSize: Theme.fsSm
                                 font.weight: Theme.fwTitle
-                                font.letterSpacing: 1
                             }
                             Text {
                                 text: I18n.t("settings.notImpl.body")

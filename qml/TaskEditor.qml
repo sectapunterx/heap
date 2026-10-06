@@ -890,9 +890,9 @@ Popup {
                     columns: 3
                     columnSpacing: Theme.spLg
                     rowSpacing: Theme.spXs
-                    FieldLabel { text: I18n.t("editor.label.status").toUpperCase() }
-                    FieldLabel { text: I18n.t("editor.label.priority").toUpperCase() }
-                    FieldLabel { text: I18n.t("editor.label.deadline").toUpperCase() }
+                    FieldLabel { text: I18n.t("editor.label.status") }
+                    FieldLabel { text: I18n.t("editor.label.priority") }
+                    FieldLabel { text: I18n.t("editor.label.deadline") }
                     AppComboBox {
                         id: statusBox
                         objectName: "te-status"
@@ -1038,7 +1038,7 @@ Popup {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: Theme.spXs
-                        FieldLabel { text: I18n.t("editor.label.desc").toUpperCase() }
+                        FieldLabel { text: I18n.t("editor.label.desc") }
                         Item { Layout.fillWidth: true }
                         // The description is markdown and always has been — it
                         // was just never rendered, so a template's checklist was
@@ -1150,7 +1150,7 @@ Popup {
                         Layout.fillWidth: true
                         spacing: Theme.spSm
                         FieldLabel {
-                            text: I18n.t("att.label").toUpperCase()
+                            text: I18n.t("att.label")
                                   + (root._attachments.length > 0 ? "  " + root._attachments.length : "")
                         }
                         Text {
@@ -1193,7 +1193,7 @@ Popup {
                     Layout.fillWidth: true
                     Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
                     spacing: Theme.spSm
-                    FieldLabel { text: I18n.t("waiting.label").toUpperCase() }
+                    FieldLabel { text: I18n.t("waiting.label") }
                     Text {
                         objectName: "te-waiting-who"
                         Layout.fillWidth: true
@@ -1288,8 +1288,8 @@ Popup {
                     columnSpacing: Theme.spLg
                     rowSpacing: Theme.spXs
 
-                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.ticketId").toUpperCase() }
-                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.branch").toUpperCase() }
+                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.ticketId") }
+                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.branch") }
                     TextField {
                         id: idField
                         ContextMenu.menu: TextEditMenu { editor: idField }
@@ -1328,8 +1328,8 @@ Popup {
                         placeholderTextColor: Theme.textDim
                     }
 
-                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.scheduled").toUpperCase() }
-                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.recurrence").toUpperCase() }
+                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.scheduled") }
+                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.recurrence") }
                     TextField {
                         id: scheduledField
                         ContextMenu.menu: TextEditMenu { editor: scheduledField }
@@ -1373,8 +1373,8 @@ Popup {
                                .concat(_extra.length > 0 ? [_label(_extra)] : [])
                     }
 
-                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.labels").toUpperCase() }
-                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.estimate").toUpperCase() }
+                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.labels") }
+                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.estimate") }
                     TextField {
                         id: labelsField
                         ContextMenu.menu: TextEditMenu { editor: labelsField }
@@ -1428,7 +1428,7 @@ Popup {
                     Layout.fillWidth: true
                     Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
                     spacing: Theme.spSm
-                    FieldLabel { text: I18n.t("editor.details.tracker").toUpperCase() }
+                    FieldLabel { text: I18n.t("editor.details.tracker") }
                     // One "label value" pair per field the tracker actually gave.
                     Flow {
                         Layout.fillWidth: true
@@ -1791,10 +1791,9 @@ Popup {
     }
 
     component FieldLabel: Text {
-        color: Theme.textMuted
-        font.pixelSize: Theme.fsXs
+        color: Theme.textDim
+        font.pixelSize: Theme.fsSm
         font.weight: Theme.fwTitle
-        font.letterSpacing: 1
         topPadding: Theme.sp2xs
     }
     component FieldBg: FieldFrame {}

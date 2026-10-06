@@ -15,7 +15,11 @@ Fails when a QML file paints with a literal instead of a token:
     whole app moves on one rule and "Reduce motion" zeroes every animation;
   - a font weight (`font.weight: Font.DemiBold`, `font.weight: 600`)
     instead of Theme.fwBody / fwTitle / fwHeading. Three weights, one job
-    each: a free choice is what put DemiBold on 117 labels.
+    each: a free choice is what put DemiBold on 117 labels;
+  - a label in capitals: `font.capitalization: Font.AllUppercase`,
+    `I18n.t(...).toUpperCase()` or a positive `font.letterSpacing`.
+    Labels are sentence case and untracked: Cyrillic in caps with
+    tracking was the loudest thing on every screen.
 
 A literal is what made the app grow 15 font sizes and 22 margins, and what
 kept Tweaks -> Density from moving anything but the hour height.
@@ -43,6 +47,9 @@ NUMBER = re.compile(r"(?<![\w.])\d")
 EASING = re.compile(r"\bEasing\.\w+")
 WEIGHT = re.compile(r"\bFont\.(?:Thin|ExtraLight|Light|Normal|Medium|DemiBold|Bold|ExtraBold|Black)\b"
                     r"|\b(?:font\.)?weight:\s*\d")
+CAPS = re.compile(r"\bfont\.capitalization:\s*Font\.AllUppercase\s*(?:;|\}|$|//)"
+                  r"|\bI18n\.\w+\((?:[^()]|\([^()]*\))*\)\.toUpperCase\(\)"
+                  r"|\bfont\.letterSpacing:\s*(?:0?\.0*[1-9]|[1-9])")
 HEX = re.compile(r"[\"']#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})[\"']")
 
 
@@ -74,6 +81,9 @@ def check(root: pathlib.Path):
                     m = WEIGHT.search(code)
                     if m:
                         problems.append(f"{f}:{n}: font weight {m.group(0)} - use Theme.fwBody / fwTitle / fwHeading")
+                    m = CAPS.search(code)
+                    if m:
+                        problems.append(f"{f}:{n}: caps label {m.group(0)} - labels are sentence case, untracked")
             if f.name not in EXEMPT_HEX and HEX.search(code):
                 problems.append(f"{f}:{n}: colour literal - use a Theme token or Theme.swatches")
     return problems

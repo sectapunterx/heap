@@ -203,11 +203,10 @@ Item {
                     Layout.fillWidth: true
                     spacing: Theme.spSm
                     Text {
-                        text: I18n.t("docs.pages").toUpperCase()
-                        color: Theme.textMuted
-                        font.pixelSize: Theme.fsXs
+                        text: I18n.t("docs.pages")
+                        color: Theme.textDim
+                        font.pixelSize: Theme.fsSm
                         font.weight: Theme.fwTitle
-                        font.letterSpacing: 1
                         Layout.fillWidth: true
                     }
                     Rectangle {

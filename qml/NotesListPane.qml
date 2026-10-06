@@ -207,11 +207,10 @@ Rectangle {
             Layout.fillWidth: true
             spacing: Theme.spSm
             Text {
-                text: I18n.t("notes.all").toUpperCase()
-                color: Theme.textMuted
-                font.pixelSize: Theme.fsXs
+                text: I18n.t("notes.all")
+                color: Theme.textDim
+                font.pixelSize: Theme.fsSm
                 font.weight: Theme.fwTitle
-                font.letterSpacing: 1
                 Layout.fillWidth: true
             }
             Rectangle {
@@ -305,11 +304,10 @@ Rectangle {
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.bottomMargin: Theme.sp2xs
-                        text: (rowData.label || "").toUpperCase()
+                        text: rowData.label || ""
                         color: Theme.textDim
-                        font.pixelSize: Theme.fsXs
+                        font.pixelSize: Theme.fsSm
                         font.weight: Theme.fwTitle
-                        font.letterSpacing: 1
                         elide: Text.ElideRight
                     }
                     // A folder header is the folder: right-click renames it or

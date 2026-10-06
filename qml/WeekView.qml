@@ -520,7 +520,6 @@ Item {
                             font.family: Theme.fontUi
                             font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsSm
-                            font.letterSpacing: 1
                         }
                         Text {
                             text: I18n.relang(AppController.shortDate(weekStart)) + " — " + AppController.shortDate(new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6))
@@ -651,17 +650,27 @@ Item {
                                 spacing: Theme.spSm
                                 Text {
                                     text: root.dowLabelsByJsDow[headCol.modelData.date.getDay()]
-                                    color: headCol.isToday ? Theme.accentStrong : Theme.textMuted
+                                    color: headCol.isToday ? Theme.accentStrong : Theme.textDim
                                     font.pixelSize: Theme.fsMd
                                     font.weight: Theme.fwTitle
-                                    font.letterSpacing: 1
                                 }
+                                // Today is an accent dot and the word, not a
+                                // filled plate: the brightest thing on the week
+                                // was a label (APP-194, APP-198).
                                 Rectangle {
                                     visible: headCol.isToday
-                                    radius: Theme.radiusSm
+                                    Layout.alignment: Qt.AlignVCenter
+                                    implicitWidth: 6; implicitHeight: 6
+                                    radius: Theme.radiusPill
                                     color: Theme.accent
-                                    implicitWidth: tBadge.implicitWidth + 8; implicitHeight: 16
-                                    Text { id: tBadge; anchors.centerIn: parent; text: I18n.t("week.todayBadge"); color: Theme.textOnAccent; font.pixelSize: Theme.fsXs; font.weight: Theme.fwTitle; font.letterSpacing: 1 }
+                                }
+                                Text {
+                                    objectName: "week-today-label"
+                                    visible: headCol.isToday
+                                    text: I18n.t("week.todayBadge")
+                                    color: Theme.accentStrong
+                                    font.pixelSize: Theme.fsSm
+                                    font.weight: Theme.fwBody
                                 }
                             }
                             Text {

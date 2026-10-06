@@ -109,11 +109,10 @@ Rectangle {
             Layout.fillWidth: true
             spacing: Theme.spSm
             Text {
-                text: I18n.t("rail.unscheduled").toUpperCase()
-                color: Theme.textMuted
-                font.pixelSize: Theme.fsXs
+                text: I18n.t("rail.unscheduled")
+                color: Theme.textDim
+                font.pixelSize: Theme.fsSm
                 font.weight: Theme.fwTitle
-                font.letterSpacing: 1
                 Layout.fillWidth: true
             }
             Text {

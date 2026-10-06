@@ -80,9 +80,9 @@ Popup {
 
         Text {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
-            text: I18n.t("common.title").toUpperCase()
-            color: Theme.textMuted; font.pixelSize: Theme.fsXs
-            font.weight: Theme.fwTitle; font.letterSpacing: 1
+            text: I18n.t("common.title")
+            color: Theme.textDim; font.pixelSize: Theme.fsSm
+            font.weight: Theme.fwTitle
         }
         TextField {
             id: nameField
@@ -98,9 +98,9 @@ Popup {
 
         Text {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
-            text: I18n.t("common.color").toUpperCase()
-            color: Theme.textMuted; font.pixelSize: Theme.fsXs
-            font.weight: Theme.fwTitle; font.letterSpacing: 1
+            text: I18n.t("common.color")
+            color: Theme.textDim; font.pixelSize: Theme.fsSm
+            font.weight: Theme.fwTitle
         }
         Row {
             id: colorSwatch

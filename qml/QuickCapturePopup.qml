@@ -391,10 +391,9 @@ Popup {
         Text {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             text: I18n.t("quick.title")
-            color: Theme.textMuted
-            font.pixelSize: Theme.fsXs
+            color: Theme.textDim
+            font.pixelSize: Theme.fsSm
             font.weight: Theme.fwTitle
-            font.letterSpacing: 1
         }
 
         TextField {

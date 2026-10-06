@@ -467,10 +467,9 @@ Popup {
     SeriesScopeDialog { id: scopePrompt }
 
     component FieldLabel: Text {
-        color: Theme.textMuted
-        font.pixelSize: Theme.fsXs
+        color: Theme.textDim
+        font.pixelSize: Theme.fsSm
         font.weight: Theme.fwTitle
-        font.letterSpacing: 1
     }
     component Field: TextField {
         id: fieldRoot
@@ -524,7 +523,7 @@ Popup {
         }
 
         FieldLabel {
-            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("common.title").toUpperCase()
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("common.title")
         }
         Field {
             id: titleField
@@ -538,8 +537,8 @@ Popup {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             columns: 2; columnSpacing: Theme.spLg; rowSpacing: Theme.spXs
 
-            FieldLabel { text: I18n.t("editor.label.eventType").toUpperCase() }
-            FieldLabel { text: I18n.t("editor.label.attendees").toUpperCase() }
+            FieldLabel { text: I18n.t("editor.label.eventType") }
+            FieldLabel { text: I18n.t("editor.label.attendees") }
 
             AppComboBox {
                 id: typeBox
@@ -715,11 +714,11 @@ Popup {
 
             FieldLabel {
                 visible: !root.allDay
-                text: I18n.t("editor.label.start").toUpperCase()
+                text: I18n.t("editor.label.start")
             }
             FieldLabel {
                 visible: !root.allDay
-                text: I18n.t("editor.label.end").toUpperCase()
+                text: I18n.t("editor.label.end")
             }
 
             Field {
@@ -743,8 +742,8 @@ Popup {
             }
 
             // DATE — the day this event lands on, and the last day it covers.
-            FieldLabel { text: I18n.t("editor.label.date").toUpperCase() }
-            FieldLabel { text: I18n.t("editor.label.endDate").toUpperCase() }
+            FieldLabel { text: I18n.t("editor.label.date") }
+            FieldLabel { text: I18n.t("editor.label.endDate") }
             Rectangle {
                 id: dateBtn
                 Layout.fillWidth: true
@@ -835,10 +834,10 @@ Popup {
             }
 
             // REPEAT — the rule, its days and its end.
-            FieldLabel { text: I18n.t("editor.label.repeat").toUpperCase() }
+            FieldLabel { text: I18n.t("editor.label.repeat") }
             FieldLabel {
                 visible: root._kind() !== "never" && root._kind() !== "custom"
-                text: I18n.t("repeat.ends").toUpperCase()
+                text: I18n.t("repeat.ends")
             }
             AppComboBox {
                 id: repeatBox
@@ -974,8 +973,8 @@ Popup {
             }
 
             // WHERE / LINK
-            FieldLabel { text: I18n.t("editor.label.location").toUpperCase() }
-            FieldLabel { text: I18n.t("editor.label.link").toUpperCase() }
+            FieldLabel { text: I18n.t("editor.label.location") }
+            FieldLabel { text: I18n.t("editor.label.link") }
             Field {
                 id: locationField
                 objectName: "event-location"
@@ -1004,8 +1003,8 @@ Popup {
             }
 
             // CONTEXT / REMINDER
-            FieldLabel { text: I18n.t("editor.label.context").toUpperCase() }
-            FieldLabel { text: I18n.t("editor.label.reminder").toUpperCase() }
+            FieldLabel { text: I18n.t("editor.label.context") }
+            FieldLabel { text: I18n.t("editor.label.reminder") }
             // Free-form context label — rendered before the event title in the
             // calendar so the same profile can mean different things per event
             // (sprint name, feature, on-call rotation, …).
@@ -1025,7 +1024,7 @@ Popup {
         ColumnLayout {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             spacing: Theme.spXs
-            FieldLabel { text: I18n.t("editor.label.notes").toUpperCase() }
+            FieldLabel { text: I18n.t("editor.label.notes") }
             ScrollView {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 64

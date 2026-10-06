@@ -265,7 +265,6 @@ Popup {
                             font.family: Theme.fontUi
                             font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsXs
-                            font.letterSpacing: 1
                         }
                     }
                 }

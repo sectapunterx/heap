@@ -377,13 +377,12 @@ Rectangle {
             anchors.left: parent.left; anchors.leftMargin: Theme.spMd
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            text: sh.text.toUpperCase()
+            text: sh.text
             elide: Text.ElideRight
             color: Theme.textDim
             font.family: Theme.fontUi
-            font.pixelSize: Theme.fsXs
+            font.pixelSize: Theme.fsSm
             font.weight: Theme.fwTitle
-            font.letterSpacing: 0.8
         }
         Rectangle {
             visible: !sh.expanded

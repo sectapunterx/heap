@@ -99,10 +99,9 @@ Popup {
             text: I18n.t("quickNote.titleInto").arg(root._target)
             elide: Text.ElideRight
             Layout.fillWidth: true
-            color: Theme.textMuted
-            font.pixelSize: Theme.fsXs
+            color: Theme.textDim
+            font.pixelSize: Theme.fsSm
             font.weight: Theme.fwTitle
-            font.letterSpacing: 1
         }
 
         ScrollView {

@@ -26,9 +26,8 @@ Rectangle {
             spacing: Theme.spSm
             Text {
                 text: I18n.t("people.label.title")
-                color: Theme.textMuted
+                color: Theme.textDim
                 font.pixelSize: Theme.fsSm
-                font.letterSpacing: 1
                 font.weight: Theme.fwTitle
             }
             // One count (APP-197): how many are waiting for a message from
@@ -330,7 +329,6 @@ Rectangle {
                             font.family: Theme.fontUi
                             font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsXs
-                            font.letterSpacing: 1
                             font.weight: Theme.fwTitle
                         }
                         MouseArea {

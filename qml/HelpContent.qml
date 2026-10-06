@@ -69,7 +69,6 @@ Item {
         font.pixelSize: Theme.fsMd
         font.family: Theme.fontMono
         font.weight: Theme.fwTitle
-        font.letterSpacing: 0.5
         Layout.fillWidth: true
         Layout.topMargin: Theme.spSm
     }

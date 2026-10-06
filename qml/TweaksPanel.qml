@@ -79,11 +79,10 @@ Popup {
                 anchors.fill: parent
                 anchors.leftMargin: Theme.sp2xl; anchors.rightMargin: Theme.spMd
                 Text {
-                    text: I18n.t("tweaks.title").toUpperCase()
-                    color: Theme.textMuted
+                    text: I18n.t("tweaks.title")
+                    color: Theme.textDim
                     font.pixelSize: Theme.fsSm
                     font.weight: Theme.fwTitle
-                    font.letterSpacing: 1
                 }
                 Item { Layout.fillWidth: true }
                 Rectangle {
@@ -253,8 +252,7 @@ Popup {
 
     component SectLabel: Text {
         color: Theme.textDim
-        font.pixelSize: Theme.fsXs
-        font.letterSpacing: 1
+        font.pixelSize: Theme.fsSm
         font.weight: Theme.fwTitle
     }
 

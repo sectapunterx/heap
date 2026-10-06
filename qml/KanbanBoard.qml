@@ -1441,7 +1441,7 @@ Item {
                 Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("kanban.newColumn"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Theme.fwHeading
             }
             Text {
-                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("kanban.colName").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Theme.fwTitle; font.letterSpacing: 1
+                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("kanban.colName"); color: Theme.textDim; font.pixelSize: Theme.fsSm; font.weight: Theme.fwTitle
             }
             TextField {
                 id: nameField
@@ -1455,7 +1455,7 @@ Item {
                 onAccepted: saveBtn.activate()
             }
             Text {
-                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("common.color").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Theme.fwTitle; font.letterSpacing: 1
+                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("common.color"); color: Theme.textDim; font.pixelSize: Theme.fsSm; font.weight: Theme.fwTitle
             }
             Row {
                 Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset

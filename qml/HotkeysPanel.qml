@@ -131,11 +131,10 @@ Popup {
                 anchors.leftMargin: Theme.sp2xl; anchors.rightMargin: Theme.spMd
                 spacing: Theme.spMd
                 Text {
-                    text: I18n.t("hotkeys.title").toUpperCase()
-                    color: Theme.textMuted
+                    text: I18n.t("hotkeys.title")
+                    color: Theme.textDim
                     font.pixelSize: Theme.fsSm
                     font.weight: Theme.fwTitle
-                    font.letterSpacing: 1
                 }
                 // `?` opens this list from anywhere outside a text field.
                 Text {
@@ -266,11 +265,10 @@ Popup {
                 objectName: "hotkeys-group-" + row.group
                 anchors.left: parent.left; anchors.leftMargin: Theme.sp2xl
                 anchors.verticalCenter: parent.verticalCenter
-                text: row.group.length > 0 ? I18n.t("hotkeys.group." + row.group).toUpperCase() : ""
-                color: Theme.textMuted
-                font.pixelSize: Theme.fsXs
+                text: row.group.length > 0 ? I18n.t("hotkeys.group." + row.group) : ""
+                color: Theme.textDim
+                font.pixelSize: Theme.fsSm
                 font.weight: Theme.fwTitle
-                font.letterSpacing: 0.8
             }
             Rectangle {
                 anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom

@@ -1020,7 +1020,6 @@ Rectangle {
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsXs
                 font.weight: Theme.fwTitle
-                font.letterSpacing: 1
                 leftPadding: Theme.spXl
                 rightPadding: Theme.spXl
             }
