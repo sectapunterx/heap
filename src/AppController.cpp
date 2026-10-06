@@ -58,6 +58,7 @@
 #include "text/UiLanguage.h"
 #include "update/UpdateInstall.h"
 #include "update/Updater.h"
+#include "views/UiScale.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -534,6 +535,16 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.view.settings.label", {"Go to Settings", "Перейти к настройкам"}},
       {"shortcut.view.settings.desc",
        {"Full settings panel: profile, appearance, integrations.", "Полная панель настроек: профиль, внешний вид, интеграции."}},
+      {"shortcut.zoom.in.label", {"Zoom in", "Увеличить интерфейс"}},
+      {"shortcut.zoom.in.desc",
+       {"Larger text and spacing, one step of Settings → Appearance → Scale.",
+        "Крупнее текст и отступы — на шаг шкалы «Внешний вид → Масштаб»."}},
+      {"shortcut.zoom.out.label", {"Zoom out", "Уменьшить интерфейс"}},
+      {"shortcut.zoom.out.desc",
+       {"Smaller text and spacing, one step of Settings → Appearance → Scale.",
+        "Мельче текст и отступы — на шаг шкалы «Внешний вид → Масштаб»."}},
+      {"shortcut.zoom.reset.label", {"Reset zoom", "Сбросить масштаб"}},
+      {"shortcut.zoom.reset.desc", {"Back to 100 %.", "Вернуть 100 %."}},
       {"shortcut.profile.next.label", {"Next profile", "Следующий профиль"}},
       {"shortcut.profile.next.desc", {"Cycle forward through profiles.", "Циклит по списку профилей вперёд."}},
       {"shortcut.profile.prev.label", {"Previous profile", "Предыдущий профиль"}},
@@ -11374,6 +11385,11 @@ void AppController::seedShortcutCatalog() {
   add("view.docs", "Ctrl+6");
   add("view.notes", "Ctrl+7");
   add("view.settings", "Ctrl+8");
+  // Interface scale (APP-168) from the keyboard, as in a browser. Ctrl++,
+  // Ctrl+Shift+= and the numpad keys are fixed aliases (kBuiltinKeys).
+  add("zoom.in", "Ctrl+=");
+  add("zoom.out", "Ctrl+-");
+  add("zoom.reset", "Ctrl+0");
   add("profile.next", "Ctrl+]");
   add("profile.prev", "Ctrl+[");
   add("profile.exportMd", "Ctrl+Shift+E");
@@ -11552,6 +11568,36 @@ QString AppController::shortcutFor(const QString& id) const {
   return i < 0 ? QString() : m_shortcuts[i].toMap().value("sequence").toString();
 }
 
+double AppController::stepUiScale(int direction, const QVariantList& steps) {
+  QList<double> values;
+  for(const QVariant& v : steps) {
+    bool ok = false;
+    const double d = v.toDouble(&ok);
+    if(ok && std::isfinite(d) && d > 0) {
+      values.append(d);
+    }
+  }
+  if(values.isEmpty()) {
+    return 1.0;
+  }
+  const auto [lo, hi] = std::minmax_element(values.cbegin(), values.cend());
+  QJsonObject settings = QJsonDocument::fromJson(m_appSettingsJson.toUtf8()).object();
+  QJsonObject appearance = settings.value(QStringLiteral("appearance")).toObject();
+  // Read the way Theme.scale does: anything outside the steps' range is 1.
+  const QJsonValue stored = appearance.value(QStringLiteral("uiScale"));
+  double current = stored.isDouble() ? stored.toDouble() : 1.0;
+  if(!std::isfinite(current) || current < *lo - 1e-6 || current > *hi + 1e-6) {
+    current = 1.0;
+  }
+  const double next = heap::ui::nextUiScale(current, direction, values);
+  if(!stored.isDouble() || std::abs(stored.toDouble() - next) > 1e-9) {
+    appearance.insert(QStringLiteral("uiScale"), next);
+    settings.insert(QStringLiteral("appearance"), appearance);
+    setAppSettingsJson(QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact)));
+  }
+  return next;
+}
+
 QString AppController::globalHotkeyBackend() const {
   return m_globalHotkey ? m_globalHotkey->backend() : QStringLiteral("none");
 }
@@ -11617,6 +11663,12 @@ constexpr BuiltinKey kBuiltinKeys[] = {
     {"Ctrl+Right", "board.moveRight", "board"},
     {"Ctrl+Shift+M", "builtin.notesMode", "notes"},
     {"Ctrl+Shift+A", "builtin.attach", "editor"},
+    // Zoom: "+" is Shift+= on most layouts, and the numpad has its own keys.
+    {"Ctrl++", "zoom.in", "app"},
+    {"Ctrl+Shift+=", "zoom.in", "app"},
+    {"Ctrl+Num++", "zoom.in", "app"},
+    {"Ctrl+Num+-", "zoom.out", "app"},
+    {"Ctrl+Num+0", "zoom.reset", "app"},
 };
 
 // Where a catalog action is live: the board's, calendar's and notes' keys only
