@@ -66,7 +66,19 @@ TEST(BundledFonts, StylesAreTheShippedWeights) {
   const QStringList monoStyles = QFontDatabase::styles(mono());
   EXPECT_TRUE(monoStyles.contains(QStringLiteral("Regular"))) << qPrintable(monoStyles.join(QStringLiteral(", ")));
   EXPECT_TRUE(monoStyles.contains(QStringLiteral("Medium")));
-  EXPECT_TRUE(QFontDatabase::isFixedPitch(mono()));
+  // Not QFontDatabase::isFixedPitch: fontconfig counts JetBrains Mono as "dual"
+  // spacing (a few glyphs are two cells wide), so it is false on Linux for the
+  // upstream font too. What the UI relies on is that text characters share one
+  // advance.
+  QFont monoFont(mono());
+  monoFont.setPixelSize(13);
+  const QRawFont raw = QRawFont::fromFont(monoFont);
+  ASSERT_TRUE(raw.isValid());
+  const QString sample = QStringLiteral("iWm0O1l.-_APP-108 Жыё");
+  const QList<QPointF> advances = raw.advancesForGlyphIndexes(raw.glyphIndexesForString(sample));
+  for(const QPointF& a : advances) {
+    EXPECT_DOUBLE_EQ(a.x(), advances.first().x());
+  }
 }
 
 TEST(BundledFonts, EachWeightResolvesToItsFace) {

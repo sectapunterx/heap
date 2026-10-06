@@ -5,8 +5,8 @@
 #include <QFontDatabase>
 #include <QFontInfo>
 #include <QGuiApplication>
+#include <QDebug>
 #include <QString>
-#include <QtLogging>
 
 namespace heap::platform {
 
