@@ -208,6 +208,13 @@ class AppController : public QObject {
     return s_headless;
   }
 
+  // `heap done` sent to the open window goes through moveTask() like a drag
+  // does. The CLI executor mutes the completion sound (APP-167) around it:
+  // only the user's own action in this window ticks.
+  void setCompletionSoundMuted(bool muted) {
+    m_completionSoundMuted = muted;
+  }
+
   Q_INVOKABLE void flushSave();
 
   QString storageState() const {
@@ -1534,6 +1541,11 @@ class AppController : public QObject {
   QHash<QString, QString> m_pendingPushes;
   // Non-zero while a bulk move runs moveTask per card: one toast for the lot.
   int m_bulkMoveDepth = 0;
+  // Completion sound (APP-167): muted for CLI requests; a bulk move to Done
+  // ticks once when the loop ends, not once per card.
+  bool m_completionSoundMuted = false;
+  bool m_completionSoundPending = false;
+  void completionSoundOnMove_(const QString& fromStatus, const QString& toStatus);
   // Providers already asked for their full status list this session.
   QSet<QString> m_statusesAsked;
   // Providers whose next tasksFetched answers a quiet follow-up pull.

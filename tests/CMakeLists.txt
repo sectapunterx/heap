@@ -401,6 +401,11 @@ heap_add_appcontroller_test(heap_regression_tests test_regressions.cpp)
 # suite so it runs headless and never touches the real state.json.
 heap_add_appcontroller_test(heap_notes_tests test_notes.cpp)
 
+# ─── Completion sound (APP-167) ───
+# The done-transition decision, the bundled WAV (qrc via heap_core) and which
+# moves ask for the sound; playback is a no-op in QStandardPaths test mode.
+heap_add_appcontroller_test(heap_completion_sound_tests test_completion_sound.cpp)
+
 # ─── Platform (global hotkey) tests ───
 # Cover heap::platform::decodeSequence — the portable QKeySequence → (key,mods)
 # parser the Windows RegisterHotKey backend feeds off. On Windows the native
