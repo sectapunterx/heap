@@ -19,6 +19,13 @@ bool changesData(Verb v);
 // there is none yet; empty optional (and `error`) when it cannot be used.
 std::optional<Snapshot> readSnapshot(QString* error);
 
+// Why the state.json of the current data dir must not be loaded for a change
+// from here: it cannot be read, or what it holds is not a state file. Empty
+// when it is fine or there is none yet. Loading a damaged file quarantines it
+// and promotes a backup (or an empty workspace); only the window may do that,
+// since only the window shows the banner saying so (CLI-1).
+QString unusableState();
+
 // Sends the request to the window open on the data dir. Empty when none is.
 std::optional<Response> askWindow(const QByteArray& requestLine);
 

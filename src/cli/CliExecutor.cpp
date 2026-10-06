@@ -1,6 +1,7 @@
 #include "AppController.h"
 
 #include "cli/CliExecutor.h"
+#include "cli/CliQuery.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -191,6 +192,26 @@ Response execute(AppController& controller, const Request& request, const QDateT
   }
   Response r;
   r.out = helpText();
+  return r;
+}
+
+Response applyHeadless(const Request& request, const QDateTime& now) {
+  if(const QString unusable = unusableState(); !unusable.isEmpty()) {
+    return failure(kExitData, QStringLiteral("nothing changed: ") + unusable);
+  }
+  Response r;
+  AppController controller;
+  if(controller.storageState() != QLatin1String("ok")) {
+    r.exitCode = kExitData;
+    r.err = QStringLiteral("heap: nothing changed: %1\n").arg(controller.storageMessage());
+    return r;
+  }
+  r = execute(controller, request, now);
+  controller.flushSave();
+  if(controller.storageState() != QLatin1String("ok")) {
+    r.exitCode = kExitData;
+    r.err += QStringLiteral("heap: the change was not saved: %1\n").arg(controller.storageMessage());
+  }
   return r;
 }
 

@@ -12,11 +12,14 @@
 
 #include "cli/CliCore.h"
 #include "cli/CliExecutor.h"
+#include "cli/CliQuery.h"
 #include "cli/VerbScan.h"
 #include "platform/Paths.h"
 
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -508,6 +511,116 @@ TEST_F(CliHeadlessTest, AddToAnotherProfileLeavesTheActiveOne) {
   ASSERT_GE(side, 0);
   ASSERT_EQ(s.profiles.at(side).tasks.size(), 1);
   EXPECT_EQ(s.profiles.at(side).tasks.at(0).title, QStringLiteral("side quest"));
+}
+
+// CLI-1: `heap add` with no window used to load a damaged state.json the way
+// the window does — quarantine it, promote the newest backup (or an empty
+// workspace) — then report "nothing changed". The window opened later found a
+// healthy file and no banner, so the rollback went unnoticed. The command line
+// now refuses and leaves every file in the data dir as it was.
+class CliDamagedStateTest : public CliHeadlessTest {
+ protected:
+  void TearDown() override {
+    const QDir dir(heap::paths::dataDir());
+    for(const QString& f : dir.entryList({QStringLiteral("state.corrupt-*.json")}, QDir::Files)) {
+      QFile::remove(dir.filePath(f));
+    }
+    QDir(dir.filePath(QStringLiteral("backups"))).removeRecursively();
+    QFile::remove(dataFile());
+  }
+
+  // Every file under the data dir with its size and a hash of its contents.
+  static std::string dataDirListing() {
+    QStringList out;
+    QDirIterator it(heap::paths::dataDir(), QDir::Files, QDirIterator::Subdirectories);
+    while(it.hasNext()) {
+      QFile f(it.next());
+      EXPECT_TRUE(f.open(QIODevice::ReadOnly));
+      const QByteArray bytes = f.readAll();
+      out << QStringLiteral("%1 %2 %3")
+                 .arg(it.fileName())
+                 .arg(bytes.size())
+                 .arg(QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha1).toHex()));
+    }
+    out.sort();
+    return out.join(QChar('\n')).toStdString();
+  }
+
+  // A saved profile with one task, a backup of it, then state.json cut short.
+  static void damageWithBackup(const QByteArray& replacement = {}) {
+    Request add;
+    add.verb = Verb::Add;
+    add.text = QStringLiteral("before the damage");
+    ASSERT_EQ(applyHeadless(add, QDateTime::currentDateTime()).exitCode, kExitOk);
+    const QDir backups(QDir(heap::paths::dataDir()).filePath(QStringLiteral("backups")));
+    ASSERT_TRUE(QDir().mkpath(backups.path()));
+    QFile::remove(backups.filePath(QStringLiteral("state-20261006-102419.json")));
+    ASSERT_TRUE(QFile::copy(dataFile(), backups.filePath(QStringLiteral("state-20261006-102419.json"))));
+    QFile f(dataFile());
+    ASSERT_TRUE(f.open(QIODevice::ReadWrite));
+    const QByteArray whole = f.readAll();
+    ASSERT_TRUE(f.resize(0));
+    f.seek(0);
+    f.write(replacement.isNull() ? whole.left(whole.size() / 2) : replacement);
+  }
+};
+
+TEST_F(CliDamagedStateTest, AddAndDoneRefuseAndTouchNothing) {
+  damageWithBackup();
+  const std::string before = dataDirListing();
+
+  Request add;
+  add.verb = Verb::Add;
+  add.text = QStringLiteral("after the damage");
+  const Response added = applyHeadless(add, QDateTime::currentDateTime());
+  EXPECT_EQ(added.exitCode, kExitData);
+  EXPECT_TRUE(added.err.contains(QStringLiteral("damaged"))) << qPrintable(added.err);
+  EXPECT_TRUE(added.err.contains(QStringLiteral("open heap"))) << qPrintable(added.err);
+  EXPECT_EQ(dataDirListing(), before);
+
+  Request done;
+  done.verb = Verb::Done;
+  done.taskId = QStringLiteral("TASK-1");
+  EXPECT_EQ(applyHeadless(done, QDateTime::currentDateTime()).exitCode, kExitData);
+  EXPECT_EQ(dataDirListing(), before);
+
+  // No quarantined copy: recovering is left to the window, which shows it.
+  EXPECT_TRUE(QDir(heap::paths::dataDir()).entryList({QStringLiteral("state.corrupt-*.json")}, QDir::Files).isEmpty());
+}
+
+TEST_F(CliDamagedStateTest, ValidJsonThatIsNotAStateFileIsDamageToo) {
+  damageWithBackup(QByteArrayLiteral("{}"));
+  const std::string before = dataDirListing();
+  Request add;
+  add.verb = Verb::Add;
+  add.text = QStringLiteral("after the damage");
+  const Response r = applyHeadless(add, QDateTime::currentDateTime());
+  EXPECT_EQ(r.exitCode, kExitData);
+  EXPECT_TRUE(r.err.contains(QStringLiteral("open heap"))) << qPrintable(r.err);
+  EXPECT_EQ(dataDirListing(), before);
+}
+
+TEST_F(CliDamagedStateTest, QuestionsRefuseAndTouchNothing) {
+  damageWithBackup();
+  const std::string before = dataDirListing();
+  for(const Verb v : {Verb::List, Verb::Today, Verb::Now}) {
+    Request r;
+    r.verb = v;
+    EXPECT_EQ(runQuery(r), std::optional<int>(kExitData));
+    EXPECT_EQ(dataDirListing(), before);
+  }
+}
+
+TEST_F(CliDamagedStateTest, AFreshDataDirStillTakesAnAdd) {
+  Request add;
+  add.verb = Verb::Add;
+  add.text = QStringLiteral("first one");
+  const Response r = applyHeadless(add, QDateTime::currentDateTime());
+  EXPECT_EQ(r.exitCode, kExitOk) << qPrintable(r.err);
+  const Snapshot s = reload();
+  const int pi = findProfile(s, QString());
+  ASSERT_GE(pi, 0);
+  EXPECT_EQ(s.profiles.at(pi).tasks.size(), 1);
 }
 
 int main(int argc, char** argv) {

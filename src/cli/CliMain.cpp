@@ -44,21 +44,7 @@ Response headless(const Request& request) {
   heap::logging::installFileLogger();
   qInfo("command line: %s", request.verb == Verb::Add ? "add" : "done");
   AppController::setHeadless(true);
-  Response r;
-  {
-    AppController controller;
-    if(controller.storageState() != QLatin1String("ok")) {
-      r.exitCode = kExitData;
-      r.err = QStringLiteral("heap: nothing changed: %1\n").arg(controller.storageMessage());
-    } else {
-      r = execute(controller, request, QDateTime::currentDateTime());
-      controller.flushSave();
-      if(controller.storageState() != QLatin1String("ok")) {
-        r.exitCode = kExitData;
-        r.err += QStringLiteral("heap: the change was not saved: %1\n").arg(controller.storageMessage());
-      }
-    }
-  }
+  const Response r = applyHeadless(request, QDateTime::currentDateTime());
   heap::logging::closeFileLogger();
   return r;
 }

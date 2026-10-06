@@ -20,4 +20,11 @@ namespace heap::cli {
 // Does not flush the save; a headless caller does that before exiting.
 Response execute(AppController& controller, const Request& request, const QDateTime& now);
 
+// `add`/`done` with no window open: a headless AppController on the data dir
+// (the caller holds it and has called AppController::setHeadless), the verb,
+// the save flushed. A state.json that cannot be read or is damaged is refused
+// before the controller exists and left as it is: the window recovers it and
+// says so, a script running `heap add` would not (CLI-1).
+Response applyHeadless(const Request& request, const QDateTime& now);
+
 }  // namespace heap::cli
