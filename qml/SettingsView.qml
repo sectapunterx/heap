@@ -1974,6 +1974,8 @@ Item {
 
             // What integrations do and do not do, before any of them.
             IntegrationsInfoCard {}
+            // How each connected tracker has been doing (APP-164).
+            IntegrationHealthCard {}
             // Outlook / Google / iCloud meetings by link (APP-118).
             CalendarSubscriptionsCard {}
 
@@ -2076,7 +2078,7 @@ Item {
                                     Rectangle {
                                         id: intTile
                                         objectName: "int-card-tile"
-                                        width: 32; height: 32; radius: Theme.radiusMd
+                                        implicitWidth: 32; implicitHeight: 32; radius: Theme.radiusMd
                                         color: modelData.color
                                         readonly property string logo: root.providerLogos[modelData.id] || ""
                                         IconImage {
@@ -2747,6 +2749,13 @@ Item {
                     hint: I18n.t("settings.git.prState.hint")
                     checked: !!(root.settings.git && root.settings.git.watchPrState)
                     onToggled: (checked) => root.set("git", "watchPrState", checked)
+                }
+                SwitchRow {
+                    objectName: "settings-git-show-move"
+                    label: I18n.t("settings.git.showMove")
+                    hint: I18n.t("settings.git.showMove.hint")
+                    checked: !(root.settings.git && root.settings.git.showWhoseMove === false)
+                    onToggled: (checked) => root.set("git", "showWhoseMove", checked)
                 }
             }
         }

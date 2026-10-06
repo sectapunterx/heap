@@ -173,6 +173,13 @@ Popup {
             if (f === "title") out.push({ label: I18n.t("ticket.conflict.title"), value: String(t.remoteTitle || "") });
             else if (f === "body") out.push({ label: I18n.t("ticket.conflict.body"), value: String(t.remoteBody || "") || "—" });
             else if (f === "priority") out.push({ label: I18n.t("ticket.conflict.priority"), value: String(t.remotePriority || "") });
+            else if (f === "status") {
+                const names = root.statusNames();
+                const at = root.statusList().indexOf(String(t.remoteColumn || ""));
+                out.push({ label: I18n.t("ticket.conflict.status"),
+                           value: (at >= 0 ? names[at] : String(t.remoteColumn || ""))
+                                  + (t.remoteStatus ? " (" + t.remoteStatus + ")" : "") });
+            }
         }
         return out;
     }
@@ -185,8 +192,45 @@ Popup {
         if (fields.indexOf("body") >= 0) descField.text = String(t.remoteBody || "");
         if (fields.indexOf("priority") >= 0 && String(t.remotePriority || "").length > 0)
             priBox.currentIndex = Math.max(0, ["P0", "P1", "P2", "P3"].indexOf(t.remotePriority));
+        if (fields.indexOf("status") >= 0) {
+            const at = root.statusList().indexOf(String(t.remoteColumn || ""));
+            if (at >= 0) statusBox.currentIndex = at;
+        }
         AppController.resolveTrackerConflict(root._originalId, true);
         root._conflictResolved = true;
+    }
+
+    // What happened to this task (APP-165). Read on open and whenever the
+    // controller says this task gained an event; never written from here.
+    property bool historyOpen: false
+    property int _historyRev: 0
+    readonly property var _history: (root._historyRev, root._originalId ? AppController.taskHistory(root._originalId) : [])
+    // The list as the fold shows it: worked out here, so the delegates only
+    // read their own row.
+    readonly property var _historyRows: root._history.map(e => ({ when: root._historyWhen(e.at), text: root._historyText(e) }))
+    function _historyWhen(at) {
+        if (!at || !at.getTime || isNaN(at.getTime())) return "";
+        return AppController.shortDate(at) + " " + String(at.getHours()).padStart(2, "0")
+             + ":" + String(at.getMinutes()).padStart(2, "0");
+    }
+    function _statusName(id) {
+        const at = root.statusList().indexOf(String(id || ""));
+        return at >= 0 ? root.statusNames()[at] : String(id || "—");
+    }
+    function _historyText(e) {
+        const v = (s) => String(s || "").length > 0 ? String(s) : "—";
+        let line;
+        switch (e.kind) {
+        case "created":   return I18n.t(e.sync ? "history.pulled" : "history.created");
+        case "pushed":    return I18n.t("history.pushed").arg(root._statusName(e.to));
+        case "status":    line = I18n.t("history.status").arg(root._statusName(e.from)).arg(root._statusName(e.to)); break;
+        case "title":     line = I18n.t("history.title").arg(v(e.from)).arg(v(e.to)); break;
+        case "priority":  line = I18n.t("history.priority").arg(v(e.from)).arg(v(e.to)); break;
+        case "due":       line = I18n.t("history.due").arg(v(e.from)).arg(v(e.to)); break;
+        case "scheduled": line = I18n.t("history.scheduled").arg(v(e.from)).arg(v(e.to)); break;
+        default:          line = String(e.kind);
+        }
+        return e.sync ? I18n.t("history.viaTracker").arg(line) : line;
     }
 
     // Comments, held only while this dialog is open (HEAP-117).
@@ -196,6 +240,10 @@ Popup {
 
     Connections {
         target: AppController
+
+        function onTaskHistoryChanged(taskId) {
+            if (taskId === root._originalId) root._historyRev++;
+        }
 
         function onTicketCommentsLoaded(taskId, comments, error) {
             // A reply for a ticket the user has since navigated away from.
@@ -211,6 +259,8 @@ Popup {
         _commentsError = "";
         _commentsRequested = false;
         _conflictResolved = false;
+        historyOpen = false;
+        _historyRev++;
         draft = initialDraft || {};
         isNew = !!draft._isNew;
         _originalId = isNew ? "" : (draft.id || "");
@@ -1422,6 +1472,89 @@ Popup {
                                 font.pixelSize: Theme.fsSm
                                 wrapMode: Text.WordWrap
                                 maximumLineCount: 6
+                                elide: Text.ElideRight
+                            }
+                        }
+                    }
+                }
+
+                // ── History (APP-165): what happened to this task, newest
+                // first. Folded by default; the fold says how many events.
+                Rectangle {
+                    visible: historyToggle.visible
+                    Layout.fillWidth: true
+                    Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+                    implicitHeight: 1
+                    color: Theme.border
+                }
+                Item {
+                    id: historyToggle
+                    objectName: "te-history-toggle"
+                    visible: !root.isNew && root._history.length > 0
+                    Layout.fillWidth: true
+                    Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+                    implicitHeight: historyHead.implicitHeight + Theme.spSm
+                    activeFocusOnTab: true
+                    Accessible.role: Accessible.Button
+                    Accessible.name: historyHead.text
+                    Keys.onSpacePressed: root.historyOpen = !root.historyOpen
+                    Keys.onReturnPressed: root.historyOpen = !root.historyOpen
+                    Keys.onEnterPressed: root.historyOpen = !root.historyOpen
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: -Theme.sp2xs
+                        radius: Theme.radiusSm
+                        color: "transparent"
+                        visible: historyToggle.activeFocus
+                        border.color: Theme.focusRing
+                        border.width: 2
+                    }
+                    Text {
+                        id: historyHead
+                        objectName: "te-history-head"
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: (root.historyOpen ? "▾  " : "▸  ") + I18n.t("editor.history").arg(root._history.length)
+                        color: historyMA.containsMouse ? Theme.text : Theme.textMuted
+                        font.pixelSize: Theme.fsMd
+                        font.weight: Font.DemiBold
+                    }
+                    MouseArea {
+                        id: historyMA
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.historyOpen = !root.historyOpen
+                    }
+                }
+                ColumnLayout {
+                    objectName: "te-history"
+                    visible: root.historyOpen && historyToggle.visible
+                    Layout.fillWidth: true
+                    Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+                    spacing: Theme.spXs
+                    Repeater {
+                        model: root.historyOpen ? root._historyRows : []
+                        delegate: RowLayout {
+                            id: histRow
+                            required property var modelData
+                            Layout.fillWidth: true
+                            spacing: Theme.spMd
+                            Text {
+                                text: histRow.modelData.when
+                                color: Theme.textDim
+                                font.family: Theme.fontMono
+                                font.pixelSize: Theme.fsXs
+                            }
+                            Text {
+                                objectName: "te-history-line"
+                                Layout.fillWidth: true
+                                text: histRow.modelData.text
+                                textFormat: Text.PlainText
+                                color: Theme.text
+                                font.pixelSize: Theme.fsSm
+                                wrapMode: Text.Wrap
+                                maximumLineCount: 3
                                 elide: Text.ElideRight
                             }
                         }

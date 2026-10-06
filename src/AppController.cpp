@@ -21,6 +21,7 @@
 #include "git/BranchTaskResolve.h"
 #include "git/GitWatcher.h"
 #include "hints/ShortcutHints.h"
+#include "history/TaskHistory.h"
 #include "integrations/AutoSync.h"
 #include "integrations/IntegrationI18n.h"
 #include "integrations/JiraProvider.h"
@@ -32,6 +33,7 @@
 #include "integrations/RestIssueProvider.h"
 #include "integrations/SecretStore.h"
 #include "integrations/StatusMap.h"
+#include "integrations/SyncState.h"
 #include "integrations/TrackerMerge.h"
 #include "markdown/MdHtml.h"
 #include "markdown/MdOutline.h"
@@ -78,6 +80,7 @@
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QSaveFile>
+#include <QScopedValueRollback>
 #include <QStandardPaths>
 #include <QSysInfo>
 #include <QSystemTrayIcon>
@@ -813,6 +816,12 @@ AppController::AppController(QObject* parent) :
 
   seedShortcutCatalog();
 
+  // Task history (APP-165): every single-task change the model sees, from
+  // whichever path made it, minus loads. A tracker pull marks its own.
+  m_tasks.setChangeObserver([this](const Task* before, const Task& after) {
+    recordTaskChange(before, after);
+  });
+
   // Re-localize shortcut catalog when language flips so the Settings →
   // Shortcuts list and HotkeysPanel labels update in place.
   connect(this, &AppController::languageChanged, this, [this]() {
@@ -862,6 +871,8 @@ AppController::AppController(QObject* parent) :
           entry["prState"] = pr.value("state");
           entry["prNumber"] = pr.value("number");
           entry["prUrl"] = pr.value("url");
+          entry["prMove"] = pr.value("move");
+          entry["prMoveReason"] = pr.value("moveReason");
           m_tasks.setGitInfoForId(taskIdForBranchMatch(mr.taskId), entry);
         });
     applyGitSettingsFromMap(settingsMap().value("git").toMap());
@@ -2021,6 +2032,8 @@ void AppController::pushStatusToTracker(const QString& taskId, const QString& st
   // offer to send the same status again.
   const QString key = pushKey(providerId, project, externalId);
   m_pendingPushes.insert(key, taskId);
+  // The card says "sending" until the tracker answers (APP-163).
+  m_tasks.setPushRuntime(taskId, true, QString());
   ensureFreshToken(
       providerId,
       [this, providerId, externalId, status, project, key, taskId]() {
@@ -2077,14 +2090,31 @@ void AppController::onTaskPushed(const QString& providerId,
   // wrote nothing, so the base still holds.
   const bool wrote = ok && error != QStringLiteral("pull-only");
   const bool baseMoves = wrote && t.externalMeta.status != remoteStatus;
-  if(t.externalMeta.unsyncedStatus != wanted || t.externalMeta.pushQueued || baseMoves) {
+  // A status the tracker took settles a status conflict: the user's side is
+  // now the tracker's too (APP-163).
+  const bool settlesConflict = ok && t.externalMeta.conflicts.contains(QStringLiteral("status"));
+  m_tasks.setPushRuntime(t.id, false, ok ? QString() : providerReason(error));
+  if(t.externalMeta.unsyncedStatus != wanted || t.externalMeta.pushQueued || baseMoves || settlesConflict) {
     t.externalMeta.unsyncedStatus = wanted;
     // The tracker answered: the move is no longer waiting to be sent.
     t.externalMeta.pushQueued = false;
     if(wrote) {
       t.externalMeta.status = remoteStatus;
     }
+    if(settlesConflict) {
+      heap::integrations::setConflict(t.externalMeta.conflicts, QStringLiteral("status"), false);
+    }
     m_tasks.upsert(t);
+    scheduleSave();
+  }
+  if(wrote) {
+    // The history says what went out, not only what came in (APP-165).
+    m_history.append(
+        activeProfileId(),
+        t.id,
+        heap::history::HistoryEvent{
+            .at = QDateTime::currentDateTime(), .kind = QStringLiteral("pushed"), .from = QString(), .to = t.status, .sync = true});
+    emit taskHistoryChanged(t.id);
     scheduleSave();
   }
   if(ok) {
@@ -6308,6 +6338,7 @@ void AppController::resetToFirstRun() {
   m_profiles.clear();
   m_activeProfileId.clear();
   m_rootExtra = {};
+  m_history.clear();
   m_settingsExtra = {};
   m_taskSeq.clear();
   m_events.reset({});
@@ -7030,6 +7061,8 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
                                                             QStringList* goneCandidates) {
   using heap::integrations::StatusMap;
   MergeStats stats;
+  // Whatever this pull changes on a card is the tracker's doing (APP-165).
+  const QScopedValueRollback<bool> fromTracker(m_historySync, true);
 
   // Resolved once for the batch: the map is the same for every issue, and
   // re-reading the settings blob per issue is how settingsMap() used to show
@@ -7175,10 +7208,6 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
         t.priority = QStringLiteral("P2");
       }
     }
-    if(conflicted) {
-      ++stats.conflicts;
-    }
-
     if(!ext.status.isEmpty() && !seenStatuses.contains(ext.status)) {
       seenStatuses.append(ext.status);
     }
@@ -7186,32 +7215,37 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
     // A status that has not changed since the last pull says nothing new, so
     // the column the user picked here stands; that is what lets a card sit in
     // In Progress or Blocked against a tracker that only knows open/closed.
+    // The tracker moving the issue while a local move is still unsent (refused
+    // or queued) is a conflict: the local column stays, nothing is pushed, and
+    // the user picks a side (APP-163) — it used to drop the local move.
     const QString mapped = StatusMap::column(ext.status, statusOverrides, QStringLiteral("todo"));
-    const QString prevRemote = t.externalMeta.status;
-    const bool remoteMoved = !prevRemote.isEmpty() && prevRemote != ext.status;
     const auto isDone = [](const QString& column) {
       return column == QStringLiteral("done");
     };
-    if(isNewRow) {
+    using heap::integrations::StatusPull;
+    const StatusPull statusPull =
+        isNewRow ? StatusPull::TakeRemote
+                 : heap::integrations::mergeStatusOnPull(
+                       t.status, t.externalMeta.unsyncedStatus, t.externalMeta.status, ext.status, mapped, t.externalMeta.column);
+    if(statusPull == StatusPull::TakeRemote) {
       t.status = mapped;
-    } else if(remoteMoved) {
-      // Someone moved the issue in the tracker: that is news, and it wins —
-      // over a queued move too, which would now undo theirs.
-      t.status = mapped;
-      t.externalMeta.unsyncedStatus.clear();
-      t.externalMeta.pushQueued = false;
-    } else if(!t.externalMeta.unsyncedStatus.isEmpty()) {
-      // A move the tracker refused: keep it here until a push goes through.
-    } else if(prevRemote.isEmpty()) {
-      // Stored before the last-seen status was kept. Only a change of kind
-      // (open ↔ closed) is evidence; the rest is the user's arrangement.
-      if(isDone(mapped) != isDone(t.status)) {
-        t.status = mapped;
+      if(!t.externalMeta.unsyncedStatus.isEmpty() && t.externalMeta.status != ext.status) {
+        // The tracker moved it (to where the card already is, or with
+        // nothing of ours waiting): there is nothing left to send.
+        t.externalMeta.unsyncedStatus.clear();
+        t.externalMeta.pushQueued = false;
       }
-    } else if(t.status == t.externalMeta.column) {
-      // Still where the last pull put it, so the user has not placed it:
-      // follow the mapping, which may have changed since.
-      t.status = mapped;
+      heap::integrations::setConflict(t.externalMeta.conflicts, QStringLiteral("status"), false);
+    } else if(statusPull == StatusPull::Conflict) {
+      // Held, not sent: a queued move would now undo theirs unasked.
+      t.externalMeta.pushQueued = false;
+      if(!t.externalMeta.conflicts.contains(QStringLiteral("status"))) {
+        conflicted = true;
+      }
+      heap::integrations::setConflict(t.externalMeta.conflicts, QStringLiteral("status"), true);
+    }
+    if(conflicted) {
+      ++stats.conflicts;
     }
     t.externalMeta.column = mapped;
     t.externalMeta.status = ext.status;
@@ -7559,6 +7593,7 @@ void AppController::applyIntegrationSettings() {
               m_retriedAfter401.remove(providerId);
               // The tracker answered, so it is reachable again.
               setProviderOffline(providerId, false);
+              recordSyncHealth(providerId, true, static_cast<int>(issues.size()), 0, QString());
               emit integrationActionFinished(providerId, QStringLiteral("sync"), true, QString());
               const bool settlePull = m_settlePulls.remove(providerId);
               // Issues missing from the pull are looked up before anything
@@ -7636,16 +7671,18 @@ void AppController::applyIntegrationSettings() {
              cfg.value(QStringLiteral("authMode")).toString() == QStringLiteral("oauth") &&
              !cfg.value(QStringLiteral("refreshToken")).toString().isEmpty()) {
             m_retriedAfter401.insert(providerId);
-            refreshOAuthToken(providerId, [this, providerId, label, error](bool ok) {
+            refreshOAuthToken(providerId, [this, providerId, label, error, status](bool ok) {
               if(ok) {
                 syncProviderNow(providerId);
               } else {
+                recordSyncHealth(providerId, false, -1, status, error);
                 emit integrationActionFinished(
                     providerId, QStringLiteral("sync"), false, tr_("sync.failed").arg(label, providerReason(error)));
               }
             });
             return;
           }
+          recordSyncHealth(providerId, false, -1, status, error);
           const QString message = tr_("sync.failed").arg(label, providerReason(error));
           emit toast(message, QStringLiteral("error"));
           emit integrationActionFinished(providerId, QStringLiteral("sync"), false, message);
@@ -7771,6 +7808,7 @@ heap::integrations::MattermostClient* AppController::directoryClient(const QStri
           this,
           [this, providerId, label](const QVector<heap::integrations::ExternalContact>& contacts) {
             const int changed = mergeExternalContacts(providerId, contacts);
+            recordSyncHealth(providerId, true, static_cast<int>(contacts.size()), 0, QString());
             emit integrationActionFinished(providerId, QStringLiteral("sync"), true, QString());
             if(changed == 0) {
               emit toast(tr_("contacts.upToDate").arg(label));
@@ -7781,6 +7819,7 @@ heap::integrations::MattermostClient* AppController::directoryClient(const QStri
   connect(client, &heap::integrations::MattermostClient::failed, this, [this, providerId, label](int status, const QString& error) {
     // A session token dies after ~30 days, and a revoked one is a 401 too.
     // Saying "expired" beats repeating the same failure on every auto-sync.
+    recordSyncHealth(providerId, false, -1, status, error);
     if(status == 401) {
       disconnectIntegration(providerId);
       emit toast(tr_("int.sessionExpired").arg(label), QStringLiteral("warning"));
@@ -8593,6 +8632,72 @@ QVariantMap AppController::integrationStates() const {
   return out;
 }
 
+void AppController::recordTaskChange(const Task* before, const Task& after) {
+  if(m_loading || after.id.isEmpty()) {
+    return;
+  }
+  const QString profileId = activeProfileId();
+  // Undo putting a deleted task back is not its creation.
+  if(before == nullptr && m_history.count(profileId, after.id) > 0) {
+    return;
+  }
+  const QVector<heap::history::HistoryEvent> events = heap::history::diffTask(before, after, QDateTime::currentDateTime(), m_historySync);
+  if(events.isEmpty()) {
+    return;
+  }
+  for(const heap::history::HistoryEvent& e : events) {
+    m_history.append(profileId, after.id, e);
+  }
+  emit taskHistoryChanged(after.id);
+}
+
+QVariantList AppController::taskHistory(const QString& taskId) const {
+  return heap::history::TaskHistory::toVariant(m_history.events(activeProfileId(), taskId));
+}
+
+void AppController::recordSyncHealth(const QString& providerId, bool ok, int items, int httpStatus, const QString& error) {
+  heap::integrations::ProviderHealth& h = m_syncHealth[providerId];
+  const QDateTime now = QDateTime::currentDateTime();
+  if(ok) {
+    h.recordOk(now, items);
+  } else {
+    h.recordFailure(now, httpStatus, error);
+  }
+  emit integrationHealthChanged();
+}
+
+QVariantList AppController::integrationHealth() const {
+  return integrationHealthAt(QDateTime::currentDateTime());
+}
+
+QVariantList AppController::integrationHealthAt(const QDateTime& now) const {
+  using namespace heap::integrations;
+  const bool ru = m_language == QStringLiteral("ru");
+  const QVariantMap integrations = settingsMap().value(QStringLiteral("integrations")).toMap();
+  QVariantList out;
+  for(const ProviderDescriptor& d : providerCatalog()) {
+    const QVariantMap cfg = integrations.value(d.id).toMap();
+    if(!cfg.value(QStringLiteral("connected"), false).toBool()) {
+      continue;
+    }
+    const ProviderHealth h = m_syncHealth.value(d.id);
+    const bool failing = h.failing();
+    out.append(QVariantMap{
+        {QStringLiteral("id"), d.id},
+        {QStringLiteral("name"), d.displayName},
+        {QStringLiteral("lastOk"), relativeAge(h.lastOk, now, ru)},
+        {QStringLiteral("items"), h.lastItems},
+        {QStringLiteral("failing"), failing},
+        {QStringLiteral("error"), failing ? failureText(h.lastFailure, ru) : QString()},
+        {QStringLiteral("errorDetail"), failing ? providerReason(h.lastError) : QString()},
+        {QStringLiteral("errorAge"), failing ? relativeAge(h.lastFailureAt, now, ru) : QString()},
+        {QStringLiteral("expiry"), expiryText(expiryFromString(cfg.value(QStringLiteral("tokenExpiresAt")).toString()), now, ru)},
+        {QStringLiteral("offline"), m_offlineProviders.contains(d.id)},
+    });
+  }
+  return out;
+}
+
 void AppController::setProviderOffline(const QString& providerId, bool offline) {
   if(offline == m_offlineProviders.contains(providerId)) {
     return;
@@ -8647,6 +8752,7 @@ void AppController::queueTrackerPush(const QString& taskId, const QString& statu
   if(row < 0) {
     return;
   }
+  m_tasks.setPushRuntime(taskId, false, QString());
   Task t = m_tasks.items().at(row);
   if(t.externalMeta.pushQueued && t.externalMeta.unsyncedStatus == status) {
     return;
@@ -8666,7 +8772,8 @@ void AppController::queueTrackerPush(const QString& taskId, const QString& statu
 void AppController::flushQueuedPushes(const QString& providerId) {
   QStringList ids;
   for(const Task& t : m_tasks.items()) {
-    if(t.externalProvider == providerId && t.externalMeta.pushQueued) {
+    // A move held by a status conflict waits for the user, not for a sync.
+    if(t.externalProvider == providerId && t.externalMeta.pushQueued && !t.externalMeta.conflicts.contains(QStringLiteral("status"))) {
       ids.append(t.id);
     }
   }
@@ -8692,27 +8799,73 @@ void AppController::resolveTrackerConflict(const QString& taskId, bool useTracke
   if(row < 0) {
     return;
   }
-  Task t = m_tasks.items().at(row);
-  if(t.externalMeta.conflicts.isEmpty()) {
-    return;
-  }
-  const UndoScope scope(this, tr_("task.editUndone").arg(taskId));
+  const QStringList fields = m_tasks.items().at(row).externalMeta.conflicts;
+  resolveTrackerConflictFields(taskId, fields, useTracker);
+}
+
+void AppController::resolveTrackerConflictField(const QString& taskId, const QString& field, bool useTracker) {
+  resolveTrackerConflictFields(taskId, {field}, useTracker);
+}
+
+namespace {
+
+// One side of one conflicting field (APP-163). Returns true when the choice
+// means the card's status has to go to the tracker now: keeping my status is
+// keeping it *and sending it*, since the tracker still says otherwise.
+bool applyConflictChoice(Task& t, const QString& field, bool useTracker) {
   if(useTracker) {
-    for(const QString& field : t.externalMeta.conflicts) {
-      if(field == QStringLiteral("title") && !t.externalMeta.title.isEmpty()) {
-        t.title = t.externalMeta.title;
-      } else if(field == QStringLiteral("body")) {
-        t.desc = t.externalMeta.body;
-      } else if(field == QStringLiteral("priority") && !t.externalMeta.priority.isEmpty()) {
-        t.priority = t.externalMeta.priority;
+    if(field == QStringLiteral("title") && !t.externalMeta.title.isEmpty()) {
+      t.title = t.externalMeta.title;
+    } else if(field == QStringLiteral("body")) {
+      t.desc = t.externalMeta.body;
+    } else if(field == QStringLiteral("priority") && !t.externalMeta.priority.isEmpty()) {
+      t.priority = t.externalMeta.priority;
+    } else if(field == QStringLiteral("status")) {
+      if(!t.externalMeta.column.isEmpty() && t.status != t.externalMeta.column) {
+        t.status = t.externalMeta.column;
+        t.statusChangedAt = QDateTime::currentDateTime();
       }
+      // The local move is dropped by the user's own choice: nothing to send.
+      t.externalMeta.unsyncedStatus.clear();
+      t.externalMeta.pushQueued = false;
     }
   }
-  // Keeping mine only stops the flag: the base stays what the tracker sent,
-  // so the next upstream change to the same field is flagged again.
-  t.externalMeta.conflicts.clear();
-  m_tasks.upsert(t);
-  scheduleSave();
+  // Keeping mine for a text field only stops the flag: the base stays what
+  // the tracker sent, so the next upstream change to it is flagged again.
+  heap::integrations::setConflict(t.externalMeta.conflicts, field, false);
+  return !useTracker && field == QStringLiteral("status");
+}
+
+}  // namespace
+
+void AppController::resolveTrackerConflictFields(const QString& taskId, const QStringList& fields, bool useTracker) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return;
+  }
+  Task t = m_tasks.items().at(row);
+  QStringList pending;
+  for(const QString& f : fields) {
+    if(t.externalMeta.conflicts.contains(f)) {
+      pending.append(f);
+    }
+  }
+  if(pending.isEmpty()) {
+    return;
+  }
+  bool send = false;
+  {
+    const UndoScope scope(this, tr_("task.editUndone").arg(taskId));
+    for(const QString& f : pending) {
+      send = applyConflictChoice(t, f, useTracker) || send;
+    }
+    m_tasks.upsert(t);
+    scheduleSave();
+  }
+  if(send) {
+    pushStatusToTracker(taskId, t.status);
+  }
+  emit trackerConflictResolved(taskId);
   emit toast(tr_(useTracker ? "task.conflictTookTracker" : "task.conflictKeptMine").arg(externalKeyOf(t)));
 }
 
@@ -9201,6 +9354,7 @@ const QStringList& knownRootKeys() {
                                    QStringLiteral("events"),
                                    QStringLiteral("settings"),
                                    QStringLiteral("taskSeq"),
+                                   QStringLiteral("taskHistory"),
                                    // v1 flat collections
                                    QStringLiteral("tasks"),
                                    QStringLiteral("people"),
@@ -9473,12 +9627,14 @@ void AppController::saveStateNow() {
   const QString path = stateFilePath();
   const QString backups = backupDirPath();
   const AppController::StateWriter writer = g_stateWriter;
+  // Serialized on the worker with the rest (implicitly shared copy).
+  const heap::history::TaskHistory history = m_history;
   // The time machine (APP-162): an hourly compressed copy, taken on the worker
   // after the file landed, so neither the copy nor its retention costs the UI.
   const QString historyDir = heap::history::dirFor(heap::paths::dataDir());
   const heap::history::Policy historyPolicy = heap::history::policyFrom(settingsMap().value("data").toMap());
 
-  auto job = [head, profiles, events, path, backups, backupDue, writer, historyDir, historyPolicy]() {
+  auto job = [head, profiles, events, history, path, backups, backupDue, writer, historyDir, historyPolicy]() {
     QJsonObject root = head;
     QJsonArray profilesArr;
     for(const Profile& p : profiles) {
@@ -9487,6 +9643,9 @@ void AppController::saveStateNow() {
     root["profiles"] = profilesArr;
     // Events are global (shown across profiles in the calendar).
     root["events"] = heap::state::eventsToJson(events);
+    if(!history.isEmpty()) {
+      root["taskHistory"] = history.toJson();
+    }
 
     if(backupDue) {
       copyStateToBackupDir(path, backups, QString());
@@ -9594,6 +9753,7 @@ void AppController::reloadStateFromDisk() {
   m_profiles.clear();
   m_activeProfileId.clear();
   m_rootExtra = {};
+  m_history.clear();
   m_settingsExtra = {};
   m_taskSeq.clear();
   m_saveBlocked = false;
@@ -9769,6 +9929,9 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
     m_rootExtra = unknownKeys(root, knownRootKeys());
     m_settingsExtra = unknownKeys(root.value("settings").toObject(), knownSettingsKeys());
   }
+  // Task history (APP-165): a root key with no schema rung — absent means
+  // none, and a build that does not know it carries it through untouched.
+  m_history = heap::history::TaskHistory::fromJson(root.value(QStringLiteral("taskHistory")).toObject());
   m_taskSeq.clear();
   const QJsonObject seq = root.value("taskSeq").toObject();
   for(auto it = seq.constBegin(); it != seq.constEnd(); ++it) {
@@ -12100,6 +12263,11 @@ QString AppController::taskIdForBranchMatch(const QString& matchedId) const {
 }
 
 void AppController::applyGitSettingsFromMap(const QVariantMap& g) {
+  const bool showMove = g.value("showWhoseMove", true).toBool();
+  if(showMove != m_showWhoseMove) {
+    m_showWhoseMove = showMove;
+    emit showWhoseMoveChanged();
+  }
   if(!m_gitWatcher) {
     return;
   }
@@ -12197,6 +12365,8 @@ void AppController::onGitRepoState(const QString& repo, const QVariantMap& state
   entry["prState"] = pr.value("state");
   entry["prNumber"] = pr.value("number");
   entry["prUrl"] = pr.value("url");
+  entry["prMove"] = pr.value("move");
+  entry["prMoveReason"] = pr.value("moveReason");
   m_tasks.setGitInfoForId(taskIdForBranchMatch(mr.taskId), entry);
 }
 

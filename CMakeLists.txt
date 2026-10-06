@@ -194,6 +194,7 @@ qt_add_library(heap_core STATIC
     src/git/BranchTaskMatcher.cpp
     src/git/BranchTaskResolve.cpp
     src/git/GitWatcher.cpp
+    src/git/PrFacts.cpp
     # Command line (APP-173): heap add|now|list|today|done|open.
     src/cli/CliConsole.cpp
     src/cli/CliCore.cpp
@@ -236,6 +237,8 @@ qt_add_library(heap_core STATIC
     # ── audit-ux: end ──
     # ── audit-int: begin ──
     src/integrations/TrackerMerge.cpp
+    src/integrations/SyncHealth.cpp
+    src/history/TaskHistory.cpp
     src/integrations/AutoSync.h
     src/integrations/IntegrationI18n.cpp
     src/diag/IssueReport.cpp
@@ -313,6 +316,8 @@ qt_add_qml_module(heap_core
         # ── audit-tasks: end ──
         # ── audit-time: begin ──
         qml/SeriesScopeDialog.qml
+        qml/SyncConflictDialog.qml
+        qml/IntegrationHealthCard.qml
         qml/IntegrationsInfoCard.qml
         qml/CalendarSubscriptionsCard.qml
         qml/AutoSyncCard.qml
@@ -414,6 +419,7 @@ qt_add_qml_module(heap_core
         src/git/BranchTaskMatcher.h
         src/git/GitTypes.h
         src/git/GitWatcher.h
+        src/git/PrFacts.h
         src/text/TaskTextUtils.h
         src/query/QueryParser.h
         src/query/TaskQuery.h
@@ -429,6 +435,9 @@ qt_add_qml_module(heap_core
         src/TypeAhead.h
         src/integrations/IntegrationTypes.h
         src/integrations/StatusMap.h
+        src/integrations/SyncState.h
+        src/integrations/SyncHealth.h
+        src/history/TaskHistory.h
         src/integrations/GithubProvider.h
         src/integrations/JiraProvider.h
         src/integrations/GitlabProvider.h
