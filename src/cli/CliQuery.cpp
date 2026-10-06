@@ -42,6 +42,25 @@ std::optional<Snapshot> readSnapshot(QString* error) {
   return snapshotFromState(doc.object(), error);
 }
 
+QString unusableState() {
+  const QString path = QDir(heap::paths::dataDir()).filePath(QStringLiteral("state.json"));
+  const heap::storage::ReadResult read = heap::storage::readWithRetry(path, {100, 300});
+  if(read.kind == heap::storage::ReadResult::Missing) {
+    return {};
+  }
+  if(read.kind == heap::storage::ReadResult::Unreadable) {
+    return QStringLiteral("cannot read %1: %2").arg(QDir::toNativeSeparators(path), read.error);
+  }
+  // The same test the window's load applies before it recovers.
+  QJsonParseError parseError{};
+  const QJsonDocument doc = QJsonDocument::fromJson(read.bytes, &parseError);
+  QString reason = parseError.errorString();
+  if(doc.isObject() && heap::storage::validateShape(doc.object(), &reason)) {
+    return {};
+  }
+  return QStringLiteral("%1 is damaged (%2); open heap to recover it").arg(QDir::toNativeSeparators(path), reason);
+}
+
 std::optional<Response> askWindow(const QByteArray& requestLine) {
   const std::optional<QByteArray> reply = heap::platform::SingleInstance::request(heap::paths::dataDir(), requestLine, kRequestTimeoutMs);
   if(!reply) {

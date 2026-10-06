@@ -127,6 +127,14 @@ Popup {
     // the user edits idField, AppController can find and rename the existing
     // row instead of inserting a duplicate.
     property string _originalId: ""
+    // The profile the editor was opened in: the task lives there, and what is
+    // saved or deleted here goes there, whatever profile is active by then
+    // (PRES-1).
+    property string _profileId: ""
+    function _backToOwnProfile() {
+        if (root._profileId && AppController.activeProfileId !== root._profileId)
+            AppController.activeProfileId = root._profileId;
+    }
 
     // ── Mirrored tracker issue (HEAP-117) ──
     // Empty for a locally-created task, which is what the strip keys off.
@@ -266,6 +274,7 @@ Popup {
         draft = initialDraft || {};
         isNew = !!draft._isNew;
         _originalId = isNew ? "" : (draft.id || "");
+        _profileId = AppController.activeProfileId;
         // New tasks: leave idField empty with a TODO hint — real id is
         // assigned on save. Edit: pre-fill with existing id (editable).
         idField.text = isNew ? "" : (draft.id || "");
@@ -583,6 +592,7 @@ Popup {
 
         const d = {
             _isNew: root.isNew,
+            _profileId: root._profileId,
             // Pass the original id alongside the (possibly edited)
             // new id so saveTask can rename rather than insert a
             // duplicate row when the user changes the id field.
@@ -613,6 +623,9 @@ Popup {
         if (root.isNew) {
             d.attachments = root._attachments.map(a => ({ id: a.id, name: a.name, size: a.size, mime: a.mime }));
         }
+        // Before the undo group: a profile switch ends the undo history, and
+        // inside a group it would record one profile's models against another's.
+        root._backToOwnProfile();
         // A task and the meeting it books are one undo step.
         AppController.beginUndoGroup(I18n.t("editor.undo.save").arg(finalId));
         try {
@@ -1636,6 +1649,7 @@ Popup {
                     // Delete the row that was opened, keyed by the stable
                     // open-time id — NOT the live idField, which the user may
                     // have edited (Save threads _originalId for the same reason).
+                    root._backToOwnProfile();
                     AppController.deleteTask(root._originalId);
                     root.close();
                 }
@@ -1650,6 +1664,7 @@ Popup {
                     const wasArchived = root._archived;
                     if (root.isDirty() && !root._commit()) return;
                     const id = idField.text.trim().length > 0 ? idField.text.trim() : root._originalId;
+                    root._backToOwnProfile();
                     AppController.setArchived(id, !wasArchived);
                     root.close();
                 }

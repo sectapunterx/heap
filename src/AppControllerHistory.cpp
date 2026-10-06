@@ -95,6 +95,34 @@ QVariantMap itemRow(const QString& kind,
                      {QStringLiteral("profileExists"), profileExists}};
 }
 
+// "Restore everything" brings back the data — profiles, events, task history —
+// and not the app's settings (TM-3). Those describe the install, not a moment
+// of the work: the theme, the shortcuts, the integrations, and the time
+// machine's own retention, which taken back to the snapshot's (the 30-day
+// default, typically) let the next hourly copy prune the months of history
+// the user had asked to keep. The snapshot is brought up to this build's
+// schema first, so the settings it is given are read at the version they were
+// written in. Only `demoActive` comes from the snapshot: it says whether the
+// restored profiles are the seeded demo.
+QByteArray withCurrentSettings(const QByteArray& snapshot, const QByteArray& current) {
+  const QJsonObject now = QJsonDocument::fromJson(current).object();
+  if(!now.value(QStringLiteral("settings")).isObject()) {
+    return snapshot;
+  }
+  QJsonObject root = QJsonDocument::fromJson(snapshot).object();
+  heap::state::migrateState(root, root.value(QStringLiteral("schemaVersion")).toInt(1));
+  const QJsonObject then = root.value(QStringLiteral("settings")).toObject();
+  QJsonObject settings = now.value(QStringLiteral("settings")).toObject();
+  const QString demo = QStringLiteral("demoActive");
+  if(then.contains(demo)) {
+    settings.insert(demo, then.value(demo));
+  } else {
+    settings.remove(demo);
+  }
+  root.insert(QStringLiteral("settings"), settings);
+  return QJsonDocument(root).toJson(QJsonDocument::Compact);
+}
+
 }  // namespace
 
 QString AppController::historyDirPath() const {
@@ -314,7 +342,12 @@ bool AppController::restoreSnapshot(const QString& name) {
     emit toast(tr_("backup.snapshotFailed"), QStringLiteral("warning"));
     return false;
   }
-  if(!replaceStateFile(bytes)) {
+  QByteArray current;
+  if(QFile f(stateFilePath()); f.open(QIODevice::ReadOnly)) {
+    current = f.readAll();
+  }
+  // replaceStateFile keeps the task id counter from going back (TM-2).
+  if(!replaceStateFile(withCurrentSettings(bytes, current))) {
     return false;
   }
   QDateTime at;
@@ -353,11 +386,8 @@ QString AppController::restoreSnapshotProfile(const QString& name, const QString
   // fresh one, and the copied events follow it (PLAT-9).
   reissueSharedTaskIds(copy, &events);
   m_profiles.push_back(copy);
-  for(CalEvent& e : events) {
-    e.profileId = copy.id;
-    e.id = mintEventId();
-    m_events.upsert(e);
-  }
+  // The copied overrides follow the copied series, as duplicateProfile's do (TM-1).
+  addEventsAsCopies(events, copy.id);
   emit profilesChanged();
   emit toast(tr_("history.profileRestored").arg(copy.name));
   scheduleSave();
