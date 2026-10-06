@@ -959,6 +959,8 @@ Item {
                                             required property bool archived
                                             required property bool blockedStuck
                                             required property string prState
+                                            required property string prMove
+                                            required property string prMoveReason
                                             required property int    prNumber
                                             required property string prUrl
                                             required property int    gitAhead
@@ -1002,6 +1004,7 @@ Item {
                                                 deadline: tc.deadline, branch: tc.branch,
                                                 archived: tc.archived, blockedStuck: tc.blockedStuck,
                                                 prState: tc.prState, prNumber: tc.prNumber, prUrl: tc.prUrl,
+                                                prMove: tc.prMove, prMoveReason: tc.prMoveReason,
                                                 gitAhead: tc.gitAhead, gitBehind: tc.gitBehind,
                                                 recentCommits: tc.recentCommits,
                                                 trackedSeconds: tc.trackedSeconds, isTiming: tc.isTiming,
