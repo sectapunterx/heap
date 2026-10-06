@@ -576,7 +576,8 @@ Item {
                     Text {
                         text: I18n.t("docs.counts").arg(root.totalDocs()).arg(root.snippets.length).arg(root.contacts.length)
                         color: Theme.textDim
-                        font.family: Theme.fontMono
+                        font.family: Theme.fontUi
+                        font.features: Theme.tabularNums
                         font.pixelSize: Theme.fsSm
                     }
                 }
@@ -930,13 +931,15 @@ Item {
                                             return "▼ " + lbl + (secCol.section.sortDesc ? " ↓" : " ↑");
                                         }
                                         color: Theme.accentStrong
-                                        font.family: Theme.fontMono
+                                        font.family: Theme.fontUi
+                                        font.features: Theme.tabularNums
                                         font.pixelSize: Theme.fsXs
                                     }
                                     Text {
                                         text: secCol.filtered.length + " / " + secCol.section.items.length
                                         color: Theme.textDim
-                                        font.family: Theme.fontMono
+                                        font.family: Theme.fontUi
+                                        font.features: Theme.tabularNums
                                         font.pixelSize: Theme.fsSm
                                     }
                                     PillButton {
@@ -1023,7 +1026,8 @@ Item {
                                     // not claim nine snippets above one card.
                                     text: root.matchingSnippetCount + ""
                                     color: Theme.textDim
-                                    font.family: Theme.fontMono
+                                    font.family: Theme.fontUi
+                                    font.features: Theme.tabularNums
                                     font.pixelSize: Theme.fsSm
                                 }
                                 PillButton {
@@ -1076,7 +1080,8 @@ Item {
                                 Text {
                                     text: root.matchingContactCount + ""
                                     color: Theme.textDim
-                                    font.family: Theme.fontMono
+                                    font.family: Theme.fontUi
+                                    font.features: Theme.tabularNums
                                     font.pixelSize: Theme.fsSm
                                 }
                                 PillButton {
@@ -1252,7 +1257,7 @@ Item {
             spacing: Theme.spMd
             Rectangle { width: 4; height: 16; radius: 2; color: nav.barColor }
             Text { text: nav.label; color: Theme.text; font.pixelSize: Theme.fsMd; Layout.fillWidth: true; elide: Text.ElideRight }
-            Text { text: nav.count + ""; color: Theme.textDim; font.family: Theme.fontMono; font.pixelSize: Theme.fsSm }
+            Text { text: nav.count + ""; color: Theme.textDim; font.family: Theme.fontUi; font.features: Theme.tabularNums; font.pixelSize: Theme.fsSm }
         }
         MouseArea {
             id: navMA
@@ -1423,7 +1428,8 @@ Item {
                     visible: (card.item.version || "").length > 0
                     text: card.item.version || ""
                     color: Theme.textDim
-                    font.family: Theme.fontMono
+                    font.family: Theme.fontUi
+                    font.features: Theme.tabularNums
                     font.pixelSize: Theme.fsSm
                 }
                 Text {
@@ -1480,7 +1486,8 @@ Item {
                 Text {
                     text: card.item.source || ""
                     color: Theme.textDim
-                    font.family: Theme.fontMono
+                    font.family: Theme.fontUi
+                    font.features: Theme.tabularNums
                     font.pixelSize: Theme.fsXs
                 }
                 Item { Layout.fillWidth: true }
@@ -1488,7 +1495,8 @@ Item {
                     visible: (card.item.updated || "").length > 0
                     text: I18n.t("docs.updatedPrefix").arg(card.item.updated || "")
                     color: Theme.textDim
-                    font.family: Theme.fontMono
+                    font.family: Theme.fontUi
+                    font.features: Theme.tabularNums
                     font.pixelSize: Theme.fsXs
                 }
             }
@@ -1756,7 +1764,8 @@ Item {
                     anchors.centerIn: parent
                     text: root.initials(cc.c.name || "")
                     color: Theme.textOnAccent
-                    font.family: Theme.fontMono
+                    font.family: Theme.fontUi
+                    font.features: Theme.tabularNums
                     font.pixelSize: Theme.fsMd
                     font.weight: Font.DemiBold
                 }
@@ -1784,7 +1793,7 @@ Item {
                             anchors.centerIn: parent
                             text: "MM"
                             color: Theme.textDim
-                            font.family: Theme.fontMono; font.pixelSize: Theme.fsXs; font.letterSpacing: 0.5
+                            font.family: Theme.fontUi; font.features: Theme.tabularNums; font.pixelSize: Theme.fsXs; font.letterSpacing: 0.5
                         }
                     }
                 }

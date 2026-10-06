@@ -241,7 +241,8 @@ Popup {
                 Layout.fillWidth: true
                 text: I18n.t("tweaks.allInSettings")
                 color: Theme.textDim
-                font.family: Theme.fontMono
+                font.family: Theme.fontUi
+                font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsXs
                 wrapMode: Text.WordWrap
             }

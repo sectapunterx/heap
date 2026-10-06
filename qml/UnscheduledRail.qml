@@ -119,7 +119,8 @@ Rectangle {
             Text {
                 text: root.items.length
                 color: Theme.textDim
-                font.family: Theme.fontMono
+                font.family: Theme.fontUi
+                font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsSm
             }
         }

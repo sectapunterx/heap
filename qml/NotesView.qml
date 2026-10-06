@@ -629,7 +629,8 @@ Item {
                             return parts.join(" · ");
                         }
                         color: Theme.textDim
-                        font.family: Theme.fontMono
+                        font.family: Theme.fontUi
+                        font.features: Theme.tabularNums
                         font.pixelSize: Theme.fsSm
                     }
                 }
@@ -638,7 +639,8 @@ Item {
                     visible: editor.length > 0 && root.viewMode !== "preview" && root.width > 900
                     text: I18n.t("notes.legend")
                     color: Theme.textDim
-                    font.family: Theme.fontMono
+                    font.family: Theme.fontUi
+                    font.features: Theme.tabularNums
                     font.pixelSize: Theme.fsSm
                 }
 
@@ -1151,7 +1153,8 @@ Item {
                                     Text {
                                         text: modelData.count !== undefined ? modelData.count : modelData.refs.length
                                         color: Theme.textDim
-                                        font.family: Theme.fontMono
+                                        font.family: Theme.fontUi
+                                        font.features: Theme.tabularNums
                                         font.pixelSize: Theme.fsXs
                                     }
                                 }
@@ -1327,7 +1330,8 @@ Item {
                                 return (parts[0] ? parts[0][0] : "") + (parts[1] ? parts[1][0] : "");
                             }
                             color: Theme.textOnAccent
-                            font.family: Theme.fontMono
+                            font.family: Theme.fontUi
+                            font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsXs
                             font.weight: Font.DemiBold
                         }

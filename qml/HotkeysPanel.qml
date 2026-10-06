@@ -142,7 +142,8 @@ Popup {
                     objectName: "hotkeys-question-hint"
                     text: I18n.t("hotkeys.questionHint")
                     color: Theme.textDim
-                    font.family: Theme.fontMono
+                    font.family: Theme.fontUi
+                    font.features: Theme.tabularNums
                     font.pixelSize: Theme.fsXs
                 }
                 Item { Layout.fillWidth: true }
@@ -229,7 +230,8 @@ Popup {
                 anchors.centerIn: parent
                 text: I18n.t("hotkeys.recordHelp")
                 color: Theme.textDim
-                font.family: Theme.fontMono
+                font.family: Theme.fontUi
+                font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsXs
             }
         }

@@ -212,7 +212,8 @@ Popup {
                                 return (parts[0] ? parts[0][0] : "") + (parts[1] ? parts[1][0] : "");
                             }
                             color: Theme.textOnAccent
-                            font.family: Theme.fontMono
+                            font.family: Theme.fontUi
+                            font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsXs
                             font.weight: Font.DemiBold
                         }
@@ -261,7 +262,8 @@ Popup {
                             anchors.centerIn: parent
                             text: I18n.t("people.pick.inrail")
                             color: Theme.textDim
-                            font.family: Theme.fontMono
+                            font.family: Theme.fontUi
+                            font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsXs
                             font.letterSpacing: 1
                         }

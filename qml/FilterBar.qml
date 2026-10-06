@@ -321,7 +321,8 @@ Rectangle {
                     .arg(root.totalCount).arg(root.activeCount)
                     .arg(root.blockedCount).arg(root.reviewCount)
             color: Theme.textDim
-            font.family: Theme.fontMono
+            font.family: Theme.fontUi
+            font.features: Theme.tabularNums
             font.pixelSize: Theme.fsSm
             elide: Text.ElideRight
             // Shrinks (and elides) instead of running off the bar's edge

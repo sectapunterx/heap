@@ -334,7 +334,8 @@ ListView {
                                   ? I18n.t("notes.code.diagram").arg(rowItem.model.language)
                                   : rowItem.model.language
                             color: Theme.textDim
-                            font.family: Theme.fontMono
+                            font.family: Theme.fontUi
+                            font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsSm
                         }
                         Item { Layout.fillWidth: true }
