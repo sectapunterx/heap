@@ -310,12 +310,9 @@ Item {
                             target: pageRow.ListView.view
                             function onMenuRequested() { if (pageRow.ListView.isCurrentItem) pageRow.openMenu(); }
                         }
-                        Rectangle {
-                            anchors.fill: parent
-                            radius: parent.radius
-                            color: "transparent"
-                            border.color: Theme.focusRing
-                            border.width: 2
+                        FocusRing {
+                            anchors.margins: 0
+                            radius: pageRow.radius
                             visible: pageRow.ListView.isCurrentItem && pageRow.ListView.view.activeFocus
                             z: 10
                         }

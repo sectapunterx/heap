@@ -355,12 +355,9 @@ Rectangle {
                     readonly property bool listFocused: !!row.parent && !!row.parent.ListView.view
                                                         && row.parent.ListView.view.activeFocus
                     function openMenu() { rowMenu.popup(row, Theme.spXl, row.height / 2); }
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: parent.radius
-                        color: "transparent"
-                        border.color: Theme.focusRing
-                        border.width: 2
+                    FocusRing {
+                        anchors.margins: 0
+                        radius: row.radius
                         visible: row.current && row.listFocused
                         z: 10
                     }

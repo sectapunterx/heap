@@ -398,12 +398,17 @@ Item {
                     radius: Theme.radius
                     color: _inMonth ? Theme.panel : Theme.panel2
                     opacity: _inMonth ? 1.0 : 0.55
-                    border.color: _sel ? (grid.activeFocus ? Theme.focusRing : Theme.accent)
-                                       : (_today ? Theme.accentStrong : Theme.border)
+                    border.color: _sel ? Theme.accent : (_today ? Theme.accentStrong : Theme.border)
                     border.width: _sel || _today ? 2 : 1
                     Accessible.role: Accessible.Cell
                     Accessible.name: root.dayLabel(modelData.date)
                     Accessible.selected: _sel
+                    // The keyboard's day, while the grid has the keyboard.
+                    FocusRing {
+                        objectName: "month-cell-cursor"
+                        anchors.margins: 0
+                        visible: dayCell._sel && grid.activeFocus
+                    }
                     // A busy day is clipped to its cell instead of drawing
                     // over the row below.
                     clip: true

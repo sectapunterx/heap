@@ -1242,14 +1242,9 @@ Popup {
                     Keys.onSpacePressed: root.detailsOpen = !root.detailsOpen
                     Keys.onReturnPressed: root.detailsOpen = !root.detailsOpen
                     Keys.onEnterPressed: root.detailsOpen = !root.detailsOpen
-                    Rectangle {
-                        anchors.fill: parent
+                    FocusRing {
                         anchors.margins: -Theme.sp2xs
                         radius: Theme.radiusSm
-                        color: "transparent"
-                        visible: detailsToggle.activeFocus
-                        border.color: Theme.focusRing
-                        border.width: 2
                     }
                     RowLayout {
                         id: detailsRow
@@ -1556,14 +1551,9 @@ Popup {
                     Keys.onSpacePressed: root.historyOpen = !root.historyOpen
                     Keys.onReturnPressed: root.historyOpen = !root.historyOpen
                     Keys.onEnterPressed: root.historyOpen = !root.historyOpen
-                    Rectangle {
-                        anchors.fill: parent
+                    FocusRing {
                         anchors.margins: -Theme.sp2xs
                         radius: Theme.radiusSm
-                        color: "transparent"
-                        visible: historyToggle.activeFocus
-                        border.color: Theme.focusRing
-                        border.width: 2
                     }
                     Text {
                         id: historyHead

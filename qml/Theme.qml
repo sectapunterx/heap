@@ -128,8 +128,20 @@ QtObject {
     // was panel2 on panel, 1.03:1. The ring is drawn outside the control, on
     // the surface, so it is measured against the surfaces — and a theme
     // whose accentStrong is too faint for that gets a stronger one.
-    readonly property color focusRing: Presets.ensureContrast(String(accentStrong),
+    //
+    // It is the keyboard cursor's colour (APP-174): Settings → Appearance →
+    // Cursor colour picks it, appearance.cursorColor holds the pick, and
+    // none means the theme's accent. A pick too faint for a surface is
+    // strengthened like the accent is. Only focus is drawn in it.
+    readonly property string cursorColorPick: typeof _appearance.cursorColor === "string"
+                                              && /^#[0-9a-fA-F]{6}$/.test(_appearance.cursorColor)
+                                              ? _appearance.cursorColor.toLowerCase() : ""
+    readonly property color focusRing: Presets.ensureContrast(cursorColorPick.length ? cursorColorPick : String(accent),
         [String(bg), String(panel), String(panel2), String(panel3)], 3.0)
+    // The soft glow just outside the ring, so the cursor reads at a glance
+    // and not only on a close look. FocusRing draws both.
+    readonly property color focusHalo: withAlpha(focusRing, 0.22)
+    readonly property int focusHaloWidth: 3
     // Fill of the highlighted menu / palette row; focusRing marks it.
     readonly property color rowHighlight: panel3
 

@@ -51,18 +51,12 @@ Button {
                    : selected ? Theme.withAlpha(Theme.accent, 0.5)
                    : (root.hovered ? Theme.borderStrong : Theme.border)
         border.width: 1
-        // The focus ring sits outside the pill, on the surface around it: an
-        // accentStrong border on a primary button's accent fill was 1.1–1.4:1
-        // and could not be seen. Theme.focusRing holds 3:1 on every surface.
-        Rectangle {
+        // The cursor sits outside the pill, on the surface around it: a
+        // border on a primary button's accent fill was 1.1–1.4:1 and could
+        // not be seen. Theme.focusRing holds 3:1 on every surface.
+        FocusRing {
             objectName: "pill-focus-ring"
-            anchors.fill: parent
-            anchors.margins: -3
-            radius: parent.radius + 3
-            color: "transparent"
             visible: root.visualFocus
-            border.color: Theme.focusRing
-            border.width: 2
         }
     }
     contentItem: Text {

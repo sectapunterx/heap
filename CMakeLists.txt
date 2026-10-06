@@ -397,6 +397,7 @@ qt_add_qml_module(heap_core
         qml/SettingsView.qml
         qml/SettingsGroup.qml
         qml/SettingsRow.qml
+        qml/CursorColorRow.qml
         qml/SeenBeforeHint.qml
         qml/StandupDraftDialog.qml
         qml/HelpContent.qml
