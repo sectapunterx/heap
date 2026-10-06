@@ -1825,6 +1825,10 @@ class AppController : public QObject {
   // — links, #KEY-1 mentions — and `events`' task links at it. Returns
   // old id -> new id (PLAT-9).
   QHash<QString, QString> reissueSharedTaskIds(Profile& p, QVector<CalEvent>* events);
+  // Adds `events` (another profile's, or a snapshot's) to the pool as
+  // `profileId`'s own: each gets a fresh id, and an override follows its
+  // series to the copy's (PLAT-10, TM-1).
+  void addEventsAsCopies(const QVector<CalEvent>& events, const QString& profileId);
   int statusIndexOf(const QString& id) const;
   // Whether another column (not `exceptId`) already carries `name`, ignoring case.
   bool statusNameTaken(const QString& name, const QString& exceptId) const;

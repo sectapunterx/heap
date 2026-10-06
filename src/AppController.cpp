@@ -10558,6 +10558,21 @@ QHash<QString, QString> AppController::reissueSharedTaskIds(Profile& p, QVector<
   return remap;
 }
 
+void AppController::addEventsAsCopies(const QVector<CalEvent>& events, const QString& profileId) {
+  QHash<QString, QString> eventIds;
+  for(const CalEvent& e : events) {
+    eventIds.insert(e.id, mintEventId());
+  }
+  for(CalEvent e : events) {
+    e.id = eventIds.value(e.id);
+    // An override stands in for an occurrence of its own copy's series. Left
+    // on the original's, it hid the original's own override for that day.
+    e.masterId = eventIds.value(e.masterId, e.masterId);
+    e.profileId = profileId;
+    m_events.upsert(e);
+  }
+}
+
 QString AppController::duplicateProfile(const QString& id, const QString& newName) {
   const int i = profileIndexOf(id);
   if(i < 0) {
@@ -10579,17 +10594,7 @@ QString AppController::duplicateProfile(const QString& id, const QString& newNam
     }
   }
   reissueSharedTaskIds(copy, &events);  // the copy's tasks are new tasks (PLAT-9)
-  QHash<QString, QString> eventIds;
-  for(const CalEvent& e : std::as_const(events)) {
-    eventIds.insert(e.id, mintEventId());
-  }
-  for(CalEvent e : std::as_const(events)) {
-    e.id = eventIds.value(e.id);
-    // An override stands in for an occurrence of its own copy's series.
-    e.masterId = eventIds.value(e.masterId, e.masterId);
-    e.profileId = copy.id;
-    m_events.upsert(e);
-  }
+  addEventsAsCopies(events, copy.id);
   clearPendingUndo();  // undo is scoped to the active workspace
   m_profiles.push_back(copy);
   m_activeProfileId = copy.id;

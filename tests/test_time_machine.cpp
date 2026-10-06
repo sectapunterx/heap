@@ -202,6 +202,21 @@ TEST(TimeMachineRetention, TheSizeCapTakesTheOldestFirstAndNeverTheNewest) {
   EXPECT_EQ(hh::pickToDelete(files, fixedNow(), p).size(), 3) << "the newest copy stays even over the cap";
 }
 
+TEST(TimeMachineRetention, TheWayBackFromTheLastRestoreIsNeverPruned) {
+  // TM-3: the copy taken before a restore is five days old, and an hourly one
+  // later that day would normally stand for the day; the cap fits one copy.
+  const QDate day = fixedNow().date().addDays(-5);
+  const hh::SnapshotFile pre = snap(QDateTime(day, QTime(9, 0)), 1000, QStringLiteral("pre"));
+  const hh::SnapshotFile olderPre = snap(QDateTime(day.addDays(-1), QTime(9, 0)), 1000, QStringLiteral("pre"));
+  const QVector<hh::SnapshotFile> files{snap(fixedNow()), snap(QDateTime(day, QTime(18, 0))), pre, olderPre};
+  EXPECT_FALSE(hh::pickToDelete(files, fixedNow(), hh::Policy{}).contains(pre.name));
+  hh::Policy tiny;
+  tiny.maxBytes = 10;
+  const QStringList gone = hh::pickToDelete(files, fixedNow(), tiny);
+  EXPECT_FALSE(gone.contains(pre.name)) << "not even the size cap takes it";
+  EXPECT_TRUE(gone.contains(olderPre.name)) << "only the newest one is exempt";
+}
+
 // ── The file ──
 
 TEST(TimeMachineFormat, EncodeDecodeRoundTrip) {
@@ -403,6 +418,115 @@ TEST_F(TimeMachine, RestoringEverythingIsItselfRestorable) {
   ASSERT_FALSE(pre.isEmpty()) << "the replaced state is in history";
   ASSERT_TRUE(app.restoreSnapshot(pre));
   EXPECT_GE(app.tasks()->indexOfId(added), 0);
+}
+
+TEST_F(TimeMachine, RestoringEverythingKeepsTheSettingsAndTheHistoryTheyKeep) {
+  // TM-3: the snapshot was taken under the default 30-day retention; the user
+  // has since asked for 90 days. Restoring the data must not restore that.
+  QJsonObject root = QJsonDocument::fromJson(stateDoc({profileJson("work", {taskJson("WORK-1")})}, "work")).object();
+  // A real file has app settings of its own, just not the retention ones.
+  QJsonObject settings = root.value("settings").toObject();
+  settings["theme"] = QStringLiteral("dark");
+  settings["app"] = QJsonObject{{"notifications", QJsonObject{{"enabled", true}}}};
+  root["settings"] = settings;
+  const QByteArray then = QJsonDocument(root).toJson();
+  const QString name = hh::write(historyDir(), then, hh::summarize(root), QDateTime::currentDateTime().addSecs(-2LL * 3600));
+  ASSERT_FALSE(name.isEmpty());
+  // Copies the 90-day policy keeps and the 30-day one would not.
+  const QString old47 = hh::write(historyDir(), then, hh::summarize(root), QDateTime::currentDateTime().addDays(-47));
+  const QString old60 = hh::write(historyDir(), then, hh::summarize(root), QDateTime::currentDateTime().addDays(-60));
+  settings["theme"] = QStringLiteral("light");
+  settings["app"] = QJsonObject{{"data", QJsonObject{{"historyDays", 90}, {"historyMaxMb", 500}}}};
+  root["settings"] = settings;
+  writeRaw(appDataDir() + "/state.json", QJsonDocument(root).toJson());
+
+  AppController app;
+  ASSERT_TRUE(app.restoreSnapshot(name));
+  const QJsonObject appSettings = QJsonDocument::fromJson(app.appSettingsJson().toUtf8()).object();
+  EXPECT_EQ(appSettings.value("data").toObject().value("historyDays").toInt(), 90) << "retention is not part of the data";
+  EXPECT_EQ(app.theme(), QStringLiteral("light")) << "neither are the other settings";
+
+  // An hour on, the next save is due an hourly copy and prunes by the policy
+  // in force. (The save before the restore took this hour's copy.)
+  for(const QString& f : historyFiles()) {
+    QDateTime at;
+    QString tag;
+    if(hh::parseName(f, &at, &tag) && tag.isEmpty() && at.secsTo(QDateTime::currentDateTime()) < 3600) {
+      ASSERT_TRUE(QFile::rename(historyDir() + "/" + f, historyDir() + "/" + hh::fileNameFor(at.addSecs(-90LL * 60))));
+    }
+  }
+  QVariantMap draft = app.newTaskDraft(QStringLiteral("todo"));
+  draft["title"] = QStringLiteral("after the restore");
+  ASSERT_TRUE(app.saveTask(draft));
+  app.flushSave();
+  const QStringList files = historyFiles();
+  EXPECT_TRUE(files.contains(old47)) << files.join(' ').toStdString();
+  EXPECT_TRUE(files.contains(old60)) << files.join(' ').toStdString();
+}
+
+TEST_F(TimeMachine, RestoringEverythingNeverHandsATaskIdOutTwice) {
+  // TM-2: a task made after the snapshot is gone after the restore, but its id
+  // is still in the "before restore" copy. A new task must not take it.
+  writeRaw(appDataDir() + "/state.json", stateDoc({profileJson("work", {taskJson("WORK-1")})}, "work"));
+  QString added;
+  {
+    AppController app;
+    const QString name = app.takeSnapshotNow(QString());
+    QVariantMap draft = app.newTaskDraft(QStringLiteral("todo"));
+    draft["title"] = QStringLiteral("made after the snapshot");
+    added = draft.value("id").toString();
+    ASSERT_TRUE(app.saveTask(draft));
+
+    ASSERT_TRUE(app.restoreSnapshot(name));
+    ASSERT_LT(app.tasks()->indexOfId(added), 0);
+    EXPECT_NE(app.newTaskDraft(QStringLiteral("todo")).value("id").toString(), added);
+    app.flushSave();
+  }
+  // And the counter reached the disk: a restart does not hand it out either.
+  AppController again;
+  EXPECT_NE(again.newTaskDraft(QStringLiteral("todo")).value("id").toString(), added);
+}
+
+TEST_F(TimeMachine, AProfileCopysOverridesFollowItsOwnSeries) {
+  // TM-1: an edited occurrence of a recurring event, copied with its profile,
+  // must stand in for the copy's series. Left on the live one's, it hid the
+  // live profile's own override for that day.
+  QJsonObject root = QJsonDocument::fromJson(stateDoc({profileJson("work", {taskJson("WORK-1")})}, "work")).object();
+  root["events"] = QJsonArray{QJsonObject{{"id", "ev-series"},
+                                          {"title", "weekly sync"},
+                                          {"date", "2026-10-07"},
+                                          {"start", 10},
+                                          {"end", 11},
+                                          {"rrule", "FREQ=WEEKLY"},
+                                          {"profileId", "work"}},
+                              QJsonObject{{"id", "ev-moved"},
+                                          {"title", "moved sync"},
+                                          {"date", "2026-10-14"},
+                                          {"start", 10},
+                                          {"end", 11},
+                                          {"masterId", "ev-series"},
+                                          {"originalDate", "2026-10-14"},
+                                          {"profileId", "work"}}};
+  writeRaw(appDataDir() + "/state.json", QJsonDocument(root).toJson());
+  AppController app;
+  const QString name = app.takeSnapshotNow(QString());
+  const QString copyId = app.restoreSnapshotProfile(name, QStringLiteral("work"));
+  ASSERT_FALSE(copyId.isEmpty());
+
+  QVector<CalEvent> copied;
+  for(const CalEvent& e : app.events()->items()) {
+    if(e.profileId == copyId) {
+      copied.append(e);
+    } else if(e.id == QLatin1String("ev-moved")) {
+      EXPECT_EQ(e.masterId, QStringLiteral("ev-series")) << "the live override is untouched";
+    }
+  }
+  ASSERT_EQ(copied.size(), 2);
+  const CalEvent& series = copied.at(0).rrule.isEmpty() ? copied.at(1) : copied.at(0);
+  const CalEvent& moved = copied.at(0).rrule.isEmpty() ? copied.at(0) : copied.at(1);
+  EXPECT_NE(series.id, QStringLiteral("ev-series"));
+  EXPECT_NE(moved.id, QStringLiteral("ev-moved"));
+  EXPECT_EQ(moved.masterId, series.id) << "the copy's override must stand in for the copy's series";
 }
 
 TEST_F(TimeMachine, ANameWithAPathIsRefused) {
