@@ -53,6 +53,7 @@
 #include "storage/Attachments.h"
 #include "storage/Snapshots.h"
 #include "storage/StateIO.h"
+#include "text/PersonMatch.h"
 #include "text/TaskTextUtils.h"
 #include "text/UiLanguage.h"
 #include "update/UpdateInstall.h"
@@ -5146,7 +5147,54 @@ QString AppController::personIdForHandle(const QString& handle) const {
       found = p.id;
     }
   }
+  if(!found.isEmpty()) {
+    return found;
+  }
+  // "@r.losev" for "Роман Лосев", hand-written: a login derived from the
+  // name names them when it names nobody else. Two people it fits ("Руслан
+  // Лосев" too) and it names neither.
+  for(const Person& p : m_people.items()) {
+    if(heap::text::personMatchRank(want, p.name, p.id) >= heap::text::PersonRank::ExactHandle) {
+      if(!found.isEmpty()) {
+        return {};
+      }
+      found = p.id;
+    }
+  }
   return found;
+}
+
+int AppController::personMatchRank(const QString& query, const QString& name, const QString& id) const {
+  return heap::text::personMatchRank(query, name, id);
+}
+
+QVariantList AppController::matchPeople(const QString& query, int limit) const {
+  struct Hit {
+    int rank;
+    qsizetype row;
+  };
+
+  const QVector<Person>& people = m_people.items();
+  QVector<Hit> hits;
+  for(qsizetype i = 0; i < people.size(); ++i) {
+    const int rank = heap::text::personMatchRank(query, people[i].name, people[i].id);
+    if(rank > heap::text::PersonRank::NoMatch) {
+      hits.push_back({rank, i});
+    }
+  }
+  // Best rank first; the model's own order among equals.
+  std::stable_sort(hits.begin(), hits.end(), [](const Hit& a, const Hit& b) {
+    return a.rank > b.rank;
+  });
+  QVariantList out;
+  for(const Hit& h : hits) {
+    if(limit > 0 && out.size() >= limit) {
+      break;
+    }
+    const Person& p = people[h.row];
+    out.append(QVariantMap{{"id", p.id}, {"name", p.name}, {"role", p.role}, {"color", p.color}, {"rank", h.rank}});
+  }
+  return out;
 }
 
 QVariantMap AppController::personById(const QString& id) const {

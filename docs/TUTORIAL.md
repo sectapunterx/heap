@@ -56,6 +56,7 @@ Everything is optional and order-independent, in **English and Russian**.
 | `APP-231 fix login race` | the ticket key becomes the task's **id** (and leaves the title) |
 | `pay invoice // net-30, portal is slow` | text after `//` becomes the task **description** |
 | `review PR @andrey @lena` | keeps the `@mentions` and links them to matching people |
+| `ask @r.losev` / `@roman losev` | finds a person by a login made of their name — for *Роман Лосев*: `@r.losev`, `@rlosev`, `@losev.r`, `@roman.losev`, `@losev`, or the words `@roman losev` / `@роман лосев` |
 | `urgent fix prod` / `p1 fix prod` / `fix prod !!` | sets the **priority**: `p0`–`p3`, `!!` (P1), `!!!` (P0), `urgent`/`asap`/`срочно` (P1), `critical`/`blocker` (P0), `не срочно` (P3) |
 | `fix login #backend #auth` | adds the **labels** `backend` and `auth` (and they leave the title); `#42` stays text |
 | `ticket: rotate keys` / `задача: …` | the leading marker says what it is and leaves the title |

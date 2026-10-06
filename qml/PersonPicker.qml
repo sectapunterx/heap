@@ -41,19 +41,24 @@ Popup {
         const out = [];
         for (let i = 0; i < root.candidates.length; i++) {
             const c = root.candidates[i];
-            if (q.length === 0
-                || (c.name || "").toLowerCase().indexOf(q) >= 0
-                || (c.role || "").toLowerCase().indexOf(q) >= 0
-                || (c.handle || "").toLowerCase().indexOf(q) >= 0
-                || (c.channel || "").toLowerCase().indexOf(q) >= 0)
-                out.push(c);
+            // Name and handle the way @-mentions find them: a login made of
+            // the name ("r.losev"), the words in either script.
+            const handle = String(c.handle || "").replace(/^@+/, "");
+            let r = q.length === 0 ? 1 : AppController.personMatchRank(q, c.name || "", handle);
+            if (q.length > 0 && c.personId && c.personId !== handle)
+                r = Math.max(r, AppController.personMatchRank(q, c.name || "", c.personId));
+            if (r === 0 && ((c.role || "").toLowerCase().indexOf(q) >= 0
+                            || (c.channel || "").toLowerCase().indexOf(q) >= 0))
+                r = 1;
+            if (r > 0) out.push(Object.assign({}, c, { _rank: r }));
         }
         // People already on the rail sink to the bottom: the point of this box
-        // is the ones who are not. Name breaks the tie — V4's sort is not
-        // stable, so without it the list reshuffles between openings and the
-        // row under the cursor is never the same one twice.
+        // is the ones who are not. Then the better match; name breaks the tie
+        // — V4's sort is not stable, so without it the list reshuffles between
+        // openings and the row under the cursor is never the same one twice.
         out.sort((a, b) => {
             if (!!a.active !== !!b.active) return a.active ? 1 : -1;
+            if (a._rank !== b._rank) return b._rank - a._rank;
             return String(a.name || "").localeCompare(String(b.name || ""));
         });
         return out;

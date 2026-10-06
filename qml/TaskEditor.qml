@@ -523,7 +523,10 @@ Popup {
                     break;
                 }
             }
-            if (!matched) out.push("@" + h);
+            // "@r.losev" for Роман Лосев: a login made of one person's name.
+            const byLogin = matched ? "" : AppController.personIdForHandle(h);
+            if (byLogin) out.push(AppController.personById(byLogin).name || byLogin);
+            else if (!matched) out.push("@" + h);
         }
         return out;
     }

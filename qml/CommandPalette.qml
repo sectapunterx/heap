@@ -210,6 +210,13 @@ Popup {
             // The words themselves in the label beat a scattered subsequence:
             // "windows" should rank "Release › Windows" above "Release".
             if (ql.length >= 2 && score >= 0 && e.label.toLowerCase().indexOf(ql) >= 0) score += 20;
+            // A person is found as an @-mention finds them: by a login made of
+            // the name ("r.losev" for Роман Лосев), by the name in the other
+            // script ("roman losev"). Exact login ~ 180, a word prefix 100.
+            if (e.kind === "person" || e.kind === "contact") {
+                const pr = AppController.personMatchRank(trimmed, e.label, e.personId || "");
+                if (pr > 0) score = Math.max(score, pr * 2);
+            }
             let snippet = "";
             // Full-text (HEAP-80): every word in the body, with a context
             // snippet. A body hit floors the entry at tier 5, below head matches.

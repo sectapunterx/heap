@@ -507,8 +507,8 @@ Item {
                               "@-упоминания")
             }
             Body {
-                text: root.tr2("Type @ + the start of a name or handle in Quick Capture, Task Editor, or Notes — a fuzzy list of the active profile's people drops down. Selecting one inserts the handle and links the entry to that person.",
-                              "Наберите @ и начало имени или ника в быстром вводе, редакторе задачи или заметках — выпадет нечёткий список людей активного профиля. Выбор вставляет ник и связывает запись с человеком.")
+                text: root.tr2("Type @ + the start of a name or handle in Quick Capture, Task Editor, or Notes — a list of the active profile's people drops down. A person is also found by a login made of their name, in either script: for Roman Losev — @r.losev, @rlosev, @losev.r, @roman.losev, @losev, or the two words @roman losev (one space is fine). Selecting one inserts the handle and links the entry to that person. A hand-written @r.losev links to them too, as long as it fits no one else.",
+                              "Наберите @ и начало имени или ника в быстром вводе, редакторе задачи или заметках — выпадет список людей активного профиля. Человека находит и логин, собранный из имени, на любой раскладке: для Романа Лосева — @r.losev, @rlosev, @losev.r, @roman.losev, @losev или два слова @roman losev / @роман лосев (один пробел можно). Выбор вставляет ник и связывает запись с человеком. Написанный вручную @r.losev тоже свяжется с ним, если больше никому не подходит.")
             }
         }
 

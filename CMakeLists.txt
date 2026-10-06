@@ -202,6 +202,7 @@ qt_add_library(heap_core STATIC
     src/cli/CliMain.cpp
     src/cli/CliQuery.cpp
     src/text/TaskTextUtils.cpp
+    src/text/PersonMatch.cpp
     src/query/QueryParser.cpp
     src/query/TaskQuery.cpp
     src/notify/NotificationCenter.cpp
@@ -434,6 +435,7 @@ qt_add_qml_module(heap_core
         src/git/GitWatcher.h
         src/git/PrFacts.h
         src/text/TaskTextUtils.h
+        src/text/PersonMatch.h
         src/query/QueryParser.h
         src/query/TaskQuery.h
         src/notes/NoteLinks.h

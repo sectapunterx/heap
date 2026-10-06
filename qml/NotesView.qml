@@ -343,18 +343,14 @@ Item {
         return Math.max(0, score);
     }
 
-    function _peopleEntries() {
+    // Ranked already, the way every @-mention box finds people: the id, a
+    // login made of the name ("r.losev"), the name's words in either script.
+    function _peopleEntries(filter) {
+        const hits = AppController.matchPeople(filter, 8);
         const out = [];
-        const m = AppController.people;
-        for (let i = 0; i < m.rowCount(); i++) {
-            const idx = m.index(i, 0);
-            out.push({
-                kind: "person",
-                id:    m.data(idx, Qt.UserRole + 1),
-                label: m.data(idx, Qt.UserRole + 2),
-                sub:   m.data(idx, Qt.UserRole + 3) || "",
-                color: m.data(idx, Qt.UserRole + 6)
-            });
+        for (let i = 0; i < hits.length; i++) {
+            out.push({ kind: "person", id: hits[i].id, label: hits[i].name,
+                       sub: hits[i].role || "", color: hits[i].color });
         }
         return out;
     }
@@ -413,8 +409,12 @@ Item {
     }
 
     function _rebuildMatches() {
-        const source = acTrigger === "@"  ? _peopleEntries()
-                     : acTrigger === "#"  ? _taskEntries()
+        if (acTrigger === "@") {
+            acMatches = _peopleEntries(acFilter);
+            acSelected = 0;
+            return;
+        }
+        const source = acTrigger === "#"  ? _taskEntries()
                      : acTrigger === "[[" ? _headingEntries()
                      : [];
         const scored = [];
@@ -479,6 +479,14 @@ Item {
 
         let i = end - 1;
         while (i >= 0 && end - i < 64 && root._isNameChar(txt[i])) i--;
+        // "@roman losev": one space inside a person's query, once a word
+        // follows it ("@Roman_Losev " as inserted still ends the mention).
+        // The list closes again when the two words stop matching anyone.
+        if (i > 0 && i < end - 1 && txt[i] === " ") {
+            let j = i - 1;
+            while (j >= 0 && end - j < 64 && root._isNameChar(txt[j])) j--;
+            if (j >= 0 && j < i - 1 && txt[j] === "@") i = j;
+        }
         if (i < 0) { _hideAutocomplete(); return; }
         const ch = txt[i];
         if (ch !== "@" && ch !== "#") { _hideAutocomplete(); return; }

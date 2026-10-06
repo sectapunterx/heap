@@ -187,6 +187,10 @@ QString tokenToAscii(const QString &token) {
 
 } // namespace
 
+QString asciiFold(QStringView token) {
+  return tokenToAscii(token.toString());
+}
+
 QString slugifyPersonName(QStringView name) {
     const QString trimmed = name.toString().trimmed();
     if (trimmed.isEmpty()) return QString();

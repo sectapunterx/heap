@@ -43,4 +43,9 @@ TaskMeta extractMeta(QStringView raw, bool keepTicketKey = false);
 // All output is ASCII-only, lowercase, [a-z0-9._-]. Empty input → "".
 QString slugifyPersonName(QStringView name);
 
+// One word as slugifyPersonName spells it: lowercase ASCII, Cyrillic
+// transliterated ("Лосев" -> "losev"), anything else not a letter or digit
+// dropped. The person matcher (PersonMatch.h) folds names with it.
+QString asciiFold(QStringView token);
+
 } // namespace heap::text

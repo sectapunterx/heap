@@ -6,7 +6,9 @@ import "Mention.js" as Mention
 // Reusable autocomplete dropdown that floats above a target
 // TextField/TextArea at the caret. Supports two triggers:
 //
-//   @<token>  → AppController.people  (id + name, prefix match)
+//   @<token>  → AppController.matchPeople (id, a login made of the name —
+//               "r.losev", "roman.losev" — or the name's words, either
+//               script; "@roman losev" may carry one space)
 //   #<token>  → AppController.tasks   (id + title, prefix/substring match)
 //
 // The owner wires it into the target's onTextChanged /
@@ -37,6 +39,8 @@ Popup {
     property bool navigated: false
 
     readonly property var _handleCharRe: /[A-Za-zА-Яа-яЁё0-9_.\-]/
+    // The longest "@first last" query that still counts as one mention.
+    readonly property int _maxPeopleQuery: 48
 
     padding: 0
     modal: false
@@ -65,6 +69,17 @@ Popup {
         if (caret < 0) return null;
         let start = caret;
         while (start > 0 && _handleCharRe.test(text.charAt(start - 1))) --start;
+        // "@roman losev": a person's query may hold one space, once a word
+        // follows it — a bare "@roman " (and the "@id " accept() leaves
+        // behind) still ends the mention. refresh() closes the list again
+        // as soon as the two words stop matching anyone.
+        if (enablePeople && start < caret && start >= 2 && text.charAt(start - 1) === " ") {
+            let first = start - 1;
+            while (first > 0 && _handleCharRe.test(text.charAt(first - 1))) --first;
+            if (first < start - 1 && first > 0 && text.charAt(first - 1) === "@"
+                    && caret - first <= _maxPeopleQuery)
+                start = first;
+        }
         if (start === 0) return null;
         const trig = text.charAt(start - 1);
         if (trig !== "@" && trig !== "#") return null;
@@ -84,20 +99,13 @@ Popup {
         };
     }
 
+    // Best match first (heap::text::personMatchRank, shared with the people
+    // picker and the palette).
     function _peopleSuggestions(q) {
+        const hits = AppController.matchPeople(q, maxRows);
         const out = [];
-        const people = AppController.people;
-        for (let i = 0; i < people.rowCount(); ++i) {
-            const idx = people.index(i, 0);
-            const id = String(people.data(idx, Qt.UserRole + 1) || "");
-            const name = String(people.data(idx, Qt.UserRole + 2) || "");
-            if (q.length === 0
-                || id.toLowerCase().indexOf(q) === 0
-                || name.toLowerCase().indexOf(q) >= 0) {
-                out.push({id: id, name: name});
-            }
-            if (out.length >= maxRows) break;
-        }
+        for (let i = 0; i < hits.length; ++i)
+            out.push({id: String(hits[i].id || ""), name: String(hits[i].name || "")});
         return out;
     }
 
