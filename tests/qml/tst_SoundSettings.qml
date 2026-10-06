@@ -75,11 +75,12 @@ TestCase {
 
     function test_chime_minutes_are_read_latest_first() {
         const sv = openAppearance();
-        compare(JSON.stringify(sv.parseChimeMinutes("5, 15, 10")), "[15,10,5]");
-        compare(JSON.stringify(sv.parseChimeMinutes(" 3,3, 0, 200, 7 ")), "[7,3]");
-        compare(JSON.stringify(sv.parseChimeMinutes("30, 20, 10, 5")), "[30,20,10]");
-        compare(sv.parseChimeMinutes("x").length, 0);
-        compare(sv.chimeMinutesText([20, 5]), "20, 5");
-        compare(sv.chimeMinutesText(undefined), "15, 10, 5");
+        const card = findChild(sv, "settings-sound-card");
+        compare(JSON.stringify(card.parseChimeMinutes("5, 15, 10")), "[15,10,5]");
+        compare(JSON.stringify(card.parseChimeMinutes(" 3,3, 0, 200, 7 ")), "[7,3]");
+        compare(JSON.stringify(card.parseChimeMinutes("30, 20, 10, 5")), "[30,20,10]");
+        compare(card.parseChimeMinutes("x").length, 0);
+        compare(card.chimeMinutesText([20, 5]), "20, 5");
+        compare(card.chimeMinutesText(undefined), "15, 10, 5");
     }
 }

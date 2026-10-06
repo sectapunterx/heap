@@ -242,21 +242,6 @@ Item {
         return (v === undefined || v === null || v === false) ? fallback : v;
     }
 
-    // The meeting chimes' moments (APP-178): up to three whole minutes from
-    // 1 to 120, latest first — the order the C++ side reads them in.
-    function parseChimeMinutes(text) {
-        const out = [];
-        for (const part of String(text).split(",")) {
-            const m = parseInt(part.trim(), 10);
-            if (m >= 1 && m <= 120 && out.indexOf(m) < 0) out.push(m);
-        }
-        out.sort((a, b) => b - a);
-        return out.slice(0, 3);
-    }
-    function chimeMinutesText(list) {
-        return (Array.isArray(list) && list.length > 0 ? list : [15, 10, 5]).join(", ");
-    }
-
     function _mergeDefaults(src) {
         // Deep-merge user-stored settings on top of defaults; missing
         // keys/sections fall back to defaults so the UI never sees undefined.
@@ -1476,50 +1461,81 @@ Item {
             // The sound palette (APP-177): a task closed, an undo, a refused
             // action — never navigation, typing or hover. Off by default;
             // quiet hours and focus mode keep it silent (AppController).
+            // Reads and writes the settings JSON directly (this view reloads
+            // on the change), so no unqualified `root` from in here.
             SettingsGroup {
+                id: soundCard
                 objectName: "settings-sound-card"
                 title: I18n.t("settings.sound.group")
+                readonly property var sound: {
+                    try { return (JSON.parse(AppController.appSettingsJson || "{}") || {}).sound || ({}); } catch (e) { return ({}); }
+                }
+                readonly property bool on: soundCard.sound.enabled === true
+                function setSound(key, value) {
+                    let s = {};
+                    try { s = JSON.parse(AppController.appSettingsJson || "{}") || {}; } catch (e) { s = {}; }
+                    const next = Object.assign({}, s.sound);
+                    next[key] = value;
+                    s.sound = next;
+                    AppController.appSettingsJson = JSON.stringify(s);
+                }
+                // The meeting chimes' moments (APP-178): up to three whole
+                // minutes from 1 to 120, latest first — the order the C++
+                // side reads them in.
+                function parseChimeMinutes(text) {
+                    const out = [];
+                    for (const part of String(text).split(",")) {
+                        const m = parseInt(part.trim(), 10);
+                        if (m >= 1 && m <= 120 && out.indexOf(m) < 0) out.push(m);
+                    }
+                    out.sort((a, b) => b - a);
+                    return out.slice(0, 3);
+                }
+                function chimeMinutesText(list) {
+                    return (Array.isArray(list) && list.length > 0 ? list : [15, 10, 5]).join(", ");
+                }
                 SwitchRow {
                     objectName: "settings-sound-enabled"
                     label: I18n.t("settings.sound.enabled")
                     hint: I18n.t("settings.sound.enabled.hint")
-                    checked: !!(root.settings.sound && root.settings.sound.enabled)
-                    onToggled: (checked) => root.set("sound", "enabled", checked)
+                    checked: soundCard.on
+                    onToggled: (checked) => soundCard.setSound("enabled", checked)
                 }
                 // Letting go of the slider plays the "done" sound at the new
                 // level, so the number has something to go by.
                 SliderRow {
                     id: soundVolumeRow
                     objectName: "settings-sound-volume"
-                    visible: !!(root.settings.sound && root.settings.sound.enabled)
+                    visible: soundCard.on
                     label: I18n.t("settings.sound.volume")
                     min: 0; max: 100; step: 5
-                    value: root.settings.sound ? root._num(root.settings.sound.volume, 55) : 55
-                    onMoved: (value) => root.set("sound", "volume", Math.round(value))
+                    value: typeof soundCard.sound.volume === "number" ? soundCard.sound.volume : 55
+                    onMoved: (value) => soundCard.setSound("volume", Math.round(value))
                     onReleased: AppController.previewSound(Math.round(soundVolumeRow.value))
                 }
                 // Three melodies as a meeting comes closer (APP-178): two
                 // chords, a rise, a call at the last moment.
                 SwitchRow {
                     objectName: "settings-sound-meeting"
-                    visible: !!(root.settings.sound && root.settings.sound.enabled)
+                    visible: soundCard.on
                     label: I18n.t("settings.sound.meeting")
                     hint: I18n.t("settings.sound.meeting.hint")
-                    checked: !!(root.settings.sound && root.settings.sound.meetingChimes)
-                    onToggled: (checked) => root.set("sound", "meetingChimes", checked)
+                    checked: soundCard.sound.meetingChimes !== false
+                    onToggled: (checked) => soundCard.setSound("meetingChimes", checked)
                 }
                 TextRow {
+                    id: chimeMinutesRow
                     objectName: "settings-sound-meeting-minutes"
-                    visible: !!(root.settings.sound && root.settings.sound.enabled && root.settings.sound.meetingChimes)
+                    visible: soundCard.on && soundCard.sound.meetingChimes !== false
                     label: I18n.t("settings.sound.meetingMinutes")
-                    hint: invalid ? I18n.t("settings.sound.meetingMinutes.invalid") : I18n.t("settings.sound.meetingMinutes.hint")
+                    hint: chimeMinutesRow.invalid ? I18n.t("settings.sound.meetingMinutes.invalid") : I18n.t("settings.sound.meetingMinutes.hint")
                     placeholder: "15, 10, 5"
                     fieldWidth: 120
                     validator: RegularExpressionValidator { regularExpression: /^\s*\d{1,3}(\s*,\s*\d{1,3}){0,2}\s*$/ }
-                    value: root.chimeMinutesText(root.settings.sound ? root.settings.sound.meetingChimeMinutes : undefined)
+                    value: soundCard.chimeMinutesText(soundCard.sound.meetingChimeMinutes)
                     onCommitted: (text) => {
-                        const list = root.parseChimeMinutes(text);
-                        if (list.length > 0) root.set("sound", "meetingChimeMinutes", list);
+                        const list = soundCard.parseChimeMinutes(text);
+                        if (list.length > 0) soundCard.setSound("meetingChimeMinutes", list);
                     }
                 }
             }
