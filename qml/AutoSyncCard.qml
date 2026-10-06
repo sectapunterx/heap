@@ -120,7 +120,8 @@ Rectangle {
                 text: root.cur > 0 ? String(root.cur / root.unit) : ""
                 placeholderText: "0"
                 color: Theme.text
-                font.family: Theme.fontMono
+                font.family: Theme.fontUi
+                font.features: Theme.tabularNums
                 background: FieldFrame {}
                 onEditingFinished: root.setCustom(text)
             }

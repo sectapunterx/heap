@@ -221,7 +221,8 @@ Dialog {
                         Text {
                             text: snapRow.modelData.time
                             color: Theme.text
-                            font.family: Theme.fontMono
+                            font.family: Theme.fontUi
+                            font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsMd
                         }
                         Text {

@@ -508,7 +508,8 @@ Item {
                         Text {
                             text: I18n.t("week.number").arg(AppController.isoWeekNumber(weekStart))
                             color: Theme.textDim
-                            font.family: Theme.fontMono
+                            font.family: Theme.fontUi
+                            font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsSm
                             font.letterSpacing: 1
                         }
@@ -524,7 +525,8 @@ Item {
                 Text {
                     text: I18n.t("week.summary").arg(I18n.deadlines(root.totalTasks())).arg(I18n.events(root.totalEvents()))
                     color: Theme.textDim
-                    font.family: Theme.fontMono
+                    font.family: Theme.fontUi
+                    font.features: Theme.tabularNums
                     font.pixelSize: Theme.fsSm
                 }
                 PillButton {
@@ -658,7 +660,8 @@ Item {
                                 anchors.leftMargin: Theme.spLg; anchors.bottomMargin: Theme.spSm
                                 text: headCol.modelData.date.getDate()
                                 color: headCol.isToday ? Theme.accentStrong : Theme.text
-                                font.family: Theme.fontMono
+                                font.family: Theme.fontUi
+                                font.features: Theme.tabularNums
                                 font.pixelSize: Theme.fsXl
                                 font.weight: Font.DemiBold
                             }
@@ -703,7 +706,8 @@ Item {
                                                       ? modelData.ticket.key : modelData.id
                                                 textFormat: Text.PlainText
                                                 color: Theme.accentStrong
-                                                font.family: Theme.fontMono
+                                                font.family: Theme.fontUi
+                                                font.features: Theme.tabularNums
                                                 font.pixelSize: Theme.fsXs
                                             }
                                             Text {
@@ -769,7 +773,8 @@ Item {
                                     visible: headCol.modelData.tasks.length > 4
                                     text: I18n.t("week.more").arg(headCol.modelData.tasks.length - 4)
                                     color: moreMA.hovered ? Theme.accentStrong : Theme.textDim
-                                    font.family: Theme.fontMono
+                                    font.family: Theme.fontUi
+                                    font.features: Theme.tabularNums
                                     font.pixelSize: Theme.fsXs
                                     ClickArea {
                                         id: moreMA
@@ -918,7 +923,8 @@ Item {
                                 horizontalAlignment: Text.AlignRight
                                 text: Theme.fmtHour(root.hoursStart + index)
                                 color: Theme.textDim
-                                font.family: Theme.fontMono
+                                font.family: Theme.fontUi
+                                font.features: Theme.tabularNums
                                 font.pixelSize: Theme.fsXs
                             }
                         }
@@ -1097,7 +1103,8 @@ Item {
                                     visible: !weEv.compact
                                     text: Theme.fmtHour(weEv.effStart)
                                     color: Theme.textMuted
-                                    font.family: Theme.fontMono
+                                    font.family: Theme.fontUi
+                                    font.features: Theme.tabularNums
                                     font.pixelSize: Theme.fsXs
                                 }
                                 RowLayout {
@@ -1107,7 +1114,8 @@ Item {
                                         visible: weEv.compact
                                         text: Theme.fmtHour(weEv.effStart)
                                         color: Theme.textMuted
-                                        font.family: Theme.fontMono
+                                        font.family: Theme.fontUi
+                                        font.features: Theme.tabularNums
                                         font.pixelSize: Theme.fsXs
                                     }
                                     Text {

@@ -47,7 +47,8 @@ Rectangle {
                     text: (parent._rev >= 0 ? I18n.t("people.badge") : "")
                               .arg(AppController.pendingPeopleCount()).arg(AppController.activePeople.rowCount())
                     color: Theme.textDim
-                    font.family: Theme.fontMono
+                    font.family: Theme.fontUi
+                    font.features: Theme.tabularNums
                     font.pixelSize: Theme.fsXs
                 }
                 Connections {
@@ -217,7 +218,8 @@ Rectangle {
                                 return (parts[0] ? parts[0][0] : "") + (parts[1] ? parts[1][0] : "");
                             }
                             color: Theme.textOnAccent
-                            font.family: Theme.fontMono
+                            font.family: Theme.fontUi
+                            font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsSm
                             font.weight: Font.DemiBold
                         }
@@ -298,7 +300,8 @@ Rectangle {
                             color: prow.personState === "pinged" ? Theme.warning
                                  : prow.personState === "replied" ? Theme.stDone
                                  : Theme.textDim
-                            font.family: Theme.fontMono
+                            font.family: Theme.fontUi
+                            font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsXs
                             font.letterSpacing: 1
                             font.weight: Font.DemiBold

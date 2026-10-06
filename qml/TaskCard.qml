@@ -531,7 +531,8 @@ Rectangle {
                 objectName: "tc-checklist"
                 text: checklistRow._done + "/" + checklistRow._total
                 color: checklistRow._done === checklistRow._total ? Theme.success : Theme.textMuted
-                font.family: Theme.fontMono
+                font.family: Theme.fontUi
+                font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsXs
             }
             // A bar rather than only a number: the ratio is the thing being
@@ -590,7 +591,8 @@ Rectangle {
                 text: link ? I18n.t("waiting.chip").arg(link.name).arg(link.days) : ""
                 textFormat: Text.PlainText
                 color: Theme.warning
-                font.family: Theme.fontMono
+                font.family: Theme.fontUi
+                font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsXs
             }
 
@@ -600,7 +602,8 @@ Rectangle {
                 visible: card._attachmentCount > 0
                 text: "📎 " + card._attachmentCount
                 color: Theme.textMuted
-                font.family: Theme.fontMono
+                font.family: Theme.fontUi
+                font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsXs
                 Accessible.name: I18n.t("att.card.count").arg(card._attachmentCount)
             }
@@ -640,7 +643,8 @@ Rectangle {
                 text: "◷ " + dlText
                 color: (card._done || card._isArchived) ? Theme.textDim
                      : days <= 0 ? Theme.danger : days <= 3 ? Theme.warning : Theme.textDim
-                font.family: Theme.fontMono
+                font.family: Theme.fontUi
+                font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsXs
             }
             Text {
@@ -652,7 +656,8 @@ Rectangle {
                 // A plan, not an alarm: muted, so the overdue date is the one
                 // that stands out (VISU-3).
                 color: Theme.textMuted
-                font.family: Theme.fontMono
+                font.family: Theme.fontUi
+                font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsXs
             }
             // The pull request's state: open is info, merged is success, closed
@@ -669,7 +674,8 @@ Rectangle {
                 }
                 textFormat: Text.PlainText
                 color: state === "merged" ? Theme.success : state === "closed" ? Theme.textDim : Theme.info
-                font.family: Theme.fontMono
+                font.family: Theme.fontUi
+                font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsXs
                 font.weight: Font.Medium
             }
@@ -694,7 +700,8 @@ Rectangle {
                     text: moveChip.mine ? I18n.t("taskcard.move.mine") : I18n.t("taskcard.move.theirs")
                     textFormat: Text.PlainText
                     color: moveChip.mine ? Theme.accentStrong : Theme.textDim
-                    font.family: Theme.fontMono
+                    font.family: Theme.fontUi
+                    font.features: Theme.tabularNums
                     font.pixelSize: Theme.fsXs
                     font.weight: moveChip.mine ? Font.DemiBold : Font.Normal
                 }
@@ -720,7 +727,8 @@ Rectangle {
                 // Running: the dot and the weight say so; the colour stays
                 // with the rest of the metadata (VISU-3).
                 color: card.task && card.task.isTiming ? Theme.textMuted : Theme.textDim
-                font.family: Theme.fontMono
+                font.family: Theme.fontUi
+                font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsXs
                 font.weight: card.task && card.task.isTiming ? Font.DemiBold : Font.Normal
                 MouseArea {
@@ -741,7 +749,8 @@ Rectangle {
                 visible: !!(card.task && card.task.recurrence && String(card.task.recurrence).length > 0)
                 text: "↻ " + card._recurLabel(card.task ? card.task.recurrence : "")
                 color: Theme.textDim
-                font.family: Theme.fontMono
+                font.family: Theme.fontUi
+                font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsXs
             }
             // Comment count. -1 means the provider never said, which is not the
@@ -810,7 +819,8 @@ Rectangle {
             anchors.centerIn: parent
             text: "+" + (AppController.selectionCount - 1)
             color: Theme.textOnAccent
-            font.family: Theme.fontMono
+            font.family: Theme.fontUi
+            font.features: Theme.tabularNums
             font.pixelSize: Theme.fsXs
             font.weight: Font.DemiBold
         }

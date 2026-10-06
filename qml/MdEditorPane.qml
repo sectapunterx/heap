@@ -152,7 +152,8 @@ Item {
                                                    ? 0
                                                    : area.text.trim().split(/\s+/).length)
                     color: Theme.textDim
-                    font.family: Theme.fontMono
+                    font.family: Theme.fontUi
+                    font.features: Theme.tabularNums
                     font.pixelSize: Theme.fsXs
                 }
                 Repeater {

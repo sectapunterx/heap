@@ -371,7 +371,8 @@ Popup {
                     visible: root._matches.length > 0
                     text: (root._selectedIdx + 1) + " / " + root._matches.length
                     color: Theme.textDim
-                    font.family: Theme.fontMono
+                    font.family: Theme.fontUi
+                    font.features: Theme.tabularNums
                     font.pixelSize: Theme.fsSm
                 }
             }
@@ -465,7 +466,8 @@ Popup {
                     Text {
                         text: (modelData._recent ? "↺ " : "") + root._kindLabel(modelData.kind)
                         color: Theme.textDim
-                        font.family: Theme.fontMono
+                        font.family: Theme.fontUi
+                        font.features: Theme.tabularNums
                         font.pixelSize: Theme.fsXs
                     }
                 }
@@ -502,7 +504,8 @@ Popup {
                 anchors.centerIn: parent
                 text: I18n.t("palette.kbdHint")
                 color: Theme.textDim
-                font.family: Theme.fontMono
+                font.family: Theme.fontUi
+                font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsXs
             }
         }

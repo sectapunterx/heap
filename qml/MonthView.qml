@@ -294,7 +294,7 @@ Item {
                 }
                 Rectangle {
                     width: 52; height: 28; radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1
-                    Text { anchors.centerIn: parent; text: root.weeksCount + " " + I18n.t("cal.wk"); color: Theme.text; font.pixelSize: Theme.fsSm; font.family: Theme.fontMono }
+                    Text { anchors.centerIn: parent; text: root.weeksCount + " " + I18n.t("cal.wk"); color: Theme.text; font.pixelSize: Theme.fsSm; font.family: Theme.fontUi; font.features: Theme.tabularNums }
                 }
                 Rectangle {
                     width: 24; height: 28; radius: Theme.radiusMd; color: incMA.hovered ? Theme.panel3 : Theme.panel2; border.color: Theme.border; border.width: 1

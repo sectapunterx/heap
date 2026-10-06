@@ -728,7 +728,8 @@ Popup {
                 objectName: "event-start"
                 visible: !root.allDay
                 Layout.fillWidth: true
-                font.family: Theme.fontMono
+                font.family: Theme.fontUi
+                font.features: Theme.tabularNums
                 placeholderText: I18n.t("editor.ph.timeRange")
                 onEditingFinished: root._maybeExpandRange(startField, endField)
             }
@@ -737,7 +738,8 @@ Popup {
                 objectName: "event-end"
                 visible: !root.allDay
                 Layout.fillWidth: true
-                font.family: Theme.fontMono
+                font.family: Theme.fontUi
+                font.features: Theme.tabularNums
                 placeholderText: "11:00"
             }
 
@@ -757,7 +759,7 @@ Popup {
                     Text {
                         Layout.fillWidth: true
                         text: root.pickedDate && root.pickedDate.toLocaleDateString ? root.pickedDate.toLocaleDateString(I18n.locale, "ddd, d MMM yyyy") : ""
-                        color: Theme.text; font.family: Theme.fontMono; font.pixelSize: Theme.fsMd
+                        color: Theme.text; font.family: Theme.fontUi; font.features: Theme.tabularNums; font.pixelSize: Theme.fsMd
                     }
                     Rectangle {   // mini calendar glyph
                         width: 15; height: 14; radius: Theme.radiusXs; color: "transparent"
@@ -807,7 +809,7 @@ Popup {
                         text: root.pickedEndDate && root.pickedEndDate.getFullYear
                             ? root.pickedEndDate.toLocaleDateString(I18n.locale, "ddd, d MMM yyyy")
                             : ""
-                        color: Theme.text; font.family: Theme.fontMono; font.pixelSize: Theme.fsMd
+                        color: Theme.text; font.family: Theme.fontUi; font.features: Theme.tabularNums; font.pixelSize: Theme.fsMd
                     }
                     Rectangle {
                         width: 15; height: 14; radius: Theme.radiusXs; color: "transparent"
@@ -879,7 +881,8 @@ Popup {
                     objectName: "event-repeat-count"
                     visible: root.endKind === "count"
                     Layout.preferredWidth: 56
-                    font.family: Theme.fontMono
+                    font.family: Theme.fontUi
+                    font.features: Theme.tabularNums
                     text: String(root.repeatCount)
                     validator: IntValidator { bottom: 1; top: 999 }
                     onTextEdited: root.repeatCount = Math.max(1, parseInt(countField.text) || 1)
@@ -895,7 +898,7 @@ Popup {
                     Text {
                         anchors.centerIn: parent
                         text: root.untilDate && root.untilDate.getFullYear ? root.untilDate.toLocaleDateString(I18n.locale, "d MMM yyyy") : ""
-                        color: Theme.text; font.family: Theme.fontMono; font.pixelSize: Theme.fsSm
+                        color: Theme.text; font.family: Theme.fontUi; font.features: Theme.tabularNums; font.pixelSize: Theme.fsSm
                     }
                     ClickArea {
                         id: untilMA

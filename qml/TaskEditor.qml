@@ -934,7 +934,8 @@ Popup {
                             ContextMenu.menu: TextEditMenu { editor: deadlineField }
                             Layout.fillWidth: true
                             placeholderText: I18n.t("editor.ph.deadline")
-                            font.family: Theme.fontMono
+                            font.family: Theme.fontUi
+                            font.features: Theme.tabularNums
                             background: Rectangle {
                                 radius: Theme.radiusMd
                                 color: Theme.panel2
@@ -1006,7 +1007,8 @@ Popup {
                         id: chipLabel
                         visible: text.length > 0
                         Layout.fillWidth: true
-                        font.family: Theme.fontMono
+                        font.family: Theme.fontUi
+                        font.features: Theme.tabularNums
                         font.pixelSize: Theme.fsXs
                         color: Theme.textMuted
                         text: {
@@ -1337,7 +1339,8 @@ Popup {
                         Layout.fillWidth: true
                         Layout.preferredWidth: 1
                         placeholderText: I18n.t("editor.ph.deadline")
-                        font.family: Theme.fontMono
+                        font.family: Theme.fontUi
+                        font.features: Theme.tabularNums
                         background: FieldBg {}
                         color: Theme.text
                         placeholderTextColor: Theme.textDim
@@ -1394,7 +1397,8 @@ Popup {
                             ContextMenu.menu: TextEditMenu { editor: estimateField }
                             Layout.fillWidth: true
                             placeholderText: "45"
-                            font.family: Theme.fontMono
+                            font.family: Theme.fontUi
+                            font.features: Theme.tabularNums
                             validator: IntValidator { bottom: 0; top: 100000 }
                             background: FieldBg {}
                             color: Theme.text
@@ -1595,7 +1599,8 @@ Popup {
                             Text {
                                 text: histRow.modelData.when
                                 color: Theme.textDim
-                                font.family: Theme.fontMono
+                                font.family: Theme.fontUi
+                                font.features: Theme.tabularNums
                                 font.pixelSize: Theme.fsXs
                             }
                             Text {

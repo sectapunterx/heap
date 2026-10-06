@@ -621,7 +621,8 @@ Item {
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 text: col.visibleCount
                                 color: Theme.textDim
-                                font.family: Theme.fontMono
+                                font.family: Theme.fontUi
+                                font.features: Theme.tabularNums
                                 font.pixelSize: Theme.fsSm
                             }
                             Item {
@@ -783,7 +784,8 @@ Item {
                                             ? col.visibleCount + "/" + col.wipLimit
                                             : col.visibleCount
                                         color: col.overWip ? Theme.danger : Theme.textDim
-                                        font.family: Theme.fontMono
+                                        font.family: Theme.fontUi
+                                        font.features: Theme.tabularNums
                                         font.pixelSize: Theme.fsSm
                                         font.weight: col.overWip ? Font.DemiBold : Font.Normal
                                     }
@@ -1630,7 +1632,8 @@ Item {
                 validator: IntValidator { bottom: 0; top: 999 }
                 placeholderText: "0"
                 color: Theme.text
-                font.family: Theme.fontMono
+                font.family: Theme.fontUi
+                font.features: Theme.tabularNums
                 background: FieldFrame {}
                 onAccepted: wipPopup.commit()
             }
@@ -1701,7 +1704,8 @@ Item {
                 validator: IntValidator { bottom: 0; top: 3650 }
                 placeholderText: "0"
                 color: Theme.text
-                font.family: Theme.fontMono
+                font.family: Theme.fontUi
+                font.features: Theme.tabularNums
                 background: FieldFrame {}
                 onAccepted: archivePopup.commit()
             }
