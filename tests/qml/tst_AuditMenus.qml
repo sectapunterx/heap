@@ -252,8 +252,10 @@ TestCase {
         tryVerify(() => box.popup.opened);
         const lv = box.popup.contentItem;
         tryVerify(() => lv.count === 3);
+        // The rows are created when the list lays out, which can be a frame
+        // after count is known: on the Windows CI runner itemAtIndex was null.
+        tryVerify(() => lv.itemAtIndex(0) !== null && lv.itemAtIndex(1) !== null);
         const row = lv.itemAtIndex(1);
-        verify(row !== null);
         compare(row.height, 28);
         verify(row.current, "the current choice is not marked");
         verify(!lv.itemAtIndex(0).current);
