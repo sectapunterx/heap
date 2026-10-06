@@ -846,6 +846,12 @@ AppController::AppController(QObject* parent) :
   if(!QStandardPaths::isTestModeEnabled()) {
     m_language = heap::text::uiLanguageFor(QLocale::system().uiLanguages());
   }
+  // The pseudo-locale (APP-189) is stretched English: C++-made dates and
+  // labels speak English with it, and the profile keeps its own language.
+  if(pseudoLocale()) {
+    m_languageUnderPseudo = m_language;
+    m_language = QStringLiteral("en");
+  }
 
   seedShortcutCatalog();
 
@@ -9967,7 +9973,7 @@ void AppController::saveStateNow() {
   QJsonObject s = m_settingsExtra;
   s["theme"] = m_theme;
   s["density"] = m_density;
-  s["language"] = m_language;
+  s["language"] = pseudoLocale() ? m_languageUnderPseudo : m_language;
   s["currentView"] = m_currentView;
   s["workdayStart"] = m_workdayStart;
   s["workdayEnd"] = m_workdayEnd;
@@ -10356,6 +10362,10 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
     if(s.contains("language")) {
       const QString v = s["language"].toString();
       m_language = (v == "ru") ? QStringLiteral("ru") : QStringLiteral("en");
+      if(pseudoLocale()) {
+        m_languageUnderPseudo = m_language;
+        m_language = QStringLiteral("en");
+      }
       emit languageChanged();
     }
     if(s.contains("currentView")) {
@@ -11795,7 +11805,9 @@ QString AppController::shortcutFor(const QString& id) const {
   return i < 0 ? QString() : m_shortcuts[i].toMap().value("sequence").toString();
 }
 
-double AppController::stepUiScale(int direction, const QVariantList& steps) {
+namespace {
+
+QList<double> uiScaleSteps(const QVariantList& steps) {
   QList<double> values;
   for(const QVariant& v : steps) {
     bool ok = false;
@@ -11804,15 +11816,32 @@ double AppController::stepUiScale(int direction, const QVariantList& steps) {
       values.append(d);
     }
   }
+  return values;
+}
+
+}  // namespace
+
+double AppController::systemUiScale(const QVariantList& steps) const {
+  if(m_systemTextScale <= 0) {
+    const bool forced = qEnvironmentVariableIsSet("HEAP_TEXT_SCALE");
+    // A test run reads the same layout on every machine.
+    m_systemTextScale = QStandardPaths::isTestModeEnabled() && !forced ? 1.0 : heap::platform::systemTextScale();
+  }
+  return heap::ui::uiScaleForTextScale(m_systemTextScale, uiScaleSteps(steps));
+}
+
+double AppController::stepUiScale(int direction, const QVariantList& steps) {
+  const QList<double> values = uiScaleSteps(steps);
   if(values.isEmpty()) {
     return 1.0;
   }
   const auto [lo, hi] = std::minmax_element(values.cbegin(), values.cend());
   QJsonObject settings = QJsonDocument::fromJson(m_appSettingsJson.toUtf8()).object();
   QJsonObject appearance = settings.value(QStringLiteral("appearance")).toObject();
-  // Read the way Theme.scale does: anything outside the steps' range is 1.
+  // Read the way Theme.scale does: unset is what the system's text size
+  // asks for, anything outside the steps' range is 1.
   const QJsonValue stored = appearance.value(QStringLiteral("uiScale"));
-  double current = stored.isDouble() ? stored.toDouble() : 1.0;
+  double current = stored.isDouble() ? stored.toDouble() : systemUiScale(steps);
   if(!std::isfinite(current) || current < *lo - 1e-6 || current > *hi + 1e-6) {
     current = 1.0;
   }

@@ -83,7 +83,7 @@ Flow {
             }
             HoverHandler { id: chipHover }
             FocusRing {}
-            QQC.ToolTip.visible: chipHover.hovered
+            QQC.ToolTip.visible: chipHover.hovered || chip.activeFocus
             QQC.ToolTip.delay: 500
             QQC.ToolTip.text: chip.broken ? I18n.t("att.chip.missing").arg(chip.attName) : I18n.t("att.chip.keys")
 

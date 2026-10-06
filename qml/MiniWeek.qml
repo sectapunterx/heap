@@ -231,7 +231,7 @@ Rectangle {
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onClicked: nav.clicked()
-            ToolTip.visible: containsMouse && nav.tip.length > 0
+            ToolTip.visible: (containsMouse || nav.activeFocus) && nav.tip.length > 0
             ToolTip.delay: 400
             ToolTip.text: nav._keys.length > 0 ? nav.tip + "  " + nav._keys : nav.tip
         }

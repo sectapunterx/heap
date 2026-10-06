@@ -63,6 +63,7 @@ Rectangle {
             }
             Item { Layout.fillWidth: true }
             Rectangle {
+                id: addBtn
                 width: 22; height: 22; radius: Theme.radiusSm
                 color: addMA.containsMouse ? Theme.panel3 : "transparent"
                 activeFocusOnTab: true
@@ -83,7 +84,7 @@ Rectangle {
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: root.pickPersonRequested()
-                    ToolTip.visible: containsMouse
+                    ToolTip.visible: containsMouse || addBtn.activeFocus
                     ToolTip.delay: 400
                     ToolTip.text: I18n.t("people.tip.add")
                 }
@@ -162,6 +163,13 @@ Rectangle {
                 // the button faded out from under the cursor.
                 property bool rowHovered: false
                 HoverHandler { onHoveredChanged: prow.rowHovered = hovered }
+                // The list's keyboard row shows the ✎ as the pointer does
+                // (APP-184); Enter edits, the menu key holds the rest.
+                readonly property bool keyCurrent: prow.ListView.isCurrentItem && !!prow.ListView.view && prow.ListView.view.activeFocus
+                readonly property bool revealed: prow.rowHovered || prow.keyCurrent
+                Accessible.role: Accessible.ListItem
+                Accessible.name: prow.name + (prow.role.length ? ", " + prow.role : "")
+                Accessible.description: stT.text + (prow.question.length ? ". " + prow.question : "")
 
                 // Declared before the RowLayout so it sits below it in paint /
                 // event order (later siblings draw on top, events hit them first).
@@ -271,14 +279,17 @@ Rectangle {
                     }
 
                     Item {
+                        objectName: "people-edit"
                         Layout.preferredWidth: 22
                         Layout.preferredHeight: 22
-                        opacity: prow.rowHovered ? 1.0 : 0.0
-                        enabled: prow.rowHovered
+                        opacity: prow.revealed ? 1.0 : 0.0
+                        enabled: prow.revealed
+                        Accessible.role: Accessible.Button
+                        Accessible.name: I18n.t("people.tip.edit")
                         Behavior on opacity {
                             NumberAnimation {
-                                duration: prow.rowHovered ? Theme.durTap : Theme.durTapOut
-                                easing.type: prow.rowHovered ? Theme.easeEnter : Theme.easeExit
+                                duration: prow.revealed ? Theme.durTap : Theme.durTapOut
+                                easing.type: prow.revealed ? Theme.easeEnter : Theme.easeExit
                             }
                         }
                         Rectangle {
@@ -306,6 +317,9 @@ Rectangle {
 
                     Rectangle {
                         Layout.alignment: Qt.AlignVCenter
+                        Accessible.role: Accessible.Button
+                        Accessible.name: stT.text + ", " + I18n.t("people.tip.cycle")
+                        Accessible.onPressAction: AppController.cyclePerson(prow.id)
                         radius: Theme.radiusPill
                         color: prow.personState === "pinged" ? Theme.withAlpha(Theme.warning, 0.10)
                              : prow.personState === "replied" ? Theme.withAlpha(Theme.stDone, 0.10)

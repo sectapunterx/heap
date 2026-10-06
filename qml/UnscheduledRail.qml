@@ -196,6 +196,15 @@ Rectangle {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: Theme.spMd
+                        // The priority in words: the bar beside the chip
+                        // says it only in colour (APP-185).
+                        Text {
+                            objectName: "unscheduled-priority"
+                            text: chip.modelData.priority
+                            color: Theme.textDim
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsXs
+                        }
                         Text {
                             objectName: "unscheduled-key"
                             text: chip.modelData.id

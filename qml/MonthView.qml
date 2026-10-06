@@ -471,8 +471,9 @@ Item {
                                 color: Theme.withAlpha(root.priColor(cell.tasks[index].priority), 0.22)
                                 Row {
                                     anchors.fill: parent; anchors.leftMargin: Theme.spXs; anchors.rightMargin: Theme.spXs; spacing: Theme.spXs
-                                    Rectangle { width: 4; height: 4; radius: 2; anchors.verticalCenter: parent.verticalCenter; color: root.priColor(cell.tasks[index].priority) }
-                                    Text { anchors.verticalCenter: parent.verticalCenter; width: parent.width - 8; elide: Text.ElideRight; text: (cell.tasks[index].scheduled ? "◷ " : "") + cell.tasks[index].title; color: Theme.text; font.pixelSize: Theme.fsXs }
+                                    // Priority by shape too (APP-185).
+                                    Text { id: priMark; objectName: "month-priority"; anchors.verticalCenter: parent.verticalCenter; text: Theme.priorityMark(cell.tasks[index].priority); color: root.priColor(cell.tasks[index].priority); font.pixelSize: Theme.fsXs }
+                                    Text { anchors.verticalCenter: parent.verticalCenter; width: parent.width - priMark.width - Theme.spXs; elide: Text.ElideRight; text: (cell.tasks[index].scheduled ? "◷ " : "") + cell.tasks[index].title; color: Theme.text; font.pixelSize: Theme.fsXs }
                                 }
                                 ClickArea {
                                     label: dayCell.cell.tasks[taskChip.index].title

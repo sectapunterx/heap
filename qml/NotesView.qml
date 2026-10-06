@@ -638,6 +638,12 @@ Item {
                 Text {
                     visible: editor.length > 0 && root.viewMode !== "preview" && root.width > 900
                     text: I18n.t("notes.legend")
+                    // Gives way to the buttons when a language runs long
+                    // (APP-189) instead of pushing them off the header.
+                    Layout.fillWidth: true
+                    Layout.maximumWidth: implicitWidth
+                    horizontalAlignment: Text.AlignRight
+                    elide: Text.ElideRight
                     color: Theme.textDim
                     font.family: Theme.fontUi
                     font.features: Theme.tabularNums
@@ -648,7 +654,7 @@ Item {
                 Rectangle {
                     id: attachBtn
                     objectName: "notes-attach"
-                    Layout.preferredHeight: 24
+                    Layout.preferredHeight: Theme.px(24)
                     radius: Theme.radiusMd
                     color: attachMA.containsMouse ? Theme.panel3 : Theme.panel2
                     border.color: Theme.border
@@ -675,7 +681,7 @@ Item {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: attachDialog.open()
                     }
-                    ToolTip.visible: attachMA.containsMouse
+                    ToolTip.visible: attachMA.containsMouse || activeFocus
                     ToolTip.delay: 500
                     ToolTip.text: I18n.t("att.button.tip.note")
                 }
@@ -683,7 +689,7 @@ Item {
                 // ── List toggle ────────────────────────────────────────
                 Rectangle {
                     objectName: "notes-list-toggle"
-                    Layout.preferredHeight: 24
+                    Layout.preferredHeight: Theme.px(24)
                     radius: Theme.radiusMd
                     color: root._listShown ? Theme.accentSoft : (listToggleMA.hovered ? Theme.panel3 : Theme.panel2)
                     border.color: root._listShown ? Theme.accent : Theme.border
@@ -708,7 +714,7 @@ Item {
 
                 // ── Backlinks pane toggle (HEAP-79) ────────────────────
                 Rectangle {
-                    Layout.preferredHeight: 24
+                    Layout.preferredHeight: Theme.px(24)
                     radius: Theme.radiusMd
                     color: root.showBacklinks ? Theme.accent : (blToggleMA.hovered ? Theme.panel3 : Theme.panel2)
                     border.color: root.showBacklinks ? Theme.accent : Theme.border
@@ -736,14 +742,17 @@ Item {
                 // ── Edit · Split · Preview toggle ──────────────────────
                 // One frame around the group instead of a border per segment,
                 // which doubled up into a 2px seam between them.
+                // Each segment as wide as its word needs (APP-189): a fixed
+                // 64px cut longer translations.
                 Rectangle {
-                    Layout.preferredWidth: 3 * 64 + 6
-                    Layout.preferredHeight: 26
+                    Layout.preferredWidth: segRow.implicitWidth + 2 * Theme.sp2xs
+                    Layout.preferredHeight: Theme.px(26)
                     radius: Theme.radiusMd
                     color: Theme.panel2
                     border.color: Theme.border
                     border.width: 1
                     Row {
+                        id: segRow
                         anchors.fill: parent
                         anchors.margins: Theme.sp2xs
                         spacing: 0
@@ -757,7 +766,7 @@ Item {
                                 id: segBtn
                                 required property var modelData
                                 readonly property bool active: root.viewMode === modelData.id
-                                width: 64
+                                width: Math.max(Theme.px(64), segTxt.implicitWidth + 2 * Theme.spLg)
                                 height: parent.height
                                 radius: Theme.radiusSm
                                 color: active ? Theme.accentSoft

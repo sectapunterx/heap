@@ -98,9 +98,11 @@ Rectangle {
                     id: chRow
                     anchors.centerIn: parent
                     spacing: Theme.spSm
-                    Rectangle {
-                        width: 8; height: 8; radius: Theme.radiusXs
+                    Text {
+                        objectName: "priority-mark"
+                        text: Theme.priorityMark(modelData)
                         color: Theme.priorityColor(modelData)
+                        font.pixelSize: Theme.fsXs
                     }
                     Text {
                         text: modelData
@@ -398,7 +400,7 @@ Rectangle {
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onClicked: chip.activated()
-            ToolTip.visible: containsMouse && chip.tip.length > 0
+            ToolTip.visible: (containsMouse || chip.activeFocus) && chip.tip.length > 0
             ToolTip.text: chip.tip
             ToolTip.delay: 500
         }

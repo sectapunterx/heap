@@ -318,9 +318,25 @@ Item {
         anchors.fill: parent
         spacing: 0
 
-        // Left nav
+        // Left nav. Grows with the interface scale (APP-183) and with the
+        // longest section name (APP-189), up to a third more, or large text
+        // and longer languages cut the names short.
+        FontMetrics {
+            id: navFont
+            font.pixelSize: Theme.fsMd
+            font.weight: Theme.fwTitle
+        }
         Rectangle {
-            Layout.preferredWidth: 240
+            readonly property real _widestTitle: {
+                let w = 0;
+                for (let i = 0; i < root.sections.length; i++)
+                    w = Math.max(w, navFont.advanceWidth(String(root.sections[i].title)));
+                return w;
+            }
+            // Outer margins, the row's margins, the icon and its gap, and a
+            // little slack for rounding and glyphs from a fallback font.
+            Layout.preferredWidth: Math.min(Theme.px(320), Math.max(Theme.px(240),
+                Math.ceil(_widestTitle) + 2 * Theme.sp2xl + 3 * Theme.spXl + 16 + Theme.spLg))
             Layout.fillHeight: true
             color: Theme.panel
             Rectangle {
@@ -356,7 +372,7 @@ Item {
 
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 28
+                    Layout.preferredHeight: Theme.px(28)
                     Layout.topMargin: Theme.spSm
                     radius: Theme.radiusMd
                     color: Theme.panel2
@@ -440,8 +456,8 @@ Item {
                                 // page's own heading now, and two lines of
                                 // small print per row made the list a wall
                                 // (APP-172). Search still matches it.
-                                Layout.preferredHeight: 36
-                                Layout.minimumHeight: 36
+                                Layout.preferredHeight: Theme.px(36)
+                                Layout.minimumHeight: Theme.px(36)
                                 radius: Theme.radiusMd
                                 color: root.activeSection === modelData.id
                                        ? Theme.accentSoft
@@ -826,7 +842,7 @@ Item {
     // flat grey slab that matches nothing else in Settings.
     component SettingsCombo: ComboBox {
         id: sc
-        implicitHeight: 30
+        implicitHeight: Theme.px(30)
         font.pixelSize: Theme.fsMd
         background: Rectangle {
             radius: Theme.radiusMd
@@ -855,7 +871,7 @@ Item {
             required property var modelData
             required property int index
             width: sc.width - 8
-            height: 28
+            height: Theme.px(28)
             highlighted: sc.highlightedIndex === scRow.index
             contentItem: Text {
                 text: scRow.modelData[sc.textRole]
@@ -1054,7 +1070,7 @@ Item {
         Rectangle {
             Layout.preferredWidth: segInner.implicitWidth + 2 * Theme.sp2xs
             Layout.fillWidth: segRow.stacked
-            Layout.preferredHeight: 30
+            Layout.preferredHeight: Theme.px(30)
             radius: Theme.radiusMd
             color: Theme.panel2
             border.color: Theme.border; border.width: 1
@@ -1080,7 +1096,7 @@ Item {
                         readonly property bool sel: segOpt.v === segRow.value
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        Layout.preferredWidth: Math.max(64, segTxt.implicitWidth + 2 * Theme.spXl)
+                        Layout.preferredWidth: Math.max(Theme.px(64), segTxt.implicitWidth + 2 * Theme.spXl)
                         implicitWidth: Layout.preferredWidth
                         radius: Theme.radiusSm
                         color: segOpt.sel ? Theme.accent
@@ -1342,7 +1358,11 @@ Item {
                 SegRow {
                     objectName: "settings-ui-scale"
                     label: I18n.t("settings.appearance.scale")
-                    hint: I18n.t("settings.appearance.scale.hint")
+                    // Unset, the scale is the system's text size (APP-183):
+                    // say so, or the 150 % nobody picked looks like a bug.
+                    hint: Theme._appearance.uiScale === undefined && Theme.systemScale() !== 1
+                          ? I18n.t("settings.appearance.scale.system")
+                          : I18n.t("settings.appearance.scale.hint")
                     value: String(Math.round(Theme.scale * 100))
                     options: Theme.scaleSteps.map((s) => ({ value: String(Math.round(s * 100)), label: Math.round(s * 100) + "%" }))
                     onSelected: (value) => root.set("appearance", "uiScale", Number(value) / 100)

@@ -9,9 +9,13 @@
 pragma Singleton
 import QtQuick
 import TodoCpp
+import "Pseudo.js" as Pseudo
 
 QtObject {
-    readonly property string lang: AppController.language || "en"
+    // HEAP_LANG=pseudo (APP-189): English, stretched and accented by
+    // Pseudo.js, to find text that is cut short or never translated.
+    readonly property bool pseudo: AppController.pseudoLocale
+    readonly property string lang: pseudo ? "en" : (AppController.language || "en")
 
     // ── Catalogue ─────────────────────────────────────────────────────
     readonly property var dict: ({
@@ -1056,6 +1060,7 @@ QtObject {
             "settings.sound.meetingMinutes.invalid": "Up to three numbers from 1 to 120, comma-separated.",
             "settings.appearance.scale": "Scale",
             "settings.appearance.scale.hint": "Text and spacing across the app, applied at once.",
+            "settings.appearance.scale.system": "Follows the system text size until you pick a scale here.",
             "toast.uiScale": "Scale %1%",
             "settings.appearance.contrast": "Contrast",
             "settings.appearance.cursorColor": "Cursor colour",
@@ -2512,6 +2517,7 @@ QtObject {
             "settings.sound.meetingMinutes.invalid": "До трёх чисел от 1 до 120 через запятую.",
             "settings.appearance.scale": "Масштаб",
             "settings.appearance.scale.hint": "Текст и отступы во всём приложении, сразу.",
+            "settings.appearance.scale.system": "Как размер текста в системе, пока здесь не выбран свой.",
             "toast.uiScale": "Масштаб %1 %",
             "settings.appearance.contrast": "Контраст",
             "settings.appearance.cursorColor": "Цвет курсора",
@@ -2936,8 +2942,8 @@ QtObject {
 
     function t(key) {
         const table = dict[lang] || dict.en;
-        if (table[key] !== undefined) return table[key];
-        if (dict.en[key] !== undefined) return dict.en[key];
+        if (table[key] !== undefined) return pseudo ? Pseudo.pseudo(table[key]) : table[key];
+        if (dict.en[key] !== undefined) return pseudo ? Pseudo.pseudo(dict.en[key]) : dict.en[key];
         return key;
     }
 

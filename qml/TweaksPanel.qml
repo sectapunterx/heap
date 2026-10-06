@@ -175,7 +175,7 @@ Popup {
                                 width: 12; height: 12; radius: 6
                                 color: chip.t.colors.accent
                             }
-                            ToolTip.visible: chipHover.hovered
+                            ToolTip.visible: chipHover.hovered || chip.activeFocus
                             ToolTip.text: chip.t.name
                             HoverHandler { id: chipHover; onHoveredChanged: if (hovered) root._focusedThemeName = chip.t.name }
                             MouseArea {

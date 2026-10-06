@@ -108,6 +108,7 @@ class AppController : public QObject {
   Q_PROPERTY(QString theme READ theme WRITE setTheme NOTIFY themeChanged)
   Q_PROPERTY(QString density READ density WRITE setDensity NOTIFY densityChanged)
   Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)
+  Q_PROPERTY(bool pseudoLocale READ pseudoLocale CONSTANT)
   Q_PROPERTY(QString currentView READ currentView WRITE setCurrentView NOTIFY currentViewChanged)
   Q_PROPERTY(QString focusedStatus READ focusedStatus NOTIFY focusedStatusChanged)
 
@@ -293,6 +294,12 @@ class AppController : public QObject {
 
   QString language() const {
     return m_language;
+  }
+
+  // HEAP_LANG=pseudo: the UI in a stretched, accented English (APP-189), to
+  // find text cut short by a fixed width. For development; no setting.
+  bool pseudoLocale() const {
+    return qEnvironmentVariable("HEAP_LANG") == QLatin1String("pseudo");
   }
 
   void setLanguage(const QString& v);
@@ -1373,6 +1380,10 @@ class AppController : public QObject {
   // `steps` (Theme.scaleSteps), written to settings.appearance.uiScale like
   // Settings → Appearance → Scale does. Returns the new scale.
   Q_INVOKABLE double stepUiScale(int direction, const QVariantList& steps);
+  // The step of `steps` the system's text size asks for (APP-183): what
+  // Theme.scale is while settings.appearance.uiScale is unset. 1.0 under
+  // tests unless HEAP_TEXT_SCALE says otherwise.
+  Q_INVOKABLE double systemUiScale(const QVariantList& steps) const;
   // How the capture hotkey reaches heap from other apps (APP-171): "native"
   // (Windows, macOS), "x11", "portal" (Wayland), or "none" — then Settings
   // says to bind `heap --capture` in the desktop's own keyboard settings.
@@ -1709,6 +1720,10 @@ class AppController : public QObject {
   // The palette rows for one profile's notes and doc pages (see searchFullText).
   QVariantList fullTextEntries(const Profile& p) const;
   QString m_appSettingsJson;
+  // The profile's language while HEAP_LANG=pseudo shows English (APP-189).
+  QString m_languageUnderPseudo;
+  // heap::platform::systemTextScale(), read on first use (APP-183).
+  mutable double m_systemTextScale = 0;
   // settingsMap()'s parse cache, keyed on the string above so that no writer
   // of it has to remember to invalidate anything.
   mutable QString m_settingsCacheSource;

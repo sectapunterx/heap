@@ -12,7 +12,9 @@ Rectangle {
     // collapsed form is the original 56px icon rail. Main owns the state and
     // persists it — this only draws it.
     property bool expanded: true
-    readonly property int expandedWidth: 216
+    // Wide enough for its labels at any interface scale (APP-183): at 150 %
+    // a fixed 216 cut "Blocked" and "Hotkeys" to an ellipsis.
+    readonly property int expandedWidth: Theme.px(216)
     readonly property int collapsedWidth: 56
     // implicitWidth, not width: a Layout writes width itself, which would
     // break a binding on it.
@@ -503,7 +505,8 @@ Rectangle {
         }
         Text {
             id: comboT
-            visible: btn.expanded && !countBox.visible && ma.containsMouse && btn._combo.length > 0
+            // Under the pointer or the keyboard (APP-184).
+            visible: btn.expanded && !countBox.visible && (ma.containsMouse || btn.activeFocus) && btn._combo.length > 0
             anchors.right: parent.right; anchors.rightMargin: Theme.spMd
             anchors.verticalCenter: parent.verticalCenter
             text: btn._combo
@@ -547,9 +550,11 @@ Rectangle {
                 if (btn.shortcutId.length > 0) AppController.noteMouseAction(btn.shortcutId);
                 btn.activated();
             }
-            // Labels are on screen when expanded; the tooltip is only for
-            // the icon-only rail.
-            ToolTip.visible: containsMouse && !btn.expanded && btn.tooltipText !== ""
+            // Labels are on screen when expanded; the tooltip is for the
+            // icon-only rail, or a label a longer language cut short
+            // (APP-189) — under the pointer, or on Tab (APP-184).
+            ToolTip.visible: (containsMouse || btn.activeFocus) && (!btn.expanded || railLabel.truncated)
+                             && btn.tooltipText !== ""
             ToolTip.text: btn._combo.length ? btn.tooltipText + "   " + btn._combo : btn.tooltipText
             ToolTip.delay: 400
         }

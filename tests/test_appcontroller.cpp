@@ -23,6 +23,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QScopeGuard>
 #include <QSignalSpy>
 #include <QStandardPaths>
 #include <QStringList>
@@ -409,6 +410,31 @@ TEST_F(AppControllerTest, StepUiScaleWritesTheAppearanceSetting) {
   app_->setAppSettingsJson(QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact)));
   EXPECT_DOUBLE_EQ(app_->stepUiScale(1, steps), 1.1);
   app_->stepUiScale(0, steps);
+}
+
+// While the user has not picked a scale, the system's text size is the scale
+// (APP-183) — and Ctrl+= steps on from there, not from 100 %.
+TEST_F(AppControllerTest, UnsetUiScaleStartsFromTheSystemTextSize) {
+  const QVariantList steps{0.9, 1, 1.1, 1.25, 1.5};
+  // A test run ignores the machine's own setting.
+  EXPECT_DOUBLE_EQ(app_->systemUiScale(steps), 1.0);
+
+  qputenv("HEAP_TEXT_SCALE", "125");
+  const auto restore = qScopeGuard([] {
+    qunsetenv("HEAP_TEXT_SCALE");
+  });
+  AppController large;
+  EXPECT_DOUBLE_EQ(large.systemUiScale(steps), 1.25);
+  QJsonObject settings = QJsonDocument::fromJson(large.appSettingsJson().toUtf8()).object();
+  QJsonObject appearance = settings.value(QStringLiteral("appearance")).toObject();
+  appearance.remove(QStringLiteral("uiScale"));
+  settings.insert(QStringLiteral("appearance"), appearance);
+  large.setAppSettingsJson(QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact)));
+  EXPECT_DOUBLE_EQ(large.stepUiScale(1, steps), 1.5);
+  // Once picked, the pick wins over the system.
+  EXPECT_DOUBLE_EQ(large.stepUiScale(-1, steps), 1.25);
+  EXPECT_DOUBLE_EQ(large.stepUiScale(-1, steps), 1.1);
+  large.stepUiScale(0, steps);
 }
 
 TEST_F(AppControllerTest, ResetShortcutRestoresAndSwaps) {

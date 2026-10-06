@@ -628,7 +628,7 @@ Rectangle {
             text: root.rightPanelShown ? "▸" : "◂"
             shortcutId: "panel.right"
             onClicked: root.rightPanelToggleRequested()
-            ToolTip.visible: hovered
+            ToolTip.visible: hovered || visualFocus
             ToolTip.delay: 400
             ToolTip.text: I18n.t(root.rightPanelShown ? "topbar.rightPanel.hide" : "topbar.rightPanel.show")
                           + "  " + AppController.shortcutFor("panel.right")

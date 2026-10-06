@@ -731,10 +731,12 @@ Item {
                             anchors.top: parent.top
                             anchors.topMargin: Theme.spLg
                             spacing: Theme.spLg
-                            Rectangle {
+                            Text {
+                                objectName: "column-folded-mark"
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                width: 8; height: 8; radius: 4
+                                text: Theme.statusMark(col.statusId)
                                 color: col.statusColor
+                                font.pixelSize: Theme.fsSm
                             }
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
@@ -908,6 +910,12 @@ Item {
                                         font.pixelSize: Theme.fsSm
                                         font.weight: col.overWip ? Theme.fwTitle : Theme.fwBody
                                     }
+                                    // The count and the over-limit warning for a
+                                    // screen reader, not only on hover (APP-184).
+                                    Accessible.role: Accessible.StaticText
+                                    Accessible.name: col.overWip
+                                        ? I18n.t("kanban.wip.over").arg(col.statusName).arg(col.wipLimit)
+                                        : cntT.text
                                     QQC.ToolTip.visible: col.overWip && wipHover.hovered
                                     QQC.ToolTip.text: I18n.t("kanban.wip.over").arg(col.statusName).arg(col.wipLimit)
                                     HoverHandler { id: wipHover }
