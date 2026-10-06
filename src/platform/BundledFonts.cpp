@@ -1,11 +1,11 @@
 #include "platform/BundledFonts.h"
 
+#include <QDebug>
 #include <QDir>
 #include <QFont>
 #include <QFontDatabase>
 #include <QFontInfo>
 #include <QGuiApplication>
-#include <QDebug>
 #include <QString>
 
 namespace heap::platform {
