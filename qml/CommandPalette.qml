@@ -62,12 +62,23 @@ Popup {
         for (let i = 0; i < list.length; i++) {
             const c = list[i];
             if (_isContextual(c.id)) continue;
+            // Focus mode (APP-160) is offered once Settings → Safety net
+            // turns it on, and says which way it goes.
+            if (c.id === "focus.immersion") {
+                if (!(AppController.safety && AppController.safety.immersion)) continue;
+                out.push({ kind: "command", commandId: c.id, sub: c.sequence || "", body: c.description || "",
+                           label: AppController.immersion ? I18n.t("palette.cmd.immersionOff") : c.label });
+                continue;
+            }
             out.push({ kind: "command", commandId: c.id, label: c.label, sub: c.sequence || "",
                        body: c.description || "" });
         }
         out.push({ kind: "command", commandId: "event.new", label: I18n.t("palette.cmd.newEvent"), sub: "" });
         out.push({ kind: "command", commandId: "welcome.replay", label: I18n.t("palette.cmd.replayTour"), sub: "" });
         out.push({ kind: "command", commandId: "recap.open", label: I18n.t("palette.cmd.weeklyRecap"), sub: "" });
+        // The standup draft (APP-170), once Settings → Safety net turns it on.
+        if (AppController.safety && AppController.safety.standupDraft)
+            out.push({ kind: "command", commandId: "standup.draft", label: I18n.t("palette.cmd.standupDraft"), sub: "" });
         out.push({ kind: "command", commandId: "timeMachine.open", label: I18n.t("palette.cmd.timeMachine"), sub: "" });
         // Saved views: one command per view, by name, plus saving the current
         // filters as one.

@@ -1,6 +1,8 @@
 #include "GitWatcher.h"
 #include "PrFacts.h"
 
+#include "safety/EndOfDay.h"
+
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -307,7 +309,9 @@ void GitWatcher::fetchCommitsAsync(const QString& repoPath) {
                    QStringLiteral("--all"),
                    QStringLiteral("--no-color"),
                    QStringLiteral("--max-count=200"),
-                   QStringLiteral("--pretty=format:%H%x1f%s")});
+                   // The commit time rides along as a third field, for the
+                   // safety net's "no sign of life" (APP-157).
+                   QStringLiteral("--pretty=format:%H%x1f%s%x1f%cI")});
   connect(p, &QProcess::finished, this, [this, p, key, repoPath](int code, QProcess::ExitStatus) {
     m_inflight.remove(key);
     if(code == 0) {
@@ -384,6 +388,61 @@ bool GitWatcher::createBranch(const QString& repoPath, const QString& branchName
   process->start();
   timeout->start();
   return true;
+}
+
+void GitWatcher::runGitAsync(const QString& repoPath, const QStringList& args, const std::function<void(int, const QByteArray&)>& done) {
+  auto* p = new QProcess(this);
+  p->setWorkingDirectory(repoPath);
+  p->setProgram(m_gitPath);
+  p->setArguments(args);
+  auto* timeout = new QTimer(p);
+  timeout->setSingleShot(true);
+  timeout->setInterval(15000);
+  connect(timeout, &QTimer::timeout, p, [p]() {
+    if(p->state() != QProcess::NotRunning) {
+      p->kill();
+    }
+  });
+  connect(p, &QProcess::finished, this, [p, done](int code, QProcess::ExitStatus status) {
+    p->deleteLater();
+    done(status == QProcess::NormalExit ? code : -1, p->readAllStandardOutput());
+  });
+  connect(p, &QProcess::errorOccurred, this, [p, done](QProcess::ProcessError error) {
+    // A process that never started emits no finished(); every other error
+    // is followed by one.
+    if(error == QProcess::FailedToStart) {
+      p->deleteLater();
+      done(-1, {});
+    }
+  });
+  p->start();
+  timeout->start();
+}
+
+void GitWatcher::checkWorkingTree(const QString& repoPath) {
+  if(m_gitPath.isEmpty() || repoPath.isEmpty()) {
+    emit workingTreeChecked(repoPath, 0, 0, false);
+    return;
+  }
+  const QString key = QStringLiteral("wt:") + repoPath;
+  if(m_workingTreeChecks.contains(key)) {
+    return;  // the answer to the first request answers this one too
+  }
+  m_workingTreeChecks.insert(key);
+  runGitAsync(repoPath, {QStringLiteral("status"), QStringLiteral("--porcelain")}, [this, repoPath, key](int code, const QByteArray& out) {
+    if(code != 0) {
+      m_workingTreeChecks.remove(key);
+      emit workingTreeChecked(repoPath, 0, 0, false);
+      return;
+    }
+    const int changed = heap::safety::countPorcelainEntries(out);
+    runGitAsync(repoPath,
+                {QStringLiteral("stash"), QStringLiteral("list")},
+                [this, repoPath, key, changed](int stashCode, const QByteArray& stashOut) {
+                  m_workingTreeChecks.remove(key);
+                  emit workingTreeChecked(repoPath, changed, stashCode == 0 ? heap::safety::countStashEntries(stashOut) : 0, true);
+                });
+  });
 }
 
 void GitWatcher::fetchAheadBehindAsync(const QString& repoPath, const QString& branch) {

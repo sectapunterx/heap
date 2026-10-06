@@ -6,6 +6,7 @@
 #include "history/TaskHistory.h"
 #include "integrations/SyncHealth.h"
 #include "notify/NotifyPayload.h"
+#include "safety/EndOfDay.h"
 #include "undo/UndoStack.h"
 
 #include <QDate>
@@ -2121,4 +2122,122 @@ class AppController : public QObject {
   void onGitBranchChanged(const QString& repo, const QString& branch, const QString& matchedId);
   void onGitRepoState(const QString& repo, const QVariantMap& state);
   void onGitCommits(const QString& repo, const QVariantMap& commitsByTask);
+
+  // ── Safety net (APP-157…) ──────────────────────────────────────────
+  // Quiet, opt-in heads-ups, each off until switched on under
+  // settings.safety. They say what they noticed, once; none of them changes
+  // a task, a timer or a status. See AppControllerSafety.cpp.
+ public:
+  // The end-of-day check (APP-157) at `now`. runAutomationAt() calls it on
+  // every tick; it fires at most once a day, at settings.safety.endOfDayTime.
+  void checkEndOfDayAt(const QDateTime& now);
+  // The "waiting on a reply" reminder (APP-158) at `now`, from the same tick.
+  void checkWaitingAt(const QDateTime& now);
+
+  // settings.safety, for QML: which heads-ups are on.
+  Q_PROPERTY(QVariantMap safety READ safetySettings NOTIFY appSettingsJsonChanged)
+  // Writes settings.safety.<key>; Settings → Safety net's rows use it.
+  Q_INVOKABLE void setSafetySetting(const QString& key, const QVariant& value);
+  // Waiting on a reply (APP-158), active profile: task id →
+  // { personId, name, color, since, days }.
+  Q_PROPERTY(QVariantMap waitingOn READ waitingOnMap NOTIFY waitingOnChanged)
+  QVariantMap waitingOnMap() const;
+
+  QVector<WaitingOn> waitingOnLinks() const {
+    return m_waitingOn;
+  }
+
+  // Link a task to the person whose answer it waits on, from now. Picking
+  // someone again (or the same person) starts the wait over and re-arms its
+  // one reminder.
+  Q_INVOKABLE void setWaitingOn(const QString& taskId, const QString& personId);
+  Q_INVOKABLE void clearWaitingOn(const QString& taskId);
+
+  // "You've seen this before" (APP-159): when `text` looks like an error or a
+  // stack trace, the note, doc page or task (any profile) that already
+  // mentions its gist — { kind, id, title, profileId, date } — or an empty
+  // map. Empty too while settings.safety.seenBefore is off. `excludeTaskId`
+  // is the task being edited, which would otherwise find itself.
+  Q_INVOKABLE QVariantMap seenBefore(const QString& text, const QString& excludeTaskId = QString());
+
+  // Focus mode (APP-160). On: notifications are held back (meetings pass
+  // unless settings.safety.immersionPassMeetings is false) and the timer runs
+  // on the current task — `preferredTaskId` if it names one, else the single
+  // selected task, else the current branch's. Off: the timer it started stops
+  // and immersionEnded() says how many notifications wait; nothing is
+  // delivered until releaseImmersionHeld(). Not persisted: a restart ends it.
+  Q_PROPERTY(bool immersion READ immersion NOTIFY immersionChanged)
+  Q_PROPERTY(QDateTime immersionStartedAt READ immersionStartedAt NOTIFY immersionChanged)
+  Q_PROPERTY(QString immersionTaskId READ immersionTaskId NOTIFY immersionChanged)
+
+  bool immersion() const {
+    return m_immersionStartedAt.isValid();
+  }
+
+  QDateTime immersionStartedAt() const {
+    return m_immersionStartedAt;
+  }
+
+  QString immersionTaskId() const {
+    return m_immersionTaskId;
+  }
+
+  qsizetype immersionHeldCount() const {
+    return m_immersionHeld.size();
+  }
+
+  Q_INVOKABLE void startImmersion(const QString& preferredTaskId = QString());
+  Q_INVOKABLE void stopImmersion();
+  Q_INVOKABLE void toggleImmersion(const QString& preferredTaskId = QString());
+  // Hands over what focus mode held back, through the usual paths. Returns
+  // how many there were.
+  Q_INVOKABLE int releaseImmersionHeld();
+
+  // The standup draft (APP-170): "Yesterday / Today / Blockers" from the last
+  // working day's column moves, commits and timer, today's work and meetings,
+  // and the blocked cards. Text for the user to edit; nothing is sent.
+  Q_INVOKABLE QString standupDraft();
+  QString standupDraftFor(const QDate& today);
+  // What the end-of-day check reads from the workspace at `now`; the
+  // repository part is filled in by git, asynchronously.
+  heap::safety::EndOfDayFacts endOfDayFacts() const;
+
+ signals:
+  // A safety-net notice for the in-app toast. `taskIds` are the tasks its
+  // "Show" opens the board on (may be empty).
+  void safetyNotice(const QString& kind, const QString& title, const QString& body, const QStringList& taskIds);
+  // Bring the board up narrowed to these tasks (a notice was clicked).
+  void safetyOpenTasksRequested(const QStringList& taskIds);
+  void waitingOnChanged();
+  void immersionChanged();
+  // Focus mode ended after `minutes`, holding back `held` notifications.
+  void immersionEnded(int held, int minutes);
+
+ private:
+  QVariantMap safetySettings() const;
+  // Delivers a safety-net notice: held during quiet hours like any other,
+  // an OS notification when the window is in the background, the in-app
+  // toast (safetyNotice) always.
+  void safetyNotify(const QString& kind, const QString& title, const QString& body, const QStringList& taskIds, const QDateTime& now);
+  void finishEndOfDay(const QDateTime& now, const heap::safety::RepoDirt& dirt);
+  void onWorkingTreeChecked(const QString& repo, int changedFiles, int stashes, bool ok);
+  // An end-of-day check waiting for git's answer about m_eodPendingRepo.
+  QDateTime m_eodPendingAt;
+  QString m_eodPendingRepo;
+  // Task id → the newest commit naming it, from the watcher's log.
+  QHash<QString, QDateTime> m_lastCommitAt;
+  // The active profile's waiting-on links (the others' are in m_profiles).
+  QVector<WaitingOn> m_waitingOn;
+  // A person's state went from `before` to their current one: a reply ends
+  // every wait on them; a deleted person's waits go with them.
+  void personStateMoved(const QString& personId, const QString& before);
+  // Focus mode (APP-160).
+  QDateTime m_immersionStartedAt;
+  QString m_immersionTaskId;
+  bool m_immersionStartedTimer = false;
+  QVector<HeldNotification> m_immersionHeld;
+  // Task id → its recent commits ({sha, subject, at}) from the watcher.
+  QHash<QString, QVariantList> m_taskCommits;
+  // Holds `n` when focus mode says so; true when it did.
+  bool holdForImmersion(const HeldNotification& n);
 };

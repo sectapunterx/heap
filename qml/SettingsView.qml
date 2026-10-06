@@ -1577,18 +1577,100 @@ Item {
     }
 
     // Safety net (APP-172): gentle, opt-in heads-ups, every one off by
-    // default. Empty-ready — each ticket that brings one adds a SwitchRow
-    // (or a SettingsGroup) here and drops the placeholder when it is the
-    // first.
+    // default. Each says what it noticed once and changes nothing by itself.
     Component {
         id: sectionSafety
         ColumnLayout {
             spacing: root.groupGap
+            // Rows read AppController.safety and write through
+            // setSafetySetting(); this view reloads on the change.
+            // APP-157: one notice at the end of the day.
             SettingsGroup {
-                objectName: "settings-safety-empty"
-                SettingsRow {
-                    label: I18n.t("settings.safety.empty.title")
-                    hint: I18n.t("settings.safety.empty.body")
+                title: I18n.t("settings.safety.group.endOfDay")
+                SwitchRow {
+                    objectName: "settings-safety-endOfDay"
+                    label: I18n.t("settings.safety.endOfDay")
+                    hint: I18n.t("settings.safety.endOfDay.hint")
+                    checked: AppController.safety.endOfDay === true
+                    onToggled: (checked) => AppController.setSafetySetting("endOfDay", checked)
+                }
+                TextRow {
+                    objectName: "settings-safety-endOfDayTime"
+                    visible: AppController.safety.endOfDay === true
+                    label: I18n.t("settings.safety.endOfDayTime"); mono: true; placeholder: "18:00"
+                    fieldWidth: 120
+                    hint: invalid ? I18n.t("settings.safety.time.invalid") : ""
+                    clockTime: true
+                    value: AppController.safety.endOfDayTime || "18:00"
+                    onCommitted: (text) => AppController.setSafetySetting("endOfDayTime", text)
+                }
+                SliderRow {
+                    objectName: "settings-safety-staleDays"
+                    visible: AppController.safety.endOfDay === true
+                    label: I18n.t("settings.safety.staleDays")
+                    unit: " " + I18n.t("common.days"); min: 1; max: 14; step: 1
+                    value: AppController.safety.staleDays ?? 3
+                    onMoved: (value) => AppController.setSafetySetting("staleDays", Math.round(value))
+                }
+            }
+            // APP-158: a task waiting on someone's reply.
+            SettingsGroup {
+                title: I18n.t("settings.safety.group.waiting")
+                SwitchRow {
+                    objectName: "settings-safety-waiting"
+                    label: I18n.t("settings.safety.waiting")
+                    hint: I18n.t("settings.safety.waiting.hint")
+                    checked: AppController.safety.waitingOn === true
+                    onToggled: (checked) => AppController.setSafetySetting("waitingOn", checked)
+                }
+                SliderRow {
+                    objectName: "settings-safety-waitingDays"
+                    visible: AppController.safety.waitingOn === true
+                    label: I18n.t("settings.safety.waitingDays")
+                    unit: " " + I18n.t("common.days"); min: 1; max: 7; step: 1
+                    value: AppController.safety.waitingDays ?? 2
+                    onMoved: (value) => AppController.setSafetySetting("waitingDays", Math.round(value))
+                }
+            }
+            // APP-159: an error pasted somewhere that came up before.
+            SettingsGroup {
+                title: I18n.t("settings.safety.group.seen")
+                SwitchRow {
+                    objectName: "settings-safety-seenBefore"
+                    label: I18n.t("settings.safety.seen")
+                    hint: I18n.t("settings.safety.seen.hint")
+                    checked: AppController.safety.seenBefore === true
+                    onToggled: (checked) => AppController.setSafetySetting("seenBefore", checked)
+                }
+            }
+            // APP-160: focus mode, from the palette or its shortcut.
+            SettingsGroup {
+                title: I18n.t("settings.safety.group.immersion")
+                SwitchRow {
+                    objectName: "settings-safety-immersion"
+                    label: I18n.t("settings.safety.immersion")
+                    hint: I18n.t("settings.safety.immersion.hint").arg(AppController.shortcutFor("focus.immersion"))
+                    checked: AppController.safety.immersion === true
+                    onToggled: (checked) => AppController.setSafetySetting("immersion", checked)
+                }
+                SwitchRow {
+                    objectName: "settings-safety-immersionPassMeetings"
+                    visible: AppController.safety.immersion === true
+                    label: I18n.t("settings.safety.immersionPassMeetings")
+                    hint: I18n.t("settings.safety.immersionPassMeetings.hint")
+                    checked: AppController.safety.immersionPassMeetings !== false
+                    onToggled: (checked) => AppController.setSafetySetting("immersionPassMeetings", checked)
+                }
+            }
+            // APP-170: a standup draft from yesterday's facts.
+            SettingsGroup {
+                title: I18n.t("settings.safety.group.standup")
+                SwitchRow {
+                    objectName: "settings-safety-standupDraft"
+                    label: I18n.t("settings.safety.standup")
+                    hint: I18n.t("settings.safety.standup.hint")
+                    checked: AppController.safety.standupDraft === true
+                    onToggled: (checked) => AppController.setSafetySetting("standupDraft", checked)
                 }
             }
         }

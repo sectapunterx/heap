@@ -495,7 +495,7 @@ ApplicationWindow {
         || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
         || tweaks.opened || hotkeys.opened || closeAsk.opened || goToDatePopup.opened
-        || weeklyRecap.opened || timeMachine.opened
+        || weeklyRecap.opened || standupDraft.opened || timeMachine.opened
 
     // ── Keyboard scope ────────────────────────────────────────────────
     // Board and calendar keys (Return, Esc, the arrows, bare letters) are
@@ -663,6 +663,49 @@ ApplicationWindow {
     // Bring the window to the foreground from any state (minimized, hidden to
     // tray, or merely unfocused). Shared by the two global-capture hotkeys and
     // the tray "Show" affordance.
+    // Where a "seen this before" hint points (APP-159): the note, doc page or
+    // task that already mentions the error, in its own profile.
+    function openSeenBefore(hit) {
+        if (!hit || !hit.id) return;
+        if (hit.profileId && hit.profileId !== AppController.activeProfileId)
+            AppController.activeProfileId = hit.profileId;
+        if (hit.kind === "note") {
+            AppController.activeNoteId = hit.id;
+            AppController.currentView = "notes";
+        } else if (hit.kind === "docPage") {
+            AppController.activeDocPageId = hit.id;
+            AppController.currentView = "docs";
+            docsBridge.requestedAnchor = "page:" + hit.id;
+        } else if (hit.kind === "task") {
+            // Edits to the task already open are not swapped out unasked.
+            taskEditor.settleThen(() => {
+                const t = AppController.taskById(hit.id);
+                if (t && t.id) taskEditor.showFor(Object.assign({}, t));
+            });
+        }
+    }
+
+    // Focus mode (APP-160) on the task in front of the user: the one open in
+    // the editor, else whatever AppController picks (selection, branch).
+    function toggleImmersion() {
+        AppController.toggleImmersion(taskEditor.opened ? taskEditor._originalId : "");
+    }
+
+    // The tasks a safety-net notice is about: one opens in the editor, several
+    // narrow the board to them. Only what is shown changes.
+    function showSafetyTasks(ids) {
+        const list = (ids || []).filter(id => id && id.length > 0);
+        if (list.length === 0) return;
+        AppController.currentView = "board";
+        if (list.length === 1) {
+            const t = AppController.taskById(list[0]);
+            if (t && t.id) taskEditor.showFor(Object.assign({}, t));
+            return;
+        }
+        topBar.searchText = list.join(" OR ");
+        win.searchText = topBar.searchText;
+    }
+
     function _summon() {
         if (win._maximizeOnShow) {
             win._maximizeOnShow = false;
@@ -691,6 +734,28 @@ ApplicationWindow {
         // Tray click / "Show heap." menu entry — just restore the window.
         function onShowWindowRequested() { win._summon(); }
         function onToast(msg, kind) { toast.show(msg, kind || "info") }
+        // A safety-net notice (APP-157…): one toast, and "Show" takes the
+        // board to the tasks it is about.
+        function onSafetyNotice(kind, title, body, taskIds) {
+            const msg = title.length > 0 ? title + " · " + body : body;
+            if (taskIds && taskIds.length > 0)
+                toast.showWithAction(msg, I18n.t("safety.show"), 10, function () { win.showSafetyTasks(taskIds) });
+            else
+                toast.show(msg, "info");
+        }
+        // Focus mode ended: one toast with how much was held back, and a way
+        // to see it. Nothing arrives unless asked for.
+        function onImmersionEnded(held, minutes) {
+            const msg = I18n.t("immersion.ended").arg(held);
+            if (held > 0)
+                toast.showWithAction(msg, I18n.t("immersion.showHeld"), 15, function () { AppController.releaseImmersionHeld() });
+            else
+                toast.show(msg, "info");
+        }
+        function onSafetyOpenTasksRequested(taskIds) {
+            win._summon();
+            win.showSafetyTasks(taskIds);
+        }
         // The third mouse use of an action that has a key: one quiet line,
         // never repeated for it (APP-166).
         function onShortcutHintRequested(shortcutId, sequence, label) {
@@ -763,6 +828,7 @@ ApplicationWindow {
                 onTriggered: win.searchText = topBar.searchText
             }
             onLeaveRequested: win.focusActiveView()
+            onSeenBeforeActivated: (hit) => win.openSeenBefore(hit)
             onNewTaskRequested: taskEditor.showFor(AppController.newTaskDraft("todo"))
             rightPanelShown: win.rightPanelShown
             onRightPanelToggleRequested: win.toggleRightPanel()
@@ -1192,7 +1258,10 @@ ApplicationWindow {
         }
     }
 
-    TaskEditor    { id: taskEditor }
+    TaskEditor    {
+        id: taskEditor
+        onSeenBeforeActivated: (hit) => win.openSeenBefore(hit)
+    }
     EventEditor   { id: eventEditor }
     PersonEditor  { id: personEditor }
     PersonPicker  {
@@ -1307,6 +1376,10 @@ ApplicationWindow {
     QuickCapturePopup {
         id: quickCapture
         onCaptured: (title, body, taskId) => toast.show(title + " — " + body.replace(/\n/g, " · "))
+        onSeenBeforeActivated: (hit) => {
+            quickCapture.close();
+            win.openSeenBefore(hit);
+        }
     }
     QuickCaptureNotesPopup {
         id: quickCaptureNotes
@@ -1328,6 +1401,15 @@ ApplicationWindow {
             // Nothing of heap is on screen to show it, so the confirmation is
             // an OS notification; clicking it opens the task.
             onCaptured: (title, body, taskId) => AppController.notifyCapture(taskId, title, body)
+        }
+    }
+    // Outside the component, so `win` is in scope for qmllint (APP-159).
+    Connections {
+        target: captureLoader.item
+        ignoreUnknownSignals: true
+        function onSeenBeforeActivated(hit) {
+            win._summon();
+            win.openSeenBefore(hit);
         }
     }
 
@@ -1401,6 +1483,8 @@ ApplicationWindow {
         case "event.new":            eventEditor.showForDraft(AppController.newEventDraft(9, AppController.selectedDate)); break;
         case "welcome.replay":       AppController.replayWelcome(); break;
         case "recap.open":           weeklyRecap.showNow(); break;
+        case "focus.immersion":      win.toggleImmersion(); break;
+        case "standup.draft":        standupDraft.showNow(); break;
         case "timeMachine.open":     timeMachine.showNow(); break;
         default:                     console.warn("palette: no command", id);
         }
@@ -1608,6 +1692,23 @@ ApplicationWindow {
         enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.copyActiveProfileMarkdownToClipboard()
     }
+    // Focus mode (APP-160): on, and again to leave. Esc leaves it too when
+    // nothing nearer would take the Esc (a selection, the board cursor, a
+    // field, a dialog) — those stand the shortcut down, so the two never
+    // compete for the same key.
+    Shortcut {
+        sequence: win._kbd("focus.immersion")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn && !!(AppController.safety && AppController.safety.immersion)
+        onActivated: win.toggleImmersion()
+    }
+    Shortcut {
+        sequence: "Escape"
+        context: Qt.ApplicationShortcut
+        enabled: AppController.immersion && !win._viewKeysBlocked && AppController.selectionCount === 0
+                 && !(AppController.currentView === "board" && !!boardLoader.item && boardLoader.item["cursorVisible"] === true)
+        onActivated: AppController.stopImmersion()
+    }
     Shortcut {
         sequence: _kbd("profile.weeklyReport")
         context: Qt.ApplicationShortcut
@@ -1688,7 +1789,7 @@ ApplicationWindow {
         enabled: sequence.length > 0 && !win._viewKeysBlocked
             && (AppController.selectionCount > 0
                 || (AppController.currentView === "board"
-                    && !!boardLoader.item && boardLoader.item.cursorVisible === true))
+                    && !!boardLoader.item && boardLoader.item["cursorVisible"] === true))
         onActivated: {
             AppController.clearSelection();
             if (boardLoader.item && boardLoader.item.clearCursor) boardLoader.item.clearCursor();
@@ -1796,7 +1897,10 @@ ApplicationWindow {
     WeeklyRecapDialog {
         id: weeklyRecap
         onTaskActivated: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+        onStandupDraftRequested: standupDraft.showNow()
     }
+    // The standup draft (APP-170): text to edit and copy, sent nowhere.
+    StandupDraftDialog { id: standupDraft }
     Connections {
         target: AppController
         function onTodayChanged() {

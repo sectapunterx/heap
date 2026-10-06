@@ -48,6 +48,7 @@
 #include "query/TaskQuery.h"
 #include "recap/WeeklyRecap.h"
 #include "recur/RecurrenceEngine.h"
+#include "safety/SafetyText.h"
 #include "storage/AsyncSaver.h"
 #include "storage/Attachments.h"
 #include "storage/Snapshots.h"
@@ -727,6 +728,10 @@ AppController::AppController(QObject* parent) :
             if(s_headless) {
               return;  // nobody to show it to; a held one would be saved as pending
             }
+            // Focus mode holds it until the user asks (APP-160).
+            if(holdForImmersion({.title = title, .body = body, .kind = kind, .taskId = QString()})) {
+              return;
+            }
             // Quiet hours hold a notification until they end rather than dropping
             // it. A meeting or the standup is an appointment and goes through.
             const bool appointment = kind == QStringLiteral("meeting") || kind == QStringLiteral("standup");
@@ -861,6 +866,9 @@ AppController::AppController(QObject* parent) :
     connect(m_gitWatcher.get(), &heap::git::GitWatcher::branchChanged, this, &AppController::onGitBranchChanged);
     connect(m_gitWatcher.get(), &heap::git::GitWatcher::repoStateUpdated, this, &AppController::onGitRepoState);
     connect(m_gitWatcher.get(), &heap::git::GitWatcher::commitsUpdated, this, &AppController::onGitCommits);
+    connect(m_gitWatcher.get(), &heap::git::GitWatcher::workingTreeChecked, this, &AppController::onWorkingTreeChecked);
+    // "Waiting 2d" counts calendar days, so it moves on at midnight (APP-158).
+    connect(this, &AppController::todayChanged, this, &AppController::waitingOnChanged);
     connect(
         m_gitWatcher.get(), &heap::git::GitWatcher::prInfoUpdated, this, [this](const QString&, const QString& br, const QVariantMap& pr) {
           const heap::git::BranchTaskMatcher m(collectPrefixes());
@@ -1181,6 +1189,9 @@ QString AppController::tr_(const QString& key) const {
     QString own = heap::integrations::integrationText(key, m_language == QStringLiteral("ru"));
     if(own.isNull()) {
       own = heap::savedviews::text(key, m_language == QStringLiteral("ru"));
+    }
+    if(own.isNull()) {
+      own = heap::safety::text(key, m_language == QStringLiteral("ru"));
     }
     return own.isNull() ? key : own;
   }
@@ -5014,12 +5025,18 @@ double AppController::nextFreeSlot(const QDate& date, double durationHours) cons
 }
 
 void AppController::cyclePerson(const QString& id) {
+  const int row = m_people.indexOfId(id);
+  const QString before = row >= 0 ? m_people.items().at(row).state : QString();
   m_people.cycleState(id);
+  personStateMoved(id, before);
   scheduleSave();
 }
 
 void AppController::setPersonState(const QString& id, const QString& state) {
+  const int row = m_people.indexOfId(id);
+  const QString before = row >= 0 ? m_people.items().at(row).state : QString();
   m_people.setState(id, state);
+  personStateMoved(id, before);
   scheduleSave();
 }
 
@@ -5151,7 +5168,10 @@ bool AppController::savePerson(const QVariantMap& draft) {
     return false;
   }
   const UndoScope scope(this, tr_(isNew ? "person.createUndone" : "person.editUndone").arg(p.name));
+  const int beforeRow = m_people.indexOfId(p.id);
+  const QString stateBefore = beforeRow >= 0 ? m_people.items().at(beforeRow).state : QString();
   m_people.upsert(p);
+  personStateMoved(p.id, stateBefore);
   // Keep Docs and the rail pointing at each other. A Person picked out of a
   // contact gets that contact's `personId` (so the next pick, and the next
   // Mattermost sync, reuse this Person instead of making a second one); a
@@ -5382,6 +5402,7 @@ void AppController::deletePerson(const QString& id) {
   const Person removedPerson = m_people.items().at(row);
   const UndoScope scope(this, tr_("person.restored").arg(removedPerson.name));
   m_people.removeById(id);
+  personStateMoved(id, removedPerson.state);
   emit undoableToast(tr_("person.deleted").arg(removedPerson.name), 5);
   scheduleSave();
 }
@@ -9266,11 +9287,14 @@ void AppController::snapshotActiveProfile() {
   p.activeDocPageId = m_activeDocPageId;
   p.savedViews = m_savedViews;
   p.statusLog = m_statusLog;
+  p.waitingOn = m_waitingOn;
   // Events are global — not snapshotted into the profile.
 }
 
 void AppController::applyProfileToModels(const Profile& p) {
   m_statusLog = p.statusLog;
+  m_waitingOn = p.waitingOn;
+  emit waitingOnChanged();
   // Imports and hand-edited files may still carry rank ties (see Rank.h).
   QVector<Task> tasks = p.tasks;
   heap::board::spreadTiedRanks(tasks);
@@ -11237,6 +11261,8 @@ void AppController::seedShortcutCatalog() {
   add("cal.prevDay", "Alt+Left");
   add("cal.nextDay", "Alt+Right");
   add("cal.newEvent", "Ctrl+Alt+E");
+  // Focus mode (APP-160); live only once Settings → Safety net turns it on.
+  add("focus.immersion", "Ctrl+Shift+F");
   // The first nine saved views, in sidebar order. Alt+digit is free in the
   // catalog and in every text field, and Ctrl+digit already means "view".
   add("savedView.1", "Alt+1");
@@ -12125,6 +12151,10 @@ void AppController::runAutomationAt(const QDateTime& now) {
     }
   }
 
+  // 6. The safety net (APP-157…): each off unless switched on.
+  checkEndOfDayAt(now);
+  checkWaitingAt(now);
+
   // Anything else that arrived during quiet hours goes out now.
   if(!quiet) {
     flushHeldNotifications(now);
@@ -12499,6 +12529,19 @@ void AppController::createBranchForTask(const QString& taskId) {
 void AppController::onGitCommits(const QString& repo, const QVariantMap& commitsByTask) {
   Q_UNUSED(repo);
   for(auto it = commitsByTask.constBegin(); it != commitsByTask.constEnd(); ++it) {
+    // The newest commit naming a task is a sign of life (APP-157), and its
+    // commits are part of the standup draft (APP-170).
+    m_taskCommits.insert(taskIdForBranchMatch(it.key()), it.value().toList());
+    for(const QVariant& c : it.value().toList()) {
+      const QDateTime at = c.toMap().value(QStringLiteral("at")).toDateTime();
+      if(!at.isValid()) {
+        continue;
+      }
+      QDateTime& last = m_lastCommitAt[taskIdForBranchMatch(it.key())];
+      if(!last.isValid() || at > last) {
+        last = at;
+      }
+    }
     if(m_tasks.indexOfId(it.key()) < 0) {
       continue;
     }
@@ -12516,6 +12559,9 @@ void AppController::notifyTask(const QString& taskId, const QString& title, cons
 
 void AppController::notifyTaskAt(
     const QString& taskId, const QString& title, const QString& body, const QString& kind, const QDateTime& now) {
+  if(holdForImmersion({.title = title, .body = body, .kind = kind, .taskId = taskId})) {
+    return;
+  }
   if(inQuietHours(now)) {
     holdNotification({title, body, kind, taskId});
     return;
@@ -12644,5 +12690,11 @@ void AppController::activateProfileOfTask(const QString& taskId) {
 }
 
 void AppController::onNotifierActivated(const QString& notificationId) {
+  // The end-of-day notice is about several tasks at once (APP-157).
+  const auto [kind, taskId] = heap::notify::parseRoutingId(notificationId);
+  if(kind == QLatin1String("endOfDay")) {
+    emit safetyOpenTasksRequested(taskId == QLatin1String("-") ? QStringList() : taskId.split(QLatin1Char(',')));
+    return;
+  }
   openReminder(notificationId);
 }
