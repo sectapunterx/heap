@@ -214,8 +214,16 @@ Item {
     onCursorTaskIdChanged: {
         if (!root._extending) root._selAnchor = "";
         if (root.cursorVisible) Qt.callLater(root.revealCursor);
+        root._seeCursor();
     }
-    onCursorVisibleChanged: if (root.cursorVisible) Qt.callLater(root.revealCursor)
+    onCursorVisibleChanged: {
+        if (root.cursorVisible) Qt.callLater(root.revealCursor);
+        root._seeCursor();
+    }
+    // A new card the keyboard cursor reaches has been seen (APP-180).
+    function _seeCursor() {
+        if (root.cursorVisible && root.cursorTaskId) AppController.markTaskSeen(root.cursorTaskId);
+    }
 
     // The board scrolls to the card the keyboard moved to (VISU-19, PERA-7):
     // the cursor walked into a column past the right edge and the board
@@ -1212,6 +1220,7 @@ Item {
                         priorities: root.activePriorities
                         sortMode: root.sortMode
                         today: AppController.today
+                        newIds: AppController.syncNewTaskIds
                     }
                 }
             }

@@ -43,7 +43,9 @@ class TaskQuery {
   // `today` anchors relative dates ("friday", "3d"). `statuses` is the board's
   // column list ([{id, name}]) so a status can be named as the UI shows it;
   // without it only ids match.
-  static TaskQuery compile(const QString& text, const QDate& today, const QVariantList& statuses = {});
+  // `newIds` is what `is:new` matches: the cards the latest sync brought in
+  // (APP-180). The caller owns that set; a CLI run has none.
+  static TaskQuery compile(const QString& text, const QDate& today, const QVariantList& statuses = {}, const QStringList& newIds = {});
 
   // True when at least one clause (or a negated word) was recognised. False
   // means the text was ordinary search terms and `freeText()` is all of it.
@@ -91,6 +93,7 @@ class TaskQuery {
   QString m_freeText;
   QStringList m_unknown;
   QDate m_today;
+  QSet<QString> m_newIds;
   bool m_isQuery = false;
 };
 

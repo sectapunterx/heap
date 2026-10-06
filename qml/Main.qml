@@ -57,7 +57,7 @@ ApplicationWindow {
     function openTaskById(key) {
         const t = AppController.taskById(AppController.taskIdForBranchMatch(key));
         if (t && t.id) taskEditor.showFor(Object.assign({}, t));
-        else toast.show(I18n.t("notes.link.noTask").arg(key), "warning");
+        else win.notice(I18n.t("notes.link.noTask").arg(key), "warning");
     }
 
     // A profile that has never opened Docs has no docs blob yet, so the
@@ -90,7 +90,7 @@ ApplicationWindow {
             }
             const t = AppController.taskById(String(target).trim());
             if (t && t.id) { taskEditor.showFor(Object.assign({}, t)); return; }
-            toast.show(I18n.t("notes.link.noNote").arg(target), "warning");
+            win.notice(I18n.t("notes.link.noNote").arg(target), "warning");
         }
     }
 
@@ -495,7 +495,7 @@ ApplicationWindow {
         || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
         || tweaks.opened || hotkeys.opened || closeAsk.opened || goToDatePopup.opened
-        || weeklyRecap.opened || standupDraft.opened || timeMachine.opened
+        || weeklyRecap.opened || standupDraft.opened || timeMachine.opened || eventLog.opened
 
     // ── Keyboard scope ────────────────────────────────────────────────
     // Board and calendar keys (Return, Esc, the arrows, bare letters) are
@@ -628,7 +628,7 @@ ApplicationWindow {
     readonly property bool _modalOpen: taskEditor.opened || eventEditor.opened
         || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
-        || closeAsk.opened || goToDatePopup.opened
+        || closeAsk.opened || goToDatePopup.opened || eventLog.opened
         || (_focusInPopup && !_focusInPopover) || _dimmerShown
     readonly property bool _globalKeysOn: !hotkeys.isCapturing && !_modalOpen
 
@@ -729,6 +729,34 @@ ApplicationWindow {
 
     // The tasks a safety-net notice is about: one opens in the editor, several
     // narrow the board to them. Only what is shown changes.
+    // A toast QML says itself; what went wrong or was refused also goes to
+    // the event log (APP-187), as the C++ side's do.
+    function notice(msg, kind) {
+        toast.show(msg, kind);
+        if (kind === "error" || kind === "warning") AppController.logEvent(kind, msg);
+    }
+
+    // "Show" on a sync's toast (APP-180): the board, filtered to the cards
+    // that sync brought in.
+    function showSyncNew() {
+        AppController.currentView = "board";
+        topBar.searchText = "is:new";
+        win.searchText = topBar.searchText;
+    }
+
+    // An event-log entry was opened (APP-187): the task it names, the cards
+    // of a sync, or the place it points at.
+    function openLogEntry(entry) {
+        const ids = (entry && entry.taskIds) || [];
+        if (ids.length > 0) {
+            const latest = AppController.syncNewTaskIds;
+            if (entry.kind === "sync" && ids.length > 1 && ids.every(id => latest.indexOf(id) >= 0)) win.showSyncNew();
+            else win.showSafetyTasks(ids);
+            return;
+        }
+        if (entry && entry.route) win.runCommand(entry.route);
+    }
+
     function showSafetyTasks(ids) {
         const list = (ids || []).filter(id => id && id.length > 0);
         if (list.length === 0) return;
@@ -770,6 +798,11 @@ ApplicationWindow {
         // Tray click / "Show heap." menu entry — just restore the window.
         function onShowWindowRequested() { win._summon(); }
         function onToast(msg, kind) { toast.show(msg, kind || "info") }
+        // A sync brought new cards (APP-180): the toast names them, and
+        // "Show" filters the board to them.
+        function onSyncNews(msg, taskIds) {
+            toast.showWithAction(msg, I18n.t("sync.show"), 10, function () { win.showSyncNew() });
+        }
         // A safety-net notice (APP-157…): one toast, and "Show" takes the
         // board to the tasks it is about.
         function onSafetyNotice(kind, title, body, taskIds) {
@@ -866,6 +899,7 @@ ApplicationWindow {
             onLeaveRequested: win.focusActiveView()
             onSeenBeforeActivated: (hit) => win.openSeenBefore(hit)
             onNewTaskRequested: taskEditor.showFor(AppController.newTaskDraft("todo"))
+            onSyncStatusRequested: win.runCommand("settings:integrations")
             rightPanelShown: win.rightPanelShown
             onRightPanelToggleRequested: win.toggleRightPanel()
             onNewProfileRequested: profileEditor.showCreate()
@@ -1554,6 +1588,7 @@ ApplicationWindow {
         case "focus.immersion":      win.toggleImmersion(); break;
         case "standup.draft":        standupDraft.showNow(); break;
         case "timeMachine.open":     timeMachine.showNow(); break;
+        case "log.open":             eventLog.showNow(); break;
         case "zoom.in":              win.zoomInterface(1); break;
         case "zoom.out":             win.zoomInterface(-1); break;
         case "zoom.reset":           win.zoomInterface(0); break;
@@ -1831,6 +1866,14 @@ ApplicationWindow {
         enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: rail.openTweaks(rail.tweaksAnchor)
     }
+    // The event log (APP-187).
+    Shortcut {
+        objectName: "shortcut-log-open"
+        sequence: win._kbd("log.open")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: eventLog.showNow()
+    }
     Shortcut {
         sequence: _kbd("hotkeys.open")
         context: Qt.ApplicationShortcut
@@ -2004,6 +2047,11 @@ ApplicationWindow {
     // The time machine (APP-162): Settings → Data and the palette open it.
     TimeMachineDialog {
         id: timeMachine
+    }
+
+    EventLogDialog {
+        id: eventLog
+        onEntryActivated: (entry) => win.openLogEntry(entry)
     }
 
     WeeklyRecapDialog {
@@ -2181,7 +2229,7 @@ ApplicationWindow {
             if (AppController.exportActiveProfileToFile(selectedFile))
                 toast.show(I18n.t("toast.profile.exported"), "success");
             else
-                toast.show(I18n.t("toast.profile.exportFail"), "error");
+                win.notice(I18n.t("toast.profile.exportFail"), "error");
         }
     }
     FileDialog {
@@ -2193,7 +2241,7 @@ ApplicationWindow {
             const err = AppController.importProfileFromJson === undefined
                 ? "" : AppController.importProfileFromFile(selectedFile, true);
             if (err && err.length > 0)
-                toast.show(I18n.t("toast.profile.importFail") + err, "error");
+                win.notice(I18n.t("toast.profile.importFail") + err, "error");
         }
     }
 
@@ -2206,7 +2254,7 @@ ApplicationWindow {
         onAccepted: {
             const r = AppController.importIcs(selectedFile);
             if (r.error) {
-                toast.show(r.error, "error");
+                win.notice(r.error, "error");
                 return;
             }
             // Counts, not a bare "done": a file that brought in nine events
@@ -2217,7 +2265,7 @@ ApplicationWindow {
             let msg = I18n.t("toast.ics.imported").arg(r.imported).arg(r.updated).arg(r.skipped);
             if (warns.length > 0)
                 msg += " · " + (warns.length === 1 ? warns[0] : I18n.t("toast.ics.warnings").arg(warns.length).arg(warns[0]));
-            toast.show(msg, (r.skipped > 0 || warns.length > 0) ? "warning" : "success");
+            win.notice(msg, (r.skipped > 0 || warns.length > 0) ? "warning" : "success");
             for (let i = 0; i < warns.length; i++) console.warn("[ics]", warns[i]);
         }
     }
@@ -2229,7 +2277,7 @@ ApplicationWindow {
         title: I18n.t("dialog.exportIcs.title")
         onAccepted: {
             const ok = AppController.exportIcsToFile(selectedFile);
-            toast.show(ok ? I18n.t("toast.ics.exported") : I18n.t("toast.ics.exportFail"),
+            win.notice(ok ? I18n.t("toast.ics.exported") : I18n.t("toast.ics.exportFail"),
                        ok ? "success" : "error");
         }
     }
@@ -2250,9 +2298,9 @@ ApplicationWindow {
     VaultImportDialog {
         id: vaultImportConfirm
         onImported: (r) => {
-            if (r.error) { toast.show(r.error, "error"); return; }
+            if (r.error) { win.notice(r.error, "error"); return; }
             const trouble = r.skipped > 0 || r.conflicts > 0;
-            toast.show(I18n.t("toast.notes.importedFull")
+            win.notice(I18n.t("toast.notes.importedFull")
                        .arg(r.imported).arg(r.updated).arg(r.kept).arg(r.conflicts).arg(r.skipped),
                        trouble ? "warning" : "success");
             for (let i = 0; i < r.warnings.length; i++) console.warn("[vault]", r.warnings[i]);
@@ -2269,7 +2317,7 @@ ApplicationWindow {
             const file = String(selectedFile);
             const name = decodeURIComponent(file.substring(file.lastIndexOf("/") + 1));
             const r = AppController.exportNotesFolder(currentFolder, name);
-            toast.show(r.error ? r.error
+            win.notice(r.error ? r.error
                                : I18n.t("toast.notes.exportedTo").arg(r.written).arg(r.folder),
                        r.error ? "error" : "success");
         }

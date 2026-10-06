@@ -2146,13 +2146,16 @@ TEST_F(AppControllerTest, AQuietResyncReportsNoChangeAndWritesNothing) {
                          });
   app_->tasks()->reset({});
 
-  // syncProvider announces itself before it starts, so collect only the
-  // toast that reports the outcome.
+  // Collect only what reports the outcome. A pull that brought cards says
+  // so through syncNews, which names them (APP-180).
   QStringList outcomes;
   QObject::connect(app_.get(), &AppController::toast, app_.get(), [&outcomes](const QString& text) {
     if(text.contains(QStringLiteral("new")) || text.contains(QStringLiteral("up to date"))) {
       outcomes << text;
     }
+  });
+  QObject::connect(app_.get(), &AppController::syncNews, app_.get(), [&outcomes](const QString& text) {
+    outcomes << text;
   });
 
   app_->syncProvider(QStringLiteral("gitea"));

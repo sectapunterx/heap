@@ -54,6 +54,8 @@ class TaskFilterProxy : public QSortFilterProxyModel {
   // AppController.today, so the board agrees with every other view and moves
   // at midnight; unset means the system date.
   Q_PROPERTY(QDate today READ today WRITE setToday NOTIFY filterChanged)
+  // What `is:new` matches: bound to AppController.syncNewTaskIds (APP-180).
+  Q_PROPERTY(QStringList newIds READ newIds WRITE setNewIds NOTIFY filterChanged)
 
  public:
   explicit TaskFilterProxy(QObject* parent = nullptr);
@@ -102,6 +104,12 @@ class TaskFilterProxy : public QSortFilterProxyModel {
     return m_priorities;
   }
 
+  QStringList newIds() const {
+    return m_newIds;
+  }
+
+  void setNewIds(const QStringList& v);
+
   void setPriorities(const QStringList& v);
 
   QString sortMode() const {
@@ -149,5 +157,6 @@ class TaskFilterProxy : public QSortFilterProxyModel {
   QString m_searchText;            // the free-text remainder, lowercased
   heap::query::TaskQuery m_query;  // compiled once per keystroke
   QStringList m_priorities;
+  QStringList m_newIds;
   QString m_sortMode = QStringLiteral("manual");
 };

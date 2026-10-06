@@ -334,6 +334,7 @@ qt_add_qml_module(heap_core
         qml/CalendarSubscriptionsCard.qml
         qml/AutoSyncCard.qml
         qml/WeeklyRecapDialog.qml
+        qml/EventLogDialog.qml
         qml/TimeMachineDialog.qml
         # ── audit-time: end ──
         # ── audit-know: begin ──
@@ -446,6 +447,7 @@ qt_add_qml_module(heap_core
         src/markdown/MarkdownEditorController.h
         src/markdown/MdHighlighter.h
         src/notify/NotificationCenter.h
+        src/notify/EventLog.h
         src/platform/GlobalHotkey.h
         src/platform/X11Keys.h
         src/platform/AltGrGuard.h

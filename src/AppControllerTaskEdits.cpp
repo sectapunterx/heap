@@ -128,7 +128,7 @@ bool AppController::passesFilter_(
 
 QVariantMap AppController::filteredCounts(
     const QString& search, const QStringList& priorities, bool showArchived, bool hideDone, const QVariant&) const {
-  const heap::query::TaskQuery q = heap::query::TaskQuery::compile(search, m_today, m_statuses);
+  const heap::query::TaskQuery q = heap::query::TaskQuery::compile(search, m_today, m_statuses, m_syncNewIds);
   int total = 0;
   int active = 0;
   int blocked = 0;
@@ -159,7 +159,7 @@ void AppController::pruneSelectionToFilter_() {
     return;
   }
   const SelectionFilter& f = m_selectionFilter;
-  const heap::query::TaskQuery q = heap::query::TaskQuery::compile(f.search, m_today, m_statuses);
+  const heap::query::TaskQuery q = heap::query::TaskQuery::compile(f.search, m_today, m_statuses, m_syncNewIds);
   QSet<QString> kept;
   for(const QString& id : std::as_const(m_selectedTaskIds)) {
     const int row = m_tasks.indexOfId(id);

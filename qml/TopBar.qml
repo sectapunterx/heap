@@ -19,6 +19,41 @@ Rectangle {
     // shown on the badge, so a typo does not read as an empty board.
     readonly property var searchProblems: AppController.searchProblems(searchField.text)
     signal newTaskRequested()
+    // The sync dot was clicked: show how the integrations are doing.
+    signal syncStatusRequested()
+
+    // ── Sync in flight (APP-186) ──
+    // Bound to the controller; a test can set it by hand.
+    property bool syncing: AppController.syncing
+    // How long a sync runs before the dot says so.
+    readonly property int syncDotDelay: 400
+    // When the current sync started (ms since the epoch), 0 when none runs.
+    property real _syncSince: 0
+    property bool syncDotShown: false
+    // Whether the dot is due at `now` for a sync running since `since`.
+    function syncDotDue(running, since, now) {
+        return running && since > 0 && now - since >= root.syncDotDelay;
+    }
+    onSyncingChanged: {
+        root._syncSince = root.syncing ? Date.now() : 0;
+        root.syncDotShown = false;
+        syncDotTimer.interval = root.syncDotDelay;
+        if (root.syncing) syncDotTimer.restart();
+        else syncDotTimer.stop();
+    }
+    Timer {
+        id: syncDotTimer
+        onTriggered: {
+            const now = Date.now();
+            if (root.syncDotDue(root.syncing, root._syncSince, now)) {
+                root.syncDotShown = true;
+            } else if (root.syncing) {
+                // A coarse timer may wake a little early.
+                syncDotTimer.interval = Math.max(1, root._syncSince + root.syncDotDelay - now);
+                syncDotTimer.restart();
+            }
+        }
+    }
     // The "seen this before" hint under the search was clicked (APP-159).
     signal seenBeforeActivated(var hit)
     // Esc on an empty search box, or Return in it: give the keyboard back.
@@ -423,6 +458,32 @@ Rectangle {
                 objectName: "topbar-immersion-exit"
                 label: I18n.t("immersion.exit")
                 onActivated: AppController.stopImmersion()
+            }
+        }
+
+        // A sync is out (APP-186): a quiet dot in the live colour, only once
+        // it has taken long enough to notice — a quick pull shows nothing.
+        // A click opens the integrations' status (APP-164).
+        Item {
+            id: syncDot
+            objectName: "topbar-sync-dot"
+            visible: root.syncDotShown
+            Layout.preferredWidth: 20
+            Layout.preferredHeight: 20
+            Layout.alignment: Qt.AlignVCenter
+            Rectangle {
+                anchors.centerIn: parent
+                width: 8
+                height: 8
+                radius: 4
+                color: syncDotMA.hovered ? Theme.withAlpha(Theme.live, 0.7) : Theme.live
+            }
+            ClickArea {
+                id: syncDotMA
+                objectName: "topbar-sync-dot-area"
+                label: I18n.t("topbar.syncing")
+                tip: I18n.t("topbar.syncing.tip")
+                onActivated: root.syncStatusRequested()
             }
         }
 

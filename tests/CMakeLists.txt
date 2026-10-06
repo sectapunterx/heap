@@ -381,6 +381,8 @@ target_compile_definitions(heap_ux_audit_tests PRIVATE HEAP_DOCS_DIR="${CMAKE_CU
 # ── audit-int: begin ──
 # ─── Integration / release fixes from the 2026-09-30 audit ───
 heap_add_appcontroller_test(heap_int_audit_tests test_int_audit.cpp)
+# New tickets on the board, the sync flag and the event log (APP-180/186/187).
+heap_add_appcontroller_test(heap_sync_visibility_tests test_sync_visibility.cpp)
 # ── audit-int: end ──
 # ── audit-perf: begin ──
 # Search/filter input latency at 3k tasks (TASKS-23). Wall-clock budgets, so it
