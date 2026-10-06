@@ -358,6 +358,8 @@ Item {
         ListView {
             id: rowList
             objectName: "timeline-rows"
+            Accessible.role: Accessible.List
+            Accessible.name: I18n.t("timeline.title")
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true

@@ -555,11 +555,13 @@ Rectangle {
             objectName: "topbar-new-task"
             text: I18n.t("topbar.newTask")
             primary: true
+            shortcutId: "task.new"
             onClicked: root.newTaskRequested()
         }
         PillButton {
             objectName: "topbar-right-panel"
             text: root.rightPanelShown ? "▸" : "◂"
+            shortcutId: "panel.right"
             onClicked: root.rightPanelToggleRequested()
             ToolTip.visible: hovered
             ToolTip.delay: 400

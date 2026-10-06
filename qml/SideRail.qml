@@ -520,8 +520,12 @@ Rectangle {
             cursorShape: Qt.PointingHandCursor
             acceptedButtons: Qt.LeftButton | Qt.RightButton
             onClicked: (m) => {
-                if (m.button === Qt.RightButton) btn.contextRequested();
-                else btn.activated();
+                if (m.button === Qt.RightButton) {
+                    btn.contextRequested();
+                    return;
+                }
+                if (btn.shortcutId.length > 0) AppController.noteMouseAction(btn.shortcutId);
+                btn.activated();
             }
             // Labels are on screen when expanded; the tooltip is only for
             // the icon-only rail.

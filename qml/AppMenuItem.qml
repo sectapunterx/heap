@@ -14,6 +14,13 @@ MenuItem {
     property bool marked: false
     // A destructive action (Delete): the label in the danger colour.
     property bool danger: false
+    // A catalogue shortcut that does the same: shown at the row's end, and a
+    // third pick with the mouse suggests the key once (APP-166).
+    property string shortcutId: ""
+    readonly property string _keys: item.shortcutId.length > 0 && AppController.shortcuts.length >= 0
+                                    ? AppController.shortcutFor(item.shortcutId) : ""
+    // The menu's own keys highlight a row without hovering it.
+    onTriggered: if (item._keys.length > 0 && item.hovered) AppController.noteMouseAction(item.shortcutId)
     readonly property bool _check: item.marked || (item.checkable && item.checked)
 
     implicitWidth: Math.max(implicitBackgroundWidth + leftInset + rightInset,
@@ -60,6 +67,15 @@ MenuItem {
                  : Theme.text
             font: item.font
             elide: Text.ElideRight
+        }
+        Text {
+            visible: item._keys.length > 0
+            anchors.verticalCenter: parent.verticalCenter
+            leftPadding: Theme.spLg
+            text: item._keys
+            color: Theme.textDim
+            font.family: Theme.fontMono
+            font.pixelSize: Theme.fsXs
         }
     }
 

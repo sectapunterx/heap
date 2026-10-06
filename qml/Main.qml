@@ -756,6 +756,11 @@ ApplicationWindow {
             win._summon();
             win.showSafetyTasks(taskIds);
         }
+        // The third mouse use of an action that has a key: one quiet line,
+        // never repeated for it (APP-166).
+        function onShortcutHintRequested(shortcutId, sequence, label) {
+            toast.show(I18n.t("hint.shortcut").arg(sequence).arg(label), "info")
+        }
         function onTrackerPushFailed(taskId, msg) {
             toast.showWithAction(msg, I18n.t("sync.retry"), 10, function () {
                 AppController.retryTrackerPush(taskId)
@@ -1266,14 +1271,18 @@ ApplicationWindow {
     ProfileEditor { id: profileEditor }
     WelcomePopup {
         id: welcome
-        // Per-step "open →" actions route here so the guide stays decoupled from
-        // the popups/editors Main owns. Each _doAction() already finished the
-        // guide, so the target surface is visible when we open it.
+        // Per-step "open →" actions route here so the tour stays decoupled from
+        // the popups/editors Main owns. Each _doAction() has paused the tour,
+        // so the target surface is visible when we open it.
         onOpenAction: (id) => {
-            if (id === "task-new")           taskEditor.showFor(AppController.newTaskDraft("todo"));
-            else if (id === "quick-capture") quickCapture.open();
-            else if (id === "palette")       cmdPalette.open();
-            else if (id === "hotkeys")       rail.openHotkeys(rail.hotkeysAnchor);
+            if (id === "task-new")            taskEditor.showFor(AppController.newTaskDraft("todo"));
+            else if (id === "quick-capture")  quickCapture.open();
+            else if (id === "palette")        cmdPalette.open();
+            else if (id === "hotkeys")        rail.openHotkeys(rail.hotkeysAnchor);
+            // "Bring your stuff" (APP-169): the same pickers as the palette's.
+            else if (id === "vault-import")   importVaultDialog.open();
+            else if (id === "profile-import") importJsonDialog.open();
+            else if (id === "integrations")   win.runCommand("settings:integrations");
         }
         // "Learn more →" — jump to Settings and scroll the Help doc to the anchor.
         onOpenHelp: (anchor) => {
@@ -1717,6 +1726,20 @@ ApplicationWindow {
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: rail.openHotkeys(rail.hotkeysAnchor)
+    }
+    // `?` opens the same cheat-sheet (APP-166), as in most keyboard-first
+    // apps. A view key: it stands down while anything takes typed text, so a
+    // question mark in a title is still a question mark. Shift+/ is what the
+    // key reports on layouts where Qt does not fold it into Key_Question, and
+    // Shift+? where the event keeps the Shift it took to type it.
+    Shortcut {
+        objectName: "shortcut-question-cheatsheet"
+        sequences: ["?", "Shift+?", "Shift+/"]
+        context: Qt.ApplicationShortcut
+        enabled: !win._viewKeysBlocked && !hotkeys.opened
+        onActivated: rail.openHotkeys(rail.hotkeysAnchor)
+        // Where a layout reports the key both ways, both sequences match.
+        onActivatedAmbiguously: rail.openHotkeys(rail.hotkeysAnchor)
     }
     Shortcut {
         sequence: _kbd("undo")

@@ -61,6 +61,8 @@ expect_refused("unexpected argument 'positional_arg'" positional_arg)
 expect_refused("unexpected argument 'board'" board)
 expect_refused("unexpected argument 'extra'" --view board extra)
 expect_refused("unexpected argument 'C:/tmp/dd'" --data-dir "${WORK_DIR}" C:/tmp/dd)
+# APP-171: --capture is an option heap knows (bound to a desktop shortcut).
+expect_refused("unexpected argument 'extra'" --capture extra)
 # --minimized (APP-154, the login entry) is a known flag: the refusal is about
 # the stray argument, not "Unknown option 'minimized'".
 expect_refused("unexpected argument 'extra'" --minimized extra)

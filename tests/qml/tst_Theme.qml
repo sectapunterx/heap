@@ -783,4 +783,33 @@ TestCase {
         const onLight = Presets.ensureContrast("#dddddd", ["#ffffff"], 3);
         verify(Presets.contrast(onLight, "#ffffff") >= 3, onLight);
     }
+
+    // APP-168: Appearance → Scale moves type and spacing live; the 11px
+    // floor holds at 90 %, and a value out of range is ignored.
+    function test_ui_scale_moves_type_and_spacing() {
+        const saved = AppController.appSettingsJson;
+        function withScale(s) {
+            const o = JSON.parse(saved || "{}");
+            o.appearance = Object.assign({}, o.appearance || {}, { uiScale: s });
+            AppController.appSettingsJson = JSON.stringify(o);
+        }
+        try {
+            withScale(1);
+            const md = Theme.fsMd, xl = Theme.sp2xl, row = Theme.rowH;
+            withScale(1.25);
+            compare(Theme.scale, 1.25);
+            compare(Theme.fsMd, Math.round(md * 1.25));
+            compare(Theme.sp2xl, Math.round(xl * 1.25));
+            compare(Theme.rowH, Math.round(row * 1.25));
+            withScale(1.5);
+            compare(Theme.fsMd, Math.round(md * 1.5));
+            withScale(0.9);
+            verify(Theme.fsXs >= 11, "the floor holds");
+            verify(Theme.fsMd < md);
+            withScale(7);
+            compare(Theme.scale, 1, "out of range means 100 %");
+        } finally {
+            AppController.appSettingsJson = saved;
+        }
+    }
 }

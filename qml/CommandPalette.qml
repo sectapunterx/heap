@@ -468,13 +468,16 @@ Popup {
                 }
             }
 
-            // Empty state
-            Text {
+            // Empty state: nothing typed yet, or nothing found — with a line
+            // on what the palette does search (APP-167).
+            EmptyState {
+                objectName: "palette-empty"
                 visible: root._matches.length === 0
                 anchors.centerIn: parent
-                text: searchField.text.length === 0 ? I18n.t("palette.empty.start") : I18n.t("palette.empty.miss")
-                color: Theme.textDim
-                font.pixelSize: Theme.fsMd
+                width: Math.min(parent.width - 2 * Theme.sp3xl, 380)
+                compact: searchField.text.length === 0
+                title: searchField.text.length === 0 ? I18n.t("palette.empty.start") : I18n.t("palette.empty.miss")
+                line: searchField.text.length === 0 ? "" : I18n.t("palette.empty.missHint")
             }
         }
 

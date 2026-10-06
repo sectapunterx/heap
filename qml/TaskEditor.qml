@@ -877,6 +877,9 @@ Popup {
                     ComboBox {
                         id: statusBox
                         objectName: "te-status"
+                        // The label above is a separate Text; a screen
+                        // reader only had "combo box" (APP-168).
+                        Accessible.name: I18n.t("editor.label.status")
                         Layout.fillWidth: true
                         Layout.preferredWidth: 1
                         // Never narrower than its longest column name: "In
@@ -907,6 +910,7 @@ Popup {
                     ComboBox {
                         id: priBox
                         objectName: "te-priority"
+                        Accessible.name: I18n.t("editor.label.priority")
                         Layout.preferredWidth: 88
                         model: ["P0", "P1", "P2", "P3"]
                         background: FieldBg {}
