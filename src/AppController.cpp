@@ -498,6 +498,9 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"deadline.inDays", {"+%1d", "+%1 д"}},
       {"deadline.inDaysShort", {"+%1d", "+%1 д"}},
       {"slot.freed", {"Freed: %1", "Освобождено: %1"}},
+      {"hotkeys.builtinTaken", {"%1 is built in for “%2” and can't be reassigned", "%1 встроено в «%2» и не переназначается"}},
+      {"hotkeys.builtin.notesMode", {"Notes: cycle editor / split / preview", "Заметки: редактор / разделённый / просмотр"}},
+      {"hotkeys.builtin.attach", {"Attach files", "Прикрепить файлы"}},
       {"import.emptyJson", {"Empty JSON", "Пустой JSON"}},
       {"import.invalidJson", {"Invalid JSON", "Невалидный JSON"}},
       {"import.missingProfile", {"JSON has no 'profile' block or expected fields", "В JSON нет блока 'profile' или ожидаемых полей"}},
@@ -1303,7 +1306,10 @@ QString titleFromBody(const QString& body) {
   if(!h1.isEmpty()) {
     return h1.left(60).trimmed();
   }
-  static const QRegularExpression kMarkers(QStringLiteral(R"(^(?:#{1,6}\s+|[-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+|>\s*)+)"));
+  // A heading marker with nothing after it yet ("# " trimmed to "#") is not
+  // the note's name either: half-way through retyping a heading the title
+  // used to become "#" (PERA-6).
+  static const QRegularExpression kMarkers(QStringLiteral(R"(^(?:#{1,6}(?:\s+|$)|[-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+|>\s*)+)"));
   for(const QString& raw : body.split(QLatin1Char('\n'))) {
     QString line = raw.trimmed();
     line.remove(kMarkers);
@@ -1439,7 +1445,12 @@ void AppController::syncActiveNoteBody() {
   // the user named that note, and its first line is just text.
   const QString was = titleFromBody(n.body);
   const QString now = titleFromBody(m_notesState);
-  const bool followed = was == n.title && (firstH1(n.body).isEmpty() || !firstH1(m_notesState).isEmpty());
+  // A body with no text at all suggests nothing, so it cannot have been
+  // disagreeing with the title: retyping a heading from scratch ("# Old" →
+  // "# " → "# New") is still the heading naming the note. Without this the
+  // title stuck at whatever was left before the heading was emptied (PERA-6).
+  const bool wasFollowing = was == n.title || (was.isEmpty() && !firstH1(m_notesState).isEmpty());
+  const bool followed = wasFollowing && (firstH1(n.body).isEmpty() || !firstH1(m_notesState).isEmpty());
   if(!now.isEmpty() && now != n.title && (followed || isPlaceholderNoteTitle(n.title)) &&
      heap::notes::backlinksTo(n.id, m_notes.items()).isEmpty()) {
     n.title = now;
@@ -2148,9 +2159,19 @@ void AppController::onTaskPushed(const QString& providerId,
     scheduleSave();
   }
   if(ok) {
-    // The issue sits somewhere else in its workflow now; what it can move to
-    // is unknown until the next pull says.
-    m_trackerTransitions.remove(providerId + QChar('\n') + externalId);
+    // The issue sits somewhere else in its workflow now. What it can move to
+    // from there is what the last pull saw for an issue of the same kind in
+    // that status; with no such issue it is unknown until the next pull says
+    // (INT-4: dropping the guard outright let the next bad move go out).
+    const QString issueKey = providerId + QChar('\n') + externalId;
+    const auto seen = remoteStatus.isEmpty() ? m_workflowTransitions.constEnd()
+                                             : m_workflowTransitions.constFind(workflowTransitionsKey(
+                                                   providerId, t.externalMeta.project, t.externalMeta.issueType, remoteStatus));
+    if(seen != m_workflowTransitions.constEnd()) {
+      m_trackerTransitions.insert(issueKey, *seen);
+    } else {
+      m_trackerTransitions.remove(issueKey);
+    }
   }
   if(!ok) {
     qWarning() << providerId << "push failed for" << externalId << ":" << error;
@@ -2284,9 +2305,19 @@ void AppController::moveSelectedTasksTo(const QString& statusId, const QString& 
   }
 }
 
+QString AppController::taskIdPrefix() const {
+  // What a #KEY-1 reference and a branch name can carry: a letter, then
+  // letters and digits. "MY TEAM" or "../../X" made ids nothing could link to
+  // and put slashes into branch names (SHELL-10); such a stored prefix, from
+  // before the field checked, falls back to the default.
+  static const QRegularExpression kPrefix(QStringLiteral("^[A-Z][A-Z0-9]{0,15}$"));
+  const QString prefix = settingsMap().value("tasks").toMap().value("idPrefix", QStringLiteral("TASK")).toString().trimmed().toUpper();
+  return kPrefix.match(prefix).hasMatch() ? prefix : QStringLiteral("TASK");
+}
+
 QVariantMap AppController::newTaskDraft(const QString& statusId) const {
   const QVariantMap tasksCfg = settingsMap().value("tasks").toMap();
-  const QString prefix = tasksCfg.value("idPrefix", QStringLiteral("TASK")).toString().trimmed();
+  const QString prefix = taskIdPrefix();
   const QString priorityDefault = tasksCfg.value("defaultPriority", QStringLiteral("P2")).toString();
   const QString statusDefault = tasksCfg.value("defaultStatus", QStringLiteral("todo")).toString();
 
@@ -4445,7 +4476,11 @@ QVariantMap AppController::exportNotesFolder(const QUrl& folderUrl, const QStrin
       skipped++;
       continue;
     }
-    f.write(file.contents.toUtf8());
+    // attachments/ sits at the root of the export, so a note in team/ links
+    // its files as ../attachments/<id>: relative to the file, which is how
+    // every other editor resolves it. Import reads it back.
+    const QString up = QStringLiteral("../").repeated(static_cast<int>(file.path.count(QLatin1Char('/'))));
+    f.write(heap::attachments::prefixRefLinks(file.contents, up).toUtf8());
     if(f.commit()) {
       written++;
       pathOf.insert(file.noteId, file.path);
@@ -4473,9 +4508,10 @@ QVariantMap AppController::exportNotesFolder(const QUrl& folderUrl, const QStrin
     scheduleSave();
   }
 
-  // The files the exported notes link, into attachments/ next to them. The
-  // links already say "attachments/<id>", so the folder reads the same in
-  // heap, in another editor and when it is imported back.
+  // The files the exported notes link, into attachments/ at the root. The
+  // links say "attachments/<id>" relative to each file (see above), so the
+  // folder reads the same in heap, in another editor and when it is imported
+  // back.
   int files = 0;
   {
     const heap::attachments::Store store(attachmentsDir());
@@ -4550,7 +4586,8 @@ QStringList AppController::unresolvedNoteLinks() const {
 }
 
 QString AppController::createNoteForLink(const QString& target) {
-  const QString title = target.trimmed();
+  // "[[C\# basics]]" asks for a note called "C# basics".
+  const QString title = heap::notes::detail::unescapeLink(target).trimmed();
   if(title.isEmpty()) {
     return {};
   }
@@ -5168,9 +5205,21 @@ bool AppController::savePerson(const QVariantMap& draft) {
     return false;
   }
   const UndoScope scope(this, tr_(isNew ? "person.createUndone" : "person.editUndone").arg(p.name));
-  const int beforeRow = m_people.indexOfId(p.id);
+  const int beforeRow = m_people.indexOfId(!isNew && !originalId.isEmpty() ? originalId : p.id);
   const QString stateBefore = beforeRow >= 0 ? m_people.items().at(beforeRow).state : QString();
-  m_people.upsert(p);
+  // An edit that changes the id renames the person: upsert() alone added a
+  // second one under the new id and left the old one in the list (SHELL-25).
+  // The renamed person keeps its place, and the Docs contacts linked to the
+  // old id follow it.
+  const int renamedRow = !isNew && !originalId.isEmpty() && originalId != p.id ? m_people.indexOfId(originalId) : -1;
+  if(renamedRow >= 0) {
+    p.extra = m_people.items().at(renamedRow).extra;
+    m_people.removeById(originalId);
+    m_people.insertAt(renamedRow, p);
+    relinkDocsContacts(originalId, p.id);
+  } else {
+    m_people.upsert(p);
+  }
   personStateMoved(p.id, stateBefore);
   // Keep Docs and the rail pointing at each other. A Person picked out of a
   // contact gets that contact's `personId` (so the next pick, and the next
@@ -5328,6 +5377,25 @@ void AppController::linkDocsContact(const QString& contactKey, const QString& pe
     setDocsState(QString::fromUtf8(QJsonDocument(docs).toJson(QJsonDocument::Compact)));
     scheduleSave();
     return;
+  }
+}
+
+void AppController::relinkDocsContacts(const QString& fromPersonId, const QString& toPersonId) {
+  QJsonObject docs = QJsonDocument::fromJson(m_docsState.toUtf8()).object();
+  QJsonArray list = docs.value(QStringLiteral("contacts")).toArray();
+  bool changed = false;
+  for(int i = 0; i < list.size(); ++i) {
+    QJsonObject c = list.at(i).toObject();
+    if(c.value(QStringLiteral("personId")).toString() != fromPersonId) {
+      continue;
+    }
+    c.insert(QStringLiteral("personId"), toPersonId);
+    list.replace(i, c);
+    changed = true;
+  }
+  if(changed) {
+    docs.insert(QStringLiteral("contacts"), list);
+    setDocsState(QString::fromUtf8(QJsonDocument(docs).toJson(QJsonDocument::Compact)));
   }
 }
 
@@ -5727,9 +5795,10 @@ QVariantMap AppController::compileSearch(const QString& text) const {
   // largest thing this call could return.
   QStringList ids;
   if(q.isQuery()) {
-    for(const Task& t : m_tasks.items()) {
-      if(q.matches(t)) {
-        ids << t.id;
+    const QVector<Task>& items = m_tasks.items();
+    for(int row = 0; row < items.size(); ++row) {
+      if(q.matches(items.at(row), m_tasks.searchTextAt(row))) {
+        ids << items.at(row).id;
       }
     }
   }
@@ -5755,8 +5824,11 @@ QString AppController::eventHourLabel(double hour) const {
   const QString fmt = settingsMap().value("calendar").toMap().value("timeFormat", QStringLiteral("24h")).toString();
   const QString mmS = QString("%1").arg(mm, 2, 10, QLatin1Char('0'));
   if(fmt == QLatin1String("12h")) {
-    const int h12 = ((hh + 11) % 12) + 1;
-    const QString ampm = hh < 12 ? QStringLiteral("am") : QStringLiteral("pm");
+    // 24:00, an end at midnight, is 12:00am — not 12:00pm, which reads (and
+    // parses back) as noon (TIME-22).
+    const int h24 = hh % 24;
+    const int h12 = ((h24 + 11) % 12) + 1;
+    const QString ampm = h24 < 12 ? QStringLiteral("am") : QStringLiteral("pm");
     return QString("%1:%2%3").arg(h12).arg(mmS).arg(ampm);
   }
   return QString("%1:%2").arg(hh, 2, 10, QLatin1Char('0')).arg(mmS);
@@ -7295,6 +7367,7 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
     const QString transitionsKey = providerId + QChar('\n') + ext.externalId;
     if(ext.transitionsKnown) {
       m_trackerTransitions.insert(transitionsKey, ext.transitions);
+      m_workflowTransitions.insert(workflowTransitionsKey(providerId, ext.project, ext.issueType, ext.status), ext.transitions);
     } else {
       m_trackerTransitions.remove(transitionsKey);
     }
@@ -10497,7 +10570,26 @@ QString AppController::duplicateProfile(const QString& id, const QString& newNam
   copy.name = uniqueProfileName(newName.trimmed().isEmpty() ? (m_profiles[i].name + " copy") : newName.trimmed());
   copy.id = makeProfileId(copy.name);
   copy.createdAt = QDateTime::currentDateTime();
-  reissueSharedTaskIds(copy, nullptr);  // the copy's tasks are new tasks (PLAT-9)
+  // Events live in the global pool, attributed to a profile by id: the copy
+  // gets its own of each, the way an export carries them (PLAT-10).
+  QVector<CalEvent> events;
+  for(const CalEvent& e : m_events.items()) {
+    if(!id.isEmpty() && e.profileId == id) {
+      events.append(e);
+    }
+  }
+  reissueSharedTaskIds(copy, &events);  // the copy's tasks are new tasks (PLAT-9)
+  QHash<QString, QString> eventIds;
+  for(const CalEvent& e : std::as_const(events)) {
+    eventIds.insert(e.id, mintEventId());
+  }
+  for(CalEvent e : std::as_const(events)) {
+    e.id = eventIds.value(e.id);
+    // An override stands in for an occurrence of its own copy's series.
+    e.masterId = eventIds.value(e.masterId, e.masterId);
+    e.profileId = copy.id;
+    m_events.upsert(e);
+  }
   clearPendingUndo();  // undo is scoped to the active workspace
   m_profiles.push_back(copy);
   m_activeProfileId = copy.id;
@@ -11328,7 +11420,15 @@ int AppController::shortcutIndexOf(const QString& id) const {
 }
 
 QString AppController::normalizeSequence(const QString& raw) const {
-  const QString trimmed = raw.trimmed();
+  // A space typed as the key itself (" ", "Ctrl+Shift+ ") is the Space key;
+  // trimming it away left nothing, or a dangling "+", and unbound the action
+  // (SHELL-5).
+  QString spelled = raw;
+  if(spelled == QStringLiteral(" ") || spelled.endsWith(QStringLiteral("+ "))) {
+    spelled.chop(1);
+    spelled += QStringLiteral("Space");
+  }
+  const QString trimmed = spelled.trimmed();
   if(trimmed.isEmpty()) {
     return QString();
   }
@@ -11396,7 +11496,69 @@ QString AppController::shortcutDescription(const QString& id) const {
 
 QString AppController::shortcutLabel(const QString& id) const {
   const int i = shortcutIndexOf(id);
-  return i < 0 ? QString() : m_shortcuts[i].toMap().value("label").toString();
+  if(i < 0) {
+    // The built-in keys that have no catalog entry of their own.
+    return id.startsWith(QStringLiteral("builtin.")) ? tr_(QStringLiteral("hotkeys.") + id) : QString();
+  }
+  return m_shortcuts[i].toMap().value("label").toString();
+}
+
+namespace {
+
+// Keys wired in QML next to the catalog's own binding, which no rebinding
+// moves: Main.qml's Ctrl+P and the board's arrows, Enter, Menu and Ctrl+arrows,
+// and the editors' fixed Ctrl+Shift+M / Ctrl+Shift+A. Two live shortcuts on
+// one sequence are ambiguous to Qt and neither fires, so a catalog action
+// that would share one with them in the same place is refused (SHELL-4).
+struct BuiltinKey {
+  const char* sequence;
+  const char* owner;  // the catalog action it aliases, or a builtin.* label
+  const char* scope;  // where it is live
+};
+
+constexpr BuiltinKey kBuiltinKeys[] = {
+    {"Ctrl+P", "palette.open", "app"},
+    {"Down", "board.cursorDown", "board"},
+    {"Up", "board.cursorUp", "board"},
+    {"Left", "board.cursorLeft", "board"},
+    {"Right", "board.cursorRight", "board"},
+    {"Enter", "board.open", "board"},
+    {"Menu", "board.cardMenu", "board"},
+    {"Ctrl+Down", "board.moveDown", "board"},
+    {"Ctrl+Up", "board.moveUp", "board"},
+    {"Ctrl+Left", "board.moveLeft", "board"},
+    {"Ctrl+Right", "board.moveRight", "board"},
+    {"Ctrl+Shift+M", "builtin.notesMode", "notes"},
+    {"Ctrl+Shift+A", "builtin.attach", "editor"},
+};
+
+// Where a catalog action is live: the board's, calendar's and notes' keys only
+// in their view, everything else everywhere.
+QString shortcutScope(const QString& id) {
+  for(const char* scope : {"board", "cal", "notes"}) {
+    if(id.startsWith(QLatin1String(scope) + QLatin1Char('.'))) {
+      return QString::fromLatin1(scope);
+    }
+  }
+  return QStringLiteral("app");
+}
+
+}  // namespace
+
+QString AppController::builtinShortcutOwner(const QString& id, const QString& normalized) {
+  const QString scope = shortcutScope(id);
+  for(const BuiltinKey& k : kBuiltinKeys) {
+    if(normalized != QLatin1String(k.sequence) || id == QLatin1String(k.owner)) {
+      continue;
+    }
+    // An editor's keys are live over every view, an app-wide action's over
+    // every scope; otherwise only the same view's keys meet.
+    const QLatin1String keyScope(k.scope);
+    if(scope == QLatin1String("app") || keyScope == QLatin1String("app") || keyScope == QLatin1String("editor") || scope == keyScope) {
+      return QString::fromLatin1(k.owner);
+    }
+  }
+  return QString();
 }
 
 QString AppController::findShortcutConflict(const QString& id, const QString& sequence) const {
@@ -11413,7 +11575,7 @@ QString AppController::findShortcutConflict(const QString& id, const QString& se
       return m.value("id").toString();
     }
   }
-  return QString();
+  return builtinShortcutOwner(id, want);
 }
 
 bool AppController::setShortcut(const QString& id, const QString& sequence) {
@@ -11422,9 +11584,23 @@ bool AppController::setShortcut(const QString& id, const QString& sequence) {
     return false;
   }
   const QString seq = normalizeSequence(sequence);
+  // Something typed that is no key sequence must not read as "unbind".
+  if(seq.isEmpty() && !sequence.trimmed().isEmpty()) {
+    return false;
+  }
   QVariantMap m = m_shortcuts[i].toMap();
   if(m.value("sequence").toString() == seq) {
     return true;
+  }
+
+  // A built-in key stays where it is whatever the catalog says, so there is
+  // nothing to swap: taking it would only make both dead (SHELL-4).
+  if(!seq.isEmpty()) {
+    const QString builtin = builtinShortcutOwner(id, seq);
+    if(!builtin.isEmpty()) {
+      emit toast(tr_("hotkeys.builtinTaken").arg(seq, shortcutLabel(builtin)), QStringLiteral("warning"));
+      return false;
+    }
   }
 
   // VS-Code-style swap: clear the conflicting owner so the new binding wins.
@@ -11526,6 +11702,13 @@ QVariantMap AppController::settingsMap() const {
   }
   m_settingsCache = doc.object().toVariantMap();
   return m_settingsCache;
+}
+
+QString AppController::workflowTransitionsKey(const QString& providerId,
+                                              const QString& project,
+                                              const QString& issueType,
+                                              const QString& status) {
+  return QStringList{providerId, project, issueType, status.toCaseFolded()}.join(QChar('\n'));
 }
 
 bool AppController::canTransitionStatus(const QString& taskId, const QString& newStatus) {
@@ -12305,10 +12488,6 @@ void AppController::flushHeldNotifications(const QDateTime& now) {
 
 QStringList AppController::collectPrefixes() const {
   return heap::git::branchPrefixes(taskIdPrefix(), m_tasks.items());
-}
-
-QString AppController::taskIdPrefix() const {
-  return settingsMap().value("tasks").toMap().value("idPrefix", QStringLiteral("TASK")).toString().trimmed().toUpper();
 }
 
 QString AppController::taskIdForBranchMatch(const QString& matchedId) const {

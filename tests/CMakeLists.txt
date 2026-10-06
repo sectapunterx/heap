@@ -574,8 +574,12 @@ target_link_libraries(heap_qml_tests PRIVATE
         Qt6::QuickTest
 )
 
+# The results also go to a file: on Windows the binary's stdout never reaches
+# ctest, so a failure there said only "Failed". ctest_with_retry.sh prints the
+# failing cases from it.
 add_test(NAME heap_qml_tests
-        COMMAND heap_qml_tests -input ${CMAKE_CURRENT_SOURCE_DIR}/qml)
+        COMMAND heap_qml_tests -input ${CMAKE_CURRENT_SOURCE_DIR}/qml
+                -o ${CMAKE_CURRENT_BINARY_DIR}/heap_qml_tests.txt,txt -o -,txt)
 # COST: the slowest suite by far; under `ctest --parallel` it starts first so
 # the rest run alongside it instead of after it.
 set_tests_properties(heap_qml_tests PROPERTIES

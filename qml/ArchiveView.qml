@@ -47,6 +47,11 @@ Item {
         objectName: "archive-filter"
         sourceModel: AppController.tasks
         archivedOnly: true
+        // As on the board: status: by column name and relative dates need
+        // the columns and today, or "status:\"Code Review\"" finds nothing
+        // here while a saved view counts it (TASKS-5).
+        statuses: AppController.statuses
+        today: AppController.today
         searchText: root.searchText
         priorities: root.activePriorities
         sortMode: "priority"
@@ -97,6 +102,40 @@ Item {
         }
         AppController.setSelectedTaskIds(merged);
     }
+
+    // Keyboard (SHELL-17): every archived card is a Tab stop with its name;
+    // ↑/↓ also walk the list from card to card, Return opens one (TaskCard),
+    // the Menu key (or Shift+F10) opens its menu — restore and delete are
+    // there. ↓ on the view itself, where a view switch leaves focus, enters
+    // the list. The keys a card does not take reach the list, which handles
+    // them for whichever card holds focus.
+    function _cardAt(i) {
+        const it = archList.itemAtIndex(i);
+        if (!it) return null;
+        const kids = it.children;
+        for (let k = 0; k < kids.length; k++)
+            if (typeof kids[k].openMenu === "function") return kids[k];
+        return null;
+    }
+    function _focusedRow() {
+        const f = root.Window.activeFocusItem;
+        if (!f) return -1;
+        const p = f.mapToItem(archList.contentItem, f.width / 2, f.height / 2);
+        return archList.indexAt(p.x, p.y);
+    }
+    function focusRow(i) {
+        if (archList.count === 0) return false;
+        const at = Math.max(0, Math.min(archList.count - 1, i));
+        archList.currentIndex = at;
+        archList.positionViewAtIndex(at, ListView.Contain);
+        const card = root._cardAt(at);
+        if (!card) return false;
+        card.forceActiveFocus(Qt.TabFocusReason);
+        return true;
+    }
+    Keys.onDownPressed: root.focusRow(Math.max(0, archList.currentIndex))
+    Accessible.role: Accessible.Pane
+    Accessible.name: I18n.t("archive.title")
 
     Rectangle {
         anchors.fill: parent; color: Theme.bg
@@ -156,6 +195,22 @@ Item {
         ListView {
             id: archList
             objectName: "archive-list"
+            Accessible.role: Accessible.List
+            Accessible.name: I18n.t("archive.title")
+            // The cards are the stops, not the list.
+            keyNavigationEnabled: false
+            Keys.onUpPressed: root.focusRow(root._focusedRow() - 1)
+            Keys.onDownPressed: {
+                const at = root._focusedRow();
+                root.focusRow(at < 0 ? 0 : at + 1);
+            }
+            Keys.onPressed: (event) => {
+                if (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier)) {
+                    const card = root._cardAt(root._focusedRow());
+                    if (card) card.openMenu();
+                    event.accepted = true;
+                }
+            }
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true

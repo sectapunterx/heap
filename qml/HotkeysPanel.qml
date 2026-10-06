@@ -335,7 +335,10 @@ Popup {
         readonly property bool capturing: root.capturingId === chip.actionId && chip.actionId.length > 0
         property string candidate: ""
         property string conflictName: ""
-        onCapturingChanged: if (!capturing) { candidate = ""; conflictName = ""; }
+        // The conflict is a built-in key (Ctrl+P, the board's arrows…): Enter
+        // cannot take it, so the hint must not offer to (SHELL-4).
+        property bool conflictBuiltin: false
+        onCapturingChanged: if (!capturing) { candidate = ""; conflictName = ""; conflictBuiltin = false; }
 
         implicitWidth: 188
         implicitHeight: 46
@@ -397,12 +400,14 @@ Popup {
                 key = String.fromCharCode(ev.key);
             } else if (ev.key >= Qt.Key_0 && ev.key <= Qt.Key_9) {
                 key = String.fromCharCode(ev.key);
-            } else if (ev.text && ev.text.length > 0 && ev.text.charCodeAt(0) >= 32) {
+            } else if (_namedKey(ev.key).length > 0) {
+                // Before ev.text: Space types " ", which made "Ctrl+Shift+ "
+                // and stored nothing (SHELL-5).
+                key = _namedKey(ev.key);
+            } else if (ev.text && ev.text.length > 0 && ev.text.charCodeAt(0) > 32) {
                 key = ev.text;
                 if (key.length === 1 && key.toLowerCase() !== key.toUpperCase())
                     key = key.toUpperCase();
-            } else {
-                key = _namedKey(ev.key);
             }
             if (!key || key.length === 0) return "";
             return mods.concat([key]).join("+");
@@ -507,6 +512,8 @@ Popup {
                             chip.conflictName = conflictId.length > 0
                                 ? AppController.shortcutLabel(conflictId)
                                 : "";
+                            chip.conflictBuiltin = conflictId.length > 0
+                                && AppController.builtinShortcutConflict(chip.actionId, seq).length > 0;
                             // Auto-commit if no modifier-free single-letter; otherwise wait for Enter.
                         }
                         event.accepted = true;
@@ -569,7 +576,7 @@ Popup {
             anchors.bottom: parent.bottom
             anchors.bottomMargin: -2
             visible: chip.capturing && chip.conflictName.length > 0
-            text: I18n.t("hotkeys.conflict.body").arg(chip.conflictName)
+            text: I18n.t(chip.conflictBuiltin ? "hotkeys.conflict.builtin" : "hotkeys.conflict.body").arg(chip.conflictName)
             color: Theme.danger
             font.pixelSize: Theme.fsXs
             elide: Text.ElideRight

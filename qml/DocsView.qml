@@ -631,6 +631,7 @@ Item {
                         Text { text: "⌕"; color: Theme.textDim; font.pixelSize: Theme.fsSm }
                         TextField {
                             id: docsSearch
+                            ContextMenu.menu: TextEditMenu { editor: docsSearch }
                             objectName: "docsSearchField"
                             Layout.fillWidth: true
                             placeholderText: I18n.t("docs.search.placeholder")
@@ -985,7 +986,9 @@ Item {
                                     }
                                     ClickArea {
                                         id: addCardMA
-                                        label: I18n.t("docs.addEntry")
+                                        // Named after its section: six tiles all
+                                        // read "Add entry" to a screen reader (SHELL-17).
+                                        label: I18n.t("docs.a11y.addEntryTo").arg(secCol.section.title || "")
                                         showTip: false
                                         onActivated: root.openDocCreate(secCol.section.id)
                                     }

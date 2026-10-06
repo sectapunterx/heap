@@ -97,6 +97,13 @@ QString TaskModel::searchTextOf(const Task& t) {
   for(const Label& l : t.labels) {
     parts.append(l.id);
   }
+  // The search box promises branches (PERA-9). Also with its separators read
+  // as spaces, so "rate limit" finds fix/login-rate-limit.
+  if(!t.branch.isEmpty()) {
+    static const QRegularExpression kBranchSeparators(QStringLiteral("[-_/.]+"));
+    parts.append(t.branch);
+    parts.append(QString(t.branch).replace(kBranchSeparators, QStringLiteral(" ")));
+  }
   return parts.join(QChar(' ')).toLower();
 }
 
@@ -668,13 +675,17 @@ namespace {
 // "- [ ] **Ship** the [build](http://…)" verbatim.
 QString plainLine(QString line) {
   static const QRegularExpression marker(QStringLiteral(R"(^(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?)"));
-  static const QRegularExpression labelledWiki(QStringLiteral(R"(\[\[[^\]|]*\|([^\]]+)\]\])"));
+  // A backslash keeps # or | in a note name literal ([[A\|B options]]), so an
+  // escaped bar is part of the name, not the label separator (KNOW-6).
+  static const QRegularExpression labelledWiki(QStringLiteral(R"(\[\[(?:\\.|[^\]|\\])*\|([^\]]+)\]\])"));
   static const QRegularExpression wiki(QStringLiteral(R"(\[\[([^\]]*)\]\])"));
+  static const QRegularExpression escapedLinkChar(QStringLiteral(R"(\\([#|]))"));
   static const QRegularExpression link(QStringLiteral(R"(!?\[([^\]]*)\]\([^)]*\))"));
   static const QRegularExpression emphasis(QStringLiteral(R"((\*\*|__|~~|==|`|\*|_)(?=\S)(.+?)(?<=\S)\1)"));
   line.remove(marker);
   line.replace(labelledWiki, QStringLiteral("\\1"));
   line.replace(wiki, QStringLiteral("\\1"));
+  line.replace(escapedLinkChar, QStringLiteral("\\1"));
   line.replace(link, QStringLiteral("\\1"));
   for(int pass = 0; pass < 3 && line.contains(emphasis); ++pass) {
     line.replace(emphasis, QStringLiteral("\\2"));

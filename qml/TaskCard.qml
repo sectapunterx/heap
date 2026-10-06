@@ -131,18 +131,22 @@ Rectangle {
         return r ? String(r).replace("every:", "") : "";
     }
 
+    // Selection and the keyboard cursor look different in shape, not only
+    // in colour (VISU-4): on a monochrome theme accent and accentStrong are
+    // both near-white, and the two were the same 2px white border. Selected:
+    // a solid accent border, an opaque accent tint and a check mark in the
+    // top row. Cursor (and Tab focus): the card's own border with a focus
+    // ring drawn inside it, a double line.
     radius: Theme.radius
     color: _isArchived ? Theme.withAlpha(Theme.panel2, 0.55)
-        : _selected ? Theme.withAlpha(Theme.accent, 0.10)
+        : _selected ? Qt.tint(Theme.panel2, Theme.withAlpha(Theme.accent, 0.16))
             : Theme.panel2
     border.color: dragArea.drag.active ? Theme.accent
-        : activeFocus ? Theme.accentStrong
         : _selected ? Theme.accent
-                : cursored ? Theme.accentStrong
                 : _isStuck ? Theme.danger
-                : hoverArea.containsMouse ? Theme.borderStrong
+                : (hoverArea.containsMouse || cursored || activeFocus) ? Theme.borderStrong
                 : Theme.border
-    border.width: dragArea.drag.active ? 2 : (_selected || cursored || activeFocus ? 2 : (_isStuck ? 2 : 1))
+    border.width: dragArea.drag.active || _selected || _isStuck ? 2 : 1
     opacity: dragArea.drag.active ? 0.92 : (_isArchived ? 0.7 : 1.0)
     scale: dragArea.drag.active ? 1.03 : 1.0
     transformOrigin: Item.Center
@@ -151,6 +155,18 @@ Rectangle {
     // (APP-167); with reduced motion it simply is where it was put.
     Behavior on scale { NumberAnimation { duration: Theme.durBase; easing.type: Easing.OutBack } }
     Behavior on border.color { ColorAnimation { duration: Theme.scaledMs(120) } }
+
+    Rectangle {
+        objectName: "tc-cursor-ring"
+        visible: card.cursored || card.activeFocus
+        anchors.fill: parent
+        anchors.margins: card.border.width + Theme.sp2xs
+        radius: Math.max(0, card.radius - card.border.width - Theme.sp2xs)
+        color: "transparent"
+        border.color: Theme.focusRing
+        border.width: 2
+        z: 4
+    }
 
     implicitWidth: parent ? parent.width : 260
     implicitHeight: contentCol.implicitHeight + 2 * Theme.spLg
@@ -291,7 +307,10 @@ Rectangle {
                 visible: card._isTicket
                 text: card._badge.icon || "◍"
                 textFormat: Text.PlainText
-                color: card._badge.color || Theme.textMuted
+                // Muted like the key beside it (VISU-2): the provider's own
+                // colour was one more accent on a card that already had five,
+                // and the glyph and its tooltip already say which tracker.
+                color: Theme.textMuted
                 font.pixelSize: Theme.fsXs
                 font.weight: Font.DemiBold
                 QQC.ToolTip.visible: badgeHover.hovered
@@ -305,7 +324,9 @@ Rectangle {
                 // synthetic heap id ("github-68") the merge invented for it.
                 text: card._isTicket ? (card._ticket.key || "") : (card.task ? card.task.id : "")
                 textFormat: Text.PlainText
-                color: Theme.accentStrong
+                // Metadata, so muted: accentStrong is white on a monochrome
+                // theme and the key was as loud as the title (VISU-3).
+                color: Theme.textMuted
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsXs
                 font.weight: Font.Medium
@@ -390,13 +411,17 @@ Rectangle {
                 objectName: "tc-conflict"
                 visible: card._isTicket && !!card._ticket.conflict
                 radius: Theme.radiusSm
-                color: Theme.withAlpha(Theme.warning, 0.14)
+                // Outlined, not filled: a different kind of out-of-step from
+                // the sync chip, which it often sits next to (VISU-2).
+                color: "transparent"
+                border.color: Theme.withAlpha(Theme.warning, 0.6)
+                border.width: 1
                 implicitWidth: conflictT.implicitWidth + 10
                 implicitHeight: conflictT.implicitHeight + 2
                 Text {
                     id: conflictT
                     anchors.centerIn: parent
-                    text: I18n.t("taskcard.conflict")
+                    text: "⇄ " + I18n.t("taskcard.conflict")
                     textFormat: Text.PlainText
                     color: Theme.warning
                     font.pixelSize: Theme.fsXs
@@ -460,9 +485,19 @@ Rectangle {
                 font.weight: Font.DemiBold
             }
             Item { Layout.fillWidth: true }
+            Text {
+                objectName: "tc-selected-mark"
+                visible: card._selected
+                text: "✓"
+                color: Theme.accentStrong
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsSm
+                font.weight: Font.DemiBold
+            }
         }
 
         Text {
+            objectName: "tc-title"
             Layout.fillWidth: true
             text: card.task ? card.task.title : ""
             // A mirrored title is written by whoever filed the issue. Text
@@ -511,7 +546,9 @@ Rectangle {
                     width: parent.width * (checklistRow._total > 0 ? checklistRow._done / checklistRow._total : 0)
                     height: parent.height
                     radius: parent.radius
-                    color: checklistRow._done === checklistRow._total ? Theme.success : Theme.accent
+                    // textDim, not accent: a white bar was as loud as the
+                    // title on a monochrome theme (VISU-3).
+                    color: checklistRow._done === checklistRow._total ? Theme.success : Theme.textDim
                 }
             }
         }
@@ -612,7 +649,9 @@ Rectangle {
                 readonly property string label: (AppController.today, I18n.lang, card._schedLabel())
                 visible: label.length > 0
                 text: "▸ " + label
-                color: Theme.accentStrong
+                // A plan, not an alarm: muted, so the overdue date is the one
+                // that stands out (VISU-3).
+                color: Theme.textMuted
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsXs
             }
@@ -678,7 +717,9 @@ Rectangle {
                                                  : (card.task.trackedSeconds || 0);
                     return (card.task.isTiming ? "● " : "⧗ ") + card._fmtElapsed(s);
                 }
-                color: card.task && card.task.isTiming ? Theme.accentStrong : Theme.textDim
+                // Running: the dot and the weight say so; the colour stays
+                // with the rest of the metadata (VISU-3).
+                color: card.task && card.task.isTiming ? Theme.textMuted : Theme.textDim
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsXs
                 font.weight: card.task && card.task.isTiming ? Font.DemiBold : Font.Normal
@@ -870,11 +911,17 @@ Rectangle {
     property var _statusMenu: null
     property var _priorityMenu: null
     function statusMenu() {
-        if (!card._statusMenu) card._statusMenu = statusMenuComponent.createObject(card);
+        if (!card._statusMenu) {
+            card._statusMenu = statusMenuComponent.createObject(card);
+            card._statusMenu.back.connect(() => card.backToMenu("status"));
+        }
         return card._statusMenu;
     }
     function priorityMenu() {
-        if (!card._priorityMenu) card._priorityMenu = priorityMenuComponent.createObject(card);
+        if (!card._priorityMenu) {
+            card._priorityMenu = priorityMenuComponent.createObject(card);
+            card._priorityMenu.back.connect(() => card.backToMenu("priority"));
+        }
         return card._priorityMenu;
     }
     // The status or priority list at the card, on the task's current value,
@@ -888,6 +935,15 @@ Rectangle {
         else if (card.task)
             cur = ["P0", "P1", "P2", "P3"].indexOf(card.task.priority);
         sub.currentIndex = Math.max(0, cur);
+    }
+    // Left in a list: the card menu again, on the row the list came from.
+    function backToMenu(which) {
+        card.openMenu();
+        const name = which === "status" ? "tc-menu-status" : "tc-menu-priority";
+        for (let i = 0; i < card._menu.count; i++) {
+            const it = card._menu.itemAt(i);
+            if (it && it.objectName === name) { card._menu.currentIndex = i; break; }
+        }
     }
     function releaseMenu() {
         for (const k of ["_menu", "_statusMenu", "_priorityMenu"]) {
@@ -937,12 +993,12 @@ Rectangle {
         }
         AppMenuItem {
             objectName: "tc-menu-status"
-            glyph: "⇥"; text: I18n.t("taskcard.setStatus") + "  ›"
+            glyph: "⇥"; text: I18n.t("taskcard.setStatus"); opensList: true
             onTriggered: taskMenu._openNext = "status"
         }
         AppMenuItem {
             objectName: "tc-menu-priority"
-            glyph: "!"; text: I18n.t("taskcard.setPriority") + "  ›"
+            glyph: "!"; text: I18n.t("taskcard.setPriority"); opensList: true
             onTriggered: taskMenu._openNext = "priority"
         }
         AppMenuItem {
@@ -967,6 +1023,7 @@ Rectangle {
             visible: card._isTicket && String(card._ticket.url || "").length > 0
             height: visible ? implicitHeight : 0
             glyph: "↗"
+            shortcutId: "task.openExternal"
             text: I18n.t("taskcard.openIn").arg(card._badge.name || card._ticket.provider || "")
             onTriggered: AppController.openTaskExternal(card.taskId)
         }
@@ -1028,6 +1085,7 @@ Rectangle {
     AppMenu {
         id: statusMenu
         objectName: "tc-status-menu"
+        backOnLeft: true
         Instantiator {
             model: AppController.statuses
             delegate: AppMenuItem {
@@ -1047,6 +1105,7 @@ Rectangle {
     AppMenu {
         id: priorityMenu
         objectName: "tc-priority-menu"
+        backOnLeft: true
         Instantiator {
             model: ["P0", "P1", "P2", "P3"]
             delegate: AppMenuItem {

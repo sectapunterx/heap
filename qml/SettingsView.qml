@@ -365,6 +365,7 @@ Item {
                         Text { text: "⌕"; color: Theme.textDim; font.pixelSize: Theme.fsSm }
                         TextField {
                             id: settingsSearch
+                            ContextMenu.menu: TextEditMenu { editor: settingsSearch }
                             objectName: "settings-search"
                             Layout.fillWidth: true
                             placeholderText: I18n.t("settings.search")
@@ -403,6 +404,10 @@ Item {
                         Repeater {
                             id: navRep
                             model: root.sections
+                            // One tab stop for the list (SHELL-11, see the delegate). Bound here:
+                            // Qt 6.9's qmllint does not resolve root inside the delegate.
+                            onItemAdded: (idx, item) => item.activeFocusOnTab
+                                = Qt.binding(() => item.activeFocus || idx === root._navTabIndex)
                             delegate: Rectangle {
                                 id: navRow
                                 required property var modelData
@@ -410,8 +415,14 @@ Item {
                                 objectName: "settings-nav-" + modelData.id
                                 visible: root._sectionMatches(modelData)
                                 // A list box: Tab lands on it, ↑/↓ move and open,
-                                // Enter / Space open.
-                                activeFocusOnTab: true
+                                // Enter / Space open. One tab stop for the whole
+                                // list (the open section's row): every row used
+                                // to be one, focus opened its section, so Tab
+                                // walked Profile → … → About and only ever
+                                // entered About's body (SHELL-11). navRep binds
+                                // activeFocusOnTab; its `activeFocus` term keeps a
+                                // row that still holds focus a stop after a click
+                                // opened another section.
                                 Accessible.role: Accessible.PageTab
                                 Accessible.name: modelData.title
                                 Keys.onUpPressed: root._focusNav(index - 1, -1)
@@ -725,6 +736,17 @@ Item {
         }
         return false;
     }
+    // The nav row Tab lands on: the open section's, or the first one the
+    // search leaves when it hides that.
+    readonly property int _navTabIndex: {
+        let first = -1;
+        for (let i = 0; i < sections.length; i++) {
+            if (!_sectionMatches(sections[i])) continue;
+            if (sections[i].id === activeSection) return i;
+            if (first < 0) first = i;
+        }
+        return first;
+    }
     // Focus the nav row at `from`, skipping rows the search hides in the
     // direction `dir` (1 down, -1 up).
     function _focusNav(from, dir) {
@@ -904,6 +926,8 @@ Item {
         // A time of day: only H:mm / HH:mm is accepted, and it is committed as
         // HH:mm — what the C++ side parses (SHELL-9, audit 2026-09-30).
         property bool clockTime: false
+        // Stored upper-case, so typed and shown that way too.
+        property bool upperCase: false
         readonly property RegularExpressionValidator _clockValidator: RegularExpressionValidator {
             regularExpression: /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/
         }
@@ -938,6 +962,7 @@ Item {
         // the field among the row's own children.
         control: TextField {
             id: textRowField
+            ContextMenu.menu: TextEditMenu { editor: textRowField }
             objectName: textRow.objectName.length > 0 ? textRow.objectName + "-field" : ""
             validator: textRow.clockTime ? textRow._clockValidator : null
             // The row's label is the field's name (APP-168); a field with no
@@ -949,6 +974,7 @@ Item {
             placeholderTextColor: Theme.textDim
             color: Theme.text
             font.family: textRow.mono ? Theme.fontMono : Theme.fontUi
+            font.capitalization: textRow.upperCase ? Font.AllUppercase : Font.MixedCase
             // Secrets stay masked until focused, so a shoulder-surfer (or a
             // screenshot) never catches a token sitting in the panel.
             echoMode: (textRow.alwaysMasked || (textRow.secret && !activeFocus)) ? TextInput.Password : TextInput.Normal
@@ -1819,6 +1845,10 @@ Item {
                 TextRow {
                     label: I18n.t("settings.tasks.idPrefix"); mono: true; placeholder: "TASK"
                     fieldWidth: 160
+                    // What a #KEY-1 link and a branch name can carry (SHELL-10):
+                    // a letter, then letters and digits. Shown as stored, upper case.
+                    validator: RegularExpressionValidator { regularExpression: /^([A-Za-z][A-Za-z0-9]{0,15})?$/ }
+                    upperCase: true
                     hint: I18n.t("settings.tasks.idPrefix.hint").arg((root.settings.tasks && root.settings.tasks.idPrefix) || "TASK")
                     value: (root.settings.tasks && root.settings.tasks.idPrefix) || ""
                     onCommitted: (text) => {
@@ -2783,6 +2813,7 @@ Item {
                     fillControl: true
                     TextField {
                         id: newRepoField
+                        ContextMenu.menu: TextEditMenu { editor: newRepoField }
                         Layout.fillWidth: true
                         placeholderText: "C:/path/to/repo"
                         color: Theme.text

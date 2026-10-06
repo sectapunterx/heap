@@ -86,6 +86,7 @@ Popup {
         }
         TextField {
             id: nameField
+            ContextMenu.menu: TextEditMenu { editor: nameField }
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             placeholderText: I18n.t("profile.ph.name")
             background: FieldFrame {}

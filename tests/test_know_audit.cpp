@@ -354,6 +354,30 @@ TEST_F(KnowAuditTest, Know7_RenameLeavesLinksToASameTitledNoteElsewhere) {
   EXPECT_EQ(heap::notes::backlinksTo(b, app_->notes()->items()).size(), 1);
 }
 
+// KNOW-6 (audit 2026-09-30): a rename to a title with '#' leaves links that
+// still find the note, and a link to "C# basics" is a link to that note.
+TEST_F(KnowAuditTest, Know6_HashAndBarTitlesLinkAndSurviveRename) {
+  const QString target = app_->newNote(QStringLiteral("Plain target"));
+  const QString csharp = app_->newNote(QStringLiteral("C# basics"));
+  const QString other = app_->newNote(QStringLiteral("Linker"));
+  app_->setNoteBody(other, QStringLiteral("[[Plain target]] and [[C\\# basics]]"));
+
+  EXPECT_EQ(app_->resolveNoteLink(QStringLiteral("C\\# basics")).value("noteId").toString(), csharp);
+  EXPECT_EQ(app_->resolveNoteLink(QStringLiteral("C# basics")).value("noteId").toString(), csharp);
+  EXPECT_EQ(app_->backlinksToNote(csharp).size(), 1);
+
+  app_->renameNote(target, QStringLiteral("Topic #1"));
+  EXPECT_EQ(app_->noteBody(other), QStringLiteral("[[Topic \\#1]] and [[C\\# basics]]"));
+  EXPECT_EQ(app_->resolveNoteLink(QStringLiteral("Topic \\#1")).value("noteId").toString(), target);
+  EXPECT_EQ(app_->backlinksToNote(target).size(), 1);
+
+  // A missing escaped link creates the note under its real name.
+  const QString created = app_->createNoteForLink(QStringLiteral("A\\|B options"));
+  const int row = app_->notes()->indexOfId(created);
+  ASSERT_GE(row, 0);
+  EXPECT_EQ(app_->notes()->items().at(row).title, QStringLiteral("A|B options"));
+}
+
 // KNOW-17 (audit 2026-09-30): quick capture into the open note while the
 // editor still holds unflushed keystrokes keeps them.
 TEST_F(KnowAuditTest, Know17_QuickCaptureFlushesTheEditorFirst) {
@@ -444,6 +468,23 @@ TEST_F(KnowAuditTest, App1_AnUntitledNoteIsNamedAfterItsFirstLine) {
   app_->setNotesState(QStringLiteral("# Retro\n\nAnother line"));
   app_->setNotesState(QStringLiteral("# Retro\n\nAnother line, edited"));
   EXPECT_EQ(title(), QStringLiteral("Retro"));
+}
+
+// PERA-6: retyping a new note's heading from scratch left the title at the
+// last fragment saved before the heading was emptied ("Без н"), because the
+// empty "# " in between broke the follow.
+TEST_F(KnowAuditTest, Pera6_RetypingTheHeadingRenamesTheNote) {
+  const QString id = app_->newNote();
+  const auto title = [&] {
+    return app_->notes()->items().at(app_->notes()->indexOfId(id)).title;
+  };
+  app_->setNotesState(QStringLiteral("# Untit\n\n"));
+  EXPECT_EQ(title(), QStringLiteral("Untit"));
+  app_->setNotesState(QStringLiteral("# \n\n"));
+  EXPECT_EQ(title(), QStringLiteral("Untit")) << "an empty heading is not a name";
+  app_->setNotesState(QStringLiteral("# S\n\n"));
+  app_->setNotesState(QStringLiteral("# Standup 30.09\n\n"));
+  EXPECT_EQ(title(), QStringLiteral("Standup 30.09"));
 }
 
 TEST_F(KnowAuditTest, App1_TitleIsCutToSixtyCharacters) {

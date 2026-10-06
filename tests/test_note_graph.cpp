@@ -260,3 +260,69 @@ TEST(NoteGraph, AResolvedLinkIsNotReported) {
 
   EXPECT_TRUE(unresolvedLinksIn(QStringLiteral("see [[Standup]]"), notes, QStringLiteral("n1")).isEmpty());
 }
+
+// ── KNOW-6 (audit 2026-09-30): titles with '#' and '|' ──
+
+TEST(NoteGraph, Know6_ATitleWithAHashOrBarIsLinkable) {
+  const QVector<Note> notes{note(QStringLiteral("c"), QStringLiteral("C# basics")),
+                            note(QStringLiteral("ab"), QStringLiteral("A|B options"), QStringLiteral("# Pros\n")),
+                            note(QStringLiteral("f"), QStringLiteral("From"))};
+  const QString from = QStringLiteral("f");
+  // Escaped, as autocomplete and rename write it.
+  EXPECT_EQ(resolveLink(QStringLiteral("C\\# basics"), notes, from).noteId, QStringLiteral("c"));
+  EXPECT_EQ(resolveLink(QStringLiteral("A\\|B options"), notes, from).noteId, QStringLiteral("ab"));
+  // Typed by hand, and as md4c hands the preview's target over (unescaped).
+  EXPECT_EQ(resolveLink(QStringLiteral("C# basics"), notes, from).noteId, QStringLiteral("c"));
+  EXPECT_EQ(resolveLink(QStringLiteral("A|B options"), notes, from).noteId, QStringLiteral("ab"));
+  // With a label and a heading after the escaped name.
+  EXPECT_EQ(resolveLink(QStringLiteral("C\\# basics|the intro"), notes, from).noteId, QStringLiteral("c"));
+  const LinkTarget h = resolveLink(QStringLiteral("A\\|B options#Pros|why"), notes, from);
+  EXPECT_EQ(h.kind, LinkTarget::HeadingRef);
+  EXPECT_EQ(h.noteId, QStringLiteral("ab"));
+  EXPECT_EQ(h.heading, QStringLiteral("Pros"));
+  EXPECT_TRUE(unresolvedLinksIn(QStringLiteral("[[C\\# basics]] [[A\\|B options]] [[C# basics]]"), notes, from).isEmpty());
+}
+
+TEST(NoteGraph, Know6_OrdinaryHeadingAndLabelLinksStillSplit) {
+  const QVector<Note> notes{note(QStringLiteral("s"), QStringLiteral("Standup"), QStringLiteral("## Risks\n")),
+                            note(QStringLiteral("f"), QStringLiteral("From"), QStringLiteral("# C# notes\n"))};
+  const LinkTarget t = resolveLink(QStringLiteral("Standup#Risks|daily"), notes, QStringLiteral("f"));
+  EXPECT_EQ(t.kind, LinkTarget::HeadingRef);
+  EXPECT_EQ(t.noteId, QStringLiteral("s"));
+  // A heading of the linking note with a '#' in it.
+  const LinkTarget own = resolveLink(QStringLiteral("C\\# notes"), notes, QStringLiteral("f"));
+  EXPECT_EQ(own.kind, LinkTarget::HeadingRef);
+  EXPECT_EQ(own.heading, QStringLiteral("C# notes"));
+}
+
+TEST(NoteGraph, Know6_BacklinksFindEscapedAndRawSpellings) {
+  const QVector<Note> notes{
+      note(QStringLiteral("c"), QStringLiteral("C# basics")),
+      note(QStringLiteral("c0"), QStringLiteral("C")),
+      note(QStringLiteral("o"), QStringLiteral("Other"), QStringLiteral("[[C\\# basics]]\n[[C# basics|x]]\n[[C#Intro]]"))};
+  EXPECT_EQ(backlinksTo(QStringLiteral("c"), notes).size(), 2);
+  // [[C#Intro]] is the heading Intro of the note called C.
+  EXPECT_EQ(backlinksTo(QStringLiteral("c0"), notes).size(), 1);
+}
+
+TEST(NoteGraph, Know6_RenameWritesAnEscapedNameThatRoundTrips) {
+  const QString body = QStringLiteral("a [[Plain target]] b [[plain target#H|lbl]] c [[Plain target|x]]");
+  const QString renamed = heap::notes::retargetLinks(body, QStringLiteral("Plain target"), QStringLiteral("Topic #1"));
+  EXPECT_EQ(renamed, QStringLiteral("a [[Topic \\#1]] b [[Topic \\#1#H|lbl]] c [[Topic \\#1|x]]"));
+  const QVector<Note> notes{note(QStringLiteral("t"), QStringLiteral("Topic #1"), QStringLiteral("# H\n")),
+                            note(QStringLiteral("o"), QStringLiteral("Other"), renamed)};
+  EXPECT_TRUE(unresolvedLinksIn(renamed, notes, QStringLiteral("o")).isEmpty());
+  EXPECT_EQ(backlinksTo(QStringLiteral("t"), notes).size(), 1);  // all on one line
+  // Renamed again, the escaped links are found and rewritten.
+  EXPECT_EQ(heap::notes::retargetLinks(renamed, QStringLiteral("Topic #1"), QStringLiteral("A|B")),
+            QStringLiteral("a [[A\\|B]] b [[A\\|B#H|lbl]] c [[A\\|B|x]]"));
+}
+
+TEST(NoteGraph, Know6_EscapingIsReversible) {
+  for(const QString& title :
+      {QStringLiteral("C# basics"), QStringLiteral("A|B"), QStringLiteral("dir\\"), QStringLiteral("a\\#b"), QStringLiteral("plain")}) {
+    const QString escaped = heap::notes::escapeLinkName(title);
+    EXPECT_EQ(heap::notes::noteNameOf(escaped), title) << escaped.toStdString();
+    EXPECT_TRUE(heap::notes::headingPartOf(escaped).isEmpty()) << escaped.toStdString();
+  }
+}

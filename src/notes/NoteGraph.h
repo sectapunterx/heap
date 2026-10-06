@@ -54,7 +54,89 @@ inline QString normalise(const QString& s) {
   return s.trimmed().toLower();
 }
 
+// md4c's rule, so the editor and the preview agree: a backslash before ASCII
+// punctuation makes it literal. "[[C\# basics]]" names the note "C# basics"
+// rather than the heading "basics" of a note called "C".
+inline bool isEscapable(QChar c) {
+  const char16_t u = c.unicode();
+  return (u >= '!' && u <= '/') || (u >= ':' && u <= '@') || (u >= '[' && u <= '`') || (u >= '{' && u <= '~');
+}
+
+inline QString unescapeLink(const QString& s) {
+  QString out;
+  out.reserve(s.size());
+  for(qsizetype i = 0; i < s.size(); ++i) {
+    if(s.at(i) == QLatin1Char('\\') && i + 1 < s.size() && isEscapable(s.at(i + 1))) {
+      ++i;
+    }
+    out += s.at(i);
+  }
+  return out;
+}
+
+// Where `ch` appears in `s` other than escaped.
+inline QVector<qsizetype> unescapedAt(const QString& s, QChar ch) {
+  QVector<qsizetype> out;
+  for(qsizetype i = 0; i < s.size(); ++i) {
+    if(s.at(i) == QLatin1Char('\\') && i + 1 < s.size() && isEscapable(s.at(i + 1))) {
+      ++i;
+    } else if(s.at(i) == ch) {
+      out << i;
+    }
+  }
+  return out;
+}
+
+// One way to read the text between [[ and ]]: the note it names, the heading
+// after '#', and where the name ends in that text.
+struct NameSplit {
+  QString name;
+  QString heading;
+  qsizetype nameEnd = 0;
+};
+
+// Every reading of a link target, most literal first.
+//
+// The whole text comes first, so a note whose title has a '#' or '|' in it is
+// found by its title: "[[C# basics]]" typed by hand, and the preview's target,
+// which md4c hands over already unescaped. Then the text before each '|' (the
+// rest is a label), and within that each '#' (the rest is a heading). The
+// caller takes the first reading that names a note.
+inline QVector<NameSplit> nameSplits(const QString& inner) {
+  QVector<NameSplit> out;
+  out.append({unescapeLink(inner).trimmed(), QString(), inner.size()});
+  QVector<qsizetype> ends = unescapedAt(inner, QLatin1Char('|'));
+  ends << inner.size();
+  for(const qsizetype end : ends) {
+    const QString pre = inner.left(end);
+    if(end != inner.size()) {
+      out.append({unescapeLink(pre).trimmed(), QString(), end});
+    }
+    for(const qsizetype hash : unescapedAt(pre, QLatin1Char('#'))) {
+      out.append({unescapeLink(pre.left(hash)).trimmed(), unescapeLink(pre.mid(hash + 1)).trimmed(), hash});
+    }
+  }
+  return out;
+}
+
 }  // namespace detail
+
+// A title as it is written inside [[ ]]. '#' and '|' would otherwise start a
+// heading and a label, and a backslash before punctuation (or before the
+// closing brackets) would escape it, so all three are escaped.
+inline QString escapeLinkName(const QString& title) {
+  QString out;
+  out.reserve(title.size() + 4);
+  for(qsizetype i = 0; i < title.size(); ++i) {
+    const QChar c = title.at(i);
+    if(c == QLatin1Char('#') || c == QLatin1Char('|') ||
+       (c == QLatin1Char('\\') && (i + 1 == title.size() || detail::isEscapable(title.at(i + 1))))) {
+      out += QLatin1Char('\\');
+    }
+    out += c;
+  }
+  return out;
+}
 
 // Every [[target]] in `markdown`, in document order, de-duplicated by the text
 // between the brackets.
@@ -77,29 +159,30 @@ inline QStringList linkTargetsIn(const QString& markdown) {
 }
 
 // The part of a link target that names a note: "Standup#Risks" and
-// "Standup|the daily one" both name Standup.
+// "Standup|the daily one" both name Standup. An escaped "\#" or "\|" is part
+// of the name.
 inline QString noteNameOf(const QString& target) {
   QString t = target;
-  const qsizetype bar = t.indexOf(QLatin1Char('|'));
-  if(bar >= 0) {
-    t = t.left(bar);
+  const QVector<qsizetype> bars = detail::unescapedAt(t, QLatin1Char('|'));
+  if(!bars.isEmpty()) {
+    t = t.left(bars.first());
   }
-  const qsizetype hash = t.indexOf(QLatin1Char('#'));
-  if(hash >= 0) {
-    t = t.left(hash);
+  const QVector<qsizetype> hashes = detail::unescapedAt(t, QLatin1Char('#'));
+  if(!hashes.isEmpty()) {
+    t = t.left(hashes.first());
   }
-  return t.trimmed();
+  return detail::unescapeLink(t).trimmed();
 }
 
 // The heading part of "Note#Heading", or empty.
 inline QString headingPartOf(const QString& target) {
   QString t = target;
-  const qsizetype bar = t.indexOf(QLatin1Char('|'));
-  if(bar >= 0) {
-    t = t.left(bar);
+  const QVector<qsizetype> bars = detail::unescapedAt(t, QLatin1Char('|'));
+  if(!bars.isEmpty()) {
+    t = t.left(bars.first());
   }
-  const qsizetype hash = t.indexOf(QLatin1Char('#'));
-  return hash >= 0 ? t.mid(hash + 1).trimmed() : QString();
+  const QVector<qsizetype> hashes = detail::unescapedAt(t, QLatin1Char('#'));
+  return hashes.isEmpty() ? QString() : detail::unescapeLink(t.mid(hashes.first() + 1)).trimmed();
 }
 
 // The ATX headings of a note, skipping fenced code. A line that merely starts
@@ -165,12 +248,18 @@ inline LinkTarget resolveLink(const QString& target, const QVector<Note>& notes,
     return {};
   };
 
-  if(!name.isEmpty()) {
-    // A note, by title. Exact-but-case-insensitive only: a prefix match would
-    // make renaming one note silently repoint links that named another.
+  // A note, by title. Exact-but-case-insensitive only: a prefix match would
+  // make renaming one note silently repoint links that named another. Each
+  // reading of the target in turn, so "C# basics" is the note of that name
+  // before it is a heading of a note called "C".
+  for(const detail::NameSplit& split : detail::nameSplits(target)) {
+    const QString wanted = detail::normalise(split.name);
+    if(wanted.isEmpty()) {
+      continue;
+    }
     const Note* hit = nullptr;
     for(const Note& n : notes) {
-      if(detail::normalise(n.title) != name) {
+      if(detail::normalise(n.title) != wanted) {
         continue;
       }
       if(hit == nullptr) {
@@ -182,8 +271,8 @@ inline LinkTarget resolveLink(const QString& target, const QVector<Note>& notes,
       }
     }
     if(hit != nullptr) {
-      if(!headingPart.isEmpty()) {
-        const QString h = headingIn(*hit, headingPart);
+      if(!split.heading.isEmpty()) {
+        const QString h = headingIn(*hit, split.heading);
         if(!h.isEmpty()) {
           return {LinkTarget::HeadingRef, hit->id, h};
         }
@@ -193,8 +282,16 @@ inline LinkTarget resolveLink(const QString& target, const QVector<Note>& notes,
   }
 
   // Failing that, a heading in the note the link was written in — the whole
-  // target for [[Risks]], the part after '#' for [[#Risks]].
+  // target for [[Risks]] (and for [[C# notes]]), the part after '#' for
+  // [[#Risks]].
   if(from != nullptr) {
+    const QString whole = detail::unescapeLink(target).trimmed();
+    if(!whole.isEmpty()) {
+      const QString h = headingIn(*from, whole);
+      if(!h.isEmpty()) {
+        return {LinkTarget::HeadingRef, from->id, h};
+      }
+    }
     const QString wanted = name.isEmpty() ? headingPart : noteNameOf(target);
     if(name.isEmpty() || headingPart.isEmpty()) {
       const QString h = headingIn(*from, wanted);
@@ -225,6 +322,21 @@ inline QVector<Backlink> backlinksTo(const QString& noteId, const QVector<Note>&
     return out;
   }
   const QString needle = detail::normalise(title);
+  QSet<QString> titles;
+  for(const Note& n : notes) {
+    titles.insert(detail::normalise(n.title));
+  }
+  // Read the way resolveLink() reads a target: the first reading that is some
+  // note's title is the note it names.
+  const auto namesIt = [&](const QString& inner) {
+    for(const detail::NameSplit& split : detail::nameSplits(inner)) {
+      const QString name = detail::normalise(split.name);
+      if(!name.isEmpty() && titles.contains(name)) {
+        return name == needle;
+      }
+    }
+    return false;
+  };
 
   for(const Note& n : notes) {
     if(n.id == noteId) {
@@ -238,7 +350,7 @@ inline QVector<Backlink> backlinksTo(const QString& noteId, const QVector<Note>&
     for(int i = 0; i < lines.size(); ++i) {
       auto it = detail::wikiLinkRe().globalMatch(lines.at(i));
       while(it.hasNext()) {
-        if(detail::normalise(noteNameOf(it.next().captured(1))) == needle) {
+        if(namesIt(it.next().captured(1))) {
           out.append({n.id, n.title, i + 1, lines.at(i).trimmed()});
           break;  // one entry per line, however many times it is named there
         }
@@ -267,20 +379,20 @@ inline QString retargetLinks(const QString& body, const QString& oldTitle, const
   while(it.hasNext()) {
     const auto m = it.next();
     const QString inner = m.captured(1);
-    if(detail::normalise(noteNameOf(inner)) != needle || !accept(inner)) {
+    qsizetype cut = -1;
+    for(const detail::NameSplit& split : detail::nameSplits(inner)) {
+      if(detail::normalise(split.name) == needle) {
+        cut = split.nameEnd;
+        break;
+      }
+    }
+    if(cut < 0 || !accept(inner)) {
       continue;
     }
-    // Keep whatever followed the name: "#heading", "|label".
-    qsizetype cut = inner.size();
-    const qsizetype bar = inner.indexOf(QLatin1Char('|'));
-    const qsizetype hash = inner.indexOf(QLatin1Char('#'));
-    if(hash >= 0 && (bar < 0 || hash < bar)) {
-      cut = hash;
-    } else if(bar >= 0) {
-      cut = bar;
-    }
+    // Keep whatever followed the name: "#heading", "|label". The new name is
+    // escaped, so a rename to "Topic #1" leaves a link that still finds it.
     out += body.mid(last, m.capturedStart(1) - last);
-    out += newTitle + inner.mid(cut);
+    out += escapeLinkName(newTitle) + inner.mid(cut);
     last = m.capturedEnd(1);
     changed = true;
   }

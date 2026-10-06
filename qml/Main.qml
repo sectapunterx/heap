@@ -551,8 +551,34 @@ ApplicationWindow {
     }
     function returnFocusHome() {
         const h = win._focusHome;
-        if (h && h.visible && h.enabled && h.Window.window === win) h.forceActiveFocus();
+        // An empty header search is not where anyone was working: it only
+        // held focus because the button that opened the dialog takes none.
+        // Sending focus back there put the caret and the query-syntax hint
+        // over the view after every dialog, and the next click only cleared
+        // it (PERO-1). The view gets it instead.
+        const idleSearch = h && h.objectName === "topbar-search" && (h.text || "").length === 0;
+        if (h && !idleSearch && h.visible && h.enabled && h.Window.window === win) h.forceActiveFocus();
         else win.focusActiveView();
+    }
+    // A view switch takes the keyboard into the new view: it used to stay on
+    // the hidden board, so after Ctrl+7 nothing typed reached the note and Tab
+    // walked the top bar (PERA-5). A popup that still holds focus hands it on
+    // when it closes (above), and the header search keeps a query being typed.
+    function _focusSwitchedView() {
+        if (win._focusInPopup) return;
+        const f = win.activeFocusItem;
+        if (f && f.visible && win._typing && !win._insideView(f)) return;
+        // Already in the new view (something put it there first).
+        const v = win.activeViewItem();
+        for (let p = f; p && v; p = p.parent)
+            if (p === v) return;
+        win.focusActiveView();
+    }
+    // Whether `it` sits in one of the four view loaders (any view, shown or not).
+    function _insideView(it) {
+        for (let p = it; p; p = p.parent)
+            if (p === boardLoader || p === notesLoader || p === docsLoader || p === viewLoader) return true;
+        return false;
     }
     // A modal (or dimming) popup is up somewhere — even one that did not take
     // focus, as most of the views' own confirm dialogs do not. Each puts its
@@ -585,7 +611,9 @@ ApplicationWindow {
         const v = win.activeViewItem();
         for (let p = f; p; p = p.parent) {
             if (p === v) return false;
-            if (p.activeFocusOnTab === true) return true;
+            // A view's own keyboard surface (the month grid) is the view:
+            // it claims the keys it uses itself and leaves the rest.
+            if (p.activeFocusOnTab === true) return p.viewSurface !== true;
         }
         return false;
     }
@@ -606,9 +634,12 @@ ApplicationWindow {
 
     // Esc in the header search with nothing left to clear hands the keyboard
     // back to the view, so J/K and Return work again without the mouse.
+    // A view that knows better where typing should go (the note editor, a
+    // list's current row) says so with takeFocus().
     function focusActiveView() {
         const v = win.activeViewItem();
-        if (v) v.forceActiveFocus();
+        if (v && typeof v.takeFocus === "function") v.takeFocus();
+        else if (v) v.forceActiveFocus();
         else win.contentItem.forceActiveFocus();
     }
 
@@ -1038,7 +1069,10 @@ ApplicationWindow {
                     // ReferenceError, and the two views would never activate.
                     Connections {
                         target: AppController
-                        function onCurrentViewChanged() { win.activateCurrentView(); }
+                        function onCurrentViewChanged() {
+                            win.activateCurrentView();
+                            Qt.callLater(win._focusSwitchedView);
+                        }
                     }
                     Component.onCompleted: win.activateCurrentView()
                     SelectionBar {
@@ -1459,6 +1493,15 @@ ApplicationWindow {
             savedViewsHost.applyAt(Number(id.slice(10)));
             return;
         }
+        // Notes actions run in the Notes view, so go there first (SHELL-1).
+        if (id.indexOf("notes.") === 0) {
+            AppController.currentView = "notes";
+            Qt.callLater(function () {
+                const v = win.activeViewItem();
+                if (v && v.runNotesCommand) v.runNotesCommand(id.slice(6));
+            });
+            return;
+        }
         if (id === "savedview.save") {
             // After the palette has closed, so the dialog gets the keyboard.
             Qt.callLater(savedViewsHost.openSave);
@@ -1833,10 +1876,12 @@ ApplicationWindow {
 
     // The day panel follows the selected date in every view it sits beside,
     // so today, go-to-date and a day at a time work from those too — they
-    // used to be week/month only.
+    // used to be week/month only. They stand down like every other view key:
+    // G opened go-to-date over the profile menu and a "Delete column?"
+    // confirm, Alt+← moved the day from the header search (SHELL-3).
     component DayKey: Shortcut {
         context: Qt.ApplicationShortcut
-        enabled: sequences.length > 0 && !hotkeys.isCapturing && !win._overlayOpen
+        enabled: sequences.length > 0 && !win._viewKeysBlocked
             && ["board", "timeline", "week", "month", "archive"].indexOf(AppController.currentView) >= 0
     }
     DayKey {

@@ -152,6 +152,31 @@ TEST_F(UxAuditTest, AnEditCannotMoveOntoAnotherPersonsId) {
   EXPECT_EQ(app_->personById(QStringLiteral("a.s")).value("question").toString(), QStringLiteral("release?"));
 }
 
+// SHELL-25 (2026-09-30-1): a new id on an existing person renames them — it
+// used to add a second "Anna S." and keep the first.
+TEST_F(UxAuditTest, AnEditToAFreeIdRenamesThePerson) {
+  Person a;
+  a.id = QStringLiteral("a.s");
+  a.name = QStringLiteral("Anna S.");
+  Person b;
+  b.id = QStringLiteral("b.k");
+  b.name = QStringLiteral("Boris K.");
+  app_->people()->reset({a, b});
+  app_->setDocsState(QStringLiteral(R"({"contacts":[{"name":"Anna S.","personId":"a.s"},{"name":"Boris K.","personId":"b.k"}]})"));
+
+  QVariantMap edit = app_->personById(QStringLiteral("a.s"));
+  edit[QStringLiteral("_originalId")] = QStringLiteral("a.s");
+  edit[QStringLiteral("id")] = QStringLiteral("a.sx");
+  ASSERT_TRUE(app_->savePerson(edit));
+
+  ASSERT_EQ(app_->people()->rowCount(), 2);
+  EXPECT_TRUE(app_->personById(QStringLiteral("a.s")).isEmpty()) << "the old id is still in the list";
+  EXPECT_EQ(app_->personById(QStringLiteral("a.sx")).value("name").toString(), QStringLiteral("Anna S."));
+  EXPECT_EQ(app_->people()->items().first().id, QStringLiteral("a.sx")) << "the renamed person keeps their place";
+  EXPECT_TRUE(app_->docsState().contains(QStringLiteral(R"("personId":"a.sx")"))) << app_->docsState().toStdString();
+  EXPECT_FALSE(app_->docsState().contains(QStringLiteral(R"("personId":"a.s")"))) << app_->docsState().toStdString();
+}
+
 // Picking a contact links it to the new Person inside the save's undo step; a
 // Mattermost sync then changes that contact outside undo. Ctrl+Z takes the
 // link back off that contact instead of re-adding the original next to it.

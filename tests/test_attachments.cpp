@@ -601,6 +601,42 @@ TEST_F(AttachmentAppTest, TheNotesFolderCarriesItsFilesBothWays) {
   EXPECT_TRUE(app_->notes()->items().at(0).body.contains(QStringLiteral("attachments/") + attId));
 }
 
+// KNOW-10 (audit 2026-09-30): a note in a subfolder links its files relative
+// to itself, so the export opens with pictures in any other editor, and the
+// folder still comes back into heap unchanged.
+TEST_F(AttachmentAppTest, Know10_ANoteInASubfolderLinksUpToTheAttachments) {
+  const QByteArray bytes = uniqueBytes("nested vault image");
+  const QVariantList stored = app_->importAttachments(urls({write(QStringLiteral("src/up.png"), bytes)}));
+  const QString attId = stored.at(0).toMap().value("id").toString();
+  const QString ref = stored.at(0).toMap().value("ref").toString();
+  const QString rootNote = app_->newNote(QStringLiteral("Root"));
+  app_->setNoteBody(rootNote, QStringLiteral("top ") + ref);
+  const QString nested = app_->newNote(QStringLiteral("Relative"), QStringLiteral("team/deep"));
+  app_->setNoteBody(nested, QStringLiteral("nested ") + ref + QStringLiteral("\nmentioned: attachments/") + attId);
+
+  QDir().mkpath(dir_.path() + QStringLiteral("/out"));
+  const QVariantMap r = app_->exportNotesFolder(QUrl::fromLocalFile(dir_.path() + QStringLiteral("/out")), QStringLiteral("vault"));
+  ASSERT_FALSE(r.contains("error"));
+  const QString vault = dir_.path() + QStringLiteral("/out/vault/");
+  const auto read = [](const QString& p) {
+    QFile f(p);
+    return f.open(QIODevice::ReadOnly) ? QString::fromUtf8(f.readAll()) : QString();
+  };
+  const QString top = read(vault + QStringLiteral("Root.md"));
+  const QString deep = read(vault + QStringLiteral("team/deep/Relative.md"));
+  EXPECT_TRUE(top.contains(QStringLiteral("](attachments/") + attId + QLatin1Char(')'))) << top.toStdString();
+  EXPECT_TRUE(deep.contains(QStringLiteral("](../../attachments/") + attId + QLatin1Char(')'))) << deep.toStdString();
+  // Text that is not a link is not a path; it stays as written.
+  EXPECT_TRUE(deep.contains(QStringLiteral("mentioned: attachments/") + attId)) << deep.toStdString();
+  // Relative to the file, the link names the exported copy.
+  EXPECT_TRUE(QFileInfo::exists(vault + QStringLiteral("team/deep/../../attachments/") + attId));
+
+  // Imported back over the same notes: nothing changed on either side.
+  const QVariantMap again = app_->importNotesFolder(QUrl::fromLocalFile(vault));
+  EXPECT_EQ(again.value("unchanged").toInt(), 2) << again.value("conflicts").toInt();
+  EXPECT_EQ(app_->noteBody(nested), QStringLiteral("nested ") + ref + QStringLiteral("\nmentioned: attachments/") + attId);
+}
+
 TEST_F(AttachmentAppTest, AnotherEditorsVaultLinksBecomeAttachments) {
   const QByteArray img = uniqueBytes("obsidian image");
   write(QStringLiteral("vault/assets/shot 1.png"), img);

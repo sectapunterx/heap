@@ -191,6 +191,21 @@ TestCase {
         AppController.notesState = "";
     }
 
+    // 2026-09-30 audit, KNOW-4: a label with escaped brackets (a[1].png) is
+    // removed whole, not cut at the "\[" inside it.
+    function test_notes_remove_takes_a_bracketed_label_whole() {
+        AppController.notesState = "";
+        const nv = Qt.createQmlObject('import TodoCpp; NotesView { anchors.fill: parent }', host, "tst_Attachments.notesBrackets");
+        tryVerify(function () { return nv._loadedOnce; });
+        const editor = findChild(nv, "notesEditor");
+        const id = "0123456789abcdef0123456789abcdef.png";
+        editor.text = "Intro\n\n![a\\[1\\].png](attachments/" + id + ")\nkeep [x\\]](attachments/" + id + ") tail\n";
+        compare(nv.removeAttachmentRefs(id), 2);
+        compare(editor.text, "Intro\n\nkeep  tail\n");
+        nv.destroy();
+        AppController.notesState = "";
+    }
+
     // 2026-09-30 audit, KNOW-3: the cleanup between the chip's Remove and the
     // editor's Ctrl+Z used to delete the file the restored link points at.
     function test_notes_cleanup_spares_a_link_the_editor_can_undo() {

@@ -98,6 +98,7 @@ Popup {
                 Layout.fillWidth: true; Layout.preferredHeight: 78
                 TextArea {
                     id: docDesc
+                    ContextMenu.menu: TextEditMenu { editor: docDesc }
                     text: root.draft.desc || ""
                     onTextChanged: root.draft.desc = text
                     wrapMode: TextEdit.Wrap
@@ -160,21 +161,39 @@ Popup {
                 spacing: Theme.spXs
                 Layout.fillWidth: true
                 FieldLabel { text: I18n.t("docs.field.section").toUpperCase() }
-                ComboBox {
+                AppComboBox {
                     id: docSection
+                    objectName: "docs-editor-section"
                     Layout.fillWidth: true
                     model: root.sections.map(s => s.title)
-                    background: FieldFrame {}
-                    contentItem: Text { text: docSection.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter }
-                    onCurrentIndexChanged: {
-                        if (currentIndex >= 0 && currentIndex < root.sections.length)
-                            root.draft._sectionId = root.sections[currentIndex].id;
+                    // Only a pick by the user writes the draft. The field is
+                    // built once with the editor and was put on its section
+                    // only then (Component.onCompleted), so every later
+                    // "+ Add" showed the first section whatever section it
+                    // was pressed in (PERO-2).
+                    onActivated: (index) => {
+                        if (index >= 0 && index < root.sections.length)
+                            root.draft._sectionId = root.sections[index].id;
                     }
-                    Component.onCompleted: {
+                    function sync() {
                         const cur = root.draft._sectionId || root.sectionId;
+                        let at = -1;
                         for (let i = 0; i < root.sections.length; i++)
-                            if (root.sections[i].id === cur) { currentIndex = i; break; }
+                            if (root.sections[i].id === cur) { at = i; break; }
+                        // No section named: the first one, as before, and
+                        // the draft says so too, so what is shown is saved.
+                        if (at < 0 && root.isNew && root.sections.length > 0) {
+                            at = 0;
+                            if (root.draft) root.draft._sectionId = root.sections[0].id;
+                        }
+                        currentIndex = at;
                     }
+                    Connections {
+                        target: root
+                        function onDraftChanged() { docSection.sync(); }
+                        function onSectionsChanged() { docSection.sync(); }
+                    }
+                    Component.onCompleted: sync()
                 }
             }
         }
@@ -195,11 +214,9 @@ Popup {
                     text: root.draft.title || ""
                     onTextChanged: root.draft.title = text
                 }
-                ComboBox {
+                AppComboBox {
                     Layout.fillWidth: true
                     model: ["sh", "cpp", "py", "js", "yaml", "text"]
-                    background: FieldFrame {}
-                    contentItem: Text { text: parent.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter }
                     currentIndex: {
                         const idx = ["sh","cpp","py","js","yaml","text"].indexOf(root.draft.lang || "sh");
                         return Math.max(0, idx);
@@ -221,6 +238,7 @@ Popup {
                 Layout.fillWidth: true; Layout.preferredHeight: 240
                 TextArea {
                     id: codeArea
+                    ContextMenu.menu: TextEditMenu { editor: codeArea }
                     text: root.draft.code || ""
                     onTextChanged: root.draft.code = text
                     wrapMode: TextEdit.NoWrap
@@ -500,6 +518,8 @@ Popup {
     }
 
     component FormField: TextField {
+        id: formFieldRoot
+        ContextMenu.menu: TextEditMenu { editor: formFieldRoot }
         property bool mono: false
         Layout.fillWidth: true
         color: Theme.text

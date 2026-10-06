@@ -686,6 +686,52 @@ TEST_F(IntAudit, JiraMoveTheWorkflowCannotMake_IsRefusedOnTheDrop) {
   EXPECT_TRUE(app_->canTransitionStatus(QStringLiteral("jira-HT-11"), QStringLiteral("review")));
 }
 
+// ── Audit 2026-09-30-1 INT-4: the guard survives a successful push ──
+
+TEST_F(IntAudit, JiraGuard_AfterAPush_KnowsTheMovesOutOfTheNewStatus) {
+  heap::testing::FakeHttpServer jira;
+  jira.route("GET /rest/api/2/serverInfo", {200, R"({"deploymentType":"Cloud"})", {}});
+  jira.route("GET /rest/api/3/issue/HT-13/transitions", {200, R"({"transitions":[{"id":"21","to":{"name":"In Progress"}}]})", {}});
+  jira.route("POST /rest/api/3/issue/HT-13/transitions", {204, "", {}});
+  app_->setIntegrationSecret(QStringLiteral("jira"), QStringLiteral("token"), QStringLiteral("tok"));
+  writeIntegrationConfig(QStringLiteral("jira"),
+                         QJsonObject{{QStringLiteral("connected"), true},
+                                     {QStringLiteral("baseUrl"), jira.base()},
+                                     {QStringLiteral("email"), QStringLiteral("me@example.com")}});
+  const auto pulled = [&jira](const QString& key, const QString& status, const QStringList& transitions) {
+    ExternalTask e;
+    e.providerId = QStringLiteral("jira");
+    e.externalId = key;
+    e.url = jira.base() + QStringLiteral("/browse/") + key;
+    e.title = key;
+    e.status = status;
+    e.project = QStringLiteral("HT");
+    e.issueType = QStringLiteral("Task");
+    e.transitionsKnown = true;
+    e.transitions = transitions;
+    return e;
+  };
+  // HT-14 already sits in "In Progress": the pull saw what that status leads to.
+  app_->mergeExternalTasks(QStringLiteral("jira"),
+                           QStringLiteral("jira-"),
+                           {pulled(QStringLiteral("HT-13"), QStringLiteral("To Do"), {QStringLiteral("In Progress")}),
+                            pulled(QStringLiteral("HT-14"), QStringLiteral("In Progress"), {QStringLiteral("Done")})},
+                           true);
+  ASSERT_NE(task("jira-HT-13"), nullptr);
+
+  app_->moveTask(QStringLiteral("jira-HT-13"), QStringLiteral("prog"));
+  ASSERT_TRUE(heap::testing::waitUntil([this]() {
+    return task("jira-HT-13")->externalMeta.status == QStringLiteral("In Progress");
+  })) << "the push never went through";
+  EXPECT_TRUE(task("jira-HT-13")->externalMeta.unsyncedStatus.isEmpty());
+
+  // Straight on to a column "In Progress" has no transition to: refused on the drop.
+  EXPECT_FALSE(app_->canTransitionStatus(QStringLiteral("jira-HT-13"), QStringLiteral("review")));
+  app_->moveTask(QStringLiteral("jira-HT-13"), QStringLiteral("review"));
+  EXPECT_EQ(task("jira-HT-13")->status, QStringLiteral("prog"));
+  EXPECT_TRUE(app_->canTransitionStatus(QStringLiteral("jira-HT-13"), QStringLiteral("done")));
+}
+
 // ── Audit 2026-09-30-1 INT-1/2/3/7: where a status push goes, and what it leaves ──
 
 class TrackerPush : public IntAudit {

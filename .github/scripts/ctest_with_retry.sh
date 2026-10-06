@@ -43,4 +43,13 @@ if [[ $status == 0 ]]; then
   fi
   exit 0
 fi
+
+# heap_qml_tests also writes its results to a file (see tests/CMakeLists.txt),
+# since its stdout is lost on Windows; name the failing cases from there.
+qml_results="$dir/heap_qml_tests.txt"
+if [[ -f $qml_results ]] && grep -q '^FAIL!' "$qml_results"; then
+  echo "::group::heap_qml_tests failures"
+  grep -A4 '^FAIL!' "$qml_results"
+  echo "::endgroup::"
+fi
 exit "$status"

@@ -120,10 +120,10 @@ bool AppController::passesFilter_(
     return false;
   }
   const QString free = q.freeText();
-  if(!free.isEmpty() && !m_tasks.data(m_tasks.index(row, 0), TaskModel::SearchTextRole).toString().contains(free)) {
+  if(!free.isEmpty() && !m_tasks.searchTextAt(row).contains(free)) {
     return false;
   }
-  return !q.isQuery() || q.matches(t);
+  return !q.isQuery() || q.matches(t, m_tasks.searchTextAt(row));
 }
 
 QVariantMap AppController::filteredCounts(

@@ -249,7 +249,7 @@ bool TaskFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex& sourceP
     if(!m_searchText.isEmpty() && !tasks->searchTextAt(sourceRow).contains(m_searchText)) {
       return false;
     }
-    return !m_query.isQuery() || m_query.matches(t);
+    return !m_query.isQuery() || m_query.matches(t, tasks->searchTextAt(sourceRow));
   }
 
   const QModelIndex idx = src->index(sourceRow, 0, sourceParent);

@@ -853,6 +853,7 @@ Popup {
                 // ── Title ──
                 TextField {
                     id: titleField
+                    ContextMenu.menu: TextEditMenu { editor: titleField }
                     objectName: "te-title"
                     Layout.fillWidth: true
                     Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
@@ -874,7 +875,7 @@ Popup {
                     FieldLabel { text: I18n.t("editor.label.status").toUpperCase() }
                     FieldLabel { text: I18n.t("editor.label.priority").toUpperCase() }
                     FieldLabel { text: I18n.t("editor.label.deadline").toUpperCase() }
-                    ComboBox {
+                    AppComboBox {
                         id: statusBox
                         objectName: "te-status"
                         // The label above is a separate Text; a screen
@@ -897,31 +898,15 @@ Popup {
                             }
                         }
                         model: root.statusNames()
-                        background: FieldBg {}
-                        contentItem: Text {
-                            text: statusBox.displayText
-                            color: Theme.text
-                            font.pixelSize: Theme.fsMd
-                            leftPadding: Theme.spLg
-                            verticalAlignment: Text.AlignVCenter
-                            elide: Text.ElideRight
-                        }
                     }
-                    ComboBox {
+                    AppComboBox {
                         id: priBox
                         objectName: "te-priority"
                         Accessible.name: I18n.t("editor.label.priority")
                         Layout.preferredWidth: 88
                         model: ["P0", "P1", "P2", "P3"]
-                        background: FieldBg {}
-                        contentItem: Text {
-                            text: priBox.displayText
-                            color: Theme.priorityColor(priBox.displayText)
-                            font.pixelSize: Theme.fsMd
-                            font.weight: Font.DemiBold
-                            leftPadding: Theme.spLg
-                            verticalAlignment: Text.AlignVCenter
-                        }
+                        textColor: Theme.priorityColor(priBox.displayText)
+                        textWeight: Font.DemiBold
                     }
                     RowLayout {
                         Layout.fillWidth: true
@@ -930,6 +915,7 @@ Popup {
                         spacing: Theme.spSm
                         TextField {
                             id: deadlineField
+                            ContextMenu.menu: TextEditMenu { editor: deadlineField }
                             Layout.fillWidth: true
                             placeholderText: I18n.t("editor.ph.deadline")
                             font.family: Theme.fontMono
@@ -1069,6 +1055,7 @@ Popup {
                         clip: true
                         TextArea {
                             id: descField
+                            ContextMenu.menu: TextEditMenu { editor: descField }
                             objectName: "te-desc"
                             placeholderText: I18n.t("editor.ph.desc")
                             wrapMode: TextEdit.Wrap
@@ -1290,6 +1277,7 @@ Popup {
                     FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.branch").toUpperCase() }
                     TextField {
                         id: idField
+                        ContextMenu.menu: TextEditMenu { editor: idField }
                         objectName: "te-id"
                         Layout.fillWidth: true
                         Layout.preferredWidth: 1
@@ -1315,6 +1303,7 @@ Popup {
                     }
                     TextField {
                         id: branchField
+                        ContextMenu.menu: TextEditMenu { editor: branchField }
                         Layout.fillWidth: true
                         Layout.preferredWidth: 1
                         placeholderText: "fix/..."
@@ -1328,6 +1317,7 @@ Popup {
                     FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.recurrence").toUpperCase() }
                     TextField {
                         id: scheduledField
+                        ContextMenu.menu: TextEditMenu { editor: scheduledField }
                         Layout.fillWidth: true
                         Layout.preferredWidth: 1
                         placeholderText: I18n.t("editor.ph.deadline")
@@ -1336,7 +1326,7 @@ Popup {
                         color: Theme.text
                         placeholderTextColor: Theme.textDim
                     }
-                    ComboBox {
+                    AppComboBox {
                         id: recurBox
                         objectName: "te-recurrence"
                         Layout.fillWidth: true
@@ -1365,20 +1355,13 @@ Popup {
                                 I18n.t("editor.recur.everyFri"), I18n.t("editor.recur.everySat"),
                                 I18n.t("editor.recur.everySun"), I18n.t("editor.recur.monthly")]
                                .concat(_extra.length > 0 ? [_label(_extra)] : [])
-                        background: FieldBg {}
-                        contentItem: Text {
-                            text: recurBox.displayText
-                            color: Theme.text
-                            font.pixelSize: Theme.fsMd
-                            leftPadding: Theme.spLg
-                            verticalAlignment: Text.AlignVCenter
-                        }
                     }
 
                     FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.labels").toUpperCase() }
                     FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.estimate").toUpperCase() }
                     TextField {
                         id: labelsField
+                        ContextMenu.menu: TextEditMenu { editor: labelsField }
                         Layout.fillWidth: true
                         Layout.preferredWidth: 1
                         placeholderText: "backlog, infra"
@@ -1392,6 +1375,7 @@ Popup {
                         spacing: Theme.spMd
                         TextField {
                             id: estimateField
+                            ContextMenu.menu: TextEditMenu { editor: estimateField }
                             Layout.fillWidth: true
                             placeholderText: "45"
                             font.family: Theme.fontMono

@@ -140,6 +140,35 @@ TestCase {
         panel.close();
     }
 
+    // SHELL-5: Space is recorded as "Space". It used to come out of ev.text as
+    // "Ctrl+Alt+ ", which stored nothing and left the action unbound.
+    function test_capture_space_records_space() {
+        const panel = openPanel();
+        tryVerify(function () { return field(panel, "view.archive") !== null; }, 2000, "no chip for view.archive");
+        field(panel, "view.archive").forceActiveFocus();
+        keyClick(Qt.Key_Return);
+        keyClick(Qt.Key_Space, Qt.ControlModifier | Qt.AltModifier);
+        keyClick(Qt.Key_Return);
+        compare(AppController.shortcutFor("view.archive"), "Ctrl+Alt+Space");
+        AppController.resetAllShortcuts();
+        panel.close();
+    }
+
+    // SHELL-4: Ctrl+P stays the palette's whatever the catalog says; taking it
+    // made both dead. The rebind is refused and the old key kept.
+    function test_builtin_key_is_not_taken() {
+        const panel = openPanel();
+        const before = AppController.shortcutFor("task.new");
+        tryVerify(function () { return field(panel, "task.new") !== null; }, 2000, "no chip for task.new");
+        field(panel, "task.new").forceActiveFocus();
+        keyClick(Qt.Key_Return);
+        keyClick(Qt.Key_P, Qt.ControlModifier);
+        keyClick(Qt.Key_Return);
+        compare(AppController.shortcutFor("task.new"), before);
+        AppController.resetAllShortcuts();
+        panel.close();
+    }
+
     // UX-4: "↺ all" asks first — one press arms, the second resets.
     function test_reset_all_needs_a_second_press() {
         const panel = openPanel();

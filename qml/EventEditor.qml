@@ -277,6 +277,13 @@ Popup {
         if (isNaN(h) || isNaN(m) || m > 59) return NaN;
         return Math.max(0, Math.min(24, h + m / 60.0));
     }
+    // The end field: midnight on the event's own day is its end, 24:00 —
+    // "12:00am" (how 12h shows that end) and "00:00" read as 0, which is
+    // before any start, and the event could not be saved (TIME-22).
+    function parseEndStrict(s) {
+        const e = root.parseHourStrict(s);
+        return (e === 0 && root._spanDays() === 0) ? 24 : e;
+    }
     // The lenient form the rest of the editor used to use: 0 for anything
     // that is not a time.
     function parseHour(s) {
@@ -358,7 +365,7 @@ Popup {
             title: titleField.text.trim(),
             type: root.types[typeBox.currentIndex],
             start: root.parseHour(startField.text),
-            end: root.parseHour(endField.text),
+            end: isNaN(root.parseEndStrict(endField.text)) ? 0 : root.parseEndStrict(endField.text),
             attendees: root._cleanAttendees(attField.text),
             date: root.pickedDate,
             endDate: root.pickedEndDate,
@@ -384,7 +391,7 @@ Popup {
         }
         if (!root.allDay) {
             const s = root.parseHourStrict(startField.text);
-            const e = root.parseHourStrict(endField.text);
+            const e = root.parseEndStrict(endField.text);
             if (isNaN(s)) { startField.forceActiveFocus(); return I18n.t("editor.err.time").arg(startField.text); }
             if (isNaN(e)) { endField.forceActiveFocus(); return I18n.t("editor.err.time").arg(endField.text); }
             // An end at or before the start on the same day used to save as
@@ -466,6 +473,8 @@ Popup {
         font.letterSpacing: 1
     }
     component Field: TextField {
+        id: fieldRoot
+        ContextMenu.menu: TextEditMenu { editor: fieldRoot }
         background: FieldFrame {}
         color: Theme.text
         placeholderTextColor: Theme.textDim
@@ -532,12 +541,10 @@ Popup {
             FieldLabel { text: I18n.t("editor.label.eventType").toUpperCase() }
             FieldLabel { text: I18n.t("editor.label.attendees").toUpperCase() }
 
-            ComboBox {
+            AppComboBox {
                 id: typeBox
                 Layout.fillWidth: true
                 model: root.types.map(t => I18n.t("event.type." + t))
-                background: FieldFrame {}
-                contentItem: Text { text: typeBox.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter }
             }
             Field {
                 id: attField
@@ -831,7 +838,7 @@ Popup {
                 visible: root._kind() !== "never" && root._kind() !== "custom"
                 text: I18n.t("repeat.ends").toUpperCase()
             }
-            ComboBox {
+            AppComboBox {
                 id: repeatBox
                 objectName: "event-repeat"
                 Layout.fillWidth: true
@@ -839,8 +846,6 @@ Popup {
                 model: [I18n.t("repeat.never"), I18n.t("repeat.daily"), I18n.t("repeat.weekdays"), I18n.t("repeat.weekly"),
                         I18n.t("repeat.biweekly"), I18n.t("repeat.monthly"), I18n.t("repeat.yearly"),
                         I18n.t("repeat.custom")]
-                background: FieldFrame {}
-                contentItem: Text { text: repeatBox.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter }
                 onActivated: {
                     // A weekly rule starts from the event's own weekday.
                     if ((root._kind() === "weekly" || root._kind() === "biweekly") && root.repeatDays.length === 0
@@ -854,7 +859,7 @@ Popup {
                 visible: root._kind() !== "never" && root._kind() !== "custom"
                 Layout.fillWidth: true
                 spacing: Theme.spSm
-                ComboBox {
+                AppComboBox {
                     id: endBox
                     objectName: "event-repeat-end"
                     Layout.fillWidth: true
@@ -867,8 +872,6 @@ Popup {
                             root.untilDate = new Date(d.getFullYear(), d.getMonth() + 1, d.getDate());
                         }
                     }
-                    background: FieldFrame {}
-                    contentItem: Text { text: endBox.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
                 }
                 Field {
                     id: countField
@@ -1008,13 +1011,11 @@ Popup {
                 Layout.fillWidth: true
                 placeholderText: I18n.t("event.ph.context")
             }
-            ComboBox {
+            AppComboBox {
                 id: reminderBox
                 objectName: "event-reminder"
                 Layout.fillWidth: true
                 model: root.reminderChoices.map(v => root._reminderLabel(v))
-                background: FieldFrame {}
-                contentItem: Text { text: reminderBox.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
             }
         }
 
@@ -1027,6 +1028,7 @@ Popup {
                 Layout.preferredHeight: 64
                 TextArea {
                     id: notesField
+                    ContextMenu.menu: TextEditMenu { editor: notesField }
                     objectName: "event-notes"
                     readOnly: root.readOnly
                     placeholderText: I18n.t("event.ph.notes")

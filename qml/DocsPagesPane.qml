@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic as QQC
@@ -53,6 +54,62 @@ Item {
         for (const k in root.expanded) next[k] = root.expanded[k];
         next[id] = !next[id];
         root.expanded = next;
+    }
+
+    // Where a page sits: its parent and its place among that parent's
+    // children. The model is flat, so the parent is looked up by row.
+    function _parentOf(id) {
+        const m = AppController.docPages;
+        const row = m.indexOfId(id);
+        return row < 0 ? "" : String(root._data(m.index(row, 0), "parentId") || "");
+    }
+    function _siblingIndex(siblings, id) {
+        for (let i = 0; i < siblings.length; i++)
+            if (siblings[i].id === id) return i;
+        return -1;
+    }
+
+    // Which of the four moves make sense for a page, so the menu can grey out
+    // the rest: up/down among its siblings, into the sibling above it (as that
+    // page's last child), out to sit just below its parent.
+    function canMove(id, dir) {
+        const _r = root.rev;
+        const parentId = root._parentOf(id);
+        const sibs = AppController.docPageChildren(parentId);
+        const i = root._siblingIndex(sibs, id);
+        if (i < 0) return false;
+        if (dir === "up" || dir === "in") return i > 0;
+        if (dir === "down") return i < sibs.length - 1;
+        if (dir === "out") return parentId.length > 0;
+        return false;
+    }
+
+    // KNOW-20: moving a page, from the row menu or with Ctrl+arrows on the
+    // tree (the same keys that reorder saved views in the rail). Each move is
+    // one moveDocPage call, which refuses a move into the page's own subtree.
+    function movePage(id, dir) {
+        if (!root.canMove(id, dir)) return;
+        const parentId = root._parentOf(id);
+        const sibs = AppController.docPageChildren(parentId);
+        const i = root._siblingIndex(sibs, id);
+        if (dir === "up") {
+            AppController.moveDocPage(id, parentId, sibs[i - 1].id);
+        } else if (dir === "down") {
+            AppController.moveDocPage(id, parentId, i + 2 < sibs.length ? sibs[i + 2].id : "");
+        } else if (dir === "in") {
+            const newParent = sibs[i - 1].id;
+            // Open the new parent, or the page vanishes from the tree.
+            if (!root.isExpanded(newParent)) root.toggle(newParent);
+            AppController.moveDocPage(id, newParent, "");
+        } else if (dir === "out") {
+            const grand = root._parentOf(parentId);
+            const up = AppController.docPageChildren(grand);
+            const j = root._siblingIndex(up, parentId);
+            AppController.moveDocPage(id, grand, j >= 0 && j + 1 < up.length ? up[j + 1].id : "");
+        }
+        // Keep the keyboard on the page that moved.
+        for (let r = 0; r < root.rows.length; r++)
+            if (root.rows[r].id === id) { tree.currentIndex = r; break; }
     }
 
     // Flat rows with a depth, which is what a ListView can draw and what the
@@ -170,6 +227,7 @@ Item {
 
                 QQC.TextField {
                     id: pageFilter
+                    QQC.ContextMenu.menu: TextEditMenu { editor: pageFilter }
                     objectName: "docpage-filter"
                     Layout.fillWidth: true
                     placeholderText: I18n.t("docs.filterPages")
@@ -209,6 +267,17 @@ Item {
                     Keys.onPressed: (event) => {
                         if (tree.currentIndex < 0) return;
                         const d = root.rows[tree.currentIndex];
+                        if (event.modifiers & Qt.ControlModifier) {
+                            const dir = event.key === Qt.Key_Up ? "up"
+                                      : event.key === Qt.Key_Down ? "down"
+                                      : event.key === Qt.Key_Right ? "in"
+                                      : event.key === Qt.Key_Left ? "out" : "";
+                            if (dir.length > 0) {
+                                root.movePage(d.id, dir);
+                                event.accepted = true;
+                            }
+                            return;
+                        }
                         if (event.key === Qt.Key_Menu || (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier))) {
                             tree.menuRequested();
                             event.accepted = true;
@@ -315,6 +384,31 @@ Item {
                             AppMenuItem {
                                 text: I18n.t("docs.renamePage")
                                 onTriggered: renamePagePopup.openFor(pageRow.modelData.id, pageRow.modelData.title)
+                            }
+                            AppMenuSeparator {}
+                            AppMenuItem {
+                                objectName: "docpage-move-up"
+                                text: I18n.t("docs.page.moveUp")
+                                enabled: root.canMove(pageRow.modelData.id, "up")
+                                onTriggered: root.movePage(pageRow.modelData.id, "up")
+                            }
+                            AppMenuItem {
+                                objectName: "docpage-move-down"
+                                text: I18n.t("docs.page.moveDown")
+                                enabled: root.canMove(pageRow.modelData.id, "down")
+                                onTriggered: root.movePage(pageRow.modelData.id, "down")
+                            }
+                            AppMenuItem {
+                                objectName: "docpage-move-in"
+                                text: I18n.t("docs.page.moveIn")
+                                enabled: root.canMove(pageRow.modelData.id, "in")
+                                onTriggered: root.movePage(pageRow.modelData.id, "in")
+                            }
+                            AppMenuItem {
+                                objectName: "docpage-move-out"
+                                text: I18n.t("docs.page.moveOut")
+                                enabled: root.canMove(pageRow.modelData.id, "out")
+                                onTriggered: root.movePage(pageRow.modelData.id, "out")
                             }
                             AppMenuSeparator {}
                             AppMenuItem {

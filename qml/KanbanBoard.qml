@@ -211,7 +211,36 @@ Item {
     property string _selAnchor: ""
     property var _selBase: []
     property bool _extending: false
-    onCursorTaskIdChanged: if (!root._extending) root._selAnchor = ""
+    onCursorTaskIdChanged: {
+        if (!root._extending) root._selAnchor = "";
+        if (root.cursorVisible) Qt.callLater(root.revealCursor);
+    }
+    onCursorVisibleChanged: if (root.cursorVisible) Qt.callLater(root.revealCursor)
+
+    // The board scrolls to the card the keyboard moved to (VISU-19, PERA-7):
+    // the cursor walked into a column past the right edge and the board
+    // stayed put, leaving 60px of the card on screen. Sideways, the whole
+    // column comes into view; down the column, the card does.
+    function revealCursor() {
+        if (!root.cursorVisible || !root.cursorTaskId) return;
+        const cols = _visibleByColumn();
+        const pos = _cursorPos(cols);
+        if (!pos) return;
+        const col = colRepeater.itemAt(pos.col);
+        if (!col) return;
+        // Down the column: _cardItem() scrolls the card's list to it.
+        root._cardItem(root.cursorTaskId);
+        const maxX = Math.max(0, hscroll.contentWidth - hscroll.width);
+        let x = hscroll.contentX;
+        if (col.x < x) x = col.x;
+        else if (col.x + col.width > x + hscroll.width) x = col.x + col.width - hscroll.width;
+        x = Math.max(0, Math.min(maxX, x));
+        if (x !== hscroll.contentX) {
+            outerAnim.stop();
+            colScrollAnim.stop();
+            hscroll.contentX = x;
+        }
+    }
     function _placeCursor(id) {
         root._extending = true;
         root.cursorTaskId = id;
@@ -707,12 +736,17 @@ Item {
                                         onDoubleClicked: { col.renaming = true; renameField.forceActiveFocus(); renameField.selectAll() }
                                         cursorShape: Qt.IBeamCursor
                                         ToolTip.visible: containsMouse
-                                        ToolTip.text: I18n.t("kanban.tip.rename")
+                                        // A name cut short is given whole here
+                                        // (VISU-6), ahead of the rename hint.
+                                        ToolTip.text: colName.truncated
+                                            ? col.statusName + " · " + I18n.t("kanban.tip.rename")
+                                            : I18n.t("kanban.tip.rename")
                                         ToolTip.delay: 500
                                         hoverEnabled: true
                                     }
                                     TextField {
                                         id: renameField
+                                        ContextMenu.menu: TextEditMenu { editor: renameField }
                                         visible: col.renaming
                                         anchors.fill: parent
                                         text: col.statusName
@@ -1253,6 +1287,7 @@ Item {
             }
             TextField {
                 id: nameField
+                ContextMenu.menu: TextEditMenu { editor: nameField }
                 objectName: "add-column-name"
                 Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
                 placeholderText: I18n.t("kanban.colName.ph")
@@ -1587,6 +1622,7 @@ Item {
             spacing: Theme.spMd
             TextField {
                 id: wipField
+                ContextMenu.menu: TextEditMenu { editor: wipField }
                 objectName: "wip-field"
                 Layout.fillWidth: true
                 Layout.preferredWidth: 220
@@ -1657,6 +1693,7 @@ Item {
             spacing: Theme.spMd
             TextField {
                 id: archiveField
+                ContextMenu.menu: TextEditMenu { editor: archiveField }
                 objectName: "archive-field"
                 Layout.fillWidth: true
                 Layout.preferredWidth: 220
