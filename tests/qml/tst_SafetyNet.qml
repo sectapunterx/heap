@@ -124,9 +124,13 @@ TestCase {
 
     function test_the_hint_names_where_the_error_came_up() {
         safetyOn({ seenBefore: true });
-        const id = makeTask("safety probe crash", "Saw KeyError: 'qml_probe_token_zz' in the worker after deploy.");
+        // A token of its own each run: the test profile outlives a run, and a
+        // task left by an earlier one carrying the same error matched after
+        // this run's own task was excluded.
+        const token = "qml_probe_token_" + Date.now().toString(36);
+        const id = makeTask("safety probe crash", "Saw KeyError: '" + token + "' in the worker after deploy.");
         const hint = createTemporaryQmlObject('import TodoCpp; SeenBeforeHint { width: 400 }', host);
-        hint.text = "Traceback (most recent call last):\n  File \"w.py\", line 9\nKeyError: 'qml_probe_token_zz'";
+        hint.text = "Traceback (most recent call last):\n  File \"w.py\", line 9\nKeyError: '" + token + "'";
         tryVerify(() => hint.shown, 3000);
         compare(hint.hit.id, id);
         verify(hint.visible);

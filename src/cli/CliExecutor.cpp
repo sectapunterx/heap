@@ -1,6 +1,7 @@
 #include "AppController.h"
 
 #include "cli/CliExecutor.h"
+#include "cli/CliQuery.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -164,7 +165,7 @@ Response open(AppController& c, const Request& req) {
   const QString id = p.tasks.at(ref.task).id;
   // Opening a task of another profile is going there.
   const ProfileScope scope(c, p.id, /*restore=*/false);
-  emit c.openTaskRequested(id);
+  emit c.openTaskRequested(id, p.id);
   Response r;
   r.out = req.json ? QString::fromUtf8(QJsonDocument(QJsonObject{{QStringLiteral("id"), id}}).toJson(QJsonDocument::Compact)) + QChar('\n')
                    : QStringLiteral("Opened %1\n").arg(id);
@@ -191,6 +192,26 @@ Response execute(AppController& controller, const Request& request, const QDateT
   }
   Response r;
   r.out = helpText();
+  return r;
+}
+
+Response applyHeadless(const Request& request, const QDateTime& now) {
+  if(const QString unusable = unusableState(); !unusable.isEmpty()) {
+    return failure(kExitData, QStringLiteral("nothing changed: ") + unusable);
+  }
+  Response r;
+  AppController controller;
+  if(controller.storageState() != QLatin1String("ok")) {
+    r.exitCode = kExitData;
+    r.err = QStringLiteral("heap: nothing changed: %1\n").arg(controller.storageMessage());
+    return r;
+  }
+  r = execute(controller, request, now);
+  controller.flushSave();
+  if(controller.storageState() != QLatin1String("ok")) {
+    r.exitCode = kExitData;
+    r.err += QStringLiteral("heap: the change was not saved: %1\n").arg(controller.storageMessage());
+  }
   return r;
 }
 
