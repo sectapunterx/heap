@@ -211,6 +211,9 @@ Item {
             gitlab: ({ connected: false, host: "", projectId: "" })
         },
         data: { autoBackup: true, backupInterval: "daily" },
+        // Off until switched on (APP-177); the volume is 0–100. The meeting
+        // chimes (APP-178) ring at these minutes before, latest first.
+        sound: { enabled: false, volume: 55, meetingChimes: true, meetingChimeMinutes: [15, 10, 5] },
         updates: { autoCheck: true },
         git: {
             watchedRepos: [],
@@ -1118,6 +1121,8 @@ Item {
         property real step: 1
         property real value: 0
         signal moved(real value)
+        // The handle let go of after a drag or a click on the track.
+        signal released()
         Slider {
             id: sliderCtl
             Layout.preferredWidth: 220
@@ -1125,6 +1130,7 @@ Item {
             from: sliderRow.min; to: sliderRow.max; stepSize: sliderRow.step
             value: sliderRow.value
             onMoved: sliderRow.moved(value)
+            onPressedChanged: if (!pressed) sliderRow.released()
             // Tab reaches it and ←/→ move it (Slider's own keys); the handle
             // shows the focus ring while it has the keyboard.
             focusPolicy: Qt.StrongFocus
@@ -1380,8 +1386,8 @@ Item {
                     label: I18n.t("settings.appearance.cursorColor")
                     hint: I18n.t("settings.appearance.cursorColor.hint")
                     value: Theme.cursorColorPick
-                    // Straight into the settings JSON, like the completion
-                    // sound below: no unqualified `root` from in here.
+                    // Straight into the settings JSON: no unqualified `root`
+                    // from in here.
                     onSelected: (color) => {
                         let s = {};
                         try { s = JSON.parse(AppController.appSettingsJson || "{}") || {}; } catch (e) { s = {}; }
@@ -1408,22 +1414,6 @@ Item {
                     hint: I18n.t("settings.appearance.reducedMotion.hint")
                     checked: !!(root.settings.appearance && root.settings.appearance.reducedMotion)
                     onToggled: (checked) => root.set("appearance", "reducedMotion", checked)
-                }
-                // Opt-in tick when a task moves to Done (APP-167); played by
-                // AppController.moveTask, independent of reduced motion.
-                // Reads and writes the settings JSON directly (this view
-                // reloads on the change), so no unqualified `root` access.
-                SwitchRow {
-                    objectName: "settings-completion-sound"
-                    label: I18n.t("settings.appearance.completionSound")
-                    hint: I18n.t("settings.appearance.completionSound.hint")
-                    checked: !!Theme._appearance.completionSound
-                    onToggled: (checked) => {
-                        let s = {};
-                        try { s = JSON.parse(AppController.appSettingsJson || "{}") || {}; } catch (e) { s = {}; }
-                        s.appearance = Object.assign({}, s.appearance, { completionSound: checked });
-                        AppController.appSettingsJson = JSON.stringify(s);
-                    }
                 }
                 // Only where there is a tray to close into. Three states,
                 // because there are three: a switch showed ON while the
@@ -1465,6 +1455,87 @@ Item {
                     onToggled: (checked) => {
                         AppController.setAutostart(!!startAtLoginRow._os.enabled, checked);
                         startAtLoginRow._os = AppController.autostartState();
+                    }
+                }
+            }
+            // The sound palette (APP-177): a task closed, an undo, a refused
+            // action — never navigation, typing or hover. Off by default;
+            // quiet hours and focus mode keep it silent (AppController).
+            // Reads and writes the settings JSON directly (this view reloads
+            // on the change), so no unqualified `root` from in here.
+            SettingsGroup {
+                id: soundCard
+                objectName: "settings-sound-card"
+                title: I18n.t("settings.sound.group")
+                readonly property var sound: {
+                    try { return (JSON.parse(AppController.appSettingsJson || "{}") || {}).sound || ({}); } catch (e) { return ({}); }
+                }
+                readonly property bool on: soundCard.sound.enabled === true
+                function setSound(key, value) {
+                    let s = {};
+                    try { s = JSON.parse(AppController.appSettingsJson || "{}") || {}; } catch (e) { s = {}; }
+                    const next = Object.assign({}, s.sound);
+                    next[key] = value;
+                    s.sound = next;
+                    AppController.appSettingsJson = JSON.stringify(s);
+                }
+                // The meeting chimes' moments (APP-178): up to three whole
+                // minutes from 1 to 120, latest first — the order the C++
+                // side reads them in.
+                function parseChimeMinutes(text) {
+                    const out = [];
+                    for (const part of String(text).split(",")) {
+                        const m = parseInt(part.trim(), 10);
+                        if (m >= 1 && m <= 120 && out.indexOf(m) < 0) out.push(m);
+                    }
+                    out.sort((a, b) => b - a);
+                    return out.slice(0, 3);
+                }
+                function chimeMinutesText(list) {
+                    return (Array.isArray(list) && list.length > 0 ? list : [15, 10, 5]).join(", ");
+                }
+                SwitchRow {
+                    objectName: "settings-sound-enabled"
+                    label: I18n.t("settings.sound.enabled")
+                    hint: I18n.t("settings.sound.enabled.hint")
+                    checked: soundCard.on
+                    onToggled: (checked) => soundCard.setSound("enabled", checked)
+                }
+                // Letting go of the slider plays the "done" sound at the new
+                // level, so the number has something to go by.
+                SliderRow {
+                    id: soundVolumeRow
+                    objectName: "settings-sound-volume"
+                    visible: soundCard.on
+                    label: I18n.t("settings.sound.volume")
+                    min: 0; max: 100; step: 5
+                    value: typeof soundCard.sound.volume === "number" ? soundCard.sound.volume : 55
+                    onMoved: (value) => soundCard.setSound("volume", Math.round(value))
+                    onReleased: AppController.previewSound(Math.round(soundVolumeRow.value))
+                }
+                // Three melodies as a meeting comes closer (APP-178): two
+                // chords, a rise, a call at the last moment.
+                SwitchRow {
+                    objectName: "settings-sound-meeting"
+                    visible: soundCard.on
+                    label: I18n.t("settings.sound.meeting")
+                    hint: I18n.t("settings.sound.meeting.hint")
+                    checked: soundCard.sound.meetingChimes !== false
+                    onToggled: (checked) => soundCard.setSound("meetingChimes", checked)
+                }
+                TextRow {
+                    id: chimeMinutesRow
+                    objectName: "settings-sound-meeting-minutes"
+                    visible: soundCard.on && soundCard.sound.meetingChimes !== false
+                    label: I18n.t("settings.sound.meetingMinutes")
+                    hint: chimeMinutesRow.invalid ? I18n.t("settings.sound.meetingMinutes.invalid") : I18n.t("settings.sound.meetingMinutes.hint")
+                    placeholder: "15, 10, 5"
+                    fieldWidth: 120
+                    validator: RegularExpressionValidator { regularExpression: /^\s*\d{1,3}(\s*,\s*\d{1,3}){0,2}\s*$/ }
+                    value: soundCard.chimeMinutesText(soundCard.sound.meetingChimeMinutes)
+                    onCommitted: (text) => {
+                        const list = soundCard.parseChimeMinutes(text);
+                        if (list.length > 0) soundCard.setSound("meetingChimeMinutes", list);
                     }
                 }
             }
