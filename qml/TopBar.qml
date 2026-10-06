@@ -153,7 +153,7 @@ Rectangle {
                         font.family: Theme.fontUi
                         font.features: Theme.tabularNums
                         font.pixelSize: Theme.fsMd
-                        font.weight: Font.Medium
+                        font.weight: Theme.fwTitle
                         // A long profile name pushed "+ Task" and the panel
                         // toggle off the window.
                         elide: Text.ElideRight
@@ -270,7 +270,7 @@ Rectangle {
                     color: Theme.accentStrong
                     font.family: Theme.fontMono
                     font.pixelSize: Theme.fsMd
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.fwTitle
                 }
                 // ── Live PR state on the focused repo (HEAP-76) ──
                 Rectangle {
@@ -312,7 +312,7 @@ Rectangle {
                         font.family: Theme.fontUi
                         font.features: Theme.tabularNums
                         font.pixelSize: Theme.fsXs
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwTitle
                     }
                     ClickArea {
                         objectName: "topbar-pr-badge"
@@ -355,7 +355,7 @@ Rectangle {
                         font.family: Theme.fontUi
                         font.features: Theme.tabularNums
                         font.pixelSize: Theme.fsXs
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwTitle
                     }
                 }
                 Rectangle {
@@ -371,7 +371,7 @@ Rectangle {
                         text: I18n.t("topbar.git.open")
                         color: openMA.hovered ? Theme.bg : Theme.accentStrong
                         font.pixelSize: Theme.fsXs
-                        font.weight: Font.Medium
+                        font.weight: Theme.fwTitle
                     }
                     ClickArea {
                         id: openMA
@@ -442,7 +442,7 @@ Rectangle {
                     text: I18n.t("immersion.on")
                     color: Theme.accentStrong
                     font.pixelSize: Theme.fsXs
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.fwTitle
                 }
                 Text {
                     objectName: "topbar-immersion-time"
@@ -602,12 +602,7 @@ Rectangle {
                 focus: false
                 closePolicy: QQC.Popup.NoAutoClose
                 visible: seenHint.shown && searchField.text.length > 0
-                background: Rectangle {
-                    radius: Theme.radiusMd
-                    color: Theme.panel
-                    border.color: Theme.border
-                    border.width: 1
-                }
+                background: PopupSurface {}
                 contentItem: SeenBeforeHint {
                     id: seenHint
                     text: searchField.text
@@ -622,7 +617,9 @@ Rectangle {
         PillButton {
             objectName: "topbar-new-task"
             text: I18n.t("topbar.newTask")
-            primary: true
+            // A quiet button (APP-198): the accent fill was the brightest
+            // spot on every screen. A filled button is only the one that
+            // confirms a dialog.
             shortcutId: "task.new"
             onClicked: root.newTaskRequested()
         }

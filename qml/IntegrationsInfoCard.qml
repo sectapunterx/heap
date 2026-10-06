@@ -45,7 +45,7 @@ Rectangle {
                     text: I18n.t("intinfo.title")
                     color: Theme.text
                     font.pixelSize: Theme.fsLg
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.fwTitle
                 }
             }
             ClickArea {

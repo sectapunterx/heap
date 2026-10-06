@@ -69,7 +69,7 @@ Rectangle {
             color: Theme.text
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
-            font.weight: Font.Medium
+            font.weight: Theme.fwTitle
             rightPadding: Theme.spSm
         }
 

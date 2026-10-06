@@ -43,18 +43,11 @@ Popup {
     property var captured: []
     property string lastCapturedId: ""
 
-    Overlay.modal: Rectangle {
-        color: Theme.scrim
-    }
+    Overlay.modal: ModalScrim {}
     // A press beside the tour ends it like ✕ and Esc do (APP-126).
     Overlay.onPressed: if (PopupStack.isTopmost(root, Overlay.overlay)) root._finish()
 
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
 
     // A hint with the shortcuts as bound now, not as they shipped (DES-15).
     function withKeys(key, ids) {
@@ -164,7 +157,7 @@ Popup {
                 color: Theme.accentStrong
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsSm
-                font.weight: Font.DemiBold
+                font.weight: Theme.fwTitle
             }
             Text {
                 text: chip.fixedLabel.length > 0 ? chip.fixedLabel : AppController.shortcutLabel(chip.sid)
@@ -205,7 +198,7 @@ Popup {
                 text: I18n.t(root.cur.title)
                 color: Theme.text
                 font.pixelSize: Theme.fsXl
-                font.weight: Font.Bold
+                font.weight: Theme.fwHeading
                 elide: Text.ElideRight
             }
 
@@ -370,7 +363,7 @@ Popup {
                         color: Theme.accentStrong
                         font.underline: learnMa.hovered
                         font.pixelSize: Theme.fsMd
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwTitle
                         ClickArea {
                             id: learnMa
                             label: I18n.t("welcome.learnMore")

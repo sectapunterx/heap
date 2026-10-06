@@ -53,12 +53,7 @@ Popup {
     }
     Timer { id: resetAllDisarm; interval: 4000; onTriggered: root.resetAllArmed = false }
 
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: PopupSurface {}
 
     // The cheat-sheet reads by area (APP-166): what works everywhere, then
     // views, the board, the calendar, notes and profiles. The catalogue keeps
@@ -131,11 +126,10 @@ Popup {
                 anchors.leftMargin: Theme.sp2xl; anchors.rightMargin: Theme.spMd
                 spacing: Theme.spMd
                 Text {
-                    text: I18n.t("hotkeys.title").toUpperCase()
-                    color: Theme.textMuted
+                    text: I18n.t("hotkeys.title")
+                    color: Theme.textDim
                     font.pixelSize: Theme.fsSm
-                    font.weight: Font.DemiBold
-                    font.letterSpacing: 1
+                    font.weight: Theme.fwTitle
                 }
                 // `?` opens this list from anywhere outside a text field.
                 Text {
@@ -266,11 +260,10 @@ Popup {
                 objectName: "hotkeys-group-" + row.group
                 anchors.left: parent.left; anchors.leftMargin: Theme.sp2xl
                 anchors.verticalCenter: parent.verticalCenter
-                text: row.group.length > 0 ? I18n.t("hotkeys.group." + row.group).toUpperCase() : ""
-                color: Theme.textMuted
-                font.pixelSize: Theme.fsXs
-                font.weight: Font.DemiBold
-                font.letterSpacing: 0.8
+                text: row.group.length > 0 ? I18n.t("hotkeys.group." + row.group) : ""
+                color: Theme.textDim
+                font.pixelSize: Theme.fsSm
+                font.weight: Theme.fwTitle
             }
             Rectangle {
                 anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
@@ -306,7 +299,7 @@ Popup {
                     text: row.actionLabel
                     color: Theme.text
                     font.pixelSize: Theme.fsMd
-                    font.weight: Font.Medium
+                    font.weight: Theme.fwTitle
                     elide: Text.ElideRight
                     Layout.fillWidth: true
                 }

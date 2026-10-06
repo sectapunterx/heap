@@ -30,7 +30,7 @@ Rectangle {
             color: Theme.text
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
-            font.weight: Font.DemiBold
+            font.weight: Theme.fwTitle
         }
         Rectangle {
             Layout.preferredWidth: 1; Layout.preferredHeight: 18; color: Theme.border
@@ -95,12 +95,7 @@ Rectangle {
         padding: Theme.spMd
         focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
-        background: Rectangle {
-            radius: Theme.radiusLg
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
+        background: PopupSurface {}
         onOpened: { labelField.text = ""; labelField.forceActiveFocus(); }
         function apply(present) {
             const name = labelField.text.trim();

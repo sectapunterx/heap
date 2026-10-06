@@ -354,6 +354,10 @@ qt_add_qml_module(heap_core
         qml/EmptyState.qml
         qml/Motion.js
         qml/IntegrationActivity.qml
+        qml/PopupSurface.qml
+        qml/ModalSurface.qml
+        qml/ModalScrim.qml
+        qml/ElevationShadow.qml
         # ── audit-ux: end ──
         # ── audit-int: begin ──
         # ── audit-int: end ──

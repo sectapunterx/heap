@@ -13,7 +13,9 @@ Column {
     property string title: ""
     property string line: ""
     property bool compact: false
-    readonly property int _iconSize: compact ? 22 : 40
+    // Whole multiples of the icons' 18px grid (APP-195), so their 1px lines
+    // land on device pixels.
+    readonly property int _iconSize: compact ? 18 : 36
 
     spacing: compact ? Theme.spXs : Theme.spMd
     // Fades in rather than popping when the last card leaves.
@@ -40,7 +42,7 @@ Column {
         text: root.title
         color: root.compact ? Theme.textDim : Theme.text
         font.pixelSize: root.compact ? Theme.fsSm : Theme.fsMd
-        font.weight: root.compact ? Font.Normal : Font.DemiBold
+        font.weight: root.compact ? Theme.fwBody : Theme.fwTitle
         wrapMode: Text.WordWrap
     }
     Text {

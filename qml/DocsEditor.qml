@@ -12,7 +12,7 @@ Popup {
     anchors.centerIn: Overlay.overlay
 
     // Dimmed backdrop so the underlying app stays visible behind the popup.
-    Overlay.modal: Rectangle { color: Theme.scrim }
+    Overlay.modal: ModalScrim {}
 
     property string kind: "doc"          // doc | snippet | contact | section
     property bool   isNew: false
@@ -39,12 +39,7 @@ Popup {
 
     width: kind === "snippet" ? 700 : 500
 
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
 
     contentItem: ColumnLayout {
         spacing: Theme.spXl
@@ -58,7 +53,7 @@ Popup {
                     : root.kind === "snippet" ? I18n.t(root.isNew ? "docs.editor.title.new.snip" : "docs.editor.title.edit.snip")
                         : root.kind === "section" ? I18n.t(root.isNew ? "docs.editor.title.new.section" : "docs.editor.title.edit.section")
                             : I18n.t(root.isNew ? "docs.editor.title.new.contact" : "docs.editor.title.edit.contact")
-                color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold
+                color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Theme.fwTitle
             }
             Text {
                 visible: !root.isNew && root.kind === "doc" && (root.draft.ref || "").length > 0
@@ -66,7 +61,7 @@ Popup {
                 color: Theme.accentStrong
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsMd
-                font.weight: Font.Medium
+                font.weight: Theme.fwTitle
             }
             Item { Layout.fillWidth: true }
         }
@@ -80,20 +75,20 @@ Popup {
 
             GridLayout {
                 columns: 2; columnSpacing: Theme.spLg; rowSpacing: Theme.spXs; Layout.fillWidth: true
-                FieldLabel { text: I18n.t("docs.field.ref").toUpperCase() }
-                FieldLabel { text: I18n.t("docs.field.version").toUpperCase() }
+                FieldLabel { text: I18n.t("docs.field.ref") }
+                FieldLabel { text: I18n.t("docs.field.version") }
                 FormField { id: docRef     ; mono: true; placeholderText: I18n.t("docsEditor.ph.ref")
                             text: root.draft.ref || ""    ; onTextChanged: root.draft.ref = text }
                 FormField { id: docVersion ; mono: true; placeholderText: I18n.t("docsEditor.ph.version")
                             text: root.draft.version || ""; onTextChanged: root.draft.version = text }
             }
 
-            FieldLabel { text: I18n.t("docs.field.title").toUpperCase() }
+            FieldLabel { text: I18n.t("docs.field.title") }
             FormField { id: docTitle; placeholderText: I18n.t("docsEditor.ph.title")
                         text: root.draft.title || ""; onTextChanged: root.draft.title = text
                         Layout.fillWidth: true }
 
-            FieldLabel { text: I18n.t("docs.field.description").toUpperCase() }
+            FieldLabel { text: I18n.t("docs.field.description") }
             ScrollView {
                 Layout.fillWidth: true; Layout.preferredHeight: 78
                 TextArea {
@@ -109,7 +104,7 @@ Popup {
                 }
             }
 
-            FieldLabel { text: I18n.t("docs.field.url").toUpperCase() }
+            FieldLabel { text: I18n.t("docs.field.url") }
             FormField {
                 id: docUrl; mono: true; placeholderText: I18n.t("docs.editor.url.ph")
                         text: root.draft.url || ""; onTextChanged: root.draft.url = text
@@ -117,8 +112,8 @@ Popup {
 
             GridLayout {
                 columns: 2; columnSpacing: Theme.spLg; rowSpacing: Theme.spXs; Layout.fillWidth: true
-                FieldLabel { text: I18n.t("docs.field.source").toUpperCase() }
-                FieldLabel { text: I18n.t("docs.field.updated").toUpperCase() }
+                FieldLabel { text: I18n.t("docs.field.source") }
+                FieldLabel { text: I18n.t("docs.field.updated") }
                 FormField { placeholderText: I18n.t("docsEditor.ph.source")
                             text: root.draft.source || ""; onTextChanged: root.draft.source = text }
                 FormField { placeholderText: I18n.t("docsEditor.ph.updated")
@@ -130,7 +125,7 @@ Popup {
                 visible: root.docCustomFields && root.docCustomFields.length > 0
                 Layout.fillWidth: true
                 spacing: Theme.spXs
-                FieldLabel { text: I18n.t("docs.field.customFields").toUpperCase() }
+                FieldLabel { text: I18n.t("docs.field.customFields") }
                 Repeater {
                     model: root.docCustomFields
                     delegate: RowLayout {
@@ -160,7 +155,7 @@ Popup {
                 visible: root.isNew
                 spacing: Theme.spXs
                 Layout.fillWidth: true
-                FieldLabel { text: I18n.t("docs.field.section").toUpperCase() }
+                FieldLabel { text: I18n.t("docs.field.section") }
                 AppComboBox {
                     id: docSection
                     objectName: "docs-editor-section"
@@ -207,8 +202,8 @@ Popup {
 
             GridLayout {
                 columns: 2; columnSpacing: Theme.spLg; rowSpacing: Theme.spXs; Layout.fillWidth: true
-                FieldLabel { text: I18n.t("docs.field.title").toUpperCase() }
-                FieldLabel { text: I18n.t("docs.field.language").toUpperCase() }
+                FieldLabel { text: I18n.t("docs.field.title") }
+                FieldLabel { text: I18n.t("docs.field.language") }
                 FormField {
                     placeholderText: I18n.t("docs.editor.build.ph")
                     text: root.draft.title || ""
@@ -225,7 +220,7 @@ Popup {
                 }
             }
 
-            FieldLabel { text: I18n.t("docs.field.tags").toUpperCase() }
+            FieldLabel { text: I18n.t("docs.field.tags") }
             FormField {
                 Layout.fillWidth: true
                 placeholderText: I18n.t("docsEditor.ph.tags")
@@ -233,7 +228,7 @@ Popup {
                 onTextChanged: root.draft.tags = text
             }
 
-            FieldLabel { text: I18n.t("docs.field.code").toUpperCase() }
+            FieldLabel { text: I18n.t("docs.field.code") }
             ScrollView {
                 Layout.fillWidth: true; Layout.preferredHeight: 240
                 TextArea {
@@ -264,21 +259,21 @@ Popup {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             spacing: Theme.spLg
 
-            FieldLabel { text: I18n.t("docs.field.title").toUpperCase() }
+            FieldLabel { text: I18n.t("docs.field.title") }
             FormField {
                 placeholderText: I18n.t("docsEditor.ph.section")
                 text: root.draft.title || ""
                 onTextChanged: root.draft.title = text
             }
 
-            FieldLabel { text: I18n.t("docs.field.subtitle").toUpperCase() }
+            FieldLabel { text: I18n.t("docs.field.subtitle") }
             FormField {
                 placeholderText: I18n.t("docsEditor.ph.sectionSub")
                 text: root.draft.subtitle || ""
                 onTextChanged: root.draft.subtitle = text
             }
 
-            FieldLabel { text: I18n.t("docs.field.accent").toUpperCase() }
+            FieldLabel { text: I18n.t("docs.field.accent") }
             Row {
                 spacing: Theme.spSm
                 Repeater {
@@ -427,22 +422,22 @@ Popup {
 
             GridLayout {
                 columns: 2; columnSpacing: Theme.spLg; rowSpacing: Theme.spXs; Layout.fillWidth: true
-                FieldLabel { text: I18n.t("docs.field.name").toUpperCase() }
-                FieldLabel { text: I18n.t("docs.field.role").toUpperCase() }
+                FieldLabel { text: I18n.t("docs.field.name") }
+                FieldLabel { text: I18n.t("docs.field.role") }
                 FormField {
                     placeholderText: I18n.t("docs.editor.ph.fullName")
                             text: root.draft.name || ""; onTextChanged: root.draft.name = text }
                 FormField { placeholderText: I18n.t("docsEditor.ph.role")
                             text: root.draft.role || ""; onTextChanged: root.draft.role = text }
-                FieldLabel { text: I18n.t("docs.field.mmChannel").toUpperCase() }
-                FieldLabel { text: I18n.t("docs.field.mmHandle").toUpperCase() }
+                FieldLabel { text: I18n.t("docs.field.mmChannel") }
+                FieldLabel { text: I18n.t("docs.field.mmHandle") }
                 FormField { mono: true; placeholderText: I18n.t("docsEditor.ph.channel")
                             text: root.draft.channel || ""; onTextChanged: root.draft.channel = text }
                 FormField { mono: true; placeholderText: "@name.surname"
                             text: root.draft.mattermost || ""; onTextChanged: root.draft.mattermost = text }
             }
 
-            FieldLabel { text: I18n.t("docs.field.avatar").toUpperCase() }
+            FieldLabel { text: I18n.t("docs.field.avatar") }
             Row {
                 spacing: Theme.spSm
                 Repeater {
@@ -510,10 +505,9 @@ Popup {
     }
 
     component FieldLabel: Text {
-        color: Theme.textMuted
-        font.pixelSize: Theme.fsXs
-        font.weight: Font.DemiBold
-        font.letterSpacing: 1
+        color: Theme.textDim
+        font.pixelSize: Theme.fsSm
+        font.weight: Theme.fwTitle
         topPadding: Theme.sp2xs
     }
 

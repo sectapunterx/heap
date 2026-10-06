@@ -80,6 +80,22 @@ QtObject {
     readonly property color panel2: _c.panel2
     readonly property color panel3: _c.panel3
 
+    // ── Surfaces on the page (APP-196) ───────────────────────────────
+    // One step per level, one way to take it. A column was a panel box
+    // 1.5 L* above the ground and a card a bordered box 3 L* above that:
+    // box in box, with edges nobody could see. Now a column has no fill
+    // (its header is what marks it) and a card stands on the ground by
+    // lightness alone: 9 L* above bg on a dark theme (8 with soft
+    // contrast), no border. A light theme has no room above its ground, so
+    // there a card is the theme's white panel and keeps its hairline.
+    // Derived from bg, so a user's own theme gets the same steps.
+    readonly property color surfaceColumn: "transparent"
+    readonly property color surfaceCard: dark ? Presets.lift(String(_c.bg), softContrast ? 8 : 9) : _c.panel
+    readonly property color surfaceCardHover: dark ? Presets.lift(String(_c.bg), softContrast ? 10 : 11)
+                                                   : Qt.tint(_c.panel, withAlpha(_c.text, 0.03))
+    readonly property color cardBorder: dark && !highContrast ? "transparent" : border
+    readonly property color cardBorderHover: dark && !highContrast ? "transparent" : borderStrong
+
     // ── Lines + text — highContrast strengthens both ──────────────────
     // High contrast is the accessibility mode, so its lines — field outlines
     // included — reach WCAG's 3:1 for UI against bg and panel on every theme;
@@ -100,7 +116,10 @@ QtObject {
     readonly property color textMuted:    _c.textMuted
     // The smallest text in the app uses this; every built-in theme keeps it
     // at WCAG AA (4.5:1) on bg, panel and panel2 (tst_Theme checks).
-    readonly property color textDim:      _c.textDim
+    // Cards stand lighter than the panels (APP-196), so they are measured too.
+    readonly property color textDim:      Presets.ensureContrast(String(_c.textDim),
+        [String(_c.bg), String(Qt.tint(_c.bg, _c.panel)), String(Qt.tint(_c.bg, _c.panel2)),
+         String(surfaceCard), String(surfaceCardHover)], 4.5)
     // Text drawn on an accent / danger fill (primary buttons, badges).
     readonly property color textOnAccent: _c.textOnAccent
     readonly property color textOnDanger: _c.textOnDanger
@@ -299,15 +318,44 @@ QtObject {
     readonly property int radiusXl: 12  // dialogs, large panels
     readonly property int radiusPill: 999
 
+    // ── Elevation (APP-182) ──────────────────────────────────────────
+    // Three levels, each with its own edge, shadow and radius, so how far
+    // something floats says what it is:
+    //  - surface: what lies on the page (cards, columns, settings cards) —
+    //    no shadow, Theme.radius, see surfaceCard below;
+    //  - popup: menus, drop-downs, suggestion lists, tooltips, floating
+    //    panels — PopupSurface.qml, radius 10, a field-strength outline
+    //    (3:1 on every surface, VISP-8) and a soft drop shadow;
+    //  - modal: dialogs and editors — ModalSurface.qml, radius 12, a deeper
+    //    shadow, always over ModalScrim.qml.
+    readonly property int   popupRadius: radiusLg
+    readonly property color popupFill: panel2
+    readonly property color popupBorder: fieldBorder
+    readonly property color popupShadow: withAlpha(scrim, dark ? 0.6 : 0.18)
+    readonly property int   popupShadowOffset: 2
+    readonly property int   popupShadowDepth: 6
+    readonly property int   modalRadius: radiusXl
+    readonly property color modalFill: panel
+    readonly property color modalBorder: borderStrong
+    readonly property color modalShadow: withAlpha(scrim, dark ? 0.7 : 0.28)
+    readonly property int   modalShadowOffset: 6
+    readonly property int   modalShadowDepth: 16
+
     // ── Type scale (px) ──────────────────────────────────────────────
-    // Six steps, times the interface scale. The floor is 11px at any scale:
-    // nothing the user has to read is smaller.
-    readonly property int fsXs:  Math.max(11, px(11))  // chips, badges, uppercase section labels
-    readonly property int fsSm:  px(12)  // meta, descriptions, secondary text
-    readonly property int fsMd:  px(13)  // body, card titles, inputs
-    readonly property int fsLg:  px(15)  // dialog and section titles
-    readonly property int fsXl:  px(20)  // page headings
-    readonly property int fs2xl: px(28)  // display (welcome, empty hero)
+    // A modular scale (APP-181): 13px body, each step 1.125 times the one
+    // below, times the interface scale. The ad-hoc 20 and 28 jumped a step
+    // and a half; on the scale the headings sit two and four steps above
+    // the dialog title. The floor is 11px at any scale: nothing the user
+    // has to read is smaller. A screen uses at most four of these.
+    readonly property int typeBase: 13
+    readonly property real typeRatio: 1.125
+    function typeStep(n) { return Math.round(typeBase * Math.pow(typeRatio, n) * scale); }
+    readonly property int fsXs:  Math.max(11, typeStep(-2))  // chips, badges, counts
+    readonly property int fsSm:  typeStep(-1)  // meta, descriptions, section labels
+    readonly property int fsMd:  typeStep(0)   // body, card titles, inputs
+    readonly property int fsLg:  typeStep(1)   // dialog and section titles
+    readonly property int fsXl:  typeStep(3)   // page headings
+    readonly property int fs2xl: typeStep(5)   // display (welcome, empty hero)
 
     // ── Accessibility / motion ───────────────────────────────────────
     readonly property bool reducedMotion: !!_appearance.reducedMotion
@@ -366,6 +414,14 @@ QtObject {
     // paths. Counts, times and dates stay in the UI face with fixed-width
     // digits, so columns of numbers still line up without the mono texture.
     readonly property var tabularNums: ({ "tnum": 1 })
+
+    // ── Weight (APP-193) ─────────────────────────────────────────────
+    // Three weights, one job each. Golos at 600 and 13px reads as bold, so a
+    // screen where everything was DemiBold had no hierarchy left. QML outside
+    // this file never names a Font.* weight (ui_tokens_check.py).
+    readonly property int fwBody:    Font.Normal    // descriptions, meta, inputs
+    readonly property int fwTitle:   Font.Medium    // card titles, the active item, labels
+    readonly property int fwHeading: Font.DemiBold  // only the title of a screen or a dialog
 
     function withAlpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a); }
 

@@ -183,7 +183,7 @@ TestCase {
         verify(ring.visible, "the cursor has no ring");
         verify(!mark.visible);
         verify(Qt.colorEqual(ring.border.color, Theme.focusRing), "the cursor is not in the cursor colour");
-        verify(Qt.colorEqual(card.color, Theme.panel2), "the cursor filled the card");
+        verify(Qt.colorEqual(card.color, Theme.surfaceCard), "the cursor filled the card");
 
         // APP-174: told apart by form — a fill and a check in a circle, no
         // ring and no border of its own.
@@ -192,8 +192,8 @@ TestCase {
         tryVerify(() => mark.visible, 1000, "a selected card has no check mark");
         verify(!ring.visible, "selection drew the cursor ring");
         compare(card.border.width, 1);
-        verify(Qt.colorEqual(card.border.color, Theme.border), "selection drew a border");
-        verify(!Qt.colorEqual(card.color, Theme.panel2), "a selected card has no fill");
+        verify(Qt.colorEqual(card.border.color, Theme.cardBorder), "selection drew a border");
+        verify(!Qt.colorEqual(card.color, Theme.surfaceCard), "a selected card has no fill");
         compare(mark.width, mark.height);
         compare(mark.radius, mark.width / 2);
 

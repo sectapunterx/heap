@@ -26,10 +26,9 @@ Rectangle {
             spacing: Theme.spSm
             Text {
                 text: I18n.t("people.label.title")
-                color: Theme.textMuted
+                color: Theme.textDim
                 font.pixelSize: Theme.fsSm
-                font.letterSpacing: 1
-                font.weight: Font.DemiBold
+                font.weight: Theme.fwTitle
             }
             // One count (APP-197): how many are waiting for a message from
             // me. The list itself shows how many people there are.
@@ -226,7 +225,7 @@ Rectangle {
                             font.family: Theme.fontUi
                             font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsSm
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                         }
                     }
                     Column {
@@ -244,7 +243,7 @@ Rectangle {
                                 text: prow.name
                                 color: (prow.personState === "todo") ? Theme.text : Theme.textMuted
                                 font.pixelSize: Theme.fsMd
-                                font.weight: Font.Medium
+                                font.weight: Theme.fwTitle
                                 elide: Text.ElideRight
                             }
                             Text {
@@ -330,8 +329,7 @@ Rectangle {
                             font.family: Theme.fontUi
                             font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsXs
-                            font.letterSpacing: 1
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                         }
                         MouseArea {
                             anchors.fill: parent

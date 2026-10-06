@@ -21,6 +21,7 @@ Dialog {
     id: root
     objectName: "weekly-recap"
     modal: true
+    Overlay.modal: ModalScrim {}
     focus: true
     anchors.centerIn: Overlay.overlay
     parent: Overlay.overlay
@@ -97,12 +98,7 @@ Dialog {
     }
 
     header: DialogHeader { text: I18n.t("recap.title").arg(root._range()) }
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
 
     contentItem: ColumnLayout {
         spacing: Theme.spLg
@@ -142,10 +138,10 @@ Dialog {
                         RowLayout {
                             spacing: Theme.spSm
                             Rectangle { implicitWidth: 8; implicitHeight: 8; radius: 4; color: grp.modelData.fromColor || Theme.textDim }
-                            Text { text: grp.modelData.fromName; color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Font.DemiBold }
+                            Text { text: grp.modelData.fromName; color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Theme.fwTitle }
                             Text { text: "→"; color: Theme.textDim; font.pixelSize: Theme.fsMd }
                             Rectangle { implicitWidth: 8; implicitHeight: 8; radius: 4; color: grp.modelData.toColor || Theme.textDim }
-                            Text { text: grp.modelData.toName; color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Font.DemiBold }
+                            Text { text: grp.modelData.toName; color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Theme.fwTitle }
                             Text { text: "· " + grp.modelData.tasks.length; color: Theme.textDim; font.pixelSize: Theme.fsSm }
                         }
 

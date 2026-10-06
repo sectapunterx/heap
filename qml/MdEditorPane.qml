@@ -141,7 +141,7 @@ Item {
                     }
                     color: Theme.text
                     font.pixelSize: Theme.fsMd
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.fwTitle
                     elide: Text.ElideRight
                     Layout.fillWidth: true
                 }

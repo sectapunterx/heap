@@ -30,9 +30,7 @@ Popup {
     x: root.standalone ? Math.round((root.parent.width - root.width) / 2) : 0
     y: root.standalone ? Theme.sp2xl : 0
 
-    Overlay.modal: Rectangle {
-        color: Theme.scrim
-    }
+    Overlay.modal: ModalScrim {}
     // A press beside the popup acts like Esc (APP-126): close when empty,
     // otherwise ask before dropping the text. See PopupStack.js.
     Overlay.onPressed: if (!root.standalone && PopupStack.isTopmost(root, Overlay.overlay)) root._maybeDiscard()
@@ -78,12 +76,7 @@ Popup {
         editor.forceActiveFocus();
     }
 
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
 
     contentItem: ColumnLayout {
         spacing: Theme.spLg
@@ -99,10 +92,9 @@ Popup {
             text: I18n.t("quickNote.titleInto").arg(root._target)
             elide: Text.ElideRight
             Layout.fillWidth: true
-            color: Theme.textMuted
-            font.pixelSize: Theme.fsXs
-            font.weight: Font.DemiBold
-            font.letterSpacing: 1
+            color: Theme.textDim
+            font.pixelSize: Theme.fsSm
+            font.weight: Theme.fwTitle
         }
 
         ScrollView {
@@ -239,16 +231,9 @@ Popup {
         width: 360
         anchors.centerIn: Overlay.overlay
 
-        Overlay.modal: Rectangle {
-            color: Theme.scrim
-        }
+        Overlay.modal: ModalScrim {}
 
-        background: Rectangle {
-            radius: Theme.radiusLg
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
+        background: ModalSurface {}
 
         function _commitDiscard() {
             editor.text = "";
@@ -278,7 +263,7 @@ Popup {
                     text: I18n.t("quickNote.discard.title")
                     color: Theme.text
                     font.pixelSize: Theme.fsMd
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.fwTitle
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
                 }

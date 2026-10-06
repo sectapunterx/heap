@@ -335,7 +335,7 @@ Item {
                 Text {
                     text: I18n.t("settings.title")
                     color: Theme.text
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.fwHeading
                     font.pixelSize: Theme.fsLg
                 }
                 Text {
@@ -455,10 +455,10 @@ Item {
                                     // whatever font had them, in any size.
                                     IconImage {
                                         source: modelData.icon
-                                        Layout.preferredWidth: 16
-                                        Layout.preferredHeight: 16
-                                        sourceSize.width: 16
-                                        sourceSize.height: 16
+                                        Layout.preferredWidth: 18
+                                        Layout.preferredHeight: 18
+                                        sourceSize.width: 18
+                                        sourceSize.height: 18
                                         color: root.activeSection === modelData.id ? Theme.accentStrong : Theme.textMuted
                                     }
                                     Text {
@@ -466,7 +466,7 @@ Item {
                                         text: modelData.title
                                         color: root.activeSection === modelData.id ? Theme.accentStrong : Theme.text
                                         font.pixelSize: Theme.fsMd
-                                        font.weight: root.activeSection === modelData.id ? Font.DemiBold : Font.Normal
+                                        font.weight: root.activeSection === modelData.id ? Theme.fwTitle : Theme.fwBody
                                         elide: Text.ElideRight
                                     }
                                 }
@@ -506,9 +506,8 @@ Item {
                             Text {
                                 text: I18n.t("settings.debug.label")
                                 color: Theme.warning
-                                font.pixelSize: Theme.fsXs
-                                font.weight: Font.DemiBold
-                                font.letterSpacing: 1
+                                font.pixelSize: Theme.fsSm
+                                font.weight: Theme.fwTitle
                             }
                             Text {
                                 text: I18n.t("settings.debug.showUnimpl")
@@ -613,11 +612,11 @@ Item {
                         spacing: Theme.spLg
                         IconImage {
                             source: root._activeMeta().icon || ""
-                            Layout.preferredWidth: 22
-                            Layout.preferredHeight: 22
+                            Layout.preferredWidth: 18
+                            Layout.preferredHeight: 18
                             Layout.alignment: Qt.AlignVCenter
-                            sourceSize.width: 22
-                            sourceSize.height: 22
+                            sourceSize.width: 18
+                            sourceSize.height: 18
                             color: Theme.textMuted
                         }
                         Text {
@@ -625,7 +624,7 @@ Item {
                             text: root._activeMeta().title || ""
                             color: Theme.text
                             font.pixelSize: Theme.fsXl
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwHeading
                             elide: Text.ElideRight
                         }
                     }
@@ -660,8 +659,7 @@ Item {
                                 text: I18n.t("settings.notImpl.title")
                                 color: Theme.warning
                                 font.pixelSize: Theme.fsSm
-                                font.weight: Font.DemiBold
-                                font.letterSpacing: 1
+                                font.weight: Theme.fwTitle
                             }
                             Text {
                                 text: I18n.t("settings.notImpl.body")
@@ -882,12 +880,7 @@ Item {
                 model: sc.popup.visible ? sc.delegateModel : null
                 currentIndex: sc.highlightedIndex
             }
-            background: Rectangle {
-                radius: Theme.radius
-                color: Theme.panel
-                border.width: 1
-                border.color: Theme.borderStrong
-            }
+            background: PopupSurface {}
         }
     }
 
@@ -1098,7 +1091,7 @@ Item {
                             text: segOpt.l
                             color: segOpt.sel ? Theme.textOnAccent : Theme.text
                             font.pixelSize: Theme.fsSm
-                            font.weight: segOpt.sel ? Font.DemiBold : Font.Medium
+                            font.weight: Theme.fwTitle
                         }
                         MouseArea {
                             id: segMA
@@ -1224,7 +1217,7 @@ Item {
             Text {
                 id: dangerTxt; anchors.centerIn: parent
                 text: dangerRow.armed ? dangerRow.confirmText : dangerRow.buttonText
-                color: dangerRow.armed ? Theme.textOnDanger : Theme.danger; font.pixelSize: Theme.fsMd; font.weight: Font.Medium
+                color: dangerRow.armed ? Theme.textOnDanger : Theme.danger; font.pixelSize: Theme.fsMd; font.weight: Theme.fwTitle
             }
             MouseArea {
                 id: dangerMA; objectName: "danger-row-button"
@@ -1268,7 +1261,7 @@ Item {
                                 font.family: Theme.fontUi
                                 font.features: Theme.tabularNums
                                 font.pixelSize: Theme.fsLg
-                                font.weight: Font.DemiBold
+                                font.weight: Theme.fwTitle
                             }
                         }
                         ColumnLayout {
@@ -1279,7 +1272,7 @@ Item {
                                 text: (root.settings.profile && root.settings.profile.name) || I18n.t("settings.profile.fullName")
                                 color: (root.settings.profile && root.settings.profile.name) ? Theme.text : Theme.textDim
                                 font.pixelSize: Theme.fsLg
-                                font.weight: Font.DemiBold
+                                font.weight: Theme.fwTitle
                                 elide: Text.ElideRight
                             }
                             Text {
@@ -2321,13 +2314,13 @@ Item {
                                         // its catalogue glyph.
                                         Text {
                                             visible: parent.logo === ""
-                                            anchors.centerIn: parent; text: modelData.icon; color: Theme.textOn(intTile.color); font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold
+                                            anchors.centerIn: parent; text: modelData.icon; color: Theme.textOn(intTile.color); font.pixelSize: Theme.fsLg; font.weight: Theme.fwTitle
                                         }
                                     }
                                     ColumnLayout {
                                         Layout.fillWidth: true
                                         spacing: 1
-                                        Text { id: intName; text: modelData.name; color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold }
+                                        Text { id: intName; text: modelData.name; color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Theme.fwTitle }
                                         Text { text: I18n.t(modelData.descKey); color: Theme.textMuted; font.pixelSize: Theme.fsMd; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                                     }
                                     Text {
@@ -2465,7 +2458,7 @@ Item {
                                             text: intSection.dcCode
                                             readOnly: true; selectByMouse: true
                                             color: Theme.text; font.family: Theme.fontMono
-                                            font.pixelSize: Theme.fsXl; font.weight: Font.DemiBold
+                                            font.pixelSize: Theme.fsXl; font.weight: Theme.fwTitle
                                         }
                                         Text {
                                             text: intSection.dcUri
@@ -2593,7 +2586,7 @@ Item {
                                                 text: (intCard.mapOpen ? "▾  " : "▸  ") + I18n.t("settings.integrations.statusMap")
                                                 color: mapToggleMA.hovered ? Theme.accentStrong : Theme.text
                                                 font.pixelSize: Theme.fsMd
-                                                font.weight: Font.DemiBold
+                                                font.weight: Theme.fwTitle
                                             }
                                             Text {
                                                 visible: !intCard.mapOpen
@@ -2932,7 +2925,7 @@ Item {
                             anchors.centerIn: parent
                             text: "+ " + I18n.t("common.add")
                             color: Theme.textOnAccent
-                            font.weight: Font.Medium
+                            font.weight: Theme.fwTitle
                         }
                         ClickArea {
                             id: addMA
@@ -3159,7 +3152,7 @@ Item {
                             width: Math.min(460, (parent ? parent.width : 460) - 2 * Theme.sp2xl)
                             padding: Theme.inset
                             closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-                            Overlay.modal: Rectangle { color: Theme.scrim }
+                            Overlay.modal: ModalScrim {}
                             readonly property var profileNames: {
                                 const out = [];
                                 const ps = AppController.profiles || [];
@@ -3167,19 +3160,14 @@ Item {
                                 return out;
                             }
                             onOpened: wipeCancel.forceActiveFocus()
-                            background: Rectangle {
-                                radius: Theme.radiusXl
-                                color: Theme.panel
-                                border.color: Theme.borderStrong
-                                border.width: 1
-                            }
+                            background: ModalSurface {}
                             contentItem: ColumnLayout {
                                 spacing: Theme.spXl
                                 Text {
                                     text: I18n.t("settings.data.wipe.dialogTitle")
                                     color: Theme.text
                                     font.pixelSize: Theme.fsLg
-                                    font.weight: Font.DemiBold
+                                    font.weight: Theme.fwHeading
                                     Layout.fillWidth: true
                                     wrapMode: Text.Wrap
                                 }
@@ -3242,7 +3230,7 @@ Item {
                             Layout.fillWidth: true
                             spacing: Theme.sp2xs
                             Text {
-                                text: "heap."; color: Theme.text; font.family: Theme.fontMono; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold
+                                text: "heap."; color: Theme.text; font.family: Theme.fontMono; font.pixelSize: Theme.fsLg; font.weight: Theme.fwTitle
                             }
                             Text {
                                 Layout.fillWidth: true

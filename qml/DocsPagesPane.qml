@@ -203,11 +203,10 @@ Item {
                     Layout.fillWidth: true
                     spacing: Theme.spSm
                     Text {
-                        text: I18n.t("docs.pages").toUpperCase()
-                        color: Theme.textMuted
-                        font.pixelSize: Theme.fsXs
-                        font.weight: Font.DemiBold
-                        font.letterSpacing: 1
+                        text: I18n.t("docs.pages")
+                        color: Theme.textDim
+                        font.pixelSize: Theme.fsSm
+                        font.weight: Theme.fwTitle
                         Layout.fillWidth: true
                     }
                     Rectangle {
@@ -349,7 +348,7 @@ Item {
                                 text: pageRow.modelData.title || ""
                                 color: Theme.text
                                 font.pixelSize: Theme.fsSm
-                                font.weight: pageRow.current ? Font.DemiBold : Font.Normal
+                                font.weight: pageRow.current ? Theme.fwTitle : Theme.fwBody
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
                             }
@@ -437,6 +436,7 @@ Item {
         objectName: "docpage-rename"
         property string pageId: ""
         modal: true
+        QQC.Overlay.modal: ModalScrim {}
         anchors.centerIn: QQC.Overlay.overlay
         parent: QQC.Overlay.overlay
         padding: Theme.inset
@@ -456,12 +456,7 @@ Item {
             renamePagePopup.close();
         }
 
-        background: Rectangle {
-            radius: Theme.radiusXl
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
+        background: ModalSurface {}
 
         contentItem: QQC.TextField {
             id: pageTitleField

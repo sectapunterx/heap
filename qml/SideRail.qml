@@ -377,13 +377,12 @@ Rectangle {
             anchors.left: parent.left; anchors.leftMargin: Theme.spMd
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            text: sh.text.toUpperCase()
+            text: sh.text
             elide: Text.ElideRight
             color: Theme.textDim
             font.family: Theme.fontUi
-            font.pixelSize: Theme.fsXs
-            font.weight: Font.DemiBold
-            font.letterSpacing: 0.8
+            font.pixelSize: Theme.fsSm
+            font.weight: Theme.fwTitle
         }
         Rectangle {
             visible: !sh.expanded
@@ -409,6 +408,8 @@ Rectangle {
         property bool active: false
         property string countText: ""
         property color countColor: Theme.danger
+        // The icons are drawn on an 18px grid with 1px lines on the pixel
+        // grid (APP-195); shown at 18, every line is one device pixel.
         property int iconSize: 18
         // Saved views: the glyph is the Alt+N digit, set in the mono face; a
         // view whose filters were changed since it was applied gets a dot.
@@ -473,7 +474,7 @@ Rectangle {
             id: labelFull
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
-            font.weight: btn.active ? Font.DemiBold : Font.Normal
+            font.weight: btn.active ? Theme.fwTitle : Theme.fwBody
             font.italic: btn.modified
             text: railLabel.text
         }
@@ -498,7 +499,7 @@ Rectangle {
             color: btn.active ? Theme.accentStrong : (ma.containsMouse ? Theme.text : Theme.textMuted)
             font.family: Theme.fontUi
             font.pixelSize: railLabel.tight ? Theme.fsSm : Theme.fsMd
-            font.weight: btn.active ? Font.DemiBold : Font.Normal
+            font.weight: btn.active ? Theme.fwTitle : Theme.fwBody
         }
         Text {
             id: comboT
@@ -529,7 +530,7 @@ Rectangle {
                 font.family: Theme.fontUi
                 font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsXs
-                font.weight: Font.DemiBold
+                font.weight: Theme.fwTitle
             }
         }
         MouseArea {

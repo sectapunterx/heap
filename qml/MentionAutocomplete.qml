@@ -193,12 +193,7 @@ Popup {
 
     onVisibleChanged: if (visible) _reposition()
 
-    background: Rectangle {
-        radius: Theme.radiusMd
-        color: Theme.panel2
-        border.color: Theme.border
-        border.width: 1
-    }
+    background: PopupSurface {}
 
     contentItem: ListView {
         clip: true

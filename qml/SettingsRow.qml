@@ -108,7 +108,7 @@ Item {
                 text: row.label
                 color: Theme.text
                 font.pixelSize: Theme.fsMd
-                font.weight: Font.Medium
+                font.weight: Theme.fwTitle
                 wrapMode: Text.WordWrap
             }
             Text {

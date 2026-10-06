@@ -207,11 +207,10 @@ Rectangle {
             Layout.fillWidth: true
             spacing: Theme.spSm
             Text {
-                text: I18n.t("notes.all").toUpperCase()
-                color: Theme.textMuted
-                font.pixelSize: Theme.fsXs
-                font.weight: Font.DemiBold
-                font.letterSpacing: 1
+                text: I18n.t("notes.all")
+                color: Theme.textDim
+                font.pixelSize: Theme.fsSm
+                font.weight: Theme.fwTitle
                 Layout.fillWidth: true
             }
             Rectangle {
@@ -305,11 +304,10 @@ Rectangle {
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.bottomMargin: Theme.sp2xs
-                        text: (rowData.label || "").toUpperCase()
+                        text: rowData.label || ""
                         color: Theme.textDim
-                        font.pixelSize: Theme.fsXs
-                        font.weight: Font.DemiBold
-                        font.letterSpacing: 1
+                        font.pixelSize: Theme.fsSm
+                        font.weight: Theme.fwTitle
                         elide: Text.ElideRight
                     }
                     // A folder header is the folder: right-click renames it or
@@ -382,7 +380,7 @@ Rectangle {
                                 text: row.note.title || ""
                                 color: Theme.text
                                 font.pixelSize: Theme.fsSm
-                                font.weight: row.current ? Font.DemiBold : Font.Normal
+                                font.weight: row.current ? Theme.fwTitle : Theme.fwBody
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
                             }
@@ -530,7 +528,7 @@ Rectangle {
             text: dragGhost.overTitle.length > 0 ? I18n.t("notes.dropToMerge").arg(dragGhost.overTitle) : dragGhost.title
             color: Theme.text
             font.pixelSize: Theme.fsSm
-            font.weight: Font.DemiBold
+            font.weight: Theme.fwTitle
         }
     }
 
@@ -539,6 +537,7 @@ Rectangle {
         objectName: "note-folder-rename"
         property string folder: ""
         modal: true
+        QQC.Overlay.modal: ModalScrim {}
         anchors.centerIn: QQC.Overlay.overlay
         parent: QQC.Overlay.overlay
         padding: Theme.inset
@@ -557,12 +556,7 @@ Rectangle {
             folderPopup.close();
         }
 
-        background: Rectangle {
-            radius: Theme.radiusXl
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
+        background: ModalSurface {}
         contentItem: QQC.TextField {
             id: folderName
             objectName: "note-folder-name"
@@ -588,6 +582,7 @@ Rectangle {
         objectName: "note-rename"
         property string noteId: ""
         modal: true
+        QQC.Overlay.modal: ModalScrim {}
         anchors.centerIn: QQC.Overlay.overlay
         parent: QQC.Overlay.overlay
         padding: Theme.inset
@@ -609,12 +604,7 @@ Rectangle {
             renamePopup.close();
         }
 
-        background: Rectangle {
-            radius: Theme.radiusXl
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
+        background: ModalSurface {}
 
         contentItem: ColumnLayout {
             spacing: Theme.spMd

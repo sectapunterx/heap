@@ -22,6 +22,7 @@ Dialog {
     id: root
     objectName: "time-machine"
     modal: true
+    Overlay.modal: ModalScrim {}
     focus: true
     anchors.centerIn: Overlay.overlay
     parent: Overlay.overlay
@@ -144,12 +145,7 @@ Dialog {
     }
 
     header: DialogHeader { text: I18n.t("tm.title") }
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
 
     contentItem: RowLayout {
         spacing: Theme.inset
@@ -196,9 +192,8 @@ Dialog {
                     bottomPadding: Theme.spXs
                     text: root.dayLabel(section)
                     color: Theme.textDim
-                    font.pixelSize: Theme.fsXs
-                    font.weight: Font.DemiBold
-                    font.capitalization: Font.AllUppercase
+                    font.pixelSize: Theme.fsSm
+                    font.weight: Theme.fwTitle
                 }
 
                 delegate: Rectangle {
@@ -328,7 +323,7 @@ Dialog {
                               : ""
                         color: Theme.text
                         font.pixelSize: Theme.fsLg
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwTitle
                         wrapMode: Text.Wrap
                     }
                     Text {
@@ -353,9 +348,8 @@ Dialog {
                     Text {
                         text: I18n.t("tm.profiles")
                         color: Theme.textDim
-                        font.pixelSize: Theme.fsXs
-                        font.weight: Font.DemiBold
-                        font.capitalization: Font.AllUppercase
+                        font.pixelSize: Theme.fsSm
+                        font.weight: Theme.fwTitle
                     }
                     Repeater {
                         model: root.preview.profiles || []
@@ -399,9 +393,8 @@ Dialog {
                     Text {
                         text: I18n.t("tm.missing")
                         color: Theme.textDim
-                        font.pixelSize: Theme.fsXs
-                        font.weight: Font.DemiBold
-                        font.capitalization: Font.AllUppercase
+                        font.pixelSize: Theme.fsSm
+                        font.weight: Theme.fwTitle
                     }
                     Text {
                         visible: (root.preview.missing || []).length === 0
@@ -423,9 +416,8 @@ Dialog {
                         visible: (root.preview.changed || []).length > 0
                         text: I18n.t("tm.changed")
                         color: Theme.textDim
-                        font.pixelSize: Theme.fsXs
-                        font.weight: Font.DemiBold
-                        font.capitalization: Font.AllUppercase
+                        font.pixelSize: Theme.fsSm
+                        font.weight: Theme.fwTitle
                     }
                     Repeater {
                         model: root.preview.changed || []

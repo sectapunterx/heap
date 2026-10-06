@@ -61,12 +61,7 @@ Popup {
     property string _focusedThemeName: ""
     onClosed: _focusedThemeName = ""
 
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: PopupSurface {}
 
     contentItem: ColumnLayout {
         spacing: 0
@@ -79,11 +74,10 @@ Popup {
                 anchors.fill: parent
                 anchors.leftMargin: Theme.sp2xl; anchors.rightMargin: Theme.spMd
                 Text {
-                    text: I18n.t("tweaks.title").toUpperCase()
-                    color: Theme.textMuted
+                    text: I18n.t("tweaks.title")
+                    color: Theme.textDim
                     font.pixelSize: Theme.fsSm
-                    font.weight: Font.DemiBold
-                    font.letterSpacing: 1
+                    font.weight: Theme.fwTitle
                 }
                 Item { Layout.fillWidth: true }
                 Rectangle {
@@ -253,9 +247,8 @@ Popup {
 
     component SectLabel: Text {
         color: Theme.textDim
-        font.pixelSize: Theme.fsXs
-        font.letterSpacing: 1
-        font.weight: Font.DemiBold
+        font.pixelSize: Theme.fsSm
+        font.weight: Theme.fwTitle
     }
 
     component FieldLabel: Text {
@@ -287,7 +280,7 @@ Popup {
             text: parent.text
             color: parent.active ? Theme.accentStrong : Theme.text
             font.pixelSize: Theme.fsMd
-            font.weight: parent.active ? Font.DemiBold : Font.Medium
+            font.weight: Theme.fwTitle
         }
         MouseArea {
             id: segMA

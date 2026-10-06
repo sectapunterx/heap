@@ -247,7 +247,7 @@ Item {
 
             Text {
                 text: root.rangeTitle()
-                color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold
+                color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Theme.fwHeading
                 Layout.preferredWidth: 240
             }
 
@@ -269,7 +269,7 @@ Item {
                         // accent is the screen's one action ("+ Task").
                         color: sel ? Theme.accentSoft : (modeMA.hovered ? Theme.panel3 : Theme.panel2)
                         border.color: sel ? Theme.withAlpha(Theme.accent, 0.5) : Theme.border; border.width: 1
-                        Text { anchors.centerIn: parent; text: parent.modelData.label; color: parent.sel ? Theme.accentStrong : Theme.text; font.pixelSize: Theme.fsSm; font.weight: parent.sel ? Font.DemiBold : Font.Normal }
+                        Text { anchors.centerIn: parent; text: parent.modelData.label; color: parent.sel ? Theme.accentStrong : Theme.text; font.pixelSize: Theme.fsSm; font.weight: parent.sel ? Theme.fwTitle : Theme.fwBody }
                         ClickArea {
                             id: modeMA
                             label: modeBtn.modelData.label
@@ -335,7 +335,7 @@ Item {
                     text: I18n.dayName(new Date(root.gridStart.getFullYear(),
                                                 root.gridStart.getMonth(),
                                                 root.gridStart.getDate() + index).getDay())
-                    color: Theme.textDim; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold
+                    color: Theme.textDim; font.pixelSize: Theme.fsXs; font.weight: Theme.fwTitle
                 }
             }
         }
@@ -396,10 +396,15 @@ Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     radius: Theme.radius
-                    color: _inMonth ? Theme.panel : Theme.panel2
+                    // Today: its number in the accent and a hairline of it,
+                    // not a 2px white frame, the brightest thing on the month
+                    // (APP-198). The selected day is told by a soft accent
+                    // fill, so today-and-selected is not a frame either.
+                    color: _sel ? Qt.tint(_inMonth ? Theme.panel : Theme.panel2, Theme.accentSoft)
+                         : _inMonth ? Theme.panel : Theme.panel2
                     opacity: _inMonth ? 1.0 : 0.55
-                    border.color: _sel ? Theme.accent : (_today ? Theme.accentStrong : Theme.border)
-                    border.width: _sel || _today ? 2 : 1
+                    border.color: _sel || _today ? Theme.accent : Theme.border
+                    border.width: 1
                     Accessible.role: Accessible.Cell
                     Accessible.name: root.dayLabel(modelData.date)
                     Accessible.selected: _sel
@@ -447,7 +452,7 @@ Item {
                             text: cell.date.getDate()
                             color: _today ? Theme.accentStrong : Theme.text
                             font.pixelSize: Theme.fsSm
-                            font.weight: _today ? Font.DemiBold : Font.Normal
+                            font.weight: _today ? Theme.fwTitle : Theme.fwBody
                         }
 
                         // Chips — first few tasks, then events, then overflow.
