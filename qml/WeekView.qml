@@ -743,9 +743,12 @@ Item {
                                                 font.pixelSize: Theme.fsXs
                                                 elide: Text.ElideRight
                                             }
-                                            Rectangle {
-                                                width: 6; height: 6; radius: 1
+                                            // Priority by shape too (APP-185).
+                                            Text {
+                                                objectName: "week-due-priority"
+                                                text: Theme.priorityMark(modelData.priority)
                                                 color: Theme.priorityColor(modelData.priority)
+                                                font.pixelSize: Theme.fsXs
                                             }
                                         }
                                         // The keyboard's way in (design audit

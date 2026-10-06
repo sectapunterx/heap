@@ -594,15 +594,18 @@ Item {
                                 font.pixelSize: Theme.fsMd
                                 elide: Text.ElideRight
                             }
-                            // Where it stands: the column's colour as a dot and
-                            // its name in dim text, no outlined pill.
+                            // Where it stands: the column's colour on the
+                            // status's shape (APP-185) and its name in dim
+                            // text, no outlined pill.
                             Row {
                                 objectName: "tl-status"
                                 spacing: Theme.spSm
-                                Rectangle {
+                                Text {
+                                    objectName: "timeline-status-mark"
                                     anchors.verticalCenter: parent.verticalCenter
-                                    width: 6; height: 6; radius: 3
+                                    text: Theme.statusMark(tlRow.t.status)
                                     color: tlRow.st.color
+                                    font.pixelSize: Theme.fsSm
                                 }
                                 Text {
                                     text: tlRow.st.name

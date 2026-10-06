@@ -464,6 +464,27 @@ QtObject {
         switch (p) { case "P0": return p0; case "P1": return p1; case "P2": return p2; case "P3": return p3; }
         return textMuted;
     }
+    // Colour is never the only sign (WCAG 1.4.1, APP-185): where a status or
+    // a priority is a coloured mark with no word beside it, the mark's shape
+    // says it too. Statuses fill like a pie as work moves on; a status of
+    // the user's own is a diamond. Priorities are a falling set of shapes,
+    // P2 and P3 — the two closest colours — filled and hollow.
+    function statusMark(id) {
+        switch (id) {
+            case "backlog": return "◌";
+            case "todo":    return "○";
+            case "prog":    return "◔";
+            case "half":    return "◑";
+            case "review":  return "◕";
+            case "blocked": return "⊘";
+            case "done":    return "●";
+        }
+        return "◇";
+    }
+    function priorityMark(p) {
+        switch (p) { case "P0": return "▲"; case "P1": return "◆"; case "P2": return "■"; }
+        return "□";
+    }
     function eventColor(type) {
         switch (type) {
             case "standup": return mStandup;

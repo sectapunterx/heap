@@ -731,10 +731,12 @@ Item {
                             anchors.top: parent.top
                             anchors.topMargin: Theme.spLg
                             spacing: Theme.spLg
-                            Rectangle {
+                            Text {
+                                objectName: "column-folded-mark"
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                width: 8; height: 8; radius: 4
+                                text: Theme.statusMark(col.statusId)
                                 color: col.statusColor
+                                font.pixelSize: Theme.fsSm
                             }
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter

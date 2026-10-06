@@ -98,9 +98,11 @@ Rectangle {
                     id: chRow
                     anchors.centerIn: parent
                     spacing: Theme.spSm
-                    Rectangle {
-                        width: 8; height: 8; radius: Theme.radiusXs
+                    Text {
+                        objectName: "priority-mark"
+                        text: Theme.priorityMark(modelData)
                         color: Theme.priorityColor(modelData)
+                        font.pixelSize: Theme.fsXs
                     }
                     Text {
                         text: modelData
