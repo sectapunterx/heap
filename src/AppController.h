@@ -1364,6 +1364,10 @@ class AppController : public QObject {
   // `steps` (Theme.scaleSteps), written to settings.appearance.uiScale like
   // Settings → Appearance → Scale does. Returns the new scale.
   Q_INVOKABLE double stepUiScale(int direction, const QVariantList& steps);
+  // The step of `steps` the system's text size asks for (APP-183): what
+  // Theme.scale is while settings.appearance.uiScale is unset. 1.0 under
+  // tests unless HEAP_TEXT_SCALE says otherwise.
+  Q_INVOKABLE double systemUiScale(const QVariantList& steps) const;
   // How the capture hotkey reaches heap from other apps (APP-171): "native"
   // (Windows, macOS), "x11", "portal" (Wayland), or "none" — then Settings
   // says to bind `heap --capture` in the desktop's own keyboard settings.
@@ -1698,6 +1702,8 @@ class AppController : public QObject {
   // The palette rows for one profile's notes and doc pages (see searchFullText).
   QVariantList fullTextEntries(const Profile& p) const;
   QString m_appSettingsJson;
+  // heap::platform::systemTextScale(), read on first use (APP-183).
+  mutable double m_systemTextScale = 0;
   // settingsMap()'s parse cache, keyed on the string above so that no writer
   // of it has to remember to invalidate anything.
   mutable QString m_settingsCacheSource;

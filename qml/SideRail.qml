@@ -12,7 +12,9 @@ Rectangle {
     // collapsed form is the original 56px icon rail. Main owns the state and
     // persists it — this only draws it.
     property bool expanded: true
-    readonly property int expandedWidth: 216
+    // Wide enough for its labels at any interface scale (APP-183): at 150 %
+    // a fixed 216 cut "Blocked" and "Hotkeys" to an ellipsis.
+    readonly property int expandedWidth: Theme.px(216)
     readonly property int collapsedWidth: 56
     // implicitWidth, not width: a Layout writes width itself, which would
     // break a binding on it.

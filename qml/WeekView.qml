@@ -486,7 +486,7 @@ Item {
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 50
+            Layout.preferredHeight: Theme.px(50)
             color: Theme.panel
             Rectangle {
                 anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
@@ -571,7 +571,10 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
 
-            readonly property int gutterW: 50
+            // Header, gutter and chip rows grow with the interface scale
+            // (APP-183): at 150 % the fixed 60px header put the date on top
+            // of the weekday and the gutter cut "10:00" to "0:00".
+            readonly property int gutterW: Theme.px(50)
             readonly property int dayCount: Math.max(1, root.days.length)
             // Narrowest a day column may get before the rail has to give way.
             readonly property int minDayW: 96
@@ -590,9 +593,9 @@ Item {
                 let most = 0;
                 for (let i = 0; i < root.days.length; i++) {
                     const n = root.days[i].tasks.length;
-                    most = Math.max(most, n === 0 ? 28 : 12 + Math.min(4, n) * 26 + (n > 4 ? 16 : 0));
+                    most = Math.max(most, n === 0 ? Theme.px(28) : Theme.px(12 + Math.min(4, n) * 26 + (n > 4 ? 16 : 0)));
                 }
-                return Math.max(28, most);
+                return Math.max(Theme.px(28), most);
             }
 
             // Sticky header band for the day-header + due-chips area
@@ -600,7 +603,7 @@ Item {
                 id: headerBand
                 anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
                 anchors.rightMargin: gridHost.railW
-                height: 60 + gridHost.dueRowH
+                height: Theme.px(60) + gridHost.dueRowH
                 color: Theme.panel
                 z: 2
 
@@ -635,10 +638,12 @@ Item {
                             Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 1; color: Theme.border }
                         }
 
-                        // Day header
+                        // Day header. Clipped: at a large scale the "today"
+                        // badge ran into the next day's name (APP-183).
                         Item {
                             anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                            height: 60
+                            height: Theme.px(60)
+                            clip: true
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
@@ -688,7 +693,7 @@ Item {
                         // Due chips strip
                         Item {
                             anchors.left: parent.left; anchors.right: parent.right
-                            anchors.top: parent.top; anchors.topMargin: 60
+                            anchors.top: parent.top; anchors.topMargin: Theme.px(60)
                             height: gridHost.dueRowH
 
                             ColumnLayout {
@@ -704,7 +709,7 @@ Item {
                                         readonly property bool _selected: AppController.selectionCount >= 0
                                             && AppController.isTaskSelected(modelData.id)
                                         Layout.fillWidth: true
-                                        Layout.preferredHeight: 22
+                                        Layout.preferredHeight: Theme.px(22)
                                         radius: Theme.radiusSm
                                         color: _selected ? Theme.withAlpha(Theme.accent, 0.18)
                                             : chipMA.containsMouse ? Theme.panel2 : Theme.panel3
@@ -824,7 +829,7 @@ Item {
                 anchors.top: headerBand.bottom
                 anchors.left: parent.left; anchors.right: parent.right
                 anchors.rightMargin: gridHost.railW
-                height: visible ? (root.strip.rows * 24 + 8) : 0
+                height: visible ? (root.strip.rows * Theme.px(24) + 8) : 0
                 visible: root.strip.rows > 0
                 color: Theme.panel
                 z: 2
@@ -841,9 +846,9 @@ Item {
                         required property var modelData
                         objectName: "allday-" + weekBar.modelData.id
                         x: gridHost.gutterW + weekBar.modelData.from * gridHost.dayW + 2
-                        y: 4 + weekBar.modelData.row * 24
+                        y: 4 + weekBar.modelData.row * Theme.px(24)
                         width: weekBar.modelData.span * gridHost.dayW - 4
-                        height: 22
+                        height: Theme.px(22)
                         // Square off the clipped end so a bar that runs past
                         // the week reads as continuing rather than ending here.
                         radius: Theme.radiusSm

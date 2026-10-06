@@ -929,4 +929,24 @@ TestCase {
             AppController.appSettingsJson = saved;
         }
     }
+
+    // APP-183: with no scale of the user's own, the system's text size is
+    // the scale (100 % under tests); a picked one wins.
+    function test_unset_ui_scale_follows_the_system_text_size() {
+        const saved = AppController.appSettingsJson;
+        try {
+            const o = JSON.parse(saved || "{}");
+            o.appearance = Object.assign({}, o.appearance || {});
+            delete o.appearance.uiScale;
+            AppController.appSettingsJson = JSON.stringify(o);
+            compare(Theme.systemScale(), AppController.systemUiScale(Theme.scaleSteps));
+            compare(Theme.scale, Theme.systemScale());
+            compare(Theme.systemScale(), 1, "tests read a 100 % system");
+            o.appearance.uiScale = 1.25;
+            AppController.appSettingsJson = JSON.stringify(o);
+            compare(Theme.scale, 1.25);
+        } finally {
+            AppController.appSettingsJson = saved;
+        }
+    }
 }

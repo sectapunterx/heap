@@ -18,6 +18,10 @@ ApplicationWindow {
     height: 900
     minimumWidth: 1100
     minimumHeight: 680
+    // Every control that names no size of its own (a TextField, a combo's
+    // text) reads the body size, so it follows the interface scale and the
+    // system's text size with everything else (APP-183).
+    font.pixelSize: Theme.fsMd
 
     // ── Window geometry ───────────────────────────────────────────────
     // The window opened at a hardcoded 1440x900 in the same spot on every

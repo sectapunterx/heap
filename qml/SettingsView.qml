@@ -318,9 +318,10 @@ Item {
         anchors.fill: parent
         spacing: 0
 
-        // Left nav
+        // Left nav. Grows with the interface scale (APP-183), or large text
+        // cuts the section names short.
         Rectangle {
-            Layout.preferredWidth: 240
+            Layout.preferredWidth: Theme.px(240)
             Layout.fillHeight: true
             color: Theme.panel
             Rectangle {
@@ -356,7 +357,7 @@ Item {
 
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 28
+                    Layout.preferredHeight: Theme.px(28)
                     Layout.topMargin: Theme.spSm
                     radius: Theme.radiusMd
                     color: Theme.panel2
@@ -440,8 +441,8 @@ Item {
                                 // page's own heading now, and two lines of
                                 // small print per row made the list a wall
                                 // (APP-172). Search still matches it.
-                                Layout.preferredHeight: 36
-                                Layout.minimumHeight: 36
+                                Layout.preferredHeight: Theme.px(36)
+                                Layout.minimumHeight: Theme.px(36)
                                 radius: Theme.radiusMd
                                 color: root.activeSection === modelData.id
                                        ? Theme.accentSoft
@@ -826,7 +827,7 @@ Item {
     // flat grey slab that matches nothing else in Settings.
     component SettingsCombo: ComboBox {
         id: sc
-        implicitHeight: 30
+        implicitHeight: Theme.px(30)
         font.pixelSize: Theme.fsMd
         background: Rectangle {
             radius: Theme.radiusMd
@@ -855,7 +856,7 @@ Item {
             required property var modelData
             required property int index
             width: sc.width - 8
-            height: 28
+            height: Theme.px(28)
             highlighted: sc.highlightedIndex === scRow.index
             contentItem: Text {
                 text: scRow.modelData[sc.textRole]
@@ -1342,7 +1343,11 @@ Item {
                 SegRow {
                     objectName: "settings-ui-scale"
                     label: I18n.t("settings.appearance.scale")
-                    hint: I18n.t("settings.appearance.scale.hint")
+                    // Unset, the scale is the system's text size (APP-183):
+                    // say so, or the 150 % nobody picked looks like a bug.
+                    hint: Theme._appearance.uiScale === undefined && Theme.systemScale() !== 1
+                          ? I18n.t("settings.appearance.scale.system")
+                          : I18n.t("settings.appearance.scale.hint")
                     value: String(Math.round(Theme.scale * 100))
                     options: Theme.scaleSteps.map((s) => ({ value: String(Math.round(s * 100)), label: Math.round(s * 100) + "%" }))
                     onSelected: (value) => root.set("appearance", "uiScale", Number(value) / 100)
