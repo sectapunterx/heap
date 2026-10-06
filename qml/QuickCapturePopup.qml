@@ -75,7 +75,10 @@ Popup {
                     break;
                 }
             }
-            if (!matched) out.push("@" + h);
+            // "@r.losev" for Роман Лосев: a login made of one person's name.
+            const byLogin = matched ? "" : AppController.personIdForHandle(h);
+            if (byLogin) out.push(AppController.personById(byLogin).name || byLogin);
+            else if (!matched) out.push("@" + h);
         }
         return out;
     }
@@ -115,6 +118,7 @@ Popup {
             const h = handles[i];
             const p = AppController.personById(h);
             if (p && p.id) { out.push(p.id); continue; }
+            let matched = false;
             for (let j = 0; j < known.rowCount(); ++j) {
                 const idx = known.index(j, 0);
                 const id  = String(known.data(idx, Qt.UserRole + 1) || "");
@@ -123,9 +127,13 @@ Popup {
                 if (id.toLowerCase() === h.toLowerCase()
                     || firstWord.toLowerCase() === h.toLowerCase()) {
                     out.push(id);
+                    matched = true;
                     break;
                 }
             }
+            // "@r.losev" for Роман Лосев: a login made of one person's name.
+            const byLogin = matched ? "" : AppController.personIdForHandle(h);
+            if (byLogin) out.push(byLogin);
         }
         return out;
     }

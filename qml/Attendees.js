@@ -35,7 +35,11 @@ function listed(text, skipStart) {
 // before one merely containing it. The same human can appear twice (a contact
 // and a Person of the same name), and someone already in the field is not
 // offered again.
-function suggest(candidates, query, taken, max) {
+//
+// `rank`, when given, is AppController.personMatchRank (query, name, handle
+// -> 0..100): it finds people by a login made of the name too ("r.losev" for
+// Роман Лосев), and a whole word or login ranks as a prefix does.
+function suggest(candidates, query, taken, max, rank) {
     const q = (query || "").toLowerCase();
     const seen = {};
     for (let i = 0; i < (taken || []).length; ++i) seen[taken[i]] = true;
@@ -46,12 +50,20 @@ function suggest(candidates, query, taken, max) {
         const key = name.toLowerCase();
         if (key.length === 0 || seen[key]) continue;
         const handle = String(c.handle || "").replace(/^@+/, "").toLowerCase();
-        const words = key.split(/\s+/);
-        let prefix = q.length === 0 || handle.indexOf(q) === 0;
-        for (let w = 0; !prefix && w < words.length; ++w)
-            if (words[w].indexOf(q) === 0) prefix = true;
+        let prefix, hit;
+        if (rank) {
+            const r = q.length === 0 ? 100 : rank(q, name, handle);
+            prefix = r >= 50;   // PersonRank::WordPrefix
+            hit = r > 0;
+        } else {
+            const words = key.split(/\s+/);
+            prefix = q.length === 0 || handle.indexOf(q) === 0;
+            for (let w = 0; !prefix && w < words.length; ++w)
+                if (words[w].indexOf(q) === 0) prefix = true;
+            hit = prefix || key.indexOf(q) >= 0 || handle.indexOf(q) >= 0;
+        }
         if (prefix) head.push(c);
-        else if (key.indexOf(q) >= 0 || handle.indexOf(q) >= 0) rest.push(c);
+        else if (hit) rest.push(c);
         else continue;
         seen[key] = true;
     }

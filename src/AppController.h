@@ -1036,6 +1036,14 @@ class AppController : public QObject {
   Q_INVOKABLE QVariantMap personById(const QString& id) const;
   // The person an "@handle" in a note names, or empty.
   Q_INVOKABLE QString personIdForHandle(const QString& handle) const;
+  // Finding someone by what was typed (heap::text::personMatchRank): the id,
+  // a login derived from the name ("r.losev", "roman.losev"), or the name's
+  // words in either script ("roman lo", "роман"). personMatchRank is the
+  // rank for one candidate (0 = no match); matchPeople is the active
+  // profile's people, best first, at most `limit` of them, as
+  // {id, name, role, color, rank}.
+  Q_INVOKABLE int personMatchRank(const QString& query, const QString& name, const QString& id) const;
+  Q_INVOKABLE QVariantList matchPeople(const QString& query, int limit) const;
   Q_INVOKABLE bool savePerson(const QVariantMap& draft);
   Q_INVOKABLE void deletePerson(const QString& id);
 

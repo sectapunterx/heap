@@ -565,6 +565,40 @@ TEST_F(KnowAuditTest, Know12_MentionsResolveToPeopleInAnyScript) {
   EXPECT_EQ(app_->personIdForHandle(QStringLiteral("олег")), QStringLiteral("p-oleg"));
 }
 
+// A login derived from the name ("@r.losev") names the one person it fits;
+// an exact id always wins, and a login two people share names neither.
+TEST_F(KnowAuditTest, MentionByLoginDerivedFromTheName) {
+  app_->people()->reset({});
+  Person roman;
+  roman.id = QStringLiteral("p-roman");
+  roman.name = QStringLiteral("Роман Лосев");
+  app_->people()->upsert(roman);
+  EXPECT_EQ(app_->personIdForHandle(QStringLiteral("@r.losev")), QStringLiteral("p-roman"));
+  EXPECT_EQ(app_->personIdForHandle(QStringLiteral("@roman.losev")), QStringLiteral("p-roman"));
+  EXPECT_EQ(app_->personIdForHandle(QStringLiteral("@r.lo")), QString());  // a prefix names no one
+
+  Person ruslan;
+  ruslan.id = QStringLiteral("p-ruslan");
+  ruslan.name = QStringLiteral("Руслан Лосев");
+  app_->people()->upsert(ruslan);
+  EXPECT_EQ(app_->personIdForHandle(QStringLiteral("@r.losev")), QString());
+  EXPECT_EQ(app_->personIdForHandle(QStringLiteral("@roman.losev")), QStringLiteral("p-roman"));
+
+  Person holder;
+  holder.id = QStringLiteral("r.losev");
+  holder.name = QStringLiteral("Someone Else");
+  app_->people()->upsert(holder);
+  EXPECT_EQ(app_->personIdForHandle(QStringLiteral("@r.losev")), QStringLiteral("r.losev"));
+
+  // matchPeople: both Losevs for the shared login, the id holder first.
+  const QVariantList hits = app_->matchPeople(QStringLiteral("r.losev"), 8);
+  ASSERT_EQ(hits.size(), 3);
+  EXPECT_EQ(hits.first().toMap().value("id").toString(), QStringLiteral("r.losev"));
+  const QVariantList romanOnly = app_->matchPeople(QStringLiteral("roman losev"), 8);
+  ASSERT_EQ(romanOnly.size(), 1);
+  EXPECT_EQ(romanOnly.first().toMap().value("name").toString(), QStringLiteral("Роман Лосев"));
+}
+
 // ── KNOW-20: copy as Markdown takes every note and every doc page ──
 
 TEST_F(KnowAuditTest, Know20_CopyAsMarkdownHasAllNotesAndPages) {

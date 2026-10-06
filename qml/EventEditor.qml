@@ -584,7 +584,8 @@ Popup {
                     function refresh() {
                         const tok = Attendees.tokenAt(attField.text, attField.cursorPosition);
                         attSuggest.items = Attendees.suggest(AppController.pingCandidates(), tok.query,
-                                                             Attendees.listed(attField.text, tok.start), 6);
+                                                             Attendees.listed(attField.text, tok.start), 6,
+                                                             (q, n, h) => AppController.personMatchRank(q, n, h));
                         attSuggest.sel = 0;
                     }
                     function dismiss() { attSuggest.items = []; }

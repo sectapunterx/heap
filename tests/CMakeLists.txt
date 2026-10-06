@@ -232,7 +232,9 @@ add_test(NAME heap_git_tests COMMAND heap_git_tests)
 
 add_executable(heap_text_tests
     test_task_text_utils.cpp
+    test_person_match.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/PersonMatch.cpp
 )
 
 target_include_directories(heap_text_tests PRIVATE
