@@ -361,7 +361,7 @@ int main(int argc, char* argv[]) {
     qInfo("data directory overridden: %s", qUtf8Printable(heap::paths::dataDir()));
   }
 
-  // Before any QML asks for "Golos Text" / "JetBrains Mono" (Theme.qml); after
+  // Before any QML asks for "heap Golos Text" / "heap JetBrains Mono" (Theme.qml); after
   // the file logger, so a face that fails to load is in heap.log.
   heap::platform::registerBundledFonts();
   heap::platform::useBundledUiFontByDefault();

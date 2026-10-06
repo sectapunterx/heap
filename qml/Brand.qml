@@ -58,8 +58,10 @@ QtObject {
     readonly property color lightAccent:  "#178ea0"
 
     // ── Typography ────────────────────────────────────────────
-    readonly property string fontSans: "Golos Text"
-    readonly property string fontMono: "JetBrains Mono"
+    // The bundled cuts (platform/BundledFonts.h): Golos Text and JetBrains
+    // Mono under a "heap " name, so an installed copy can never stand in.
+    readonly property string fontSans: "heap Golos Text"
+    readonly property string fontMono: "heap JetBrains Mono"
 
     // Type scale (px)
     readonly property int sizeDisplay:  56

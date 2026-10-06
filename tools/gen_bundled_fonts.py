@@ -9,12 +9,19 @@ faces instead: Golos Text 400/500/600 and JetBrains Mono 400/500, cut with
 fontTools.varLib.instancer from the upstream files, every glyph kept (full
 Latin + Cyrillic).
 
-Each face is named the legacy way: family "Golos Text" / "JetBrains Mono" in
-name ID 1, the weight ("Medium") in name ID 2, no typographic family (16/17).
-GDI reads ID 1 and DirectWrite / fontconfig prefer ID 16, so with 16 absent
-every backend sees one family with three (two) weights rather than "Golos Text
-Medium" as a family of its own. Neither OFL.txt declares a Reserved Font Name,
-so a modified version may keep the name.
+Each face is named the legacy way: family "heap Golos Text" / "heap JetBrains
+Mono" in name ID 1, the weight ("Medium") in name ID 2, no typographic family
+(16/17). GDI reads ID 1 and DirectWrite / fontconfig prefer ID 16, so with 16
+absent every backend sees one family with three (two) weights rather than
+"Golos Text Medium" as a family of its own.
+
+The "heap " prefix (in the family, full and PostScript names) keeps these cuts
+apart from a copy of the same font installed on the machine. Under the
+upstream name, Windows with JetBrains Mono installed mixed the two: text was
+shaped against one file's glyph order and drawn from the other's, so every
+time, count and key hint came out as random Cyrillic (0.6.0). Neither OFL.txt
+declares a Reserved Font Name; the rename is for the collision, not the
+licence.
 
     pip install fonttools
     python tools/gen_bundled_fonts.py            # downloads upstream, writes resources/fonts/
@@ -56,7 +63,8 @@ def main() -> None:
             var_path = OUT / ("_" + varfile)
             var_path.write_bytes(fetch(f"{UPSTREAM}/{updir}/{varfile.replace('[', '%5B').replace(']', '%5D')}"))
             (OUT / f"{stem}-OFL.txt").write_bytes(fetch(f"{UPSTREAM}/{updir}/OFL.txt"))
-        family = TTFont(var_path)["name"].getDebugName(1)
+        family = "heap " + TTFont(var_path)["name"].getDebugName(1)
+        ps_family = family.replace(" ", "")
         for weight, style in weights:
             font = instancer.instantiateVariableFont(TTFont(var_path), {"wght": weight}, updateFontNames=True)
             names = font["name"]
@@ -65,8 +73,16 @@ def main() -> None:
                     names.setName(family, 1, rec.platformID, rec.platEncID, rec.langID)
                 elif rec.nameID == 2:
                     names.setName(style, 2, rec.platformID, rec.platEncID, rec.langID)
+                elif rec.nameID == 3:
+                    version = rec.toUnicode().split(";")[0]
+                    names.setName(f"{version};heap;{ps_family}-{style}", 3, rec.platformID, rec.platEncID, rec.langID)
+                elif rec.nameID == 4:
+                    names.setName(f"{family} {style}", 4, rec.platformID, rec.platEncID, rec.langID)
+                elif rec.nameID == 6:
+                    names.setName(f"{ps_family}-{style}", 6, rec.platformID, rec.platEncID, rec.langID)
             names.removeNames(nameID=16)
             names.removeNames(nameID=17)
+            names.removeNames(nameID=25)  # variations PostScript prefix: upstream name, no axes left
             if weight != 400:
                 font["OS/2"].fsSelection &= ~FS_SELECTION_REGULAR
             font.recalcTimestamp = False  # keep upstream head.modified: same bytes on every run

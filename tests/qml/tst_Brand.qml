@@ -31,8 +31,8 @@ TestCase {
 
     // ── Typography ────────────────────────────────────────────
     function test_font_families() {
-        compare(Brand.fontSans, "Golos Text");
-        compare(Brand.fontMono, "JetBrains Mono");
+        compare(Brand.fontSans, "heap Golos Text");
+        compare(Brand.fontMono, "heap JetBrains Mono");
         verify(Brand.fontSans.length > 0);
         verify(Brand.fontMono.length > 0);
     }

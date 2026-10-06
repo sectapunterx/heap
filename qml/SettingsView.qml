@@ -170,8 +170,8 @@ Item {
             // No accent / theme defaults here: an absent darkPreset /
             // lightPreset means the built-in heap. themes (Theme.qml), and
             // writing a default would pin a profile to it.
-            fontUI: "Golos Text",
-            fontMono: "JetBrains Mono",
+            fontUI: Brand.fontSans,
+            fontMono: Brand.fontMono,
             reducedMotion: false,
             highContrast: false
         },

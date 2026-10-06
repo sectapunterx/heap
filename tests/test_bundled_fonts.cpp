@@ -8,6 +8,7 @@
 #include "platform/BundledFonts.h"
 
 #include <QDir>
+#include <QFile>
 #include <QFont>
 #include <QFontDatabase>
 #include <QFontInfo>
@@ -53,9 +54,26 @@ TEST(BundledFonts, FamiliesAreRegistered) {
   EXPECT_TRUE(families.contains(ui())) << qPrintable(families.join(QStringLiteral(", ")));
   EXPECT_TRUE(families.contains(mono()));
   // One family per font: a weight never shows up as a family of its own.
-  EXPECT_FALSE(families.contains(QStringLiteral("Golos Text Medium")));
-  EXPECT_FALSE(families.contains(QStringLiteral("Golos Text SemiBold")));
-  EXPECT_FALSE(families.contains(QStringLiteral("JetBrains Mono Medium")));
+  EXPECT_FALSE(families.contains(ui() + QStringLiteral(" Medium")));
+  EXPECT_FALSE(families.contains(ui() + QStringLiteral(" SemiBold")));
+  EXPECT_FALSE(families.contains(mono() + QStringLiteral(" Medium")));
+}
+
+// The bundled faces never carry the upstream names. With JetBrains Mono
+// installed on Windows, a bundled face sharing the name was mixed with the
+// installed one (shaped against one file's glyph ids, drawn from the other's)
+// and text in it came out as random glyphs (0.6.0).
+TEST(BundledFonts, NamesNeverCollideWithAnInstalledCopy) {
+  EXPECT_TRUE(ui().startsWith(QStringLiteral("heap ")));
+  EXPECT_TRUE(mono().startsWith(QStringLiteral("heap ")));
+  const QDir dir(QStringLiteral(":/fonts"));
+  for(const QString& file : dir.entryList({QStringLiteral("*.ttf")}, QDir::Files)) {
+    QFile f(dir.filePath(file));
+    ASSERT_TRUE(f.open(QIODevice::ReadOnly));
+    const QRawFont raw(f.readAll(), 12);
+    ASSERT_TRUE(raw.isValid()) << qPrintable(file);
+    EXPECT_TRUE(raw.familyName() == ui() || raw.familyName() == mono()) << qPrintable(file + QStringLiteral(": ") + raw.familyName());
+  }
 }
 
 TEST(BundledFonts, StylesAreTheShippedWeights) {

@@ -315,15 +315,19 @@ QtObject {
     // the whole string matched nothing and every Text fell back to the system
     // font. A family set in settings that this machine does not have gives
     // way to the bundled one here, since Qt would pick an arbitrary face.
-    // "IBM Plex Sans" was the seeded default before the fonts were bundled and
-    // sits in existing profiles; nobody picked it, so it reads as "the default".
-    readonly property string legacyDefaultFontUi: "IBM Plex Sans"
+    // Earlier seeded defaults sit in existing profiles and read as "the
+    // default": "IBM Plex Sans" from before the fonts were bundled, and the
+    // upstream "Golos Text" / "JetBrains Mono" that 0.6.0 seeded. The bundled
+    // faces are "heap ..." now, and the upstream name may be an installed copy.
+    readonly property var legacyDefaultFontsUi: ["IBM Plex Sans", "Golos Text"]
+    readonly property var legacyDefaultFontsMono: ["JetBrains Mono"]
     function _installedFont(family, fallback) {
         return family && Qt.fontFamilies().indexOf(family) >= 0 ? family : fallback;
     }
-    readonly property string fontUi: _appearance.fontUI !== legacyDefaultFontUi
+    readonly property string fontUi: legacyDefaultFontsUi.indexOf(_appearance.fontUI) < 0
                                      ? _installedFont(_appearance.fontUI, Brand.fontSans) : Brand.fontSans
-    readonly property string fontMono: _installedFont(_appearance.fontMono, Brand.fontMono)
+    readonly property string fontMono: legacyDefaultFontsMono.indexOf(_appearance.fontMono) < 0
+                                       ? _installedFont(_appearance.fontMono, Brand.fontMono) : Brand.fontMono
 
     function withAlpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a); }
 
