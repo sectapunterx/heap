@@ -42,6 +42,7 @@
 #include "platform/Accessibility.h"
 #include "platform/GlobalHotkey.h"
 #include "platform/Paths.h"
+#include "platform/Sound.h"
 #include "query/TaskQuery.h"
 #include "recap/WeeklyRecap.h"
 #include "recur/RecurrenceEngine.h"
@@ -1877,6 +1878,7 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
   const QString recurrence = t.recurrence;
   const QDate recurBase = t.dueAt.isValid() ? t.dueAt.date() : t.scheduledAt.date();
   m_tasks.setStatus(id, newStatus);
+  completionSoundOnMove_(prevStatus, newStatus);
 
   // Mirror the change back to the linked tracker issue (e.g. moving to Done
   // closes the GitHub issue / transitions the Jira issue). Routed to whichever
@@ -1983,6 +1985,23 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
     emit toast(recursNote);
   }
   scheduleSave();
+}
+
+void AppController::completionSoundOnMove_(const QString& fromStatus, const QString& toStatus) {
+  // Tracker pulls and undo/redo restore rows without passing through
+  // moveTask(), so what reaches here is a move the user made — in this window,
+  // or through `heap` on the command line (muted, or headless).
+  using heap::platform::StatusChangeSource;
+  const StatusChangeSource source = s_headless || m_completionSoundMuted ? StatusChangeSource::Cli : StatusChangeSource::User;
+  const bool enabled = settingsMap().value(QStringLiteral("appearance")).toMap().value(QStringLiteral("completionSound")).toBool();
+  if(!heap::platform::shouldPlayCompletionSound(fromStatus, toStatus, source, enabled)) {
+    return;
+  }
+  if(m_bulkMoveDepth > 0) {
+    m_completionSoundPending = true;
+    return;
+  }
+  heap::platform::playCompletionSound();
 }
 
 void AppController::pushStatusToTracker(const QString& taskId, const QString& status) {
@@ -11563,6 +11582,10 @@ void AppController::moveSelectedTasksToStatus(const QString& statusId) {
     }
   }
   --m_bulkMoveDepth;
+  if(m_completionSoundPending) {
+    m_completionSoundPending = false;
+    heap::platform::playCompletionSound();
+  }
   if(moved > 0) {
     scope.setLabel(tr_("selection.toast.moved").arg(moved));
     emit undoableToast(tr_("selection.toast.moved").arg(moved), 5);

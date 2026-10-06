@@ -138,7 +138,10 @@ Response done(AppController& c, const Request& req, const QDateTime& now) {
   bool moved = false;
   {
     const ProfileScope scope(c, p.id, /*restore=*/true);
+    // Not the user's click in the window: no completion sound (APP-167).
+    c.setCompletionSoundMuted(true);
     c.moveTask(id, target);
+    c.setCompletionSoundMuted(false);
     const Snapshot after = snapshotOf(c);
     const TaskRef moved_ref = findTask(after, id, findProfile(after, QString()));
     moved = moved_ref.found() && after.profiles.at(moved_ref.profile).tasks.at(moved_ref.task).status == target;

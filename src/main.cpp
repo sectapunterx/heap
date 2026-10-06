@@ -11,6 +11,7 @@
 #include "platform/AltGrGuard.h"
 #include "platform/Paths.h"
 #include "platform/SingleInstance.h"
+#include "platform/Sound.h"
 #include "storage/StateIO.h"
 
 #include <QApplication>
@@ -273,6 +274,7 @@ int main(int argc, char* argv[]) {
     return 0;
   }
   if(cli.smoke) {
+    heap::platform::setSoundSuppressed(true);
     const QString source = dataDir;
     dataDir = smokeDataDir.path();
     if(!source.isEmpty()) {

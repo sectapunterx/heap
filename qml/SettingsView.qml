@@ -1356,6 +1356,22 @@ Item {
                     checked: !!(root.settings.appearance && root.settings.appearance.reducedMotion)
                     onToggled: (checked) => root.set("appearance", "reducedMotion", checked)
                 }
+                // Opt-in tick when a task moves to Done (APP-167); played by
+                // AppController.moveTask, independent of reduced motion.
+                // Reads and writes the settings JSON directly (this view
+                // reloads on the change), so no unqualified `root` access.
+                SwitchRow {
+                    objectName: "settings-completion-sound"
+                    label: I18n.t("settings.appearance.completionSound")
+                    hint: I18n.t("settings.appearance.completionSound.hint")
+                    checked: !!Theme._appearance.completionSound
+                    onToggled: (checked) => {
+                        let s = {};
+                        try { s = JSON.parse(AppController.appSettingsJson || "{}") || {}; } catch (e) { s = {}; }
+                        s.appearance = Object.assign({}, s.appearance, { completionSound: checked });
+                        AppController.appSettingsJson = JSON.stringify(s);
+                    }
+                }
                 // Only where there is a tray to close into. Three states,
                 // because there are three: a switch showed ON while the
                 // choice was still unset, and the next close asked anyway.
