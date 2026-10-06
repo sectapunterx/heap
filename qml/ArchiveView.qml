@@ -213,6 +213,8 @@ Item {
                 required property string branch
                 required property bool blockedStuck
                 required property string prState
+                required property string prMove
+                required property string prMoveReason
                 required property int prNumber
                 required property string prUrl
                 required property int gitAhead
@@ -275,6 +277,7 @@ Item {
                         deadline: row.deadline, branch: row.branch,
                         archived: true, blockedStuck: row.blockedStuck,
                         prState: row.prState, prNumber: row.prNumber, prUrl: row.prUrl,
+                        prMove: row.prMove, prMoveReason: row.prMoveReason,
                         gitAhead: row.gitAhead, gitBehind: row.gitBehind,
                         recentCommits: row.recentCommits,
                         trackedSeconds: row.trackedSeconds, isTiming: row.isTiming,

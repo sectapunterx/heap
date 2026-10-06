@@ -43,6 +43,9 @@ class GitWatcher : public QObject {
   }
 
   void requestPrFetch(const QString& repoPath, const QString& branch);
+  // Recomputes every known PR's whose-move against `login`. Public so a test
+  // can stand in for `gh api user`.
+  void setMyLogin(const QString& login);
 
   // Create and switch to a new branch (`git checkout -b`).
   //
@@ -103,6 +106,12 @@ class GitWatcher : public QObject {
   void fetchAheadBehindAsync(const QString& repoPath, const QString& branch);
   void fetchCommitsAsync(const QString& repoPath);
   void fetchPrAsync(const QString& repoPath, const QString& branch, bool emitOneShot);
+  // Who the user is on the forge, for whose-move (APP-156). Asked once.
+  void fetchLoginAsync(const QString& workDir, const QString& tool, bool glab);
+  void applyMove(PrInfo& info) const;
+
+  QString m_myLogin;
+  bool m_loginAsked = false;
 
   static QString cacheKey(const QString& repo, const QString& branch);
   static QString readHeadText(const QString& gitDir);

@@ -79,6 +79,9 @@ Popup {
                        body: views[v].query });
         }
         out.push({ kind: "command", commandId: "savedview.save", label: I18n.t("palette.cmd.saveView"), sub: "" });
+        // Integrations health (APP-164) lives at the top of that section.
+        out.push({ kind: "setting", commandId: "settings:integrations", label: I18n.t("palette.cmd.integrationsHealth"),
+                   sub: I18n.t("health.hint") });
         for (let j = 0; j < _settingsSections.length; j++) {
             const id = _settingsSections[j];
             out.push({ kind: "setting", commandId: "settings:" + id,

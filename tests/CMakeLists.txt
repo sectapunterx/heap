@@ -184,10 +184,31 @@ target_include_directories(heap_recur_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/
 target_link_libraries(heap_recur_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
 add_test(NAME heap_recur_tests COMMAND heap_recur_tests)
 
+# Sync state of a mirrored card and the status rule of a pull (APP-163). Header-only.
+add_executable(heap_sync_state_tests test_sync_state.cpp)
+target_include_directories(heap_sync_state_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_sync_state_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
+add_test(NAME heap_sync_state_tests COMMAND heap_sync_state_tests)
+
+# Integrations health: failure wording and relative times (APP-164).
+add_executable(heap_sync_health_tests test_sync_health.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SyncHealth.cpp)
+target_include_directories(heap_sync_health_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_sync_health_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
+add_test(NAME heap_sync_health_tests COMMAND heap_sync_health_tests)
+
+# Task history: diff, cap, coalescing, JSON round-trip (APP-165). Gui and Qml
+# because TaskHistory.h reaches Models.h.
+add_executable(heap_task_history_tests test_task_history.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../src/history/TaskHistory.cpp)
+target_include_directories(heap_task_history_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_task_history_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Qml GTest::gtest GTest::gtest_main)
+add_test(NAME heap_task_history_tests COMMAND heap_task_history_tests)
+
 add_executable(heap_git_tests
     test_branch_task_matcher.cpp
     test_git_watcher_parse.cpp
+    test_whose_move.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/BranchTaskMatcher.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/PrFacts.cpp
 )
 
 target_include_directories(heap_git_tests PRIVATE
@@ -344,6 +365,9 @@ heap_add_appcontroller_test(heap_int_audit_tests test_int_audit.cpp)
 heap_add_appcontroller_test(heap_filter_bench_tests test_filter_bench.cpp)
 set_tests_properties(heap_filter_bench_tests PROPERTIES RUN_SERIAL TRUE)
 # ── audit-perf: end ──
+
+# ─── Task history through the controller: recording, sync marks, save (APP-165) ───
+heap_add_appcontroller_test(heap_task_history_app_tests test_task_history_app.cpp)
 
 # ─── Regressions from the 0.5.0 end-to-end audit ───
 heap_add_appcontroller_test(heap_regression_tests test_regressions.cpp)
