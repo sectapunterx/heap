@@ -10720,6 +10720,15 @@ bool AppController::restoreFromBackup(const QString& fileName) {
 }
 
 bool AppController::replaceStateFile(const QByteArray& bytes) {
+  // Every task id handed out so far, in any profile, before the state that
+  // holds them goes (TM-2).
+  const QHash<QString, int> seqBefore = m_taskSeq;
+  QStringList idsBefore;
+  for(const Profile& p : m_profiles) {
+    for(const Task& t : p.id == m_activeProfileId ? m_tasks.items() : p.tasks) {
+      idsBefore.append(t.id);
+    }
+  }
   QString error;
   if(!heap::storage::writeAtomically(stateFilePath(), bytes, &error)) {
     setStorageState(QStringLiteral("writeFailed"), tr_("storage.writeFailed").arg(QDir::toNativeSeparators(stateFilePath()), error));
@@ -10728,6 +10737,21 @@ bool AppController::replaceStateFile(const QByteArray& bytes) {
   // Reload from disk. The undo history described the state that was just
   // replaced, so it goes with it (reloadStateFromDisk clears it).
   reloadStateFromDisk();
+  // The id counter never goes back, whether the state came from the time
+  // machine or from backups/. Restored to the older file's, it handed the next
+  // new task the id of one the restore had just removed — and that one is
+  // still in the "before restore" copy, where it then read as an edit of the
+  // new task, and "Use this version" overwrote the new task with it.
+  const QHash<QString, int> restored = m_taskSeq;
+  for(auto it = seqBefore.constBegin(); it != seqBefore.constEnd(); ++it) {
+    m_taskSeq.insert(it.key(), qMax(it.value(), m_taskSeq.value(it.key(), 1)));
+  }
+  for(const QString& id : std::as_const(idsBefore)) {
+    noteTaskIdUsed(id);
+  }
+  if(m_taskSeq != restored) {
+    scheduleSave();
+  }
   return true;
 }
 

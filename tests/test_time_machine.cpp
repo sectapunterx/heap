@@ -487,6 +487,29 @@ TEST_F(TimeMachine, RestoringEverythingNeverHandsATaskIdOutTwice) {
   EXPECT_NE(again.newTaskDraft(QStringLiteral("todo")).value("id").toString(), added);
 }
 
+TEST_F(TimeMachine, RestoringABackupNeverHandsATaskIdOutTwice) {
+  // The same as TM-2 for Settings → Data → backups: the backup's counter is
+  // older than the ids the replaced state handed out.
+  const QByteArray before = stateDoc({profileJson("work", {taskJson("WORK-1")})}, "work");
+  writeRaw(appDataDir() + "/state.json", before);
+  writeRaw(appDataDir() + "/backups/state-20260101-000000.json", before);
+  QString added;
+  {
+    AppController app;
+    QVariantMap draft = app.newTaskDraft(QStringLiteral("todo"));
+    draft["title"] = QStringLiteral("made after the backup");
+    added = draft.value("id").toString();
+    ASSERT_TRUE(app.saveTask(draft));
+
+    ASSERT_TRUE(app.restoreFromBackup(QStringLiteral("state-20260101-000000.json")));
+    ASSERT_LT(app.tasks()->indexOfId(added), 0);
+    EXPECT_NE(app.newTaskDraft(QStringLiteral("todo")).value("id").toString(), added);
+    app.flushSave();
+  }
+  AppController again;
+  EXPECT_NE(again.newTaskDraft(QStringLiteral("todo")).value("id").toString(), added);
+}
+
 TEST_F(TimeMachine, AProfileCopysOverridesFollowItsOwnSeries) {
   // TM-1: an edited occurrence of a recurring event, copied with its profile,
   // must stand in for the copy's series. Left on the live one's, it hid the

@@ -342,35 +342,13 @@ bool AppController::restoreSnapshot(const QString& name) {
     emit toast(tr_("backup.snapshotFailed"), QStringLiteral("warning"));
     return false;
   }
-  // Every task id handed out so far, in any profile, before the state that
-  // holds them goes (TM-2).
-  const QHash<QString, int> seqBefore = m_taskSeq;
-  QStringList idsBefore;
-  for(const Profile& p : m_profiles) {
-    for(const Task& t : p.id == m_activeProfileId ? m_tasks.items() : p.tasks) {
-      idsBefore.append(t.id);
-    }
-  }
   QByteArray current;
   if(QFile f(stateFilePath()); f.open(QIODevice::ReadOnly)) {
     current = f.readAll();
   }
+  // replaceStateFile keeps the task id counter from going back (TM-2).
   if(!replaceStateFile(withCurrentSettings(bytes, current))) {
     return false;
-  }
-  // The id counter never goes back. Restored to the snapshot's, it handed the
-  // next new task the id of one the restore had just removed — and that one
-  // is still in the "before restore" snapshot, where it then read as an edit
-  // of the new task, and "Use this version" overwrote the new task with it.
-  const QHash<QString, int> restored = m_taskSeq;
-  for(auto it = seqBefore.constBegin(); it != seqBefore.constEnd(); ++it) {
-    m_taskSeq.insert(it.key(), qMax(it.value(), m_taskSeq.value(it.key(), 1)));
-  }
-  for(const QString& id : std::as_const(idsBefore)) {
-    noteTaskIdUsed(id);
-  }
-  if(m_taskSeq != restored) {
-    scheduleSave();
   }
   QDateTime at;
   heap::history::parseName(name, &at);
