@@ -409,7 +409,9 @@ jobs:
         if: runner.os == 'Linux'
         env:
           QT_QPA_PLATFORM: offscreen
-        run: build/heap --smoke --data-dir "$RUNNER_TEMP/smoke"
+        # --perf-log: the startup timings (perf: lines) land in this log for
+        # trend-watching; logged only, never judged (APP-161).
+        run: build/heap --smoke --perf-log --data-dir "$RUNNER_TEMP/smoke"
 
       # The portable bundle exactly as release.yml assembles it (windeployqt +
       # copy-deps + UCRT), started with a PATH that has no MSYS2 on it — so a DLL

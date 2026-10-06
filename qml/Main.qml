@@ -485,7 +485,7 @@ ApplicationWindow {
         || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
         || tweaks.opened || hotkeys.opened || closeAsk.opened || goToDatePopup.opened
-        || weeklyRecap.opened
+        || weeklyRecap.opened || timeMachine.opened
 
     // ── Keyboard scope ────────────────────────────────────────────────
     // Board and calendar keys (Return, Esc, the arrows, bare letters) are
@@ -1066,6 +1066,7 @@ ApplicationWindow {
                             function openHotkeys() { rail.openHotkeys(rail.hotkeysAnchor) }
                             function exportJson()  { exportJsonDialog.open() }
                             function importJson()  { importJsonDialog.open() }
+                            function openTimeMachine() { timeMachine.showNow() }
                         }
                     }
                 }
@@ -1378,6 +1379,7 @@ ApplicationWindow {
         case "event.new":            eventEditor.showForDraft(AppController.newEventDraft(9, AppController.selectedDate)); break;
         case "welcome.replay":       AppController.replayWelcome(); break;
         case "recap.open":           weeklyRecap.showNow(); break;
+        case "timeMachine.open":     timeMachine.showNow(); break;
         default:                     console.warn("palette: no command", id);
         }
     }
@@ -1764,6 +1766,11 @@ ApplicationWindow {
     // The Monday recap: last week's column moves (WEAK PECAP). Opens itself
     // on the first launch of a week, and when the app is left running into
     // Monday; the palette opens it any time.
+    // The time machine (APP-162): Settings → Data and the palette open it.
+    TimeMachineDialog {
+        id: timeMachine
+    }
+
     WeeklyRecapDialog {
         id: weeklyRecap
         onTaskActivated: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))

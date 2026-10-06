@@ -278,27 +278,10 @@ Popup {
 
         // QuickCapture tasks: the "To Do" column, with the id of the ticket the
         // text names ("LTE-2398 …") or the profile prefix.
-        const draft = AppController.newQuickTaskDraft(_meta.ticketKey || "");
-        draft._isNew = true;
-        draft.title = _title;
-        if (_meta.priority) draft.priority = _meta.priority;
-        if (_meta.labels && _meta.labels.length > 0) draft.labels = _meta.labels;
-        if (_meta && _meta.desc && _meta.desc.length > 0) {
-            draft.desc = _meta.desc;
-        }
-        // The parsed datetime lands on the task itself — including the clock
-        // time, which used to survive only as a side calendar block (HEAP-115).
-        if (_preview && _preview.ok && _preview.start) {
-            draft.scheduledAt = _preview.start;
-            draft.dueAt = _preview.start;
-            draft.scheduledHasTime = !!_preview.hasTime;
-            draft.dueHasTime = !!_preview.hasTime;
-        }
-        // Persist a parsed recurrence ("every weekday…") so completing the task
-        // regenerates it (HEAP-77).
-        if (_preview && _preview.recurrence && _preview.recurrence.length > 0) {
-            draft.recurrence = _preview.recurrence;
-        }
+        // Title, "// description", priority, #labels, the parsed date (clock
+        // time included, HEAP-115) and recurrence (HEAP-77): built in C++, the
+        // same draft `heap add` saves from the command line (APP-173).
+        const draft = AppController.quickTaskDraft(inputField.text, new Date());
         // A meeting is a task and its calendar event: one undo step for both.
         AppController.beginUndoGroup(I18n.t("quick.undo").arg(draft.id));
         try {
@@ -368,6 +351,9 @@ Popup {
         root._finish(root._summary("task", draft, null));
     }
 
+    // Opt-in timing (HEAP_PERF_LOG=1 / --perf-log): hotkey or open() to the
+    // first frame that shows the popup. Logs only; a no-op otherwise.
+    onAboutToShow: AppController.perfMarkShown("capture", contentItem)
     onOpened: {
         inputField.text = "";
         _preview = {ok: false};

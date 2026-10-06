@@ -11,6 +11,7 @@
 // matters is the one printed to stdout.
 
 #include "AppController.h"
+#include "BenchData.h"
 
 #include <QApplication>
 #include <QDir>
@@ -35,37 +36,6 @@ QString appDataDir() {
   return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
 }
 
-QVector<Task> makeTasks(int n) {
-  QVector<Task> out;
-  out.reserve(n);
-  const QDateTime base(QDate(2026, 7, 9), QTime(9, 0));
-  for(int i = 0; i < n; ++i) {
-    Task t;
-    t.id = QStringLiteral("BENCH-") + QString::number(i);
-    t.title = QStringLiteral("Task number %1 with a realistic title length").arg(i);
-    t.desc = QStringLiteral("Several lines of description text, of the sort a real ticket carries.\nSecond line.");
-    t.priority = QStringLiteral("P%1").arg(i % 4);
-    t.status = (i % 3 == 0) ? QStringLiteral("todo") : QStringLiteral("prog");
-    t.scheduledAt = base.addDays(i % 90);
-    t.dueAt = base.addDays((i % 90) + 1);
-    t.scheduledHasTime = (i % 2) == 0;
-    t.dueHasTime = (i % 2) == 0;
-    t.branch = QStringLiteral("feature/bench-") + QString::number(i);
-    t.statusChangedAt = base;
-    t.trackedSeconds = i;
-    t.recurrence = (i % 10 == 0) ? QStringLiteral("every:weekday") : QString();
-    if(i % 5 == 0) {
-      t.externalId = QString::number(i);
-      t.externalUrl = QStringLiteral("https://example.invalid/") + t.externalId;
-      t.externalProvider = QStringLiteral("github");
-    }
-    t.labels = {Label{QStringLiteral("bench"), QStringLiteral("#5cc2dd")}, Label{QStringLiteral("p") + QString::number(i % 4), QString()}};
-    t.estimateMinutes = 30 + (i % 240);
-    out.append(t);
-  }
-  return out;
-}
-
 }  // namespace
 
 TEST(SaveLatency, TenThousandTasksSaveWithinBudget) {
@@ -73,7 +43,7 @@ TEST(SaveLatency, TenThousandTasksSaveWithinBudget) {
   QDir().mkpath(appDataDir());
 
   AppController app;
-  app.tasks()->reset(makeTasks(kTaskCount));
+  app.tasks()->reset(heap::bench::makeTasks(kTaskCount));
 
   // flushSave() only writes when a save is pending, so each run arms the
   // debounced save the way any edit would, then times the flush: snapshot the

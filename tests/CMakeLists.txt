@@ -307,6 +307,8 @@ heap_add_appcontroller_test(heap_doc_pages_tests test_doc_pages.cpp)
 # Storage safety (locked/damaged/newer state.json, failed saves, restore),
 # profile-scoped undo and task ids, automation across profiles, worktrees.
 heap_add_appcontroller_test(heap_storage_safety_tests test_storage_safety.cpp)
+# Time machine (APP-162): history/ retention, snapshot format, restores.
+heap_add_appcontroller_test(heap_time_machine_tests test_time_machine.cpp)
 # ── audit-plat: end ──
 # ── audit-tasks: begin ──
 # Regressions from the 2026-09-30 audit, tasks area (undo, ranks, recurrence,
@@ -830,6 +832,12 @@ add_test(NAME heap_mattermost_tests COMMAND heap_mattermost_tests)
 # QPA + test-mode paths); links GlobalHotkey since AppController references it.
 heap_add_appcontroller_test(heap_appcontroller_tests test_appcontroller.cpp)
 
+# ─── Command line (APP-173) ───
+# Verb detection, argument parsing, the request/response wire format, `heap now`
+# resolution, list/today, and add/done through a headless AppController under a
+# plain QCoreApplication, read back from the saved state.json.
+heap_add_appcontroller_test(heap_cli_tests test_cli.cpp)
+
 # ─── Lossless serialization round-trip + field-count guard (HEAP-131) ───
 # Pure: exercises heap::state (the live save path) and heap::sync::SyncSerializer
 # side by side. No AppController, no QApplication.
@@ -879,6 +887,18 @@ target_compile_definitions(heap_state_fixture_tests PRIVATE
 # budget for reasons that have nothing to do with the code (seen under ASan).
 # RUN_SERIAL runs each one alone; everything else stays parallel.
 set_tests_properties(heap_md_bench_tests heap_save_bench_tests PROPERTIES RUN_SERIAL TRUE)
+
+# ─── Performance budget gate (APP-161) ───
+# Median timings of the heavy-profile operations against tests/PerfBudgets.h;
+# prints a measured-vs-budget table every run. The gate is armed only in an
+# optimised build without sanitizers or coverage — elsewhere the numbers are
+# meaningless as a pass/fail signal, so the table is printed and nothing fails.
+heap_add_appcontroller_test(heap_perf_tests test_perf_budget.cpp)
+if (NOT HEAP_ENABLE_SANITIZERS AND NOT HEAP_ENABLE_COVERAGE
+        AND CMAKE_BUILD_TYPE MATCHES "^(Release|RelWithDebInfo|MinSizeRel)$")
+    target_compile_definitions(heap_perf_tests PRIVATE HEAP_PERF_GATE=1)
+endif ()
+set_tests_properties(heap_perf_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
 
 # ─── CI's qmllint, locally ───
 # CI judges QML with Qt 6.9.1's qmllint (the qmllint ratchet). A newer local
