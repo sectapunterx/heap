@@ -45,7 +45,7 @@ Popup {
 
     Overlay.modal: ModalScrim {}
     // A press beside the tour ends it like ✕ and Esc do (APP-126).
-    Overlay.onPressed: if (PopupStack.isTopmost(root, Overlay.overlay)) root._finish()
+    Overlay.onPressed: if (PopupStack.isTopmost(root, Overlay.overlay) && PopupStack.pressedOutside(root, AppController.lastPressGlobalPos())) root._finish()
 
     background: ModalSurface {}
 

@@ -23,6 +23,13 @@ ApplicationWindow {
     // system's text size with everything else (APP-183).
     font.pixelSize: Theme.fsMd
 
+    // The OS draws the title bar and follows its own app mode, so a dark
+    // heap on a light Windows sat under a white bar. Follow the theme, and
+    // again once the window exists (a hidden start has no native frame yet).
+    readonly property bool _frameDark: Theme.dark
+    on_FrameDarkChanged: AppController.setWindowFrameDark(win, win._frameDark)
+    onVisibleChanged: if (win.visible) AppController.setWindowFrameDark(win, win._frameDark)
+
     // ── Window geometry ───────────────────────────────────────────────
     // The window opened at a hardcoded 1440x900 in the same spot on every
     // launch, so resizing or moving it — or maximising it — was undone each
@@ -376,6 +383,7 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
+        AppController.setWindowFrameDark(win, win._frameDark);
         _keepRetiredThemes();
         _restoreGeometry();
         if (win._startHidden && !win._minimizeToTray) win.showMinimized();
