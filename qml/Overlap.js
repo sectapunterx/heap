@@ -92,3 +92,17 @@ function lane(col, cols, avail, minW) {
     const stepX = (avail - w) / (n - 1);
     return { x: col * stepX, w: w };
 }
+
+// How tall an event is drawn in the week grid, and whether it gets two lines
+// (APP-199). Half an hour or more: at least two lines high, the time small
+// on top and the title under it; a 30-minute meeting was 17px and clipped
+// down to its start time. Shorter: one line, time and title side by side.
+// `visualEnd` is the hour the block reaches once grown, so the overlap
+// layout tiles a stretched block beside the next one instead of under it.
+var TWO_LINE_HOURS = 0.5;
+function block(start, end, hourH, oneLineH, twoLineH) {
+    const dur = Math.max(0, end - start);
+    const twoLine = dur >= TWO_LINE_HOURS - 1e-9;
+    const height = Math.max(twoLine ? twoLineH : oneLineH, dur * hourH - 2);
+    return { height: height, twoLine: twoLine, visualEnd: Math.max(end, start + (height + 2) / hourH) };
+}

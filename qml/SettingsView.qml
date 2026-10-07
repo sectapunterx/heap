@@ -211,6 +211,9 @@ Item {
             gitlab: ({ connected: false, host: "", projectId: "" })
         },
         data: { autoBackup: true, backupInterval: "daily" },
+        // Off until switched on (APP-177); the volume is 0–100. The meeting
+        // chimes (APP-178) ring at these minutes before, latest first.
+        sound: { enabled: false, volume: 55, meetingChimes: true, meetingChimeMinutes: [15, 10, 5] },
         updates: { autoCheck: true },
         git: {
             watchedRepos: [],
@@ -315,9 +318,25 @@ Item {
         anchors.fill: parent
         spacing: 0
 
-        // Left nav
+        // Left nav. Grows with the interface scale (APP-183) and with the
+        // longest section name (APP-189), up to a third more, or large text
+        // and longer languages cut the names short.
+        FontMetrics {
+            id: navFont
+            font.pixelSize: Theme.fsMd
+            font.weight: Theme.fwTitle
+        }
         Rectangle {
-            Layout.preferredWidth: 240
+            readonly property real _widestTitle: {
+                let w = 0;
+                for (let i = 0; i < root.sections.length; i++)
+                    w = Math.max(w, navFont.advanceWidth(String(root.sections[i].title)));
+                return w;
+            }
+            // Outer margins, the row's margins, the icon and its gap, and a
+            // little slack for rounding and glyphs from a fallback font.
+            Layout.preferredWidth: Math.min(Theme.px(320), Math.max(Theme.px(240),
+                Math.ceil(_widestTitle) + 2 * Theme.sp2xl + 3 * Theme.spXl + 16 + Theme.spLg))
             Layout.fillHeight: true
             color: Theme.panel
             Rectangle {
@@ -332,7 +351,7 @@ Item {
                 Text {
                     text: I18n.t("settings.title")
                     color: Theme.text
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.fwHeading
                     font.pixelSize: Theme.fsLg
                 }
                 Text {
@@ -353,7 +372,7 @@ Item {
 
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 28
+                    Layout.preferredHeight: Theme.px(28)
                     Layout.topMargin: Theme.spSm
                     radius: Theme.radiusMd
                     color: Theme.panel2
@@ -396,7 +415,13 @@ Item {
                     contentWidth: width
                     contentHeight: navCol.implicitHeight
                     boundsBehavior: Flickable.StopAtBounds
-                    ScrollBar.vertical: ThinScrollBar {}
+                    objectName: "settings-nav-scroll"
+                    // Thirteen groups do not fit at 125 % on a laptop: the
+                    // thumb stays drawn and the cut edge fades (SCALE-2), where
+                    // "Help" sat half under the footer and "About" was nowhere
+                    // with nothing saying the list went on.
+                    ScrollBar.vertical: ThinScrollBar { objectName: "settings-nav-scrollbar"; cue: true }
+                    onHeightChanged: Qt.callLater(root._revealNavActive)
 
                     ColumnLayout {
                         id: navCol
@@ -437,8 +462,8 @@ Item {
                                 // page's own heading now, and two lines of
                                 // small print per row made the list a wall
                                 // (APP-172). Search still matches it.
-                                Layout.preferredHeight: 36
-                                Layout.minimumHeight: 36
+                                Layout.preferredHeight: Theme.px(36)
+                                Layout.minimumHeight: Theme.px(36)
                                 radius: Theme.radiusMd
                                 color: root.activeSection === modelData.id
                                        ? Theme.accentSoft
@@ -452,10 +477,10 @@ Item {
                                     // whatever font had them, in any size.
                                     IconImage {
                                         source: modelData.icon
-                                        Layout.preferredWidth: 16
-                                        Layout.preferredHeight: 16
-                                        sourceSize.width: 16
-                                        sourceSize.height: 16
+                                        Layout.preferredWidth: 18
+                                        Layout.preferredHeight: 18
+                                        sourceSize.width: 18
+                                        sourceSize.height: 18
                                         color: root.activeSection === modelData.id ? Theme.accentStrong : Theme.textMuted
                                     }
                                     Text {
@@ -463,7 +488,7 @@ Item {
                                         text: modelData.title
                                         color: root.activeSection === modelData.id ? Theme.accentStrong : Theme.text
                                         font.pixelSize: Theme.fsMd
-                                        font.weight: root.activeSection === modelData.id ? Font.DemiBold : Font.Normal
+                                        font.weight: root.activeSection === modelData.id ? Theme.fwTitle : Theme.fwBody
                                         elide: Text.ElideRight
                                     }
                                 }
@@ -503,9 +528,8 @@ Item {
                             Text {
                                 text: I18n.t("settings.debug.label")
                                 color: Theme.warning
-                                font.pixelSize: Theme.fsXs
-                                font.weight: Font.DemiBold
-                                font.letterSpacing: 1
+                                font.pixelSize: Theme.fsSm
+                                font.weight: Theme.fwTitle
                             }
                             Text {
                                 text: I18n.t("settings.debug.showUnimpl")
@@ -574,8 +598,8 @@ Item {
                     id: scrollAnim
                     target: bodyScroll
                     property: "contentY"
-                    duration: Theme.scaledMs(220)
-                    easing.type: Easing.OutCubic
+                    duration: Theme.durMove
+                    easing.type: Theme.easeEnter
                 }
                 WheelHandler {
                     acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
@@ -610,11 +634,11 @@ Item {
                         spacing: Theme.spLg
                         IconImage {
                             source: root._activeMeta().icon || ""
-                            Layout.preferredWidth: 22
-                            Layout.preferredHeight: 22
+                            Layout.preferredWidth: 18
+                            Layout.preferredHeight: 18
                             Layout.alignment: Qt.AlignVCenter
-                            sourceSize.width: 22
-                            sourceSize.height: 22
+                            sourceSize.width: 18
+                            sourceSize.height: 18
                             color: Theme.textMuted
                         }
                         Text {
@@ -622,7 +646,7 @@ Item {
                             text: root._activeMeta().title || ""
                             color: Theme.text
                             font.pixelSize: Theme.fsXl
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwHeading
                             elide: Text.ElideRight
                         }
                     }
@@ -657,8 +681,7 @@ Item {
                                 text: I18n.t("settings.notImpl.title")
                                 color: Theme.warning
                                 font.pixelSize: Theme.fsSm
-                                font.weight: Font.DemiBold
-                                font.letterSpacing: 1
+                                font.weight: Theme.fwTitle
                             }
                             Text {
                                 text: I18n.t("settings.notImpl.body")
@@ -751,6 +774,22 @@ Item {
     }
     // Focus the nav row at `from`, skipping rows the search hides in the
     // direction `dir` (1 down, -1 up).
+    // The open group's row in view, after a deep link or a resize.
+    function _revealNavActive() {
+        for (let i = 0; i < navRep.count; i++) {
+            const it = navRep.itemAt(i);
+            if (!it || it.objectName !== "settings-nav-" + root.activeSection) continue;
+            const y = it.mapToItem(navCol, 0, 0).y;
+            if (y < navScroll.contentY)
+                navScroll.contentY = Math.max(0, y - Theme.spMd);
+            else if (y + it.height > navScroll.contentY + navScroll.height)
+                navScroll.contentY = Math.max(0, Math.min(navScroll.contentHeight - navScroll.height,
+                                                          y + it.height - navScroll.height + Theme.spMd));
+            return;
+        }
+    }
+    onActiveSectionChanged: Qt.callLater(root._revealNavActive)
+
     function _focusNav(from, dir) {
         const step = dir === -1 ? -1 : 1;
         for (let i = from; i >= 0 && i < navRep.count; i += step) {
@@ -825,7 +864,7 @@ Item {
     // flat grey slab that matches nothing else in Settings.
     component SettingsCombo: ComboBox {
         id: sc
-        implicitHeight: 30
+        implicitHeight: Theme.px(30)
         font.pixelSize: Theme.fsMd
         background: Rectangle {
             radius: Theme.radiusMd
@@ -854,7 +893,7 @@ Item {
             required property var modelData
             required property int index
             width: sc.width - 8
-            height: 28
+            height: Theme.px(28)
             highlighted: sc.highlightedIndex === scRow.index
             contentItem: Text {
                 text: scRow.modelData[sc.textRole]
@@ -879,12 +918,7 @@ Item {
                 model: sc.popup.visible ? sc.delegateModel : null
                 currentIndex: sc.highlightedIndex
             }
-            background: Rectangle {
-                radius: Theme.radius
-                color: Theme.panel
-                border.width: 1
-                border.color: Theme.borderStrong
-            }
+            background: PopupSurface {}
         }
     }
 
@@ -1012,6 +1046,7 @@ Item {
         Keys.onReturnPressed: switchRow.toggled(!switchRow.checked)
 
         Rectangle {
+            id: switchTrack
             Layout.preferredWidth: 36; Layout.preferredHeight: 20; radius: 10
             color: switchRow.checked ? Theme.accent : Theme.panel3
             // The OFF track had no edge on panel3 in the light themes, and
@@ -1020,13 +1055,19 @@ Item {
             border.width: 1
             FocusRing { target: switchRow; radius: 13 }
             Rectangle {
+                id: switchKnob
                 width: 14; height: 14; radius: 7
                 color: Theme.knob
                 border.color: Theme.fieldBorder
                 border.width: 1
                 anchors.verticalCenter: parent.verticalCenter
-                x: switchRow.checked ? parent.width - width - 3 : 3
-                Behavior on x { NumberAnimation { duration: Theme.scaledMs(120) } }
+                // Slides by transform, not by x: only transform and opacity
+                // animate (APP-175).
+                x: 3
+                transform: Translate {
+                    x: switchRow.checked ? switchTrack.width - switchKnob.width - 6 : 0
+                    Behavior on x { NumberAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
+                }
             }
         }
     }
@@ -1051,7 +1092,7 @@ Item {
         Rectangle {
             Layout.preferredWidth: segInner.implicitWidth + 2 * Theme.sp2xs
             Layout.fillWidth: segRow.stacked
-            Layout.preferredHeight: 30
+            Layout.preferredHeight: Theme.px(30)
             radius: Theme.radiusMd
             color: Theme.panel2
             border.color: Theme.border; border.width: 1
@@ -1077,7 +1118,7 @@ Item {
                         readonly property bool sel: segOpt.v === segRow.value
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        Layout.preferredWidth: Math.max(64, segTxt.implicitWidth + 2 * Theme.spXl)
+                        Layout.preferredWidth: Math.max(Theme.px(64), segTxt.implicitWidth + 2 * Theme.spXl)
                         implicitWidth: Layout.preferredWidth
                         radius: Theme.radiusSm
                         color: segOpt.sel ? Theme.accent
@@ -1088,7 +1129,7 @@ Item {
                             text: segOpt.l
                             color: segOpt.sel ? Theme.textOnAccent : Theme.text
                             font.pixelSize: Theme.fsSm
-                            font.weight: segOpt.sel ? Font.DemiBold : Font.Medium
+                            font.weight: Theme.fwTitle
                         }
                         MouseArea {
                             id: segMA
@@ -1111,6 +1152,8 @@ Item {
         property real step: 1
         property real value: 0
         signal moved(real value)
+        // The handle let go of after a drag or a click on the track.
+        signal released()
         Slider {
             id: sliderCtl
             Layout.preferredWidth: 220
@@ -1118,6 +1161,7 @@ Item {
             from: sliderRow.min; to: sliderRow.max; stepSize: sliderRow.step
             value: sliderRow.value
             onMoved: sliderRow.moved(value)
+            onPressedChanged: if (!pressed) sliderRow.released()
             // Tab reaches it and ←/→ move it (Slider's own keys); the handle
             // shows the focus ring while it has the keyboard.
             focusPolicy: Qt.StrongFocus
@@ -1211,7 +1255,7 @@ Item {
             Text {
                 id: dangerTxt; anchors.centerIn: parent
                 text: dangerRow.armed ? dangerRow.confirmText : dangerRow.buttonText
-                color: dangerRow.armed ? Theme.textOnDanger : Theme.danger; font.pixelSize: Theme.fsMd; font.weight: Font.Medium
+                color: dangerRow.armed ? Theme.textOnDanger : Theme.danger; font.pixelSize: Theme.fsMd; font.weight: Theme.fwTitle
             }
             MouseArea {
                 id: dangerMA; objectName: "danger-row-button"
@@ -1242,7 +1286,7 @@ Item {
                         Layout.fillWidth: true
                         spacing: Theme.sp2xl
                         Rectangle {
-                            Layout.preferredWidth: 48; Layout.preferredHeight: 48; radius: 24
+                            Layout.preferredWidth: Theme.px(48); Layout.preferredHeight: Theme.px(48); radius: width / 2
                             color: root.settings.profile ? root.settings.profile.color : Theme.accent
                             Text {
                                 anchors.centerIn: parent
@@ -1255,7 +1299,7 @@ Item {
                                 font.family: Theme.fontUi
                                 font.features: Theme.tabularNums
                                 font.pixelSize: Theme.fsLg
-                                font.weight: Font.DemiBold
+                                font.weight: Theme.fwTitle
                             }
                         }
                         ColumnLayout {
@@ -1266,7 +1310,7 @@ Item {
                                 text: (root.settings.profile && root.settings.profile.name) || I18n.t("settings.profile.fullName")
                                 color: (root.settings.profile && root.settings.profile.name) ? Theme.text : Theme.textDim
                                 font.pixelSize: Theme.fsLg
-                                font.weight: Font.DemiBold
+                                font.weight: Theme.fwTitle
                                 elide: Text.ElideRight
                             }
                             Text {
@@ -1336,7 +1380,11 @@ Item {
                 SegRow {
                     objectName: "settings-ui-scale"
                     label: I18n.t("settings.appearance.scale")
-                    hint: I18n.t("settings.appearance.scale.hint")
+                    // Unset, the scale is the system's text size (APP-183):
+                    // say so, or the 150 % nobody picked looks like a bug.
+                    hint: Theme._appearance.uiScale === undefined && Theme.systemScale() !== 1
+                          ? I18n.t("settings.appearance.scale.system")
+                          : I18n.t("settings.appearance.scale.hint")
                     value: String(Math.round(Theme.scale * 100))
                     options: Theme.scaleSteps.map((s) => ({ value: String(Math.round(s * 100)), label: Math.round(s * 100) + "%" }))
                     onSelected: (value) => root.set("appearance", "uiScale", Number(value) / 100)
@@ -1366,6 +1414,22 @@ Item {
                         root.set("appearance", "highContrast", value === "high");
                     }
                 }
+                // The keyboard cursor's colour (APP-174). "" is the theme's
+                // accent, and follows a theme change.
+                CursorColorRow {
+                    objectName: "settings-cursor-color"
+                    label: I18n.t("settings.appearance.cursorColor")
+                    hint: I18n.t("settings.appearance.cursorColor.hint")
+                    value: Theme.cursorColorPick
+                    // Straight into the settings JSON: no unqualified `root`
+                    // from in here.
+                    onSelected: (color) => {
+                        let s = {};
+                        try { s = JSON.parse(AppController.appSettingsJson || "{}") || {}; } catch (e) { s = {}; }
+                        s.appearance = Object.assign({}, s.appearance, { cursorColor: color });
+                        AppController.appSettingsJson = JSON.stringify(s);
+                    }
+                }
             }
             SettingsGroup {
                 objectName: "settings-theme-card"
@@ -1385,22 +1449,6 @@ Item {
                     hint: I18n.t("settings.appearance.reducedMotion.hint")
                     checked: !!(root.settings.appearance && root.settings.appearance.reducedMotion)
                     onToggled: (checked) => root.set("appearance", "reducedMotion", checked)
-                }
-                // Opt-in tick when a task moves to Done (APP-167); played by
-                // AppController.moveTask, independent of reduced motion.
-                // Reads and writes the settings JSON directly (this view
-                // reloads on the change), so no unqualified `root` access.
-                SwitchRow {
-                    objectName: "settings-completion-sound"
-                    label: I18n.t("settings.appearance.completionSound")
-                    hint: I18n.t("settings.appearance.completionSound.hint")
-                    checked: !!Theme._appearance.completionSound
-                    onToggled: (checked) => {
-                        let s = {};
-                        try { s = JSON.parse(AppController.appSettingsJson || "{}") || {}; } catch (e) { s = {}; }
-                        s.appearance = Object.assign({}, s.appearance, { completionSound: checked });
-                        AppController.appSettingsJson = JSON.stringify(s);
-                    }
                 }
                 // Only where there is a tray to close into. Three states,
                 // because there are three: a switch showed ON while the
@@ -1442,6 +1490,87 @@ Item {
                     onToggled: (checked) => {
                         AppController.setAutostart(!!startAtLoginRow._os.enabled, checked);
                         startAtLoginRow._os = AppController.autostartState();
+                    }
+                }
+            }
+            // The sound palette (APP-177): a task closed, an undo, a refused
+            // action — never navigation, typing or hover. Off by default;
+            // quiet hours and focus mode keep it silent (AppController).
+            // Reads and writes the settings JSON directly (this view reloads
+            // on the change), so no unqualified `root` from in here.
+            SettingsGroup {
+                id: soundCard
+                objectName: "settings-sound-card"
+                title: I18n.t("settings.sound.group")
+                readonly property var sound: {
+                    try { return (JSON.parse(AppController.appSettingsJson || "{}") || {}).sound || ({}); } catch (e) { return ({}); }
+                }
+                readonly property bool on: soundCard.sound.enabled === true
+                function setSound(key, value) {
+                    let s = {};
+                    try { s = JSON.parse(AppController.appSettingsJson || "{}") || {}; } catch (e) { s = {}; }
+                    const next = Object.assign({}, s.sound);
+                    next[key] = value;
+                    s.sound = next;
+                    AppController.appSettingsJson = JSON.stringify(s);
+                }
+                // The meeting chimes' moments (APP-178): up to three whole
+                // minutes from 1 to 120, latest first — the order the C++
+                // side reads them in.
+                function parseChimeMinutes(text) {
+                    const out = [];
+                    for (const part of String(text).split(",")) {
+                        const m = parseInt(part.trim(), 10);
+                        if (m >= 1 && m <= 120 && out.indexOf(m) < 0) out.push(m);
+                    }
+                    out.sort((a, b) => b - a);
+                    return out.slice(0, 3);
+                }
+                function chimeMinutesText(list) {
+                    return (Array.isArray(list) && list.length > 0 ? list : [15, 10, 5]).join(", ");
+                }
+                SwitchRow {
+                    objectName: "settings-sound-enabled"
+                    label: I18n.t("settings.sound.enabled")
+                    hint: I18n.t("settings.sound.enabled.hint")
+                    checked: soundCard.on
+                    onToggled: (checked) => soundCard.setSound("enabled", checked)
+                }
+                // Letting go of the slider plays the "done" sound at the new
+                // level, so the number has something to go by.
+                SliderRow {
+                    id: soundVolumeRow
+                    objectName: "settings-sound-volume"
+                    visible: soundCard.on
+                    label: I18n.t("settings.sound.volume")
+                    min: 0; max: 100; step: 5
+                    value: typeof soundCard.sound.volume === "number" ? soundCard.sound.volume : 55
+                    onMoved: (value) => soundCard.setSound("volume", Math.round(value))
+                    onReleased: AppController.previewSound(Math.round(soundVolumeRow.value))
+                }
+                // Three melodies as a meeting comes closer (APP-178): two
+                // chords, a rise, a call at the last moment.
+                SwitchRow {
+                    objectName: "settings-sound-meeting"
+                    visible: soundCard.on
+                    label: I18n.t("settings.sound.meeting")
+                    hint: I18n.t("settings.sound.meeting.hint")
+                    checked: soundCard.sound.meetingChimes !== false
+                    onToggled: (checked) => soundCard.setSound("meetingChimes", checked)
+                }
+                TextRow {
+                    id: chimeMinutesRow
+                    objectName: "settings-sound-meeting-minutes"
+                    visible: soundCard.on && soundCard.sound.meetingChimes !== false
+                    label: I18n.t("settings.sound.meetingMinutes")
+                    hint: chimeMinutesRow.invalid ? I18n.t("settings.sound.meetingMinutes.invalid") : I18n.t("settings.sound.meetingMinutes.hint")
+                    placeholder: "15, 10, 5"
+                    fieldWidth: 120
+                    validator: RegularExpressionValidator { regularExpression: /^\s*\d{1,3}(\s*,\s*\d{1,3}){0,2}\s*$/ }
+                    value: soundCard.chimeMinutesText(soundCard.sound.meetingChimeMinutes)
+                    onCommitted: (text) => {
+                        const list = soundCard.parseChimeMinutes(text);
+                        if (list.length > 0) soundCard.setSound("meetingChimeMinutes", list);
                     }
                 }
             }
@@ -2227,13 +2356,13 @@ Item {
                                         // its catalogue glyph.
                                         Text {
                                             visible: parent.logo === ""
-                                            anchors.centerIn: parent; text: modelData.icon; color: Theme.textOn(intTile.color); font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold
+                                            anchors.centerIn: parent; text: modelData.icon; color: Theme.textOn(intTile.color); font.pixelSize: Theme.fsLg; font.weight: Theme.fwTitle
                                         }
                                     }
                                     ColumnLayout {
                                         Layout.fillWidth: true
                                         spacing: 1
-                                        Text { id: intName; text: modelData.name; color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold }
+                                        Text { id: intName; text: modelData.name; color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Theme.fwTitle }
                                         Text { text: I18n.t(modelData.descKey); color: Theme.textMuted; font.pixelSize: Theme.fsMd; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                                     }
                                     Text {
@@ -2371,7 +2500,7 @@ Item {
                                             text: intSection.dcCode
                                             readOnly: true; selectByMouse: true
                                             color: Theme.text; font.family: Theme.fontMono
-                                            font.pixelSize: Theme.fsXl; font.weight: Font.DemiBold
+                                            font.pixelSize: Theme.fsXl; font.weight: Theme.fwTitle
                                         }
                                         Text {
                                             text: intSection.dcUri
@@ -2499,7 +2628,7 @@ Item {
                                                 text: (intCard.mapOpen ? "▾  " : "▸  ") + I18n.t("settings.integrations.statusMap")
                                                 color: mapToggleMA.hovered ? Theme.accentStrong : Theme.text
                                                 font.pixelSize: Theme.fsMd
-                                                font.weight: Font.DemiBold
+                                                font.weight: Theme.fwTitle
                                             }
                                             Text {
                                                 visible: !intCard.mapOpen
@@ -2838,7 +2967,7 @@ Item {
                             anchors.centerIn: parent
                             text: "+ " + I18n.t("common.add")
                             color: Theme.textOnAccent
-                            font.weight: Font.Medium
+                            font.weight: Theme.fwTitle
                         }
                         ClickArea {
                             id: addMA
@@ -3065,7 +3194,7 @@ Item {
                             width: Math.min(460, (parent ? parent.width : 460) - 2 * Theme.sp2xl)
                             padding: Theme.inset
                             closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-                            Overlay.modal: Rectangle { color: Theme.scrim }
+                            Overlay.modal: ModalScrim {}
                             readonly property var profileNames: {
                                 const out = [];
                                 const ps = AppController.profiles || [];
@@ -3073,19 +3202,14 @@ Item {
                                 return out;
                             }
                             onOpened: wipeCancel.forceActiveFocus()
-                            background: Rectangle {
-                                radius: Theme.radiusXl
-                                color: Theme.panel
-                                border.color: Theme.borderStrong
-                                border.width: 1
-                            }
+                            background: ModalSurface {}
                             contentItem: ColumnLayout {
                                 spacing: Theme.spXl
                                 Text {
                                     text: I18n.t("settings.data.wipe.dialogTitle")
                                     color: Theme.text
                                     font.pixelSize: Theme.fsLg
-                                    font.weight: Font.DemiBold
+                                    font.weight: Theme.fwHeading
                                     Layout.fillWidth: true
                                     wrapMode: Text.Wrap
                                 }
@@ -3148,7 +3272,7 @@ Item {
                             Layout.fillWidth: true
                             spacing: Theme.sp2xs
                             Text {
-                                text: "heap."; color: Theme.text; font.family: Theme.fontMono; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold
+                                text: "heap."; color: Theme.text; font.family: Theme.fontMono; font.pixelSize: Theme.fsLg; font.weight: Theme.fwTitle
                             }
                             Text {
                                 Layout.fillWidth: true
@@ -3292,5 +3416,15 @@ Item {
         function onExportJsonRequested()  { if (typeof settingsBus !== "undefined") settingsBus.exportJson() }
         function onImportJsonRequested()  { if (typeof settingsBus !== "undefined") settingsBus.importJson() }
         function onTimeMachineRequested() { if (typeof settingsBus !== "undefined") settingsBus.openTimeMachine() }
+    }
+
+    // Over the list, not in it: parented to the Flickable itself
+    // (not its content), so it stays put while the rows scroll.
+    ScrollFade {
+        objectName: "settings-nav-fade"
+        parent: navScroll
+        anchors.fill: parent
+        flick: navScroll
+        color: Theme.panel
     }
 }

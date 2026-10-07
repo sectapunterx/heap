@@ -569,12 +569,26 @@ Item {
                 anchors.leftMargin: Theme.inset; anchors.rightMargin: Theme.inset
                 spacing: Theme.sp2xl
 
+                // Title and search give way when the header runs short (at
+                // 150 % with the right panel open the search was cut mid-word
+                // and the tabs squeezed to no padding, SCALE-3); the tabs keep
+                // their words.
                 ColumnLayout {
+                    objectName: "docs-title-col"
                     spacing: 1
                     Layout.alignment: Qt.AlignVCenter
-                    Text { text: I18n.t("docs.header"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold }
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: Theme.px(80)
+                    Layout.maximumWidth: implicitWidth
                     Text {
-                        text: I18n.t("docs.counts").arg(root.totalDocs()).arg(root.snippets.length).arg(root.contacts.length)
+                        Layout.fillWidth: true
+                        text: I18n.t("docs.header"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Theme.fwHeading
+                        elide: Text.ElideRight
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                        text: I18n.docsCounts(root.totalDocs(), root.snippets.length, root.contacts.length)
                         color: Theme.textDim
                         font.family: Theme.fontUi
                         font.features: Theme.tabularNums
@@ -590,17 +604,21 @@ Item {
                         delegate: Rectangle {
                             required property var modelData
                             objectName: "docs-tab-" + modelData
-                            width: 96; height: 26
+                            // As wide as its word needs: a fixed 96 let a
+                            // longer word run past the frame (SCALE-3).
+                            width: Math.max(Theme.px(96), tabTxt.implicitWidth + 2 * Theme.spLg)
+                            height: Theme.px(26)
                             color: root.tab === modelData ? Theme.withAlpha(Theme.accent, 0.16)
                                  : tabMA.hovered ? Theme.panel3 : Theme.panel2
                             border.color: root.tab === modelData ? Theme.accent : Theme.border
                             border.width: 1
                             Text {
+                                id: tabTxt
                                 anchors.centerIn: parent
                                 text: I18n.t("docs.tab." + modelData)
                                 color: root.tab === modelData ? Theme.text : Theme.textDim
                                 font.pixelSize: Theme.fsSm
-                                font.weight: root.tab === modelData ? Font.DemiBold : Font.Normal
+                                font.weight: root.tab === modelData ? Theme.fwTitle : Theme.fwBody
                             }
                             ClickArea {
                                 id: tabMA
@@ -619,8 +637,12 @@ Item {
 
                 // Search
                 Rectangle {
-                    Layout.preferredWidth: 320
-                    Layout.preferredHeight: 28
+                    objectName: "docs-search-box"
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: Theme.px(320)
+                    Layout.maximumWidth: Theme.px(320)
+                    Layout.minimumWidth: Theme.px(140)
+                    Layout.preferredHeight: Theme.px(28)
                     radius: Theme.radiusMd
                     color: Theme.panel2
                     border.color: Theme.border
@@ -780,8 +802,8 @@ Item {
                     id: wheelAnim
                     target: bodyScroll
                     property: "contentY"
-                    duration: Theme.scaledMs(220)
-                    easing.type: Easing.OutCubic
+                    duration: Theme.durMove
+                    easing.type: Theme.easeEnter
                 }
 
                 WheelHandler {
@@ -809,20 +831,32 @@ Item {
                     width: bodyScroll.width
                     spacing: Theme.sp3xl
 
+                    // Nothing kept here yet (APP-191): what the page is for
+                    // and where to start. The sections below stay, so their
+                    // "+ Add" is right there.
+                    EmptyState {
+                        objectName: "docs-empty"
+                        visible: root.searchText.trim().length === 0 && root.totalDocs() === 0
+                                 && root.snippets.length === 0 && root.contacts.length === 0
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredWidth: Math.min(bodyCol.width - 2 * Theme.sp3xl, 420)
+                        Layout.topMargin: Theme.sp3xl
+                        icon: "heap-08-docs"
+                        title: I18n.t("docs.empty")
+                        line: I18n.t("docs.empty.hint")
+                    }
+
                     ColumnLayout {
                         objectName: "docs-no-matches"
                         visible: root.searchFoundNothing
                         Layout.fillWidth: true
                         Layout.topMargin: Theme.sp3xl
                         spacing: Theme.spMd
-                        Text {
+                        EmptyState {
                             Layout.alignment: Qt.AlignHCenter
-                            Layout.maximumWidth: bodyCol.width - 2 * Theme.sp3xl
-                            text: I18n.t("docs.noMatches").arg(root.searchText.trim())
-                            color: Theme.text
-                            font.pixelSize: Theme.fsMd
-                            wrapMode: Text.Wrap
-                            horizontalAlignment: Text.AlignHCenter
+                            Layout.preferredWidth: Math.min(bodyCol.width - 2 * Theme.sp3xl, 420)
+                            title: I18n.t("docs.noMatches").arg(root.searchText.trim())
+                            line: I18n.t("docs.noMatches.hint")
                         }
                         PillButton {
                             Layout.alignment: Qt.AlignHCenter
@@ -849,7 +883,9 @@ Item {
 
                             Item {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 44
+                                // Grows with the type: two lines at 150 % are
+                                // taller than 44 (SCALE-3).
+                                Layout.preferredHeight: Math.max(44, secHeadRow.implicitHeight)
                                 id: secAnchor
                                 objectName: "sec-" + secCol.section.id
 
@@ -888,19 +924,26 @@ Item {
                                 }
 
                                 RowLayout {
+                                    id: secHeadRow
                                     anchors.fill: parent
                                     spacing: Theme.spXl
                                     Rectangle { width: 4; height: 32; radius: 2; color: secCol.section.accent }
+                                    // Gives way to the count and "+ Add", and
+                                    // says it was cut with an ellipsis (SCALE-3).
                                     ColumnLayout {
                                         spacing: 0
                                         Layout.fillWidth: true
                                         RowLayout {
                                             spacing: Theme.spSm
+                                            Layout.fillWidth: true
                                             Text {
+                                                Layout.fillWidth: true
+                                                Layout.maximumWidth: implicitWidth
+                                                elide: Text.ElideRight
                                                 text: secCol.section.title
                                                 color: Theme.text
                                                 font.pixelSize: Theme.fsLg
-                                                font.weight: Font.DemiBold
+                                                font.weight: Theme.fwTitle
                                             }
                                             IconButton {
                                                 objectName: "docs-section-edit"
@@ -920,9 +963,13 @@ Item {
                                                 onActivated: root.deleteSection(secCol.section.id)
                                             }
                                         }
-                                        Text { text: secCol.section.subtitle; color: Theme.textMuted; font.pixelSize: Theme.fsMd }
+                                        Text {
+                                            objectName: "docs-section-subtitle"
+                                            Layout.fillWidth: true
+                                            elide: Text.ElideRight
+                                            text: secCol.section.subtitle; color: Theme.textMuted; font.pixelSize: Theme.fsMd
+                                        }
                                     }
-                                    Item { Layout.fillWidth: true }
                                     Text {
                                         visible: (secCol.section.sortBy || "manual") !== "manual"
                                         text: {
@@ -1015,7 +1062,7 @@ Item {
                                 Rectangle { width: 4; height: 32; radius: 2; color: Theme.accent }
                                 ColumnLayout {
                                     spacing: 0
-                                    Text { text: I18n.t("docs.snippets"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold }
+                                    Text { text: I18n.t("docs.snippets"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Theme.fwTitle }
                                     Text {
                                         text: I18n.t("docs.cat.snippets.sub"); color: Theme.textMuted; font.pixelSize: Theme.fsMd
                                     }
@@ -1071,7 +1118,7 @@ Item {
                                 Rectangle { width: 4; height: 32; radius: 2; color: Theme.textMuted }
                                 ColumnLayout {
                                     spacing: 0
-                                    Text { text: I18n.t("docs.contacts"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold }
+                                    Text { text: I18n.t("docs.contacts"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Theme.fwTitle }
                                     Text {
                                         text: I18n.t("docs.cat.contacts.sub"); color: Theme.textMuted; font.pixelSize: Theme.fsMd
                                     }
@@ -1386,6 +1433,10 @@ Item {
         // they blinked out as the pointer approached.
         property bool cardHovered: false
         HoverHandler { onHoveredChanged: card.cardHovered = hovered }
+        // The ⋮⋮ ✎ × overlay sits where the version and ↗ are; while it
+        // shows they step aside rather than show through between the
+        // buttons (EYE-5).
+        readonly property bool actionsShown: card.cardHovered || cardEdit.activeFocus || cardDelete.activeFocus
         color: cardHovered ? Theme.panel2 : Theme.panel
         border.color: cardHovered ? Theme.borderStrong : Theme.border
         border.width: 1
@@ -1421,11 +1472,13 @@ Item {
                            color: card.accent
                            font.family: Theme.fontMono
                            font.pixelSize: Theme.fsSm
-                           font.weight: Font.DemiBold }
+                           font.weight: Theme.fwTitle }
                 }
                 Item { Layout.fillWidth: true }
                 Text {
+                    objectName: "docs-card-version"
                     visible: (card.item.version || "").length > 0
+                    opacity: card.actionsShown ? 0 : 1
                     text: card.item.version || ""
                     color: Theme.textDim
                     font.family: Theme.fontUi
@@ -1433,8 +1486,10 @@ Item {
                     font.pixelSize: Theme.fsSm
                 }
                 Text {
+                    objectName: "docs-card-link"
+                    opacity: card.actionsShown ? 0 : 1
                     text: card.isInternal ? "→" : "↗"
-                    color: card.cardHovered ? Theme.accentStrong : Theme.textDim
+                    color: Theme.textDim
                     font.pixelSize: Theme.fsMd
                 }
             }
@@ -1443,7 +1498,7 @@ Item {
                 text: card.item.title || ""
                 color: Theme.text
                 font.pixelSize: Theme.fsMd
-                font.weight: Font.Medium
+                font.weight: Theme.fwTitle
                 wrapMode: Text.WordWrap
             }
             Text {
@@ -1537,7 +1592,12 @@ Item {
                 // the section menu's Move up / Move down.
                 opacity: card.cardHovered ? 1 : 0
                 enabled: card.cardHovered
-                Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: card.cardHovered ? Theme.durTap : Theme.durTapOut
+                        easing.type: card.cardHovered ? Theme.easeEnter : Theme.easeExit
+                    }
+                }
                 width: 18; height: 22; radius: Theme.radiusSm
                 color: handleMA.containsMouse ? Theme.panel3 : Theme.panel2
                 border.color: Theme.border; border.width: 1
@@ -1555,6 +1615,7 @@ Item {
                 }
             }
             IconButton {
+                id: cardEdit
                 objectName: "docs-card-edit"
                 glyph: "✎"
                 label: I18n.t("docs.menu.edit")
@@ -1562,6 +1623,7 @@ Item {
                 onActivated: root.openDocEdit(card.sectionId, card.item)
             }
             IconButton {
+                id: cardDelete
                 objectName: "docs-card-delete"
                 glyph: "×"
                 danger: true
@@ -1653,7 +1715,7 @@ Item {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spSm
-                Text { text: sCard.snip.title || ""; color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Font.Medium; Layout.fillWidth: true; elide: Text.ElideRight }
+                Text { text: sCard.snip.title || ""; color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Theme.fwTitle; Layout.fillWidth: true; elide: Text.ElideRight }
                 Rectangle {
                     radius: Theme.radiusSm
                     color: Theme.panel2
@@ -1758,7 +1820,8 @@ Item {
             anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spLg
             spacing: Theme.spLg
             Rectangle {
-                width: 32; height: 32; radius: 16
+                objectName: "docs-contact-avatar"
+                width: Theme.px(32); height: width; radius: width / 2
                 color: cc.c.color || Theme.accent
                 Text {
                     anchors.centerIn: parent
@@ -1767,7 +1830,7 @@ Item {
                     font.family: Theme.fontUi
                     font.features: Theme.tabularNums
                     font.pixelSize: Theme.fsMd
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.fwTitle
                 }
             }
             ColumnLayout {
@@ -1779,7 +1842,7 @@ Item {
                     // PlainText, not the AutoText default: these strings come
                     // from the Mattermost server, and a first_name of
                     // "<img src=…>" would otherwise be fetched on render.
-                    Text { text: cc.c.name || ""; textFormat: Text.PlainText; color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Font.Medium; elide: Text.ElideRight; Layout.fillWidth: true }
+                    Text { text: cc.c.name || ""; textFormat: Text.PlainText; color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Theme.fwTitle; elide: Text.ElideRight; Layout.fillWidth: true }
                     // Says where the card came from, so an edit that a later
                     // sync may overwrite is not a surprise.
                     Rectangle {
@@ -1793,7 +1856,7 @@ Item {
                             anchors.centerIn: parent
                             text: "MM"
                             color: Theme.textDim
-                            font.family: Theme.fontUi; font.features: Theme.tabularNums; font.pixelSize: Theme.fsXs; font.letterSpacing: 0.5
+                            font.family: Theme.fontUi; font.features: Theme.tabularNums; font.pixelSize: Theme.fsXs
                         }
                     }
                 }

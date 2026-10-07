@@ -21,4 +21,8 @@ QString plural(int n, const QString& forms);
 // without a move for 3+ days". Empty when there is nothing to say.
 QString endOfDaySummary(const EndOfDayFindings& f, int staleDays, bool ru);
 
+// The day's summary in one line (APP-190): "3 closed today · 2 carry over to
+// tomorrow". Running timers are said by endOfDaySummary. Empty when neither.
+QString daySummaryLine(const DaySummary& s, bool ru);
+
 }  // namespace heap::safety

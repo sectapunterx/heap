@@ -322,11 +322,19 @@ ListView {
                     spacing: 0
 
                     // Header appears only when there is something to say.
+                    // Folded to nothing rather than hidden: a hidden Copy was
+                    // off the Tab path, so the keyboard could only reach it
+                    // under the mouse. Tab onto it opens the header (APP-184).
                     RowLayout {
+                        id: codeHeader
+                        readonly property bool shown: rowItem.model.language !== "" || codeHover.hovered
+                                                      || copyArea.activeFocus
                         Layout.fillWidth: true
                         Layout.margins: Theme.spMd
+                        Layout.topMargin: shown ? Theme.spMd : 0
                         Layout.bottomMargin: 0
-                        visible: rowItem.model.language !== "" || codeHover.hovered
+                        Layout.maximumHeight: shown ? Number.POSITIVE_INFINITY : 0
+                        opacity: shown ? 1 : 0
                         spacing: Theme.spMd
                         Text {
                             objectName: "mdCodeLanguage"

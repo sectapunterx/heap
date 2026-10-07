@@ -376,6 +376,18 @@ TestCase {
         compare(AppController.savedViewCounts[ok], 4);
     }
 
+    // EYE-7: a saved view is a bookmark with its Alt+N digit in it, not a
+    // bare digit that its corner count turned into "1⁶" in the collapsed rail.
+    function test_rows_are_bookmarks_with_their_digit() {
+        mkView("Marked", "svprobe");
+        const row = railRow(0);
+        compare(row.glyph, "");
+        verify(String(row.iconSource).indexOf("heap-36-saved-view.svg") >= 0, String(row.iconSource));
+        compare(row.iconText, "1");
+        const t = findChild(row, "rail-icon-text");
+        verify(t !== null && t.visible && t.text === "1");
+    }
+
     function test_empty_list_offers_saving() {
         clickLaidOut("rail-saved-empty");
         tryCompare(tc.host.nameDialog, "opened", true);

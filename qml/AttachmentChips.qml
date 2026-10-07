@@ -83,7 +83,7 @@ Flow {
             }
             HoverHandler { id: chipHover }
             FocusRing {}
-            QQC.ToolTip.visible: chipHover.hovered
+            QQC.ToolTip.visible: chipHover.hovered || chip.activeFocus
             QQC.ToolTip.delay: 500
             QQC.ToolTip.text: chip.broken ? I18n.t("att.chip.missing").arg(chip.attName) : I18n.t("att.chip.keys")
 
@@ -115,7 +115,7 @@ Flow {
                 Text {
                     text: chip.broken ? I18n.t("att.chip.missingShort") : String(chip.modelData.sizeText || "")
                     color: chip.broken ? Theme.danger : Theme.textDim
-                    font.family: Theme.fontMono
+                    font.features: Theme.tabularNums
                     font.pixelSize: Theme.fsXs
                 }
                 ChipButton {
@@ -184,17 +184,13 @@ Flow {
             confirm.open();
         }
         modal: true
+        QQC.Overlay.modal: ModalScrim {}
         parent: QQC.Overlay.overlay
         anchors.centerIn: parent
         width: Math.min(460, (parent ? parent.width : 460) - 2 * Theme.sp3xl)
         padding: Theme.inset
         title: I18n.t("att.confirm.title")
-        background: Rectangle {
-            radius: Theme.radiusXl
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
+        background: ModalSurface {}
         contentItem: ColumnLayout {
             spacing: Theme.spMd
             Text {

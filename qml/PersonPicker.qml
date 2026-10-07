@@ -20,7 +20,7 @@ Popup {
     width: 460
     anchors.centerIn: Overlay.overlay
 
-    Overlay.modal: Rectangle { color: Theme.scrim }
+    Overlay.modal: ModalScrim {}
 
     // Emitted with a PersonEditor draft — Main hands it straight to the editor.
     signal draftRequested(var draft)
@@ -119,12 +119,7 @@ Popup {
     // A shorter query can leave `current` past the end of the list.
     onMatchesChanged: if (current >= rowCount) current = Math.max(0, rowCount - 1)
 
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
 
     contentItem: ColumnLayout {
         spacing: 0
@@ -134,7 +129,7 @@ Popup {
             text: root.title
             color: Theme.text
             font.pixelSize: Theme.fsLg
-            font.weight: Font.DemiBold
+            font.weight: Theme.fwHeading
         }
 
         TextField {
@@ -203,7 +198,7 @@ Popup {
                     spacing: Theme.spLg
 
                     Rectangle {
-                        width: 26; height: 26; radius: 13
+                        width: Theme.px(26); height: width; radius: width / 2
                         color: crow.modelData.color && crow.modelData.color.length ? crow.modelData.color : Theme.accent
                         Text {
                             anchors.centerIn: parent
@@ -215,7 +210,7 @@ Popup {
                             font.family: Theme.fontUi
                             font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsXs
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                         }
                     }
 
@@ -227,7 +222,7 @@ Popup {
                             text: crow.modelData.name || ""
                             color: Theme.text
                             font.pixelSize: Theme.fsMd
-                            font.weight: Font.Medium
+                            font.weight: Theme.fwTitle
                             elide: Text.ElideRight
                         }
                         Text {
@@ -265,7 +260,6 @@ Popup {
                             font.family: Theme.fontUi
                             font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsXs
-                            font.letterSpacing: 1
                         }
                     }
                 }
@@ -299,7 +293,7 @@ Popup {
                 anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spLg
                 spacing: Theme.spLg
                 Rectangle {
-                    width: 26; height: 26; radius: 13
+                    width: Theme.px(26); height: width; radius: width / 2
                     color: "transparent"
                     border.color: Theme.border
                     border.width: 1

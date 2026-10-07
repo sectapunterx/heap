@@ -109,11 +109,10 @@ Rectangle {
             Layout.fillWidth: true
             spacing: Theme.spSm
             Text {
-                text: I18n.t("rail.unscheduled").toUpperCase()
-                color: Theme.textMuted
-                font.pixelSize: Theme.fsXs
-                font.weight: Font.DemiBold
-                font.letterSpacing: 1
+                text: I18n.t("rail.unscheduled")
+                color: Theme.textDim
+                font.pixelSize: Theme.fsSm
+                font.weight: Theme.fwTitle
                 Layout.fillWidth: true
             }
             Text {
@@ -191,13 +190,38 @@ Rectangle {
                         elide: Text.ElideRight
                         Layout.fillWidth: true
                     }
-                    Text {
-                        text: chip.modelData.id + " · " + chip.modelData.deadline.toLocaleDateString(I18n.locale, "ddd d MMM")
-                        color: Theme.textDim
-                        font.family: Theme.fontMono
-                        font.pixelSize: Theme.fsXs
-                        elide: Text.ElideRight
+                    // The key in mono, because it is an id; the date in the
+                    // UI face with even digits (APP-200): set in mono it read
+                    // as code, "вт 6 окт." in a typewriter.
+                    RowLayout {
                         Layout.fillWidth: true
+                        spacing: Theme.spMd
+                        // The priority in words: the bar beside the chip
+                        // says it only in colour (APP-185).
+                        Text {
+                            objectName: "unscheduled-priority"
+                            text: chip.modelData.priority
+                            color: Theme.textDim
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsXs
+                        }
+                        Text {
+                            objectName: "unscheduled-key"
+                            text: chip.modelData.id
+                            color: Theme.textDim
+                            font.family: Theme.fontMono
+                            font.pixelSize: Theme.fsXs
+                        }
+                        Text {
+                            objectName: "unscheduled-date"
+                            text: I18n.fmtDate(chip.modelData.deadline, "weekdayDay")
+                            color: Theme.textDim
+                            font.family: Theme.fontUi
+                            font.features: Theme.tabularNums
+                            font.pixelSize: Theme.fsXs
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
                     }
                 }
 

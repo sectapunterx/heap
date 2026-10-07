@@ -26,6 +26,7 @@ QQC.Dialog {
     }
 
     modal: true
+    QQC.Overlay.modal: ModalScrim {}
     parent: QQC.Overlay.overlay
     anchors.centerIn: parent
     width: Math.min(480, (parent ? parent.width : 480) - 32)
@@ -33,12 +34,7 @@ QQC.Dialog {
     title: I18n.t("notes.vault.previewTitle")
 
     header: DialogHeader { text: root.title }
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
 
     contentItem: ColumnLayout {
         spacing: Theme.spMd

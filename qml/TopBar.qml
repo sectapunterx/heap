@@ -19,6 +19,41 @@ Rectangle {
     // shown on the badge, so a typo does not read as an empty board.
     readonly property var searchProblems: AppController.searchProblems(searchField.text)
     signal newTaskRequested()
+    // The sync dot was clicked: show how the integrations are doing.
+    signal syncStatusRequested()
+
+    // ── Sync in flight (APP-186) ──
+    // Bound to the controller; a test can set it by hand.
+    property bool syncing: AppController.syncing
+    // How long a sync runs before the dot says so.
+    readonly property int syncDotDelay: 400
+    // When the current sync started (ms since the epoch), 0 when none runs.
+    property real _syncSince: 0
+    property bool syncDotShown: false
+    // Whether the dot is due at `now` for a sync running since `since`.
+    function syncDotDue(running, since, now) {
+        return running && since > 0 && now - since >= root.syncDotDelay;
+    }
+    onSyncingChanged: {
+        root._syncSince = root.syncing ? Date.now() : 0;
+        root.syncDotShown = false;
+        syncDotTimer.interval = root.syncDotDelay;
+        if (root.syncing) syncDotTimer.restart();
+        else syncDotTimer.stop();
+    }
+    Timer {
+        id: syncDotTimer
+        onTriggered: {
+            const now = Date.now();
+            if (root.syncDotDue(root.syncing, root._syncSince, now)) {
+                root.syncDotShown = true;
+            } else if (root.syncing) {
+                // A coarse timer may wake a little early.
+                syncDotTimer.interval = Math.max(1, root._syncSince + root.syncDotDelay - now);
+                syncDotTimer.restart();
+            }
+        }
+    }
     // The "seen this before" hint under the search was clicked (APP-159).
     signal seenBeforeActivated(var hit)
     // Esc on an empty search box, or Return in it: give the keyboard back.
@@ -118,7 +153,7 @@ Rectangle {
                         font.family: Theme.fontUi
                         font.features: Theme.tabularNums
                         font.pixelSize: Theme.fsMd
-                        font.weight: Font.Medium
+                        font.weight: Theme.fwTitle
                         // A long profile name pushed "+ Task" and the panel
                         // toggle off the window.
                         elide: Text.ElideRight
@@ -235,7 +270,7 @@ Rectangle {
                     color: Theme.accentStrong
                     font.family: Theme.fontMono
                     font.pixelSize: Theme.fsMd
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.fwTitle
                 }
                 // ── Live PR state on the focused repo (HEAP-76) ──
                 Rectangle {
@@ -277,7 +312,7 @@ Rectangle {
                         font.family: Theme.fontUi
                         font.features: Theme.tabularNums
                         font.pixelSize: Theme.fsXs
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwTitle
                     }
                     ClickArea {
                         objectName: "topbar-pr-badge"
@@ -320,7 +355,7 @@ Rectangle {
                         font.family: Theme.fontUi
                         font.features: Theme.tabularNums
                         font.pixelSize: Theme.fsXs
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwTitle
                     }
                 }
                 Rectangle {
@@ -336,7 +371,7 @@ Rectangle {
                         text: I18n.t("topbar.git.open")
                         color: openMA.hovered ? Theme.bg : Theme.accentStrong
                         font.pixelSize: Theme.fsXs
-                        font.weight: Font.Medium
+                        font.weight: Theme.fwTitle
                     }
                     ClickArea {
                         id: openMA
@@ -407,7 +442,7 @@ Rectangle {
                     text: I18n.t("immersion.on")
                     color: Theme.accentStrong
                     font.pixelSize: Theme.fsXs
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.fwTitle
                 }
                 Text {
                     objectName: "topbar-immersion-time"
@@ -426,6 +461,32 @@ Rectangle {
             }
         }
 
+        // A sync is out (APP-186): a quiet dot in the live colour, only once
+        // it has taken long enough to notice — a quick pull shows nothing.
+        // A click opens the integrations' status (APP-164).
+        Item {
+            id: syncDot
+            objectName: "topbar-sync-dot"
+            visible: root.syncDotShown
+            Layout.preferredWidth: 20
+            Layout.preferredHeight: 20
+            Layout.alignment: Qt.AlignVCenter
+            Rectangle {
+                anchors.centerIn: parent
+                width: 8
+                height: 8
+                radius: 4
+                color: syncDotMA.hovered ? Theme.withAlpha(Theme.live, 0.7) : Theme.live
+            }
+            ClickArea {
+                id: syncDotMA
+                objectName: "topbar-sync-dot-area"
+                label: I18n.t("topbar.syncing")
+                tip: I18n.t("topbar.syncing.tip")
+                onActivated: root.syncStatusRequested()
+            }
+        }
+
         // Search: 280px when there is room, down to 160 when there is not.
         Rectangle {
             id: searchBox
@@ -438,7 +499,7 @@ Rectangle {
             color: Theme.panel2
             border.color: searchField.activeFocus ? Theme.accent : Theme.border
             border.width: searchField.activeFocus ? 2 : 1
-            Behavior on border.color { ColorAnimation { duration: Theme.scaledMs(120) } }
+            Behavior on border.color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spSm
@@ -450,7 +511,7 @@ Rectangle {
                     text: "⌕"
                     color: root.searchIsQuery ? Theme.accentStrong : Theme.textDim
                     font.pixelSize: Theme.fsSm
-                    Behavior on color { ColorAnimation { duration: Theme.scaledMs(120) } }
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                 }
                 TextField {
                     id: searchField
@@ -541,12 +602,7 @@ Rectangle {
                 focus: false
                 closePolicy: QQC.Popup.NoAutoClose
                 visible: seenHint.shown && searchField.text.length > 0
-                background: Rectangle {
-                    radius: Theme.radiusMd
-                    color: Theme.panel
-                    border.color: Theme.border
-                    border.width: 1
-                }
+                background: PopupSurface {}
                 contentItem: SeenBeforeHint {
                     id: seenHint
                     text: searchField.text
@@ -561,7 +617,9 @@ Rectangle {
         PillButton {
             objectName: "topbar-new-task"
             text: I18n.t("topbar.newTask")
-            primary: true
+            // A quiet button (APP-198): the accent fill was the brightest
+            // spot on every screen. A filled button is only the one that
+            // confirms a dialog.
             shortcutId: "task.new"
             onClicked: root.newTaskRequested()
         }
@@ -570,7 +628,7 @@ Rectangle {
             text: root.rightPanelShown ? "▸" : "◂"
             shortcutId: "panel.right"
             onClicked: root.rightPanelToggleRequested()
-            ToolTip.visible: hovered
+            ToolTip.visible: hovered || visualFocus
             ToolTip.delay: 400
             ToolTip.text: I18n.t(root.rightPanelShown ? "topbar.rightPanel.hide" : "topbar.rightPanel.show")
                           + "  " + AppController.shortcutFor("panel.right")

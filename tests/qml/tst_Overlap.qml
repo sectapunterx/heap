@@ -132,4 +132,25 @@ TestCase {
         compare(Overlap.lane(cols - 1, cols, avail, minW).x + minW, avail);
         compare(Overlap.lane(0, 3, 50, 64).w, 50, "the minimum never exceeds the day");
     }
+
+    // APP-199: a week event of half an hour or more is two lines high, the
+    // time on top of the title; a shorter one is one line. The grown block
+    // reports how far down it reaches so the overlap layout can tile it.
+    function test_week_block_heights() {
+        const hourH = 38, one = 20, two = 34;
+        const half = Overlap.block(11, 11.5, hourH, one, two);
+        verify(half.twoLine, "a half-hour meeting gets two lines");
+        compare(half.height, two, "17px grows to two lines");
+        verify(half.visualEnd > 11.5, "and reaches past its end");
+        const quarter = Overlap.block(10, 10.25, hourH, one, two);
+        verify(!quarter.twoLine, "a 15-minute standup is one line");
+        compare(quarter.height, one);
+        const twoHours = Overlap.block(13, 15, hourH, one, two);
+        verify(twoHours.twoLine);
+        compare(twoHours.height, 2 * hourH - 2, "a long event keeps its own height");
+        compare(twoHours.visualEnd, 15);
+        // Grown to two lines, 11:00-11:30 now sits beside an 11:30 meeting.
+        const m = Overlap.compute([ev("a", 11, half.visualEnd), ev("b", 11.5, 12)]);
+        compare(m["a"].cols, 2);
+    }
 }

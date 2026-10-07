@@ -381,6 +381,8 @@ target_compile_definitions(heap_ux_audit_tests PRIVATE HEAP_DOCS_DIR="${CMAKE_CU
 # ── audit-int: begin ──
 # ─── Integration / release fixes from the 2026-09-30 audit ───
 heap_add_appcontroller_test(heap_int_audit_tests test_int_audit.cpp)
+# New tickets on the board, the sync flag and the event log (APP-180/186/187).
+heap_add_appcontroller_test(heap_sync_visibility_tests test_sync_visibility.cpp)
 # ── audit-int: end ──
 # ── audit-perf: begin ──
 # Search/filter input latency at 3k tasks (TASKS-23). Wall-clock budgets, so it
@@ -403,10 +405,11 @@ heap_add_appcontroller_test(heap_regression_tests test_regressions.cpp)
 # suite so it runs headless and never touches the real state.json.
 heap_add_appcontroller_test(heap_notes_tests test_notes.cpp)
 
-# ─── Completion sound (APP-167) ───
-# The done-transition decision, the bundled WAV (qrc via heap_core) and which
-# moves ask for the sound; playback is a no-op in QStandardPaths test mode.
-heap_add_appcontroller_test(heap_completion_sound_tests test_completion_sound.cpp)
+# ─── Sound palette (APP-177; the completion tick was APP-167) ───
+# The decisions, the three bundled WAVs (qrc via heap_core: length, edges,
+# spectrum), the settings migration and which actions ask for a sound;
+# playback is a no-op in QStandardPaths test mode.
+heap_add_appcontroller_test(heap_sound_tests test_sound.cpp)
 
 # ─── The fonts shipped inside the app (qrc :/fonts via heap_core) ───
 # Registration, one family per font, every weight the UI uses resolving to its
@@ -588,10 +591,13 @@ add_test(NAME heap_qml_tests
         COMMAND heap_qml_tests -input ${CMAKE_CURRENT_SOURCE_DIR}/qml
                 -o ${CMAKE_CURRENT_BINARY_DIR}/heap_qml_tests.txt,txt -o -,txt)
 # COST: the slowest suite by far; under `ctest --parallel` it starts first so
-# the rest run alongside it instead of after it.
+# the rest run alongside it instead of after it. TIMEOUT: one process runs every
+# tst_*.qml, and on the macOS runner it already took ~285 s against ctest's
+# default 300 s, so each new suite risked a timeout that is not a failure.
 set_tests_properties(heap_qml_tests PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_CONTROLS_STYLE=Basic"
-        COST 1000)
+        COST 1000
+        TIMEOUT 900)
 
 # HEAP-71: the static TodoCpp module's file-based components (SideRail,
 # ArchiveView, …) failed to resolve in the Quick Test binary on Linux under
@@ -899,6 +905,10 @@ add_test(NAME heap_mattermost_tests COMMAND heap_mattermost_tests)
 # QPA + test-mode paths); links GlobalHotkey since AppController references it.
 heap_add_appcontroller_test(heap_appcontroller_tests test_appcontroller.cpp)
 
+# ─── The palette runs every catalog action (APP-192) ───
+heap_add_appcontroller_test(heap_palette_catalog_tests test_palette_catalog.cpp)
+target_compile_definitions(heap_palette_catalog_tests PRIVATE HEAP_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../qml")
+
 # ─── Command line (APP-173) ───
 # Verb detection, argument parsing, the request/response wire format, `heap now`
 # resolution, list/today, and add/done through a headless AppController under a
@@ -1033,3 +1043,12 @@ foreach (_t IN LISTS _heap_dir_targets)
     endif ()
 endforeach ()
 add_custom_target(heap_all_tests DEPENDS ${_heap_test_exes})
+
+# APP-188: a displayed date goes through the UI-language formatter; a
+# hand-picked pattern ("dd.MM HH:mm") fails here as well as in CI's ui-tokens.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if (Python3_Interpreter_FOUND)
+    add_test(NAME heap_date_format_check
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../.github/scripts/date_format_check.py
+                     ${CMAKE_CURRENT_SOURCE_DIR}/../qml ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+endif ()

@@ -134,6 +134,36 @@ TestCase {
     }
 
     // ── VISU-19 / PERA-7: the board scrolls to the cursor ──
+    // EYE-1: a hidden separator takes no room. The ticket group's separator
+    // on a local task left a blank row above "Schedule".
+    function test_a_hidden_separator_collapses() {
+        const sep = make('import TodoCpp; AppMenuSeparator { visible: false }');
+        compare(sep.height, 0);
+        sep.visible = true;
+        verify(sep.height > 0);
+
+        const id = addTask(AppController.statuses[0].id, "separator");
+        const b = makeBoard();
+        const m = openCardMenu(b, id);
+        const at = indexOfItem(m.menu, "tc-menu-ticketSep");
+        verify(at > 0);
+        const ticketSep = m.menu.itemAt(at);
+        verify(!ticketSep.visible);
+        compare(ticketSep.height, 0);
+        // The row before it and the next shown row sit on one regular
+        // separator's distance, not two.
+        const prev = m.menu.itemAt(at - 1);
+        let next = null;
+        for (let i = at + 1; i < m.menu.count; i++) {
+            const it = m.menu.itemAt(i);
+            if (it && it.visible && it.height > 0) { next = it; break; }
+        }
+        verify(next !== null);
+        const gap = next.y - (prev.y + prev.height);
+        verify(gap < Theme.spSm, "blank band of " + gap + "px in the card menu");
+        m.menu.close();
+    }
+
     function test_the_board_scrolls_to_a_cursor_past_the_right_edge() {
         const sts = AppController.statuses;
         verify(sts.length >= 4);
@@ -182,14 +212,24 @@ TestCase {
         card.cursored = true;
         verify(ring.visible, "the cursor has no ring");
         verify(!mark.visible);
-        compare(card.border.width, 1);
+        verify(Qt.colorEqual(ring.border.color, Theme.focusRing), "the cursor is not in the cursor colour");
+        verify(Qt.colorEqual(card.color, Theme.surfaceCard), "the cursor filled the card");
 
+        // APP-174: told apart by form — a fill and a check in a circle, no
+        // ring and no border of its own.
         card.cursored = false;
         AppController.setSelectedTaskIds([id]);
         tryVerify(() => mark.visible, 1000, "a selected card has no check mark");
         verify(!ring.visible, "selection drew the cursor ring");
-        compare(card.border.width, 2);
-        verify(!Qt.colorEqual(card.color, Theme.panel2), "a selected card has no fill");
+        compare(card.border.width, 1);
+        verify(Qt.colorEqual(card.border.color, Theme.cardBorder), "selection drew a border");
+        verify(!Qt.colorEqual(card.color, Theme.surfaceCard), "a selected card has no fill");
+        compare(mark.width, mark.height);
+        compare(mark.radius, mark.width / 2);
+
+        // Both at once: the ring over the filled card.
+        card.cursored = true;
+        verify(ring.visible && mark.visible);
     }
 
     // ── VISP-5: a menu is as wide as its longest row ──

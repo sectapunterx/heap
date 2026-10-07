@@ -21,6 +21,7 @@ Dialog {
     id: root
     objectName: "weekly-recap"
     modal: true
+    Overlay.modal: ModalScrim {}
     focus: true
     anchors.centerIn: Overlay.overlay
     parent: Overlay.overlay
@@ -92,17 +93,11 @@ Dialog {
         const a = new Date(root.recap.weekStart + "T00:00:00");
         const b = new Date(root.recap.weekEnd + "T00:00:00");
         b.setDate(b.getDate() - 1);
-        const loc = Qt.locale(I18n.lang === "ru" ? "ru_RU" : "en_US");
-        return a.toLocaleDateString(loc, "d MMM") + " – " + b.toLocaleDateString(loc, "d MMM");
+        return I18n.fmtDate(a, "dayMonth") + " – " + I18n.fmtDate(b, "dayMonth");
     }
 
     header: DialogHeader { text: I18n.t("recap.title").arg(root._range()) }
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
 
     contentItem: ColumnLayout {
         spacing: Theme.spLg
@@ -142,10 +137,10 @@ Dialog {
                         RowLayout {
                             spacing: Theme.spSm
                             Rectangle { implicitWidth: 8; implicitHeight: 8; radius: 4; color: grp.modelData.fromColor || Theme.textDim }
-                            Text { text: grp.modelData.fromName; color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Font.DemiBold }
+                            Text { text: grp.modelData.fromName; color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Theme.fwTitle }
                             Text { text: "→"; color: Theme.textDim; font.pixelSize: Theme.fsMd }
                             Rectangle { implicitWidth: 8; implicitHeight: 8; radius: 4; color: grp.modelData.toColor || Theme.textDim }
-                            Text { text: grp.modelData.toName; color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Font.DemiBold }
+                            Text { text: grp.modelData.toName; color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Theme.fwTitle }
                             Text { text: "· " + grp.modelData.tasks.length; color: Theme.textDim; font.pixelSize: Theme.fsSm }
                         }
 

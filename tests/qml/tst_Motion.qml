@@ -1,6 +1,5 @@
-// Micro-motions and empty states (APP-167): the pure timing rules in
-// Motion.js, the check mark a card plays when its task is marked done, and
-// the EmptyState drawing.
+// Micro-motions and empty states (APP-167): the pure rules in Motion.js,
+// the stack a closed task is laid on (APP-176), and the EmptyState drawing.
 import QtQuick
 import QtTest
 import TodoCpp
@@ -16,17 +15,28 @@ TestCase {
 
     Item { id: host; anchors.fill: parent }
 
-    function test_just_completed_window() {
-        const now = new Date(2026, 9, 6, 12, 0, 0);
-        const at = (ms) => new Date(now.getTime() - ms);
-        verify(Motion.justCompleted("done", at(0), now));
-        verify(Motion.justCompleted("done", at(Motion.DONE_WINDOW_MS), now));
-        verify(!Motion.justCompleted("done", at(Motion.DONE_WINDOW_MS + 1), now), "too long ago");
-        verify(!Motion.justCompleted("todo", at(10), now), "not done");
-        verify(!Motion.justCompleted("done", undefined, now), "no change time");
-        verify(!Motion.justCompleted("done", new Date(NaN), now), "an invalid date");
-        verify(!Motion.justCompleted("done", new Date(now.getTime() + 5000), now), "a clock that went back");
-        verify(Motion.justCompleted("done", at(200).toISOString(), now), "an ISO string");
+    // APP-176: closing one task plays the stack; a bulk move, a move inside
+    // Done and "Reduce motion" do not.
+    function test_should_stack_only_for_one_card_into_done_with_motion() {
+        verify(Motion.shouldStack(1, "prog", "done", 1));
+        verify(!Motion.shouldStack(2, "prog", "done", 1), "a bulk move");
+        verify(!Motion.shouldStack(0, "prog", "done", 1), "nothing moved");
+        verify(!Motion.shouldStack(1, "prog", "review", 1), "not into Done");
+        verify(!Motion.shouldStack(1, "done", "done", 1), "already done");
+        verify(!Motion.shouldStack(1, "prog", "done", 0), "reduced motion");
+    }
+
+    function test_stack_bars_are_capped_and_keep_their_widths() {
+        compare(Motion.stackBars(0), 0);
+        compare(Motion.stackBars(3), 3);
+        compare(Motion.stackBars(500), Motion.STACK_MAX);
+        compare(Motion.stackBars(-2), 0);
+        for (let i = 0; i < 8; i++) {
+            const w = Motion.stackBarWidth(i);
+            verify(w > 0 && w <= 1, "bar " + i + " is " + w);
+        }
+        compare(Motion.stackBarWidth(0), Motion.stackBarWidth(Motion.STACK_MAX), "the pattern repeats");
+        verify(Motion.stackBarWidth(0) >= Motion.stackBarWidth(1), "widest at the base, like the mark");
     }
 
     function test_settle_offset_follows_motion() {
@@ -39,39 +49,32 @@ TestCase {
     }
 
     function test_theme_duration_tokens() {
-        verify(Theme.durFast <= Theme.durBase && Theme.durBase <= Theme.durSlow);
-        verify(Theme.durFast <= 150, "feedback stays under 150 ms");
+        verify(Theme.durTap <= Theme.durPop && Theme.durPop <= Theme.durMove);
+        verify(Theme.durTap <= 150, "feedback stays under 150 ms");
+        compare(Theme.durPopOut, Math.floor(Theme.durPop / 2), "leaving takes half the time");
         compare(Theme.motion, Theme.reducedMotion ? 0 : 1);
-        if (Theme.reducedMotion) compare(Theme.durBase, 0);
+        if (Theme.reducedMotion) compare(Theme.durMove, 0);
     }
 
-    function test_card_plays_check_mark_when_done() {
+    // The stack replaced the check mark a card played when done (APP-167).
+    function test_card_no_longer_plays_a_check_mark() {
         const card = createTemporaryQmlObject(
-            'import TodoCpp; TaskCard { width: 260; task: ({ id: "MOT-1", title: "t", status: "todo", priority: "P2" }) }', host);
+            'import TodoCpp; TaskCard { width: 260; task: ({ id: "MOT-1", title: "t", status: "done", priority: "P2", statusChangedAt: new Date() }) }', host);
         verify(card !== null);
-        const mark = findChild(card, "tc-done-mark");
-        verify(mark !== null);
-        compare(mark.visible, false, "nothing on a card that is not done");
-        card.task = ({ id: "MOT-1", title: "t", status: "done", priority: "P2" });
-        if (Theme.motion > 0) {
-            tryVerify(function () { return mark.visible; }, 1000, "the check mark shows");
-            tryVerify(function () { return !mark.visible; }, 2000, "and fades");
-        } else {
-            wait(50);
-            compare(mark.visible, false, "reduced motion: no check mark");
-        }
+        compare(findChild(card, "tc-done-mark"), null);
     }
 
-    function test_card_built_for_a_task_just_done_plays_too() {
-        if (Theme.motion === 0) skip("reduced motion");
-        const card = createTemporaryQmlObject(
-            'import TodoCpp; TaskCard { width: 260; task: ({ id: "MOT-2", title: "t", status: "done", priority: "P2", statusChangedAt: new Date() }) }', host);
-        const mark = findChild(card, "tc-done-mark");
-        tryVerify(function () { return mark.visible; }, 1000);
-        const old = createTemporaryQmlObject(
-            'import TodoCpp; TaskCard { width: 260; task: ({ id: "MOT-3", title: "t", status: "done", priority: "P2", statusChangedAt: new Date(2020, 0, 1) }) }', host);
-        wait(100);
-        compare(findChild(old, "tc-done-mark").visible, false, "a card done long ago stays quiet");
+    function test_stack_tokens() {
+        const saved = AppController.appSettingsJson;
+        AppController.appSettingsJson = JSON.stringify({ appearance: { reducedMotion: false } });
+        const on = [Theme.durStack, Theme.durStackFold, Theme.durStackFly];
+        AppController.appSettingsJson = JSON.stringify({ appearance: { reducedMotion: true } });
+        const off = [Theme.durStack, Theme.durStackFold, Theme.durStackFly];
+        AppController.appSettingsJson = saved;
+        compare(on[0], 360);
+        compare(on[1] + on[2], on[0], "fold and flight make the whole move");
+        verify(on[1] < on[2], "the fold is the shorter half");
+        compare(off, [0, 0, 0]);
     }
 
     function test_empty_state_draws_icon_title_and_line() {

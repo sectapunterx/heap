@@ -23,9 +23,7 @@ Popup {
     readonly property real _maxH: (Overlay.overlay ? Overlay.overlay.height : 900) - 48
 
     // Dimmed backdrop so the underlying app stays visible behind the popup.
-    Overlay.modal: Rectangle {
-        color: Theme.scrim
-    }
+    Overlay.modal: ModalScrim {}
     // A press beside the editor (APP-126); see PopupStack.js.
     Overlay.onPressed: if (PopupStack.isTopmost(root, Overlay.overlay)) root.requestClose()
 
@@ -219,9 +217,7 @@ Popup {
     // read their own row.
     readonly property var _historyRows: root._history.map(e => ({ when: root._historyWhen(e.at), text: root._historyText(e) }))
     function _historyWhen(at) {
-        if (!at || !at.getTime || isNaN(at.getTime())) return "";
-        return AppController.shortDate(at) + " " + String(at.getHours()).padStart(2, "0")
-             + ":" + String(at.getMinutes()).padStart(2, "0");
+        return I18n.fmtDateTime(at, "weekdayDay");
     }
     function _statusName(id) {
         const at = root.statusList().indexOf(String(id || ""));
@@ -274,6 +270,8 @@ Popup {
         draft = initialDraft || {};
         isNew = !!draft._isNew;
         _originalId = isNew ? "" : (draft.id || "");
+        // Opening a card a sync brought in is seeing it (APP-180).
+        if (_originalId.length > 0) AppController.markTaskSeen(_originalId);
         _profileId = AppController.activeProfileId;
         // New tasks: leave idField empty with a TODO hint — real id is
         // assigned on save. Edit: pre-fill with existing id (editable).
@@ -374,7 +372,7 @@ Popup {
         if (!d || !d.getFullYear || isNaN(d.getTime())) return "";
         const iso = formatDate(d);
         if (!hasTime) return iso;
-        return iso + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+        return iso + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");  // machine-format: the field parses it back
     }
 
     // "YYYY-MM-DD" or "YYYY-MM-DD HH:MM" — the shape formatWhen writes back into
@@ -696,10 +694,8 @@ Popup {
         onActivated: attachDialog.open()
     }
 
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: fileDrop.containsDrag ? Theme.accent : Theme.borderStrong
+    background: ModalSurface {
+        border.color: fileDrop.containsDrag ? Theme.accent : Theme.modalBorder
         border.width: fileDrop.containsDrag ? 2 : 1
         // Files dropped anywhere on the editor are attached to the task.
         DropArea {
@@ -734,7 +730,7 @@ Popup {
                 text: root.isNew ? I18n.t("editor.new.task") : I18n.t("editor.edit.task")
                 color: Theme.text
                 font.pixelSize: Theme.fsLg
-                font.weight: Font.DemiBold
+                font.weight: Theme.fwHeading
             }
             Text {
                 visible: !root.isNew
@@ -745,7 +741,7 @@ Popup {
                 color: Theme.accentStrong
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsMd
-                font.weight: Font.Medium
+                font.weight: Theme.fwTitle
             }
             Item { Layout.fillWidth: true }
             PillButton {
@@ -795,7 +791,7 @@ Popup {
                                 textFormat: Text.PlainText
                                 color: root._badge.color || Theme.textMuted
                                 font.pixelSize: Theme.fsXs
-                                font.weight: Font.DemiBold
+                                font.weight: Theme.fwTitle
                             }
                             Text {
                                 text: (root._badge.name || root._ticket.provider || "")
@@ -829,7 +825,7 @@ Popup {
                                 textFormat: Text.PlainText
                                 color: Theme.warning
                                 font.pixelSize: Theme.fsSm
-                                font.weight: Font.DemiBold
+                                font.weight: Theme.fwTitle
                                 wrapMode: Text.WordWrap
                             }
                             Repeater {
@@ -867,18 +863,43 @@ Popup {
                 }
 
                 // ── Title ──
-                TextField {
+                // Wraps instead of scrolling sideways: a long title opened
+                // scrolled to its end, the start off to the left and its first
+                // visible letter cut (SCALE-6). Still one line of text — Enter
+                // does not break it, a pasted newline becomes a space, and Tab
+                // moves on.
+                TextArea {
                     id: titleField
                     ContextMenu.menu: TextEditMenu { editor: titleField }
                     objectName: "te-title"
                     Layout.fillWidth: true
                     Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
                     placeholderText: I18n.t("editor.ph.titleShort")
+                    wrapMode: TextEdit.Wrap
+                    selectByMouse: true
                     font.pixelSize: Theme.fsLg
-                    font.weight: Font.Medium
+                    font.weight: Theme.fwTitle
                     background: FieldBg {}
                     color: Theme.text
                     placeholderTextColor: Theme.textDim
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                            // Ctrl+Enter is the save shortcut's.
+                            if (!(event.modifiers & Qt.ControlModifier)) event.accepted = true;
+                            return;
+                        }
+                        if (event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab) return;
+                        const back = event.key === Qt.Key_Backtab || (event.modifiers & Qt.ShiftModifier);
+                        const next = titleField.nextItemInFocusChain(!back);
+                        if (next) next.forceActiveFocus(back ? Qt.BacktabFocusReason : Qt.TabFocusReason);
+                        event.accepted = true;
+                    }
+                    onTextChanged: {
+                        if (!/[\r\n\t]/.test(text)) return;
+                        const at = cursorPosition;
+                        text = text.replace(/[\r\n\t]+/g, " ");
+                        cursorPosition = Math.min(at, text.length);
+                    }
                 }
 
                 // ── Status · priority · deadline: what a developer reads first ──
@@ -888,9 +909,9 @@ Popup {
                     columns: 3
                     columnSpacing: Theme.spLg
                     rowSpacing: Theme.spXs
-                    FieldLabel { text: I18n.t("editor.label.status").toUpperCase() }
-                    FieldLabel { text: I18n.t("editor.label.priority").toUpperCase() }
-                    FieldLabel { text: I18n.t("editor.label.deadline").toUpperCase() }
+                    FieldLabel { text: I18n.t("editor.label.status") }
+                    FieldLabel { text: I18n.t("editor.label.priority") }
+                    FieldLabel { text: I18n.t("editor.label.deadline") }
                     AppComboBox {
                         id: statusBox
                         objectName: "te-status"
@@ -922,7 +943,7 @@ Popup {
                         Layout.preferredWidth: 88
                         model: ["P0", "P1", "P2", "P3"]
                         textColor: Theme.priorityColor(priBox.displayText)
-                        textWeight: Font.DemiBold
+                        textWeight: Theme.fwTitle
                     }
                     RowLayout {
                         Layout.fillWidth: true
@@ -956,7 +977,7 @@ Popup {
                                                            root._deadlinePreview.hasTime);
                                 }
                             }
-                            ToolTip.visible: hovered && text.length > 0 &&
+                            ToolTip.visible: (hovered || activeFocus) && text.length > 0 &&
                                 root._deadlinePreview && !root._deadlinePreview.ok
                             ToolTip.text: I18n.t("editor.tip.unrecognized")
                         }
@@ -1015,15 +1036,8 @@ Popup {
                             if (!root._deadlinePreview || !root._deadlinePreview.ok ||
                                 !root._deadlinePreview.start) return "";
                             const d = root._deadlinePreview.start;
-                            const iso = d.getFullYear() + "-" +
-                                String(d.getMonth() + 1).padStart(2, "0") + "-" +
-                                String(d.getDate()).padStart(2, "0");
-                            if (root._deadlinePreview.hasTime) {
-                                const hh = String(d.getHours()).padStart(2, "0");
-                                const mm = String(d.getMinutes()).padStart(2, "0");
-                                return "↑ " + iso + " " + hh + ":" + mm;
-                            }
-                            return "↑ " + iso;
+                            return "↑ " + (root._deadlinePreview.hasTime ? I18n.fmtDateTime(d, "weekdayDayYear")
+                                                                          : I18n.fmtDate(d, "weekdayDayYear"));
                         }
                     }
                 }
@@ -1036,7 +1050,7 @@ Popup {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: Theme.spXs
-                        FieldLabel { text: I18n.t("editor.label.desc").toUpperCase() }
+                        FieldLabel { text: I18n.t("editor.label.desc") }
                         Item { Layout.fillWidth: true }
                         // The description is markdown and always has been — it
                         // was just never rendered, so a template's checklist was
@@ -1148,7 +1162,7 @@ Popup {
                         Layout.fillWidth: true
                         spacing: Theme.spSm
                         FieldLabel {
-                            text: I18n.t("att.label").toUpperCase()
+                            text: I18n.t("att.label")
                                   + (root._attachments.length > 0 ? "  " + root._attachments.length : "")
                         }
                         Text {
@@ -1157,6 +1171,10 @@ Popup {
                             text: I18n.t("att.hint.task")
                             color: Theme.textDim
                             font.pixelSize: Theme.fsXs
+                            // Two lines before it gives up: a longer language
+                            // lost the end of the hint (APP-189).
+                            wrapMode: Text.WordWrap
+                            maximumLineCount: 2
                             elide: Text.ElideRight
                         }
                         Item { Layout.fillWidth: root._attachments.length > 0 }
@@ -1164,7 +1182,7 @@ Popup {
                             objectName: "te-attach"
                             text: "📎  " + I18n.t("att.button")
                             onClicked: attachDialog.open()
-                            ToolTip.visible: hovered
+                            ToolTip.visible: hovered || visualFocus
                             ToolTip.delay: 400
                             ToolTip.text: I18n.t("att.button.tip")
                         }
@@ -1191,7 +1209,7 @@ Popup {
                     Layout.fillWidth: true
                     Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
                     spacing: Theme.spSm
-                    FieldLabel { text: I18n.t("waiting.label").toUpperCase() }
+                    FieldLabel { text: I18n.t("waiting.label") }
                     Text {
                         objectName: "te-waiting-who"
                         Layout.fillWidth: true
@@ -1242,14 +1260,9 @@ Popup {
                     Keys.onSpacePressed: root.detailsOpen = !root.detailsOpen
                     Keys.onReturnPressed: root.detailsOpen = !root.detailsOpen
                     Keys.onEnterPressed: root.detailsOpen = !root.detailsOpen
-                    Rectangle {
-                        anchors.fill: parent
+                    FocusRing {
                         anchors.margins: -Theme.sp2xs
                         radius: Theme.radiusSm
-                        color: "transparent"
-                        visible: detailsToggle.activeFocus
-                        border.color: Theme.focusRing
-                        border.width: 2
                     }
                     RowLayout {
                         id: detailsRow
@@ -1260,7 +1273,7 @@ Popup {
                             text: (root.detailsOpen ? "▾  " : "▸  ") + I18n.t("editor.details")
                             color: detailsMA.containsMouse ? Theme.text : Theme.textMuted
                             font.pixelSize: Theme.fsMd
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                         }
                         // What is filled in behind the fold, so a closed Details
                         // still says whether there is anything to look at.
@@ -1291,8 +1304,8 @@ Popup {
                     columnSpacing: Theme.spLg
                     rowSpacing: Theme.spXs
 
-                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.ticketId").toUpperCase() }
-                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.branch").toUpperCase() }
+                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.ticketId") }
+                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.branch") }
                     TextField {
                         id: idField
                         ContextMenu.menu: TextEditMenu { editor: idField }
@@ -1331,8 +1344,8 @@ Popup {
                         placeholderTextColor: Theme.textDim
                     }
 
-                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.scheduled").toUpperCase() }
-                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.recurrence").toUpperCase() }
+                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.scheduled") }
+                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.recurrence") }
                     TextField {
                         id: scheduledField
                         ContextMenu.menu: TextEditMenu { editor: scheduledField }
@@ -1376,8 +1389,8 @@ Popup {
                                .concat(_extra.length > 0 ? [_label(_extra)] : [])
                     }
 
-                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.labels").toUpperCase() }
-                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.estimate").toUpperCase() }
+                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.labels") }
+                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.estimate") }
                     TextField {
                         id: labelsField
                         ContextMenu.menu: TextEditMenu { editor: labelsField }
@@ -1418,7 +1431,7 @@ Popup {
                                 const bi = root.statusList().indexOf("backlog");
                                 if (bi >= 0) statusBox.currentIndex = bi;
                             }
-                            ToolTip.visible: hovered
+                            ToolTip.visible: hovered || visualFocus
                             ToolTip.delay: 400
                             ToolTip.text: I18n.t("editor.someday.hint")
                         }
@@ -1431,7 +1444,7 @@ Popup {
                     Layout.fillWidth: true
                     Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
                     spacing: Theme.spSm
-                    FieldLabel { text: I18n.t("editor.details.tracker").toUpperCase() }
+                    FieldLabel { text: I18n.t("editor.details.tracker") }
                     // One "label value" pair per field the tracker actually gave.
                     Flow {
                         Layout.fillWidth: true
@@ -1556,14 +1569,9 @@ Popup {
                     Keys.onSpacePressed: root.historyOpen = !root.historyOpen
                     Keys.onReturnPressed: root.historyOpen = !root.historyOpen
                     Keys.onEnterPressed: root.historyOpen = !root.historyOpen
-                    Rectangle {
-                        anchors.fill: parent
+                    FocusRing {
                         anchors.margins: -Theme.sp2xs
                         radius: Theme.radiusSm
-                        color: "transparent"
-                        visible: historyToggle.activeFocus
-                        border.color: Theme.focusRing
-                        border.width: 2
                     }
                     Text {
                         id: historyHead
@@ -1573,7 +1581,7 @@ Popup {
                         text: (root.historyOpen ? "▾  " : "▸  ") + I18n.t("editor.history").arg(root._history.length)
                         color: historyMA.containsMouse ? Theme.text : Theme.textMuted
                         font.pixelSize: Theme.fsMd
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwTitle
                     }
                     MouseArea {
                         id: historyMA
@@ -1704,13 +1712,8 @@ Popup {
         closePolicy: Popup.NoAutoClose
         padding: Theme.inset
         width: Math.min(380, root.width - 2 * Theme.inset)
-        background: Rectangle {
-            radius: Theme.radiusXl
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
-        Overlay.modal: Rectangle { color: Theme.scrim }
+        background: ModalSurface {}
+        Overlay.modal: ModalScrim {}
         onOpened: promptBody.forceActiveFocus()
         function keep() { root._afterPrompt = null; discardPrompt.close(); titleField.forceActiveFocus(); }
         function discard() { discardPrompt.close(); root.close(); root._runAfterPrompt(); }
@@ -1730,7 +1733,7 @@ Popup {
                 text: I18n.t("editor.dirty.title")
                 color: Theme.text
                 font.pixelSize: Theme.fsLg
-                font.weight: Font.DemiBold
+                font.weight: Theme.fwHeading
                 wrapMode: Text.Wrap
             }
             Text {
@@ -1799,10 +1802,9 @@ Popup {
     }
 
     component FieldLabel: Text {
-        color: Theme.textMuted
-        font.pixelSize: Theme.fsXs
-        font.weight: Font.DemiBold
-        font.letterSpacing: 1
+        color: Theme.textDim
+        font.pixelSize: Theme.fsSm
+        font.weight: Theme.fwTitle
         topPadding: Theme.sp2xs
     }
     component FieldBg: FieldFrame {}

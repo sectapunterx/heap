@@ -61,12 +61,7 @@ Popup {
     property string _focusedThemeName: ""
     onClosed: _focusedThemeName = ""
 
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: PopupSurface {}
 
     contentItem: ColumnLayout {
         spacing: 0
@@ -79,11 +74,10 @@ Popup {
                 anchors.fill: parent
                 anchors.leftMargin: Theme.sp2xl; anchors.rightMargin: Theme.spMd
                 Text {
-                    text: I18n.t("tweaks.title").toUpperCase()
-                    color: Theme.textMuted
+                    text: I18n.t("tweaks.title")
+                    color: Theme.textDim
                     font.pixelSize: Theme.fsSm
-                    font.weight: Font.DemiBold
-                    font.letterSpacing: 1
+                    font.weight: Theme.fwTitle
                 }
                 Item { Layout.fillWidth: true }
                 Rectangle {
@@ -181,7 +175,7 @@ Popup {
                                 width: 12; height: 12; radius: 6
                                 color: chip.t.colors.accent
                             }
-                            ToolTip.visible: chipHover.hovered
+                            ToolTip.visible: chipHover.hovered || chip.activeFocus
                             ToolTip.text: chip.t.name
                             HoverHandler { id: chipHover; onHoveredChanged: if (hovered) root._focusedThemeName = chip.t.name }
                             MouseArea {
@@ -253,9 +247,8 @@ Popup {
 
     component SectLabel: Text {
         color: Theme.textDim
-        font.pixelSize: Theme.fsXs
-        font.letterSpacing: 1
-        font.weight: Font.DemiBold
+        font.pixelSize: Theme.fsSm
+        font.weight: Theme.fwTitle
     }
 
     component FieldLabel: Text {
@@ -287,7 +280,7 @@ Popup {
             text: parent.text
             color: parent.active ? Theme.accentStrong : Theme.text
             font.pixelSize: Theme.fsMd
-            font.weight: parent.active ? Font.DemiBold : Font.Medium
+            font.weight: Theme.fwTitle
         }
         MouseArea {
             id: segMA
@@ -324,22 +317,29 @@ Popup {
             font.pixelSize: Theme.fsMd
         }
         Rectangle {
+            id: toggleTrack
             width: 32; height: 18; radius: 9
             color: toggleRow.checked ? Theme.accent : Theme.panel3
             // An edge for the OFF track and the knob: both vanished on the
             // light themes' panel3 and accent (DES-20).
             border.color: toggleRow.checked ? "transparent" : Theme.fieldBorder
             border.width: 1
-            Behavior on color { ColorAnimation { duration: Theme.animMs } }
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             FocusRing { target: toggleRow; radius: 12 }
             Rectangle {
                 width: 14; height: 14; radius: 7
+                id: toggleKnob
                 y: 2
-                x: toggleRow.checked ? parent.width - width - 2 : 2
+                x: 2
                 color: Theme.knob
                 border.color: Theme.fieldBorder
                 border.width: 1
-                Behavior on x { NumberAnimation { duration: Theme.animMs; easing.type: Easing.OutCubic } }
+                // Slides by transform, not by x: only transform and opacity
+                // animate (APP-175).
+                transform: Translate {
+                    x: toggleRow.checked ? toggleTrack.width - toggleKnob.width - 4 : 0
+                    Behavior on x { NumberAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
+                }
             }
         }
     }

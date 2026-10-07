@@ -162,4 +162,23 @@ TestCase {
         verify(!w2.paused);
         AppController.currentView = "board";
     }
+
+    // APP-201: the body is as tall as the step's content, with no blank band
+    // under "Learn more", and the link carries no arrow.
+    function test_body_height_follows_the_content() {
+        const w = mk();
+        w.open();
+        tryCompare(w, "opened", true);
+        const body = findChild(w.contentItem, "welcome-body");
+        const content = findChild(w.contentItem, "welcome-body-content");
+        verify(body !== null && content !== null);
+        for (let i = 0; i < w.steps.length; i++) {
+            w.step = i;
+            tryVerify(() => Math.abs(body.height - content.implicitHeight) < 1, 2000,
+                      "step " + i + ": body " + body.height + " vs content " + content.implicitHeight);
+        }
+        for (const lang of ["en", "ru"])
+            verify(String(I18n.dict[lang]["welcome.learnMore"]).indexOf("→") < 0, lang + " link has an arrow");
+        w._finish();
+    }
 }

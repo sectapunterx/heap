@@ -136,7 +136,9 @@ TestCase {
 
     function test_drop_on_a_card_attaches_and_the_card_counts() {
         const id = newTask("att card probe");
-        const card = cardComp.createObject(host, { task: { id: id, title: "att card probe", status: "todo", priority: "P2",
+        // Cursored: the count is a detail under the cursor (APP-179).
+        const card = cardComp.createObject(host, { cursored: true,
+                                                   task: { id: id, title: "att card probe", status: "todo", priority: "P2",
                                                            attachmentCount: 0 } });
         verify(card !== null);
         const chip = findChild(card, "tc-attachments");

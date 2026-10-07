@@ -22,7 +22,7 @@ TestCase {
     // ── smoke: the singleton resolves and core tokens have sane types ──
     function test_singleton_resolves() {
         verify(Theme !== null, "Theme singleton must resolve");
-        compare(typeof Theme.animMs, "number");
+        compare(typeof Theme.durMove, "number");
         verify(Theme.rowH > 0, "rowH must be positive");
         verify(Theme.pad > 0, "pad must be positive");
         verify(Theme.radius > 0, "radius must be positive");
@@ -89,6 +89,13 @@ TestCase {
         compare(plainProbe.fontInfo.family, "heap Golos Text");
     }
 
+    // ── Weights (APP-193): three, one job each, and only the heading at 600 ──
+    function test_three_weights() {
+        compare(Theme.fwBody, Font.Normal);
+        compare(Theme.fwTitle, Font.Medium);
+        compare(Theme.fwHeading, Font.DemiBold);
+    }
+
     // ── withAlpha: keeps r/g/b, replaces alpha ──
     function test_withalpha_preserves_rgb_sets_alpha() {
         const c = Qt.rgba(0.2, 0.4, 0.6, 1.0);
@@ -104,18 +111,39 @@ TestCase {
         fuzzyCompare(c.a, 1.0, 0.01);
     }
 
-    // ── scaledMs: identity when motion is on, 0 when reduced ──
-    function test_scaledms_matches_motion_state() {
-        compare(Theme.scaledMs(0), 0);
-        // animMs is defined as reducedMotion ? 0 : 160 — scaledMs(160) must agree.
-        compare(Theme.scaledMs(160), Theme.animMs);
-        if (Theme.reducedMotion) {
-            compare(Theme.scaledMs(200), 0);
-            compare(Theme.animMs, 0);
-        } else {
-            compare(Theme.scaledMs(200), 200);
-            compare(Theme.animMs, 160);
-        }
+    // ── Motion tokens (APP-175): tap < pop < move, leaving takes half,
+    //    one curve in and one out, no overshoot ──
+    function test_motion_tokens_with_motion_on() {
+        const saved = AppController.appSettingsJson;
+        AppController.appSettingsJson = JSON.stringify({ appearance: { reducedMotion: false } });
+        const d = [Theme.durTap, Theme.durPop, Theme.durMove,
+                   Theme.durTapOut, Theme.durPopOut, Theme.durMoveOut, Theme.durPulse];
+        AppController.appSettingsJson = saved;
+        compare(d[0], 90);
+        compare(d[1], 140);
+        compare(d[2], 220);
+        compare(d[3], 45);
+        compare(d[4], 70);
+        compare(d[5], 110);
+        verify(d[6] > 0);
+        compare(Theme.easeEnter, Easing.OutQuint);
+        compare(Theme.easeExit, Easing.InCubic);
+    }
+
+    // ── "Reduce motion" = 0 ms for every duration token ──
+    function test_reduced_motion_zeroes_every_duration() {
+        const saved = AppController.appSettingsJson;
+        AppController.appSettingsJson = JSON.stringify({ appearance: { reducedMotion: true } });
+        const reduced = Theme.reducedMotion;
+        const motion = Theme.motion;
+        const d = { durTap: Theme.durTap, durPop: Theme.durPop, durMove: Theme.durMove,
+                    durTapOut: Theme.durTapOut, durPopOut: Theme.durPopOut,
+                    durMoveOut: Theme.durMoveOut, durPulse: Theme.durPulse };
+        AppController.appSettingsJson = saved;
+        compare(reduced, true);
+        compare(motion, 0);
+        for (const k in d)
+            compare(d[k], 0, k + " must be 0 with reduced motion");
     }
 
     // ── statusColor: each known id maps to its swatch, unknown → textMuted ──
@@ -211,7 +239,7 @@ TestCase {
         const showWeekends = Theme.showWeekends;
         const reduced      = Theme.reducedMotion;
         const contrast     = Theme.highContrast;
-        const animMs       = Theme.animMs;
+        const durMove      = Theme.durMove;
         AppController.appSettingsJson = saved;
 
         compare(weekStart, "mon");
@@ -220,7 +248,7 @@ TestCase {
         compare(showWeekends, true);
         compare(reduced, false);
         compare(contrast, false);
-        compare(animMs, 160);
+        compare(durMove, 220);
     }
 
     // ── explicit overrides win — notably showWeekends:false must survive
@@ -296,10 +324,34 @@ TestCase {
         for (const t of Presets.PRESETS) {
             AppController.theme = t.base;
             AppController.appSettingsJson = JSON.stringify({ appearance: { darkPreset: t.id, lightPreset: t.id } });
-            for (const surface of [Theme.bg, Theme.panel, Theme.panel2]) {
+            for (const surface of [Theme.bg, Theme.panel, Theme.panel2, Theme.surfaceCard, Theme.surfaceCardHover]) {
                 const ratio = _contrast(Theme.textDim, surface);
                 if (ratio < 4.5) fails.push(t.id + ": textDim on " + surface + " is " + ratio.toFixed(2) + ":1");
             }
+        }
+        AppController.appSettingsJson = saved;
+        AppController.theme = savedTheme;
+        compare(fails.length, 0, fails.join("; "));
+    }
+
+    // A card stands on the ground by lightness, one step per level (APP-196):
+    // on every dark theme 8–10 L* above bg and no border; a light theme keeps
+    // its white card and the hairline. Columns have no fill at all.
+    function test_cards_stand_on_the_ground_by_lightness() {
+        const saved = AppController.appSettingsJson;
+        const savedTheme = AppController.theme;
+        const fails = [];
+        for (const t of Presets.PRESETS) {
+            AppController.theme = t.base;
+            AppController.appSettingsJson = JSON.stringify({ appearance: { darkPreset: t.id, lightPreset: t.id, contrast: "normal" } });
+            compare(Theme.surfaceColumn.a, 0, t.id + ": a column has no fill");
+            if (t.base !== "dark") {
+                verify(Theme.cardBorder.a > 0, t.id + ": a light card keeps its hairline");
+                continue;
+            }
+            const dL = Presets.lightness(String(Theme.surfaceCard)) - Presets.lightness(String(Theme.bg));
+            if (dL < 8 || dL > 10) fails.push(t.id + ": card is " + dL.toFixed(1) + " L* above bg");
+            if (Theme.cardBorder.a !== 0) fails.push(t.id + ": dark card has a border");
         }
         AppController.appSettingsJson = saved;
         AppController.theme = savedTheme;
@@ -335,6 +387,17 @@ TestCase {
         const s = [Theme.fsXs, Theme.fsSm, Theme.fsMd, Theme.fsLg, Theme.fsXl, Theme.fs2xl];
         verify(s[0] >= 11, "fsXs is " + s[0] + "px");
         for (let i = 1; i < s.length; i++) verify(s[i] > s[i - 1], "type scale step " + i + " does not ascend");
+    }
+
+    // Every size sits on the 1.125 scale from 13px (APP-181), not on the
+    // old 11/12/13/15/20/28 list.
+    function test_type_scale_is_modular() {
+        compare(Theme.scale, 1);
+        const steps = { fsSm: -1, fsMd: 0, fsLg: 1, fsXl: 3, fs2xl: 5 };
+        for (const k in steps)
+            compare(Theme[k], Math.round(13 * Math.pow(1.125, steps[k])), k);
+        compare(Theme.fsXs, 11, "the floor");
+        compare([Theme.fsXl, Theme.fs2xl], [19, 23]);
     }
 
     // Density moves the spacing scale, not just the hour height: compact
@@ -862,6 +925,26 @@ TestCase {
             verify(Theme.fsMd < md);
             withScale(7);
             compare(Theme.scale, 1, "out of range means 100 %");
+        } finally {
+            AppController.appSettingsJson = saved;
+        }
+    }
+
+    // APP-183: with no scale of the user's own, the system's text size is
+    // the scale (100 % under tests); a picked one wins.
+    function test_unset_ui_scale_follows_the_system_text_size() {
+        const saved = AppController.appSettingsJson;
+        try {
+            const o = JSON.parse(saved || "{}");
+            o.appearance = Object.assign({}, o.appearance || {});
+            delete o.appearance.uiScale;
+            AppController.appSettingsJson = JSON.stringify(o);
+            compare(Theme.systemScale(), AppController.systemUiScale(Theme.scaleSteps));
+            compare(Theme.scale, Theme.systemScale());
+            compare(Theme.systemScale(), 1, "tests read a 100 % system");
+            o.appearance.uiScale = 1.25;
+            AppController.appSettingsJson = JSON.stringify(o);
+            compare(Theme.scale, 1.25);
         } finally {
             AppController.appSettingsJson = saved;
         }

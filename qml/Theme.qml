@@ -80,6 +80,22 @@ QtObject {
     readonly property color panel2: _c.panel2
     readonly property color panel3: _c.panel3
 
+    // ── Surfaces on the page (APP-196) ───────────────────────────────
+    // One step per level, one way to take it. A column was a panel box
+    // 1.5 L* above the ground and a card a bordered box 3 L* above that:
+    // box in box, with edges nobody could see. Now a column has no fill
+    // (its header is what marks it) and a card stands on the ground by
+    // lightness alone: 9 L* above bg on a dark theme (8 with soft
+    // contrast), no border. A light theme has no room above its ground, so
+    // there a card is the theme's white panel and keeps its hairline.
+    // Derived from bg, so a user's own theme gets the same steps.
+    readonly property color surfaceColumn: "transparent"
+    readonly property color surfaceCard: dark ? Presets.lift(String(_c.bg), softContrast ? 8 : 9) : _c.panel
+    readonly property color surfaceCardHover: dark ? Presets.lift(String(_c.bg), softContrast ? 10 : 11)
+                                                   : Qt.tint(_c.panel, withAlpha(_c.text, 0.03))
+    readonly property color cardBorder: dark && !highContrast ? "transparent" : border
+    readonly property color cardBorderHover: dark && !highContrast ? "transparent" : borderStrong
+
     // ── Lines + text — highContrast strengthens both ──────────────────
     // High contrast is the accessibility mode, so its lines — field outlines
     // included — reach WCAG's 3:1 for UI against bg and panel on every theme;
@@ -100,7 +116,10 @@ QtObject {
     readonly property color textMuted:    _c.textMuted
     // The smallest text in the app uses this; every built-in theme keeps it
     // at WCAG AA (4.5:1) on bg, panel and panel2 (tst_Theme checks).
-    readonly property color textDim:      _c.textDim
+    // Cards stand lighter than the panels (APP-196), so they are measured too.
+    readonly property color textDim:      Presets.ensureContrast(String(_c.textDim),
+        [String(_c.bg), String(Qt.tint(_c.bg, _c.panel)), String(Qt.tint(_c.bg, _c.panel2)),
+         String(surfaceCard), String(surfaceCardHover)], 4.5)
     // Text drawn on an accent / danger fill (primary buttons, badges).
     readonly property color textOnAccent: _c.textOnAccent
     readonly property color textOnDanger: _c.textOnDanger
@@ -128,8 +147,24 @@ QtObject {
     // was panel2 on panel, 1.03:1. The ring is drawn outside the control, on
     // the surface, so it is measured against the surfaces — and a theme
     // whose accentStrong is too faint for that gets a stronger one.
-    readonly property color focusRing: Presets.ensureContrast(String(accentStrong),
+    //
+    // It is the keyboard cursor's colour (APP-174): Settings → Appearance →
+    // Cursor colour picks it, appearance.cursorColor holds the pick, and
+    // none means the theme's accent. A pick too faint for a surface is
+    // strengthened like the accent is. Only focus is drawn in it.
+    readonly property string cursorColorPick: typeof _appearance.cursorColor === "string"
+                                              && /^#[0-9a-fA-F]{6}$/.test(_appearance.cursorColor)
+                                              ? _appearance.cursorColor.toLowerCase() : ""
+    readonly property color focusRing: Presets.ensureContrast(cursorColorPick.length ? cursorColorPick : String(accent),
         [String(bg), String(panel), String(panel2), String(panel3)], 3.0)
+    // The soft glow just outside the ring, so the cursor reads at a glance
+    // and not only on a close look. FocusRing draws both.
+    readonly property color focusHalo: withAlpha(focusRing, 0.22)
+    // Live things — a sync in flight (APP-186). The brand's signal cyan in
+    // heap. ink, which the sync-meeting colour carries in every theme, so it
+    // is a tone each theme already has rather than a new token to fill in.
+    readonly property color live: _c.mSync
+    readonly property int focusHaloWidth: 3
     // Fill of the highlighted menu / palette row; focusRing marks it.
     readonly property color rowHighlight: panel3
 
@@ -244,9 +279,15 @@ QtObject {
     // ── Interface scale (APP-168) ────────────────────────────────────
     // Settings → Appearance → Scale: 90–150 %. Type, spacing and row
     // heights follow it live; hairlines, radii and icon cells stay put.
+    // Until the user picks one, the system's text size picks it (APP-183):
+    // Windows "Make text bigger" at 150 % starts heap at 150 %.
     readonly property var scaleSteps: [0.9, 1, 1.1, 1.25, 1.5]
+    // A function, not a property: the system is asked only when needed.
+    function systemScale() { return AppController.systemUiScale(scaleSteps); }
     readonly property real scale: {
-        const v = Number(_appearance.uiScale);
+        const raw = _appearance.uiScale;
+        const v = Number(raw);
+        if (raw === undefined || raw === null) return systemScale();
         return isFinite(v) && v >= 0.9 && v <= 1.5 ? v : 1;
     }
     function px(n) { return Math.round(n * scale); }
@@ -283,30 +324,77 @@ QtObject {
     readonly property int radiusXl: 12  // dialogs, large panels
     readonly property int radiusPill: 999
 
+    // ── Elevation (APP-182) ──────────────────────────────────────────
+    // Three levels, each with its own edge, shadow and radius, so how far
+    // something floats says what it is:
+    //  - surface: what lies on the page (cards, columns, settings cards) —
+    //    no shadow, Theme.radius, see surfaceCard below;
+    //  - popup: menus, drop-downs, suggestion lists, tooltips, floating
+    //    panels — PopupSurface.qml, radius 10, a field-strength outline
+    //    (3:1 on every surface, VISP-8) and a soft drop shadow;
+    //  - modal: dialogs and editors — ModalSurface.qml, radius 12, a deeper
+    //    shadow, always over ModalScrim.qml.
+    readonly property int   popupRadius: radiusLg
+    readonly property color popupFill: panel2
+    readonly property color popupBorder: fieldBorder
+    readonly property color popupShadow: withAlpha(scrim, dark ? 0.6 : 0.18)
+    readonly property int   popupShadowOffset: 2
+    readonly property int   popupShadowDepth: 6
+    readonly property int   modalRadius: radiusXl
+    readonly property color modalFill: panel
+    readonly property color modalBorder: borderStrong
+    readonly property color modalShadow: withAlpha(scrim, dark ? 0.7 : 0.28)
+    readonly property int   modalShadowOffset: 6
+    readonly property int   modalShadowDepth: 16
+
     // ── Type scale (px) ──────────────────────────────────────────────
-    // Six steps, times the interface scale. The floor is 11px at any scale:
-    // nothing the user has to read is smaller.
-    readonly property int fsXs:  Math.max(11, px(11))  // chips, badges, uppercase section labels
-    readonly property int fsSm:  px(12)  // meta, descriptions, secondary text
-    readonly property int fsMd:  px(13)  // body, card titles, inputs
-    readonly property int fsLg:  px(15)  // dialog and section titles
-    readonly property int fsXl:  px(20)  // page headings
-    readonly property int fs2xl: px(28)  // display (welcome, empty hero)
+    // A modular scale (APP-181): 13px body, each step 1.125 times the one
+    // below, times the interface scale. The ad-hoc 20 and 28 jumped a step
+    // and a half; on the scale the headings sit two and four steps above
+    // the dialog title. The floor is 11px at any scale: nothing the user
+    // has to read is smaller. A screen uses at most four of these.
+    readonly property int typeBase: 13
+    readonly property real typeRatio: 1.125
+    function typeStep(n) { return Math.round(typeBase * Math.pow(typeRatio, n) * scale); }
+    readonly property int fsXs:  Math.max(11, typeStep(-2))  // chips, badges, counts
+    readonly property int fsSm:  typeStep(-1)  // meta, descriptions, section labels
+    readonly property int fsMd:  typeStep(0)   // body, card titles, inputs
+    readonly property int fsLg:  typeStep(1)   // dialog and section titles
+    readonly property int fsXl:  typeStep(3)   // page headings
+    readonly property int fs2xl: typeStep(5)   // display (welcome, empty hero)
 
     // ── Accessibility / motion ───────────────────────────────────────
     readonly property bool reducedMotion: !!_appearance.reducedMotion
     readonly property bool highContrast:  contrast === "high"
-    readonly property int animMs: reducedMotion ? 0 : 160
-    function scaledMs(n) { return reducedMotion ? 0 : n; }
     // 1, or 0 with "Reduce motion" on: a factor for anything that moves by a
     // distance (a springy drop, a check mark that grows), not only by time.
     readonly property real motion: reducedMotion ? 0 : 1
-    // Duration steps (APP-167). Feedback that answers a click is fast, a
-    // change of place is base, a panel that slides is slow; all 0 with
-    // "Reduce motion" on.
-    readonly property int durFast: reducedMotion ? 0 : 120
-    readonly property int durBase: reducedMotion ? 0 : 160
-    readonly property int durSlow: reducedMotion ? 0 : 240
+    // Motion (APP-175): three durations and one curve. How long a thing moves
+    // depends on how far it goes: tap answers a press, hover or switch; pop
+    // opens a menu, a drop-down or a tip; move carries a card, a panel or a
+    // dialog. A thing arrives on easeEnter (fast, slowing to rest) and leaves
+    // in half the time on easeExit (speeding away). No overshoot: a tool, not
+    // a toy. All 0 with "Reduce motion" on. QML outside this file never
+    // writes a duration or an Easing literal (ui_tokens_check.py).
+    readonly property int durTap:  reducedMotion ? 0 : 90
+    readonly property int durPop:  reducedMotion ? 0 : 140
+    readonly property int durMove: reducedMotion ? 0 : 220
+    readonly property int durTapOut:  durTap / 2
+    readonly property int durPopOut:  durPop / 2
+    readonly property int durMoveOut: durMove / 2
+    readonly property int easeEnter: Easing.OutQuint
+    readonly property int easeExit:  Easing.InCubic
+    // The one big move (APP-176): a task marked done folds into a bar where
+    // its card stood, then lays itself on the stack over the Done column,
+    // like a bar in the heap mark. One curve (easeEnter) for both halves;
+    // the fold takes about the first third.
+    readonly property int durStack: reducedMotion ? 0 : 360
+    readonly property int durStackFold: Math.round(durStack * 0.38)
+    readonly property int durStackFly:  durStack - durStackFold
+    // The one loop: a busy label breathing. Not a move, so not one of the
+    // three; it does not run at all with "Reduce motion" on.
+    readonly property int durPulse:  reducedMotion ? 0 : 600
+    readonly property int easePulse: Easing.InOutQuad
 
     // ── Typography — Brand defaults, overrideable via settings ───────
     // Golos Text and JetBrains Mono ship inside the app (platform/BundledFonts),
@@ -332,6 +420,14 @@ QtObject {
     // paths. Counts, times and dates stay in the UI face with fixed-width
     // digits, so columns of numbers still line up without the mono texture.
     readonly property var tabularNums: ({ "tnum": 1 })
+
+    // ── Weight (APP-193) ─────────────────────────────────────────────
+    // Three weights, one job each. Golos at 600 and 13px reads as bold, so a
+    // screen where everything was DemiBold had no hierarchy left. QML outside
+    // this file never names a Font.* weight (ui_tokens_check.py).
+    readonly property int fwBody:    Font.Normal    // descriptions, meta, inputs
+    readonly property int fwTitle:   Font.Medium    // card titles, the active item, labels
+    readonly property int fwHeading: Font.DemiBold  // only the title of a screen or a dialog
 
     function withAlpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a); }
 
@@ -367,6 +463,27 @@ QtObject {
     function priorityColor(p) {
         switch (p) { case "P0": return p0; case "P1": return p1; case "P2": return p2; case "P3": return p3; }
         return textMuted;
+    }
+    // Colour is never the only sign (WCAG 1.4.1, APP-185): where a status or
+    // a priority is a coloured mark with no word beside it, the mark's shape
+    // says it too. Statuses fill like a pie as work moves on; a status of
+    // the user's own is a diamond. Priorities are a falling set of shapes,
+    // P2 and P3 — the two closest colours — filled and hollow.
+    function statusMark(id) {
+        switch (id) {
+            case "backlog": return "◌";
+            case "todo":    return "○";
+            case "prog":    return "◔";
+            case "half":    return "◑";
+            case "review":  return "◕";
+            case "blocked": return "⊘";
+            case "done":    return "●";
+        }
+        return "◇";
+    }
+    function priorityMark(p) {
+        switch (p) { case "P0": return "▲"; case "P1": return "◆"; case "P2": return "■"; }
+        return "□";
     }
     function eventColor(type) {
         switch (type) {

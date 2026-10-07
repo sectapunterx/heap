@@ -53,7 +53,7 @@ TestCase {
     }
 
     // Neutral (default) variant: panel2 fill, Theme.border line, Theme.text
-    // label at Medium weight.
+    // label at the title weight.
     function test_neutral_style() {
         const b = make('import TodoCpp; PillButton { text: "n"; width: 120; height: 32 }');
         parkCursor();
@@ -63,18 +63,19 @@ TestCase {
         compare(b.background.border.width, 1);
         compare(b.background.radius, Theme.radiusMd);
         verify(Qt.colorEqual(b.contentItem.color, Theme.text), "neutral label must be Theme.text");
-        compare(b.contentItem.font.weight, Font.Medium);
+        compare(b.contentItem.font.weight, Theme.fwTitle);
         compare(b.contentItem.font.pixelSize, Theme.fsMd);
     }
 
-    // Primary variant: accent fill, no border, text-on-accent label at DemiBold —
+    // Primary variant: accent fill, no border, text-on-accent label at the title weight (APP-193: one weight
+    // for every button; the fill says which one is primary) —
     // what every "Save"/"Create" caller (EventEditor, DocsEditor, …) relies on.
     function test_primary_style() {
         const b = make('import TodoCpp; PillButton { text: "p"; primary: true }');
         verify(Qt.colorEqual(b.background.color, Theme.accent), "primary fill must be Theme.accent");
         verify(Qt.colorEqual(b.background.border.color, "#00000000"), "primary border must be transparent");
         verify(Qt.colorEqual(b.contentItem.color, Theme.textOnAccent), "primary label is the theme's text-on-accent");
-        compare(b.contentItem.font.weight, Font.DemiBold);
+        compare(b.contentItem.font.weight, Theme.fwTitle);
     }
 
     // Danger variant: danger-tinted fill/border with a danger label — the "Delete"
@@ -84,7 +85,7 @@ TestCase {
         verify(Qt.colorEqual(b.background.color, Theme.withAlpha(Theme.danger, 0.12)), "danger fill must be danger @ 0.12");
         verify(Qt.colorEqual(b.background.border.color, Theme.withAlpha(Theme.danger, 0.4)), "danger border must be danger @ 0.4");
         verify(Qt.colorEqual(b.contentItem.color, Theme.danger), "danger label must be Theme.danger");
-        compare(b.contentItem.font.weight, Font.Medium);
+        compare(b.contentItem.font.weight, Theme.fwTitle);
     }
 
     // Precedence pin: primary wins over danger in every ternary chain

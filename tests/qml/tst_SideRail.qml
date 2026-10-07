@@ -48,6 +48,30 @@ TestCase {
         verify(!labelOf(rail, "rail-notes").visible);
     }
 
+    // EYE-7: in the icon rail a saved view is its numbered bookmark; the
+    // count moves to the tooltip, as a corner number on the digit read as
+    // "1⁶". Expanded, the count pill stays.
+    function test_collapsed_saved_view_has_no_corner_count() {
+        const id = AppController.saveView("rail-probe", { query: "", priorities: [], sort: "manual",
+                                                          archived: false, showDone: false, view: "board" });
+        verify(id !== "");
+        try {
+            const at = AppController.savedViews.findIndex(v => v.id === id);
+            const rail = make('import TodoCpp; SideRail { height: 700; expanded: false }');
+            const row = findChild(rail, "rail-saved-" + at);
+            verify(row !== null);
+            tryVerify(() => AppController.savedViewCounts[id] !== undefined, 2000);
+            const n = String(AppController.savedViewCounts[id]);
+            compare(row.countText, "");
+            verify(row.tooltipText.indexOf(I18n.t("siderail.saved.count").arg(n)) >= 0, row.tooltipText);
+            verify(String(row.iconSource).indexOf("heap-36-saved-view.svg") >= 0);
+            rail.expanded = true;
+            compare(row.countText, n);
+        } finally {
+            AppController.deleteSavedView(id);
+        }
+    }
+
     function test_toggle_button_asks_main() {
         const rail = make('import TodoCpp; SideRail { height: 700; expanded: true }');
         let n = 0;

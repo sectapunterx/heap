@@ -5,6 +5,7 @@
 #include "notify/NotificationCenter.h"
 #include "platform/Autostart.h"
 #include "platform/Paths.h"
+#include "text/LocaleFormat.h"
 
 #include <QDir>
 #include <QFile>
@@ -117,7 +118,7 @@ void AppController::snoozeReminderAt(const QString& notificationId, int minutes,
   if(m_notifier) {
     m_notifier->dismiss(notificationId);
   }
-  emit toast(tr_(QStringLiteral("notify.snoozedUntil")).arg(s.fireAt.time().toString(QStringLiteral("HH:mm"))));
+  emit toast(tr_(QStringLiteral("notify.snoozedUntil")).arg(heap::text::formatTime(s.fireAt.time(), twelveHourClock())));
 }
 
 void AppController::fireDueSnoozes(const QDateTime& now) {

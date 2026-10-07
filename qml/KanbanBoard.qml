@@ -4,6 +4,7 @@ import QtQuick.Controls
 import QtQuick.Controls.Basic
 import QtQuick.Controls as QQC
 import TodoCpp
+import "Motion.js" as Motion
 
 Item {
     id: root
@@ -118,7 +119,7 @@ Item {
     NumberAnimation {
         id: colScrollAnim
         target: hscroll; property: "contentX"
-        duration: Theme.scaledMs(260); easing.type: Easing.OutCubic
+        duration: Theme.durMove; easing.type: Theme.easeEnter
     }
     Timer { id: focusPulseTimer; interval: 1100; onTriggered: root._focusPulseStatus = "" }
 
@@ -214,8 +215,16 @@ Item {
     onCursorTaskIdChanged: {
         if (!root._extending) root._selAnchor = "";
         if (root.cursorVisible) Qt.callLater(root.revealCursor);
+        root._seeCursor();
     }
-    onCursorVisibleChanged: if (root.cursorVisible) Qt.callLater(root.revealCursor)
+    onCursorVisibleChanged: {
+        if (root.cursorVisible) Qt.callLater(root.revealCursor);
+        root._seeCursor();
+    }
+    // A new card the keyboard cursor reaches has been seen (APP-180).
+    function _seeCursor() {
+        if (root.cursorVisible && root.cursorTaskId) AppController.markTaskSeen(root.cursorTaskId);
+    }
 
     // The board scrolls to the card the keyboard moved to (VISU-19, PERA-7):
     // the cursor walked into a column past the right edge and the board
@@ -429,6 +438,7 @@ Item {
         if (c < 0 || c >= cols.length) return;
         const destIds = cols[c].ids;
         const beforeId = manual && pos.row < destIds.length ? destIds[pos.row] : "";
+        root.stackOnClose(id, cols[pos.col].statusId, cols[c].statusId, 1);
         AppController.moveTaskTo(id, cols[c].statusId, beforeId);
     }
 
@@ -469,6 +479,82 @@ Item {
         AppController.setSelectedTaskIds(merged);
     }
 
+    // ── Closing a task: the stack (APP-176) ─────────────────────────────
+    // A single card moved into Done folds into a bar where it stood and lays
+    // itself on the stack over the Done column, like a bar in the heap mark.
+    // The one big move in the app; a bulk move and "Reduce motion" skip it,
+    // and so does a Done column that is folded or off screen. Called just
+    // before the move, while the card is still where the user saw it.
+    property bool stackRunning: false
+    // The columns cannot name the board, so they reach it through this: the
+    // board asks, the column the card goes to answers with where its stack
+    // is (it owns that), and the board flies the card there. A drop or a
+    // card's status menu asks the board the same way.
+    component StackBus: QtObject {
+        // The column whose top bar waits while a card is on its way.
+        property string holdStatus: ""
+        signal requested(Item card, string title, string toStatus)
+        signal launchRequested(Item card, string title, string toStatus, real colLeft, real colRight,
+                               real toX, real toY, real toW, color barColor)
+        signal dropped(var source, string toStatus, int moved)
+    }
+    StackBus { id: stackBus }
+    Connections {
+        target: stackBus
+        function onLaunchRequested(card: Item, title: string, toStatus: string, colLeft: real, colRight: real,
+                                   toX: real, toY: real, toW: real, barColor: color) {
+            root.launchStack(card, title, toStatus, colLeft, colRight, toX, toY, toW, barColor);
+        }
+        function onDropped(source: var, toStatus: string, moved: int) {
+            root.stackOnDrop(source, toStatus, moved);
+        }
+    }
+    function stackOnClose(id, fromStatus, toStatus, moved) {
+        if (!Motion.shouldStack(moved, fromStatus, toStatus, Theme.motion)) return false;
+        let card = null;
+        for (let c = 0; c < colRepeater.count && !card; c++) card = root._cardIn(colRepeater.itemAt(c), id);
+        if (!card || !card.task) return false;
+        stackBus.requested(card, String(card.task.title || ""), toStatus);
+        return root.stackRunning;
+    }
+    // A card dropped or sent from its menu: anything with the card's
+    // taskId and task.
+    function stackOnDrop(source, toStatus, moved) {
+        if (!source || !source.taskId) return false;
+        return root.stackOnClose(source.taskId, source.task ? source.task.status : "", toStatus, moved);
+    }
+    // The card for `id` if this column's list has built it; never scrolls.
+    function _cardIn(col, id) {
+        if (!col || !col.taskList) return null;
+        const row = col.taskFilter.ids().indexOf(id);
+        return row >= 0 ? col.taskList.itemAtIndex(row) : null;
+    }
+    // From the Done column: its left and right edge and its stack's top
+    // bar, in scene coordinates. Nothing flies to a column off screen.
+    function launchStack(card: Item, title: string, toStatus: string, colLeft: real, colRight: real,
+                         toX: real, toY: real, toW: real, barColor: color): bool {
+        const vp = hscroll.mapToItem(null, 0, 0);
+        if (colLeft < vp.x || colRight > vp.x + hscroll.width + 1) return false;
+        const from = card.mapToItem(root, 0, 0);
+        const to = root.mapFromItem(null, toX, toY);
+        stackFlyer.launch(from.x, from.y, card.width, card.height, title, to.x, to.y, toW, barColor);
+        stackBus.holdStatus = toStatus;
+        return true;
+    }
+
+    // Columns that do not fit sit off to the right (APP-200): how many, so
+    // the board can say so instead of letting one hide under the panel.
+    readonly property int hiddenColumnsRight: {
+        const edge = hscroll.contentX + hscroll.width;
+        const _deps = [rowL.implicitWidth, colRepeater.count, root.collapsed];
+        let n = 0;
+        for (let c = 0; c < colRepeater.count; c++) {
+            const it = colRepeater.itemAt(c);
+            if (it && it.x + it.width / 2 > edge) n++;
+        }
+        return n;
+    }
+
     // The priorities the filter bar has switched on, as a plain list for the
     // per-column proxies. Empty means "no priority filter" — which is what an
     // all-chips-off filter bar means, not "nothing passes".
@@ -494,8 +580,8 @@ Item {
         id: outerAnim
         target: hscroll
         property: "contentX"
-        duration: Theme.scaledMs(220)
-        easing.type: Easing.OutCubic
+        duration: Theme.durMove
+        easing.type: Theme.easeEnter
     }
 
     Flickable {
@@ -550,6 +636,16 @@ Item {
             Repeater {
                 id: colRepeater
                 model: colModel
+                // The board's search state too, for the column's empty state
+                // (Qt 6.9's qmllint does not resolve root inside the column).
+                onItemAdded: (index, item) => {
+                    item["bus"] = stackBus;
+                    item["filtering"] = Qt.binding(() => root._filtering);
+                    item["nothingFound"] = Qt.binding(() => root._nothingFound);
+                    item["boardEmpty"] = Qt.binding(() => root._boardTotal === 0);
+                }
+                // A column's way to the stack: its drops and its cards' menus
+                // ask the board through this, not by the board's id.
 
                 Rectangle {
                     id: col
@@ -566,6 +662,11 @@ Item {
                     readonly property alias taskFilter: colFilter
                     property bool dragOver: false
                     readonly property int visibleCount: colFilter.count
+                    // Set by colRepeater: a search or filter is on / it hides
+                    // every card on the board / the board has no cards at all.
+                    property bool filtering: false
+                    property bool nothingFound: false
+                    property bool boardEmpty: false
                     // Advisory work-in-progress limit. 0 = none. Over the
                     // limit the badge turns, and that is all it does: a hard
                     // cap would make a drag silently do nothing, which reads
@@ -591,15 +692,45 @@ Item {
                     // Briefly emphasised when the sidebar Blocked / Code Review
                     // button jumps focus to this column.
                     readonly property bool focusPulse: root._focusPulseStatus === col.statusId
+                    // Done's stack (APP-176): a bar per card, up to a few.
+                    // While a closed card is on its way the top bar waits.
+                    readonly property int stackBars: col.statusId === "done" ? Motion.stackBars(col.visibleCount) : 0
+                    // Set by the board when the column is made.
+                    property StackBus bus: null
+                    readonly property bool stackHold: !!col.bus && col.bus.holdStatus === col.statusId
+                    // The board asks for a card closed into this column.
+                    Connections {
+                        target: col.bus
+                        function onRequested(card: Item, title: string, toStatus: string) {
+                            if (toStatus !== col.statusId || col.folded) return;
+                            const left = col.mapToItem(null, 0, 0);
+                            const top = stackCol.mapToItem(null, 0, 0);
+                            // The new top bar: as wide as that row gets once
+                            // the column has one more card.
+                            const bars = Motion.stackBars(col.visibleCount + 1);
+                            col.bus.launchRequested(card, title, col.statusId, left.x, left.x + col.width, top.x, top.y,
+                                                    stackCol.width * Motion.stackBarWidth(bars - 1), col.statusColor);
+                        }
+                    }
+                    // One entry per bar, top first. Widths are counted from
+                    // the bottom, so a bar laid on top leaves the rest as
+                    // they were.
+                    readonly property var stackModel: {
+                        const out = [];
+                        for (let i = 0; i < col.stackBars; i++)
+                            out.push({ w: Motion.stackBarWidth(col.stackBars - 1 - i), c: col.statusColor,
+                                       o: i === 0 && col.stackHold ? 0 : 0.75 });
+                        return out;
+                    }
 
                     width: col.folded ? root.foldedWidth : root.columnWidth
                     height: rowL.height
                     radius: Theme.radius
-                    color: Theme.panel
-                    border.color: (dragOver || focusPulse) ? Theme.accent : Theme.border
+                    color: Theme.surfaceColumn
+                    border.color: (dragOver || focusPulse) ? Theme.accent : "transparent"
                     border.width: focusPulse ? 2 : 1
                     clip: true
-                    Behavior on border.color { ColorAnimation { duration: Theme.scaledMs(180) } }
+                    Behavior on border.color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
 
                     // Folded: the name runs down the strip, with the count; a
                     // click (or Z on the board) opens it again.
@@ -612,10 +743,12 @@ Item {
                             anchors.top: parent.top
                             anchors.topMargin: Theme.spLg
                             spacing: Theme.spLg
-                            Rectangle {
+                            Text {
+                                objectName: "column-folded-mark"
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                width: 8; height: 8; radius: 4
+                                text: Theme.statusMark(col.statusId)
                                 color: col.statusColor
+                                font.pixelSize: Theme.fsSm
                             }
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
@@ -636,7 +769,7 @@ Item {
                                     text: col.statusName
                                     color: Theme.text
                                     font.pixelSize: Theme.fsMd
-                                    font.weight: Font.DemiBold
+                                    font.weight: Theme.fwTitle
                                 }
                             }
                         }
@@ -667,7 +800,7 @@ Item {
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: 38
-                            color: Theme.panel2
+                            color: "transparent"
                             HoverHandler { onHoveredChanged: col.headerHovered = hovered }
                             // The header's menu from the keyboard: Menu or
                             // Shift+F10 on any of its buttons, which pass the
@@ -727,7 +860,7 @@ Item {
                                         color: Theme.text
                                         font.family: Theme.fontUi
                                         font.pixelSize: Theme.fsMd
-                                        font.weight: Font.DemiBold
+                                        font.weight: Theme.fwTitle
                                         elide: Text.ElideRight
                                         width: parent.width
                                     }
@@ -760,7 +893,7 @@ Item {
                                         background: Rectangle { radius: Theme.radiusSm; color: Theme.panel; border.color: Theme.accent; border.width: 1 }
                                         font.family: Theme.fontUi
                                         font.pixelSize: Theme.fsMd
-                                        font.weight: Font.DemiBold
+                                        font.weight: Theme.fwTitle
                                         selectByMouse: true
                                         onAccepted: { AppController.renameStatus(col.statusId, text.trim()); col.renaming = false }
                                         onActiveFocusChanged: if (!activeFocus && col.renaming) { AppController.renameStatus(col.statusId, text.trim()); col.renaming = false }
@@ -787,8 +920,14 @@ Item {
                                         font.family: Theme.fontUi
                                         font.features: Theme.tabularNums
                                         font.pixelSize: Theme.fsSm
-                                        font.weight: col.overWip ? Font.DemiBold : Font.Normal
+                                        font.weight: col.overWip ? Theme.fwTitle : Theme.fwBody
                                     }
+                                    // The count and the over-limit warning for a
+                                    // screen reader, not only on hover (APP-184).
+                                    Accessible.role: Accessible.StaticText
+                                    Accessible.name: col.overWip
+                                        ? I18n.t("kanban.wip.over").arg(col.statusName).arg(col.wipLimit)
+                                        : cntT.text
                                     QQC.ToolTip.visible: col.overWip && wipHover.hovered
                                     QQC.ToolTip.text: I18n.t("kanban.wip.over").arg(col.statusName).arg(col.wipLimit)
                                     HoverHandler { id: wipHover }
@@ -827,7 +966,7 @@ Item {
                                 anchors.rightMargin: Theme.spMd + 22 + Theme.spMd + cntPill.width + Theme.spMd
                                 width: hoverIcons.implicitWidth + Theme.spSm
                                 height: hoverIcons.implicitHeight
-                                color: Theme.panel2
+                                color: Theme.bg
                                 opacity: col.headerRevealed ? 1 : 0
                                 visible: !col.renaming
                                 z: 2
@@ -903,6 +1042,33 @@ Item {
                         }
 
                         Item {
+                            objectName: "done-stack"
+                            Layout.fillWidth: true
+                            // Laid out even while empty, so the first card
+                            // closed has a place to land.
+                            visible: col.statusId === "done"
+                            Layout.preferredHeight: stackCol.implicitHeight + Theme.spMd + Theme.spXs
+                            Column {
+                                id: stackCol
+                                x: Theme.spXl
+                                y: Theme.spMd
+                                width: parent.width - 2 * Theme.spXl
+                                spacing: Theme.spXs
+                                Repeater {
+                                    model: col.stackModel
+                                    Rectangle {
+                                        required property var modelData
+                                        width: parent ? parent.width * modelData.w : 0
+                                        height: 4
+                                        radius: 2
+                                        color: modelData.c
+                                        opacity: modelData.o
+                                    }
+                                }
+                            }
+                        }
+
+                        Item {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
 
@@ -912,6 +1078,7 @@ Item {
                             ListView {
                                 id: bodyFlick
                                 objectName: "column-list"
+                                readonly property StackBus bus: col.bus
                                 anchors.fill: parent
                                 anchors.margins: Theme.spMd
                                 clip: true
@@ -957,8 +1124,8 @@ Item {
                                     id: bodyAnim
                                     target: bodyFlick
                                     property: "contentY"
-                                    duration: Theme.scaledMs(220)
-                                    easing.type: Easing.OutCubic
+                                    duration: Theme.durMove
+                                    easing.type: Theme.easeEnter
                                 }
 
                                 WheelHandler {
@@ -1071,6 +1238,11 @@ Item {
                                                 root.taskClicked(tc.id);
                                             }
                                             onRangeSelectRequested: (anchorId) => root._rangeSelect(anchorId)
+                                            onStatusPicked: (sid) => tc._stack(tc.ListView.view, sid)
+                                            // The column's bus, by way of the list.
+                                            function _stack(view, sid) {
+                                                if (view && view.bus) view.bus.dropped(tc, sid, 1);
+                                            }
                                             onMenuOpenChanged: root._openCardMenus += menuOpen ? 1 : -1
                                             Component.onDestruction: if (menuOpen) root._openCardMenus--
                                         }
@@ -1078,8 +1250,15 @@ Item {
                                 // An empty column says how a card gets here
                                 // (APP-167); one whose cards the search or a
                                 // filter hides, that nothing in it matches.
+                                // While a search or filter is on: "nothing
+                                // matches" and no invitation to drag cards in,
+                                // and nothing at all when the whole board came
+                                // up empty — the board says that once (FUNC-1).
+                                // Same on a board with no cards yet: one
+                                // board-level state, the columns keep only
+                                // their headers (EYE-4).
                                 Item {
-                                    visible: col.visibleCount === 0
+                                    visible: col.visibleCount === 0 && !col.nothingFound && !col.boardEmpty
                                     width: bodyFlick.width
                                     height: colEmpty.implicitHeight + Theme.spXl
                                     EmptyState {
@@ -1089,8 +1268,9 @@ Item {
                                         width: parent.width
                                         compact: true
                                         icon: "heap-01-board"
-                                        title: I18n.t("kanban.empty")
-                                        line: (AppController.statusCounts[col.statusId] || 0) > 0 ? I18n.t("kanban.empty.noMatch") : I18n.t("kanban.empty.hint")
+                                        title: col.filtering ? I18n.t("view.empty.noMatch.title") : I18n.t("kanban.empty")
+                                        line: col.filtering ? ""
+                                            : (AppController.statusCounts[col.statusId] || 0) > 0 ? I18n.t("kanban.empty.noMatch") : I18n.t("kanban.empty.hint")
                                     }
                                 }
                             }
@@ -1158,9 +1338,12 @@ Item {
                                     const target = manual ? colDrop.beforeId : "";
                                     if (AppController.isTaskSelected(src.taskId)
                                         && AppController.selectionCount > 1) {
+                                        // Several cards: no stack (APP-176).
+                                        if (col.bus) col.bus.dropped(src, col.statusId, AppController.selectionCount);
                                         if (manual) AppController.moveSelectedTasksTo(col.statusId, target);
                                         else AppController.moveSelectedTasksToStatus(col.statusId);
                                     } else if (manual || AppController.taskById(src.taskId).status !== col.statusId) {
+                                        if (col.bus) col.bus.dropped(src, col.statusId, 1);
                                         AppController.moveTaskTo(src.taskId, col.statusId, target);
                                     }
                                     drop.accept(Qt.MoveAction);
@@ -1212,6 +1395,7 @@ Item {
                         priorities: root.activePriorities
                         sortMode: root.sortMode
                         today: AppController.today
+                        newIds: AppController.syncNewTaskIds
                     }
                 }
             }
@@ -1263,10 +1447,10 @@ Item {
         padding: 0
         width: 360
         anchors.centerIn: Overlay.overlay
-        background: Rectangle { radius: Theme.radiusXl; color: Theme.panel; border.color: Theme.borderStrong; border.width: 1 }
+        background: ModalSurface {}
 
         // Dimmed backdrop so the board stays visible behind the dialog.
-        Overlay.modal: Rectangle { color: Theme.scrim }
+        Overlay.modal: ModalScrim {}
 
         // Not `palette`: that is QQuickPopup's own property, which every
         // Control inside the popup resolves its colours through. Shadowing it
@@ -1282,10 +1466,10 @@ Item {
             spacing: Theme.spLg
             Item { Layout.preferredHeight: 4 }
             Text {
-                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("kanban.newColumn"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold
+                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("kanban.newColumn"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Theme.fwHeading
             }
             Text {
-                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("kanban.colName").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
+                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("kanban.colName"); color: Theme.textDim; font.pixelSize: Theme.fsSm; font.weight: Theme.fwTitle
             }
             TextField {
                 id: nameField
@@ -1299,7 +1483,7 @@ Item {
                 onAccepted: saveBtn.activate()
             }
             Text {
-                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("common.color").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
+                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("common.color"); color: Theme.textDim; font.pixelSize: Theme.fsSm; font.weight: Theme.fwTitle
             }
             Row {
                 Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
@@ -1357,7 +1541,7 @@ Item {
         // which toggles.
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
         padding: Theme.spMd
-        background: Rectangle { radius: Theme.radiusLg; color: Theme.panel; border.color: Theme.borderStrong; border.width: 1 }
+        background: PopupSurface {}
         property string forStatusId: ""
 
         readonly property var swatches: addColumnPopup.swatches
@@ -1414,6 +1598,119 @@ Item {
         z: 1000
     }
 
+    // The closed card on its way to the stack (APP-176): it folds into a bar
+    // where it stood (the first third), then flies onto the stack. One curve
+    // for both. Drawn here, over every column, and gone when it lands.
+    Rectangle {
+        id: stackFlyer
+        objectName: "stack-flyer"
+        visible: false
+        z: 1001
+        property real toX: 0
+        property real toY: 0
+        property real toW: 0
+        property real foldY: 0
+        property color barColor: Theme.stDone
+        color: Theme.panel2
+        border.color: Theme.border
+        border.width: height > 8 ? 1 : 0
+        radius: Theme.radius
+        function launch(x: real, y: real, w: real, h: real, title: string,
+                        tx: real, ty: real, tw: real, barColor: color) {
+            stackAnim.stop();
+            stackBus.holdStatus = "";
+            stackFlyer.x = x;
+            stackFlyer.y = y;
+            stackFlyer.width = w;
+            stackFlyer.height = h;
+            stackFlyer.radius = Theme.radius;
+            stackFlyer.color = Theme.panel2;
+            stackFlyer.opacity = 1;
+            stackFlyer.foldY = y + (h - 4) / 2;
+            stackFlyer.toX = tx;
+            stackFlyer.toY = ty;
+            stackFlyer.toW = tw;
+            stackFlyer.barColor = barColor;
+            flyerTitle.text = title;
+            flyerTitle.opacity = 1;
+            stackFlyer.visible = true;
+            root.stackRunning = true;
+            stackAnim.restart();
+        }
+        function land() {
+            stackFlyer.visible = false;
+            stackBus.holdStatus = "";
+            root.stackRunning = false;
+        }
+        Text {
+            id: flyerTitle
+            x: Theme.spLg
+            y: Theme.spLg
+            width: parent.width - 2 * Theme.spLg
+            textFormat: Text.PlainText
+            color: Theme.text
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsMd
+            font.weight: Theme.fwTitle
+            elide: Text.ElideRight
+        }
+        SequentialAnimation {
+            id: stackAnim
+            ParallelAnimation {
+                NumberAnimation { target: flyerTitle; property: "opacity"; to: 0; duration: Theme.durTap; easing.type: Theme.easeEnter }
+                NumberAnimation { target: stackFlyer; property: "height"; to: 4; duration: Theme.durStackFold; easing.type: Theme.easeEnter }
+                NumberAnimation { target: stackFlyer; property: "y"; to: stackFlyer.foldY; duration: Theme.durStackFold; easing.type: Theme.easeEnter }
+                NumberAnimation { target: stackFlyer; property: "radius"; to: 2; duration: Theme.durStackFold; easing.type: Theme.easeEnter }
+                ColorAnimation { target: stackFlyer; property: "color"; to: stackFlyer.barColor; duration: Theme.durStackFold; easing.type: Theme.easeEnter }
+            }
+            ParallelAnimation {
+                NumberAnimation { target: stackFlyer; property: "x"; to: stackFlyer.toX; duration: Theme.durStackFly; easing.type: Theme.easeEnter }
+                NumberAnimation { target: stackFlyer; property: "y"; to: stackFlyer.toY; duration: Theme.durStackFly; easing.type: Theme.easeEnter }
+                NumberAnimation { target: stackFlyer; property: "width"; to: stackFlyer.toW; duration: Theme.durStackFly; easing.type: Theme.easeEnter }
+                NumberAnimation { target: stackFlyer; property: "opacity"; to: 0.75; duration: Theme.durStackFly; easing.type: Theme.easeEnter }
+            }
+            ScriptAction { script: stackFlyer.land() }
+        }
+    }
+
+    // Columns off to the right (APP-200): at 1600px the fourth went under the
+    // side panel with nothing to say it was there. Says how many; a click
+    // scrolls one column over.
+    Rectangle {
+        id: hiddenCols
+        objectName: "board-hidden-columns"
+        visible: root.hiddenColumnsRight > 0
+        anchors.right: parent.right
+        anchors.rightMargin: Theme.sp2xl + Theme.spMd
+        // Over the foot of the columns, just above the scrollbar it points
+        // along: a column's header and its "+" stay clear.
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: Theme.sp2xl + Theme.spLg
+        z: 900
+        radius: Theme.radiusPill
+        color: hiddenColsMA.hovered || hiddenColsMA.keyboardFocused ? Theme.panel3 : Theme.panel2
+        border.color: Theme.borderStrong
+        border.width: 1
+        implicitWidth: hiddenColsT.implicitWidth + 2 * Theme.spLg
+        implicitHeight: hiddenColsT.implicitHeight + 2 * Theme.spXs
+        Text {
+            id: hiddenColsT
+            objectName: "board-hidden-columns-text"
+            anchors.centerIn: parent
+            text: I18n.t("kanban.hiddenColumns").arg(root.hiddenColumnsRight) + "  →"
+            color: Theme.textMuted
+            font.family: Theme.fontUi
+            font.features: Theme.tabularNums
+            font.pixelSize: Theme.fsSm
+        }
+        ClickArea {
+            id: hiddenColsMA
+            label: hiddenColsT.text
+            tip: I18n.t("kanban.hiddenColumns.tip")
+            onActivated: root._scrollOuter(-(root.columnWidth + Theme.spXl))
+        }
+    }
+
     // ── Inline components ───────────────────────────────────────────────────
 
     component HoverIcon: Rectangle {
@@ -1436,7 +1733,12 @@ Item {
         height: 20
         radius: Theme.radiusSm
         opacity: shown ? 1 : 0
-        Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
+        Behavior on opacity {
+            NumberAnimation {
+                duration: hoverIcon.shown ? Theme.durTap : Theme.durTapOut
+                easing.type: hoverIcon.shown ? Theme.easeEnter : Theme.easeExit
+            }
+        }
         color: hoverIcon.hot ? (danger ? Theme.withAlpha(Theme.danger, 0.16) : Theme.panel3)
                              : "transparent"
         border.color: hoverIcon.hot ? (danger ? Theme.danger : Theme.border) : "transparent"
@@ -1446,7 +1748,7 @@ Item {
             text: hoverIcon.glyph
             color: hoverIcon.hot ? (hoverIcon.danger ? Theme.danger : Theme.text) : Theme.textMuted
             font.pixelSize: Theme.fsMd
-            font.weight: Font.DemiBold
+            font.weight: Theme.fwTitle
         }
         ClickArea {
             id: hoverIconMA
@@ -1465,6 +1767,21 @@ Item {
     // Live tasks: a board whose every card is archived is empty too, and
     // says where they went (TASKS-33).
     readonly property int _boardTotal: AppController.statusCounts["_total"] || 0
+    // A search or a priority filter that hides every card is not an empty
+    // board: it says the search found nothing, once, like the other views
+    // (FUNC-1). It used to be "Nothing here yet" in every column.
+    readonly property bool _filtering: root.searchText.trim().length > 0 || root.activePriorities.length > 0
+    // Every card the search lets through, in any column.
+    TaskFilterProxy {
+        id: boardFilter
+        sourceModel: AppController.tasks
+        statuses: AppController.statuses
+        showArchived: root.showArchived
+        searchText: root.searchText
+        priorities: root.activePriorities
+        today: AppController.today
+    }
+    readonly property bool _nothingFound: root._filtering && root._boardTotal > 0 && boardFilter.count === 0
     property int _allRows: AppController.tasks.rowCount()
     Connections {
         target: AppController.tasks
@@ -1483,32 +1800,22 @@ Item {
         color: Theme.panel
         border.color: Theme.borderStrong
         border.width: 1
-        visible: root._boardTotal === 0
+        visible: root._boardTotal === 0 || root._nothingFound
     }
-    Column {
+    EmptyState {
         id: boardEmptyCol
+        objectName: "board-empty-state"
         anchors.centerIn: parent
         width: Math.min(parent.width - 96, 360)
-        spacing: Theme.spMd
-        visible: root._boardTotal === 0
-        Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            text: root._allRows > 0 ? I18n.t("board.empty.archivedTitle") : I18n.t("board.empty.title")
-            color: Theme.text
-            font.pixelSize: Theme.fsLg
-            font.weight: Font.DemiBold
-        }
-        Text {
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
-            // The keys as bound now, not as they shipped (design audit DES-15).
-            text: root._allRows > 0
-                  ? I18n.t("board.empty.archivedHint").arg(AppController.shortcutFor("view.archive")).arg(AppController.shortcutFor("task.new"))
-                  : I18n.t("board.empty.hint").arg(AppController.shortcutFor("task.new")).arg(AppController.shortcutFor("quick-capture"))
-            color: Theme.textMuted
-            font.pixelSize: Theme.fsMd
-        }
+        visible: root._boardTotal === 0 || root._nothingFound
+        icon: root._nothingFound ? "" : root._allRows > 0 ? "heap-05-archive" : "heap-01-board"
+        title: root._nothingFound ? I18n.t("view.empty.noMatch.title")
+             : root._allRows > 0 ? I18n.t("board.empty.archivedTitle") : I18n.t("board.empty.title")
+        // The keys as bound now, not as they shipped (design audit DES-15).
+        line: root._nothingFound ? I18n.t("view.empty.noMatch.hint")
+            : root._allRows > 0
+              ? I18n.t("board.empty.archivedHint").arg(AppController.shortcutFor("view.archive")).arg(AppController.shortcutFor("task.new"))
+              : I18n.t("board.empty.hint").arg(AppController.shortcutFor("task.new")).arg(AppController.shortcutFor("quick-capture"))
     }
     // ── Column delete: confirm when it is not empty ───────────────────
     // Deleting a column re-homes every card in it. That is undoable, but a
@@ -1542,6 +1849,7 @@ Item {
         property int cardCount: 0
 
         modal: true
+        Overlay.modal: ModalScrim {}
         anchors.centerIn: Overlay.overlay
         parent: Overlay.overlay
         padding: Theme.inset
@@ -1552,12 +1860,7 @@ Item {
         width: 420
         title: I18n.t("kanban.confirmDelete.title").arg(confirmDelete.statusName)
 
-        background: Rectangle {
-            radius: Theme.radiusXl
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
+        background: ModalSurface {}
 
         contentItem: Text {
             text: I18n.t("kanban.confirmDelete.body").arg(confirmDelete.cardCount)
@@ -1603,17 +1906,13 @@ Item {
         }
 
         modal: true
+        Overlay.modal: ModalScrim {}
         anchors.centerIn: Overlay.overlay
         parent: Overlay.overlay
         padding: Theme.inset
         title: I18n.t("kanban.wip.title").arg(wipPopup.statusName)
 
-        background: Rectangle {
-            radius: Theme.radiusXl
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
+        background: ModalSurface {}
 
         function commit() {
             AppController.setStatusWipLimit(wipPopup.statusId, parseInt(wipField.text || "0") || 0);
@@ -1675,17 +1974,13 @@ Item {
         }
 
         modal: true
+        Overlay.modal: ModalScrim {}
         anchors.centerIn: Overlay.overlay
         parent: Overlay.overlay
         padding: Theme.inset
         title: I18n.t("kanban.archive.title").arg(archivePopup.statusName)
 
-        background: Rectangle {
-            radius: Theme.radiusXl
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
+        background: ModalSurface {}
 
         function commit() {
             AppController.setStatusArchiveDays(archivePopup.statusId, parseInt(archiveField.text || "0") || 0);

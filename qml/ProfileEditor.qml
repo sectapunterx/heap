@@ -14,7 +14,7 @@ Popup {
     anchors.centerIn: Overlay.overlay
 
     // Dimmed backdrop so the underlying app stays visible behind the popup.
-    Overlay.modal: Rectangle { color: Theme.scrim }
+    Overlay.modal: ModalScrim {}
 
     // Not `palette`: that is QQuickPopup's own property, which every
     // Control inside this dialog resolves its colours through. Shadowing
@@ -59,10 +59,7 @@ Popup {
         Qt.callLater(function () { nameField.forceActiveFocus(); nameField.selectAll() });
     }
 
-    background: Rectangle {
-        radius: Theme.radiusXl; color: Theme.panel
-        border.color: Theme.borderStrong; border.width: 1
-    }
+    background: ModalSurface {}
 
     contentItem: ColumnLayout {
         spacing: Theme.spXl
@@ -75,14 +72,14 @@ Popup {
                     : I18n.t("editor.profile.dup")
             color: Theme.text
             font.pixelSize: Theme.fsLg
-            font.weight: Font.DemiBold
+            font.weight: Theme.fwHeading
         }
 
         Text {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
-            text: I18n.t("common.title").toUpperCase()
-            color: Theme.textMuted; font.pixelSize: Theme.fsXs
-            font.weight: Font.DemiBold; font.letterSpacing: 1
+            text: I18n.t("common.title")
+            color: Theme.textDim; font.pixelSize: Theme.fsSm
+            font.weight: Theme.fwTitle
         }
         TextField {
             id: nameField
@@ -98,9 +95,9 @@ Popup {
 
         Text {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
-            text: I18n.t("common.color").toUpperCase()
-            color: Theme.textMuted; font.pixelSize: Theme.fsXs
-            font.weight: Font.DemiBold; font.letterSpacing: 1
+            text: I18n.t("common.color")
+            color: Theme.textDim; font.pixelSize: Theme.fsSm
+            font.weight: Theme.fwTitle
         }
         Row {
             id: colorSwatch

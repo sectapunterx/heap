@@ -26,12 +26,14 @@ Rectangle {
             spacing: Theme.spSm
             Text {
                 text: I18n.t("people.label.title")
-                color: Theme.textMuted
+                color: Theme.textDim
                 font.pixelSize: Theme.fsSm
-                font.letterSpacing: 1
-                font.weight: Font.DemiBold
+                font.weight: Theme.fwTitle
             }
+            // One count (APP-197): how many are waiting for a message from
+            // me. The list itself shows how many people there are.
             Rectangle {
+                visible: badge.pending > 0
                 radius: Theme.radiusPill
                 color: Theme.panel3
                 implicitWidth: badge.implicitWidth + 12
@@ -44,8 +46,8 @@ Rectangle {
                 Text {
                     id: badge
                     anchors.centerIn: parent
-                    text: (parent._rev >= 0 ? I18n.t("people.badge") : "")
-                              .arg(AppController.pendingPeopleCount()).arg(AppController.activePeople.rowCount())
+                    readonly property int pending: parent._rev >= 0 ? AppController.pendingPeopleCount() : 0
+                    text: I18n.t("people.badge.pending").arg(badge.pending)
                     color: Theme.textDim
                     font.family: Theme.fontUi
                     font.features: Theme.tabularNums
@@ -61,7 +63,8 @@ Rectangle {
             }
             Item { Layout.fillWidth: true }
             Rectangle {
-                width: 22; height: 22; radius: Theme.radiusSm
+                id: addBtn
+                width: Theme.px(22); height: Theme.px(22); radius: Theme.radiusSm
                 color: addMA.containsMouse ? Theme.panel3 : "transparent"
                 activeFocusOnTab: true
                 Accessible.role: Accessible.Button
@@ -81,7 +84,7 @@ Rectangle {
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: root.pickPersonRequested()
-                    ToolTip.visible: containsMouse
+                    ToolTip.visible: containsMouse || addBtn.activeFocus
                     ToolTip.delay: 400
                     ToolTip.text: I18n.t("people.tip.add")
                 }
@@ -146,12 +149,9 @@ Rectangle {
                 width: ListView.view ? ListView.view.width : 0
                 height: layout.implicitHeight + 12
                 function openMenu() { personMenu.popup(prow, 12, prow.height / 2); }
-                Rectangle {
-                    anchors.fill: parent
+                FocusRing {
+                    anchors.margins: 0
                     radius: Theme.radius
-                    color: "transparent"
-                    border.color: Theme.focusRing
-                    border.width: 2
                     visible: prow.ListView.isCurrentItem && peopleView.activeFocus
                     z: 10
                 }
@@ -163,6 +163,13 @@ Rectangle {
                 // the button faded out from under the cursor.
                 property bool rowHovered: false
                 HoverHandler { onHoveredChanged: prow.rowHovered = hovered }
+                // The list's keyboard row shows the ✎ as the pointer does
+                // (APP-184); Enter edits, the menu key holds the rest.
+                readonly property bool keyCurrent: prow.ListView.isCurrentItem && !!prow.ListView.view && prow.ListView.view.activeFocus
+                readonly property bool revealed: prow.rowHovered || prow.keyCurrent
+                Accessible.role: Accessible.ListItem
+                Accessible.name: prow.name + (prow.role.length ? ", " + prow.role : "")
+                Accessible.description: stT.text + (prow.question.length ? ". " + prow.question : "")
 
                 // Declared before the RowLayout so it sits below it in paint /
                 // event order (later siblings draw on top, events hit them first).
@@ -198,7 +205,12 @@ Rectangle {
                     border.color: Theme.border
                     border.width: 1
                     opacity: prow.rowHovered ? 1.0 : 0.0
-                    Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(80) } }
+                    Behavior on opacity {
+                        NumberAnimation {
+                            duration: prow.rowHovered ? Theme.durTap : Theme.durTapOut
+                            easing.type: prow.rowHovered ? Theme.easeEnter : Theme.easeExit
+                        }
+                    }
                 }
 
                 RowLayout {
@@ -208,8 +220,11 @@ Rectangle {
                     anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spMd
                     spacing: Theme.spLg
 
+                    // Sized with the type its initials are set in: a fixed
+                    // 28 let "МК" run past the circle at 150 % (SCALE-4).
                     Rectangle {
-                        width: 28; height: 28; radius: 14
+                        objectName: "people-avatar"
+                        width: Theme.px(28); height: width; radius: width / 2
                         color: prow.color
                         Text {
                             anchors.centerIn: parent
@@ -221,20 +236,37 @@ Rectangle {
                             font.family: Theme.fontUi
                             font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsSm
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                         }
                     }
                     Column {
                         Layout.fillWidth: true
                         Layout.alignment: Qt.AlignVCenter
                         spacing: 1
-                        Text {
+                        // The name, and the role beside it in dim text
+                        // rather than chained on with a "·" (APP-197).
+                        Row {
                             width: parent.width
-                            text: prow.name + (prow.role.length ? "  · " + prow.role : "")
-                            color: (prow.personState === "todo") ? Theme.text : Theme.textMuted
-                            font.pixelSize: Theme.fsMd
-                            font.weight: Font.Medium
-                            elide: Text.ElideRight
+                            spacing: Theme.spMd
+                            Text {
+                                id: personName
+                                width: Math.min(implicitWidth, parent.width - (roleT.visible ? Math.min(roleT.implicitWidth, parent.width / 2) + parent.spacing : 0))
+                                text: prow.name
+                                color: (prow.personState === "todo") ? Theme.text : Theme.textMuted
+                                font.pixelSize: Theme.fsMd
+                                font.weight: Theme.fwTitle
+                                elide: Text.ElideRight
+                            }
+                            Text {
+                                id: roleT
+                                anchors.baseline: personName.baseline
+                                visible: prow.role.length > 0
+                                width: Math.max(0, parent.width - personName.width - parent.spacing)
+                                text: prow.role
+                                color: Theme.textDim
+                                font.pixelSize: Theme.fsSm
+                                elide: Text.ElideRight
+                            }
                         }
                         Text {
                             width: parent.width
@@ -250,11 +282,19 @@ Rectangle {
                     }
 
                     Item {
+                        objectName: "people-edit"
                         Layout.preferredWidth: 22
                         Layout.preferredHeight: 22
-                        opacity: prow.rowHovered ? 1.0 : 0.0
-                        enabled: prow.rowHovered
-                        Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(80) } }
+                        opacity: prow.revealed ? 1.0 : 0.0
+                        enabled: prow.revealed
+                        Accessible.role: Accessible.Button
+                        Accessible.name: I18n.t("people.tip.edit")
+                        Behavior on opacity {
+                            NumberAnimation {
+                                duration: prow.revealed ? Theme.durTap : Theme.durTapOut
+                                easing.type: prow.revealed ? Theme.easeEnter : Theme.easeExit
+                            }
+                        }
                         Rectangle {
                             anchors.fill: parent
                             radius: Theme.radiusSm
@@ -280,6 +320,9 @@ Rectangle {
 
                     Rectangle {
                         Layout.alignment: Qt.AlignVCenter
+                        Accessible.role: Accessible.Button
+                        Accessible.name: stT.text + ", " + I18n.t("people.tip.cycle")
+                        Accessible.onPressAction: AppController.cyclePerson(prow.id)
                         radius: Theme.radiusPill
                         color: prow.personState === "pinged" ? Theme.withAlpha(Theme.warning, 0.10)
                              : prow.personState === "replied" ? Theme.withAlpha(Theme.stDone, 0.10)
@@ -303,8 +346,7 @@ Rectangle {
                             font.family: Theme.fontUi
                             font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsXs
-                            font.letterSpacing: 1
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                         }
                         MouseArea {
                             anchors.fill: parent

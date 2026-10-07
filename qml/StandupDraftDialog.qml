@@ -13,6 +13,7 @@ Dialog {
     id: root
     objectName: "standup-draft"
     modal: true
+    Overlay.modal: ModalScrim {}
     focus: true
     anchors.centerIn: Overlay.overlay
     parent: Overlay.overlay
@@ -26,12 +27,7 @@ Dialog {
     }
 
     header: DialogHeader { text: I18n.t("standup.title") }
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
 
     contentItem: ColumnLayout {
         spacing: Theme.spLg

@@ -97,11 +97,13 @@ TestCase {
         const id = makeTask("safety probe waiting", "");
         AppController.setWaitingOn(id, makePerson("Safety Probe Person"));
 
-        const card = createTemporaryQmlObject('import TodoCpp; TaskCard { width: 300 }', host);
+        // The card says it waits, and how long, under the cursor; who it
+        // waits on is the editor's (APP-179: a card shows no people).
+        const card = createTemporaryQmlObject('import TodoCpp; TaskCard { width: 300; cursored: true }', host);
         card.task = AppController.taskById(id);
         const chip = findChild(card, "tc-waiting");
         tryVerify(() => chip.visible);
-        verify(chip.text.indexOf("Safety Probe Person") >= 0, chip.text);
+        verify(chip.text.indexOf("Safety Probe Person") < 0, chip.text);
 
         const te = createTemporaryQmlObject('import TodoCpp; TaskEditor { }', host);
         te.showFor(Object.assign({}, AppController.taskById(id)));
@@ -115,7 +117,7 @@ TestCase {
     function test_nothing_shows_while_the_switch_is_off() {
         const id = makeTask("safety probe waiting off", "");
         AppController.setWaitingOn(id, makePerson("Safety Probe Off"));
-        const card = createTemporaryQmlObject('import TodoCpp; TaskCard { width: 300 }', host);
+        const card = createTemporaryQmlObject('import TodoCpp; TaskCard { width: 300; cursored: true }', host);
         card.task = AppController.taskById(id);
         verify(!findChild(card, "tc-waiting").visible);
     }

@@ -133,6 +133,62 @@ TEST_F(SafetyNetTest, EndOfDayStaysQuietWhenThereIsNothingToSay) {
   EXPECT_EQ(spy.count(), 0);
 }
 
+// ── APP-190: the day's summary ──
+
+TEST_F(SafetyNetTest, EndOfDaySummaryShowsClosedCarryOverAndTimers) {
+  app_->setLanguage(QStringLiteral("en"));
+  const QDateTime now = todayAt(18, 30);
+  Task closed = task(QStringLiteral("T-1"), QStringLiteral("done"));
+  closed.statusChangedAt = todayAt(11);
+  Task closedYesterday = task(QStringLiteral("T-2"), QStringLiteral("done"));
+  closedYesterday.statusChangedAt = todayAt(11).addDays(-1);
+  Task dueToday = task(QStringLiteral("T-3"), QStringLiteral("todo"));
+  dueToday.dueAt = todayAt(17);
+  Task overdue = task(QStringLiteral("T-4"), QStringLiteral("prog"));
+  overdue.scheduledAt = todayAt(9).addDays(-2);
+  overdue.timerStartedAt = todayAt(14);
+  Task tomorrow = task(QStringLiteral("T-5"), QStringLiteral("todo"));
+  tomorrow.dueAt = todayAt(10).addDays(1);
+  Task undated = task(QStringLiteral("T-6"), QStringLiteral("todo"));
+  app_->tasks()->reset({closed, closedYesterday, dueToday, overdue, tomorrow, undated});
+
+  const QVariantMap s = app_->endOfDaySummaryAt(now);
+  const auto ids = [&s](const char* key) {
+    QStringList out;
+    for(const QVariant& v : s.value(QString::fromUtf8(key)).toList()) {
+      out << v.toMap().value(QStringLiteral("id")).toString();
+    }
+    return out;
+  };
+  EXPECT_EQ(ids("closed"), QStringList{QStringLiteral("T-1")});
+  EXPECT_EQ(ids("carryOver"), (QStringList{QStringLiteral("T-3"), QStringLiteral("T-4")}));
+  // Other workspaces on disk may hold timers of their own; this one's is there.
+  EXPECT_TRUE(ids("timers").contains(QStringLiteral("T-4")));
+  EXPECT_EQ(s.value(QStringLiteral("date")).toDate(), now.date());
+
+  // It only reads: nothing moved, rescheduled or stopped.
+  const QVector<Task> after = app_->tasks()->items();
+  EXPECT_EQ(after.at(2).status, QStringLiteral("todo"));
+  EXPECT_EQ(after.at(2).dueAt, todayAt(17));
+  EXPECT_EQ(after.at(3).scheduledAt, todayAt(9).addDays(-2));
+  EXPECT_TRUE(after.at(3).timerStartedAt.isValid());
+}
+
+TEST_F(SafetyNetTest, EndOfDayWrapsUpADayWithWorkClosed) {
+  app_->setLanguage(QStringLiteral("en"));
+  app_->setAppSettingsJson(settingsJson({{"endOfDay", true}}));
+  Task closed = task(QStringLiteral("T-1"), QStringLiteral("done"));
+  closed.statusChangedAt = todayAt(11);
+  app_->tasks()->reset({closed});
+  const QSignalSpy spy(app_.get(), &AppController::safetyNotice);
+
+  app_->runAutomationAt(todayAt(18, 30));
+
+  ASSERT_EQ(spy.count(), 1);
+  EXPECT_EQ(spy.at(0).at(0).toString(), QStringLiteral("endOfDay"));
+  EXPECT_TRUE(spy.at(0).at(2).toString().contains(QStringLiteral("1 closed today"))) << spy.at(0).at(2).toString().toStdString();
+}
+
 // ── APP-158 ──
 
 namespace {

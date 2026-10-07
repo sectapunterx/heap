@@ -61,32 +61,17 @@ Menu {
 
     // A raised surface (VISP-8): panel was the colour of the board's columns
     // and the hairline borderStrong 1.2:1 against them, so a card menu ran
-    // into the cards under it. panel2 with a field-strength outline (3:1 on
-    // every surface) and a soft drop shadow lift it off the page.
-    background: Rectangle {
+    // into the cards under it. The popup level of elevation (APP-182) lifts
+    // it off the page, like every drop-down, suggestion list and tooltip.
+    background: PopupSurface {
         implicitWidth: menu.minWidth
         implicitHeight: 32
-        radius: Theme.radiusLg
-        color: Theme.panel2
-        border.color: Theme.fieldBorder
-        border.width: 1
-        Rectangle {
-            objectName: "menu-shadow"
-            z: -1
-            anchors.fill: parent
-            anchors.topMargin: Theme.spXs
-            anchors.bottomMargin: -Theme.spXs
-            anchors.leftMargin: -1
-            anchors.rightMargin: -1
-            radius: parent.radius
-            color: Theme.withAlpha(Theme.scrim, Theme.dark ? 0.6 : 0.18)
-        }
     }
 
     enter: Transition {
-        NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.scaledMs(90) }
+        NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.durPop; easing.type: Theme.easeEnter }
     }
     exit: Transition {
-        NumberAnimation { property: "opacity"; from: 1; to: 0; duration: Theme.scaledMs(70) }
+        NumberAnimation { property: "opacity"; from: 1; to: 0; duration: Theme.durPopOut; easing.type: Theme.easeExit }
     }
 }

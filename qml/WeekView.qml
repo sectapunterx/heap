@@ -121,6 +121,13 @@ Item {
     property bool railWanted: true
     Timer { interval: 60000; repeat: true; running: true; onTriggered: root.now = new Date() }
     readonly property int hourH: 38
+    // An event block's floor heights (APP-199): one line of small text, or
+    // the time on top of a title.
+    readonly property int eventOneLineH: Math.ceil(Theme.fsXs * 1.4) + 2 * Theme.sp2xs
+    readonly property int eventTwoLineH: Math.ceil((Theme.fsXs + Theme.fsSm) * 1.4) + 2 * Theme.sp2xs
+    function eventBlock(start, end) {
+        return Overlap.block(start, end, root.hourH, root.eventOneLineH, root.eventTwoLineH);
+    }
     // Indexed by JS day-of-week (0=Sun..6=Sat) so the label tracks the actual
     // date regardless of which day the week starts on. Names come from the app
     // language — they used to be hardcoded English next to a localised date
@@ -445,7 +452,9 @@ Item {
             const list = [];
             for (let j = 0; j < days[i].events.length; j++) {
                 const e = days[i].events[j];
-                list.push({ id: e.key, start: e.start, end: e.end });
+                // As tall as it is drawn: a half-hour block grown to two
+                // lines sits beside the meeting after it, not on top of it.
+                list.push({ id: e.key, start: e.start, end: root.eventBlock(e.start, e.end).visualEnd });
             }
             for (let j = 0; j < days[i].blocks.length; j++) {
                 const b = days[i].blocks[j];
@@ -477,7 +486,7 @@ Item {
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 50
+            Layout.preferredHeight: Theme.px(50)
             color: Theme.panel
             Rectangle {
                 anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
@@ -495,7 +504,7 @@ Item {
                     objectName: "week-prev"
                     text: "←"
                     Accessible.name: I18n.t("miniweek.prevWeek")
-                    ToolTip.visible: prevWeekBtn.hovered
+                    ToolTip.visible: prevWeekBtn.hovered || prevWeekBtn.visualFocus
                     ToolTip.delay: 500
                     ToolTip.text: I18n.t("miniweek.prevWeek") + "  " + AppController.shortcutFor("cal.prev")
                     onClicked: root.step(-1)
@@ -511,13 +520,12 @@ Item {
                             font.family: Theme.fontUi
                             font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsSm
-                            font.letterSpacing: 1
                         }
                         Text {
                             text: I18n.relang(AppController.shortDate(weekStart)) + " — " + AppController.shortDate(new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6))
                             color: Theme.text
                             font.pixelSize: Theme.fsLg
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwHeading
                         }
                     }
                 }
@@ -539,7 +547,7 @@ Item {
                 PillButton {
                     id: todayBtn
                     text: I18n.t("common.today")
-                    ToolTip.visible: todayBtn.hovered
+                    ToolTip.visible: todayBtn.hovered || todayBtn.visualFocus
                     ToolTip.delay: 500
                     ToolTip.text: I18n.t("common.today") + "  " + AppController.shortcutFor("cal.today")
                     onClicked: AppController.selectedDate = AppController.today
@@ -549,7 +557,7 @@ Item {
                     objectName: "week-next"
                     text: "→"
                     Accessible.name: I18n.t("miniweek.nextWeek")
-                    ToolTip.visible: nextWeekBtn.hovered
+                    ToolTip.visible: nextWeekBtn.hovered || nextWeekBtn.visualFocus
                     ToolTip.delay: 500
                     ToolTip.text: I18n.t("miniweek.nextWeek") + "  " + AppController.shortcutFor("cal.next")
                     onClicked: root.step(1)
@@ -563,7 +571,10 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
 
-            readonly property int gutterW: 50
+            // Header, gutter and chip rows grow with the interface scale
+            // (APP-183): at 150 % the fixed 60px header put the date on top
+            // of the weekday and the gutter cut "10:00" to "0:00".
+            readonly property int gutterW: Theme.px(50)
             readonly property int dayCount: Math.max(1, root.days.length)
             // Narrowest a day column may get before the rail has to give way.
             readonly property int minDayW: 96
@@ -582,9 +593,9 @@ Item {
                 let most = 0;
                 for (let i = 0; i < root.days.length; i++) {
                     const n = root.days[i].tasks.length;
-                    most = Math.max(most, n === 0 ? 28 : 12 + Math.min(4, n) * 26 + (n > 4 ? 16 : 0));
+                    most = Math.max(most, n === 0 ? Theme.px(28) : Theme.px(12 + Math.min(4, n) * 26 + (n > 4 ? 16 : 0)));
                 }
-                return Math.max(28, most);
+                return Math.max(Theme.px(28), most);
             }
 
             // Sticky header band for the day-header + due-chips area
@@ -592,7 +603,7 @@ Item {
                 id: headerBand
                 anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
                 anchors.rightMargin: gridHost.railW
-                height: 60 + gridHost.dueRowH
+                height: Theme.px(60) + gridHost.dueRowH
                 color: Theme.panel
                 z: 2
 
@@ -627,10 +638,12 @@ Item {
                             Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 1; color: Theme.border }
                         }
 
-                        // Day header
+                        // Day header. Clipped: at a large scale the "today"
+                        // badge ran into the next day's name (APP-183).
                         Item {
                             anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                            height: 60
+                            height: Theme.px(60)
+                            clip: true
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
@@ -642,17 +655,27 @@ Item {
                                 spacing: Theme.spSm
                                 Text {
                                     text: root.dowLabelsByJsDow[headCol.modelData.date.getDay()]
-                                    color: headCol.isToday ? Theme.accentStrong : Theme.textMuted
+                                    color: headCol.isToday ? Theme.accentStrong : Theme.textDim
                                     font.pixelSize: Theme.fsMd
-                                    font.weight: Font.DemiBold
-                                    font.letterSpacing: 1
+                                    font.weight: Theme.fwTitle
                                 }
+                                // Today is an accent dot and the word, not a
+                                // filled plate: the brightest thing on the week
+                                // was a label (APP-194, APP-198).
                                 Rectangle {
                                     visible: headCol.isToday
-                                    radius: Theme.radiusSm
+                                    Layout.alignment: Qt.AlignVCenter
+                                    implicitWidth: 6; implicitHeight: 6
+                                    radius: Theme.radiusPill
                                     color: Theme.accent
-                                    implicitWidth: tBadge.implicitWidth + 8; implicitHeight: 16
-                                    Text { id: tBadge; anchors.centerIn: parent; text: I18n.t("week.todayBadge"); color: Theme.textOnAccent; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1 }
+                                }
+                                Text {
+                                    objectName: "week-today-label"
+                                    visible: headCol.isToday
+                                    text: I18n.t("week.todayBadge")
+                                    color: Theme.accentStrong
+                                    font.pixelSize: Theme.fsSm
+                                    font.weight: Theme.fwBody
                                 }
                             }
                             Text {
@@ -663,14 +686,14 @@ Item {
                                 font.family: Theme.fontUi
                                 font.features: Theme.tabularNums
                                 font.pixelSize: Theme.fsXl
-                                font.weight: Font.DemiBold
+                                font.weight: Theme.fwTitle
                             }
                         }
 
                         // Due chips strip
                         Item {
                             anchors.left: parent.left; anchors.right: parent.right
-                            anchors.top: parent.top; anchors.topMargin: 60
+                            anchors.top: parent.top; anchors.topMargin: Theme.px(60)
                             height: gridHost.dueRowH
 
                             ColumnLayout {
@@ -686,7 +709,7 @@ Item {
                                         readonly property bool _selected: AppController.selectionCount >= 0
                                             && AppController.isTaskSelected(modelData.id)
                                         Layout.fillWidth: true
-                                        Layout.preferredHeight: 22
+                                        Layout.preferredHeight: Theme.px(22)
                                         radius: Theme.radiusSm
                                         color: _selected ? Theme.withAlpha(Theme.accent, 0.18)
                                             : chipMA.containsMouse ? Theme.panel2 : Theme.panel3
@@ -699,6 +722,14 @@ Item {
                                             anchors.leftMargin: Theme.spSm; anchors.rightMargin: Theme.spSm
                                             spacing: Theme.spXs
                                             Text {
+                                                id: chipKey
+                                                objectName: "week-due-key"
+                                                // The key goes first when the chip
+                                                // is narrow, so the title keeps
+                                                // some words: at 125 % every chip
+                                                // read "APP-105 …" (SCALE-7).
+                                                visible: dueChip.width - 2 * Theme.spSm - chipKey.implicitWidth
+                                                         - chipPri.implicitWidth - 2 * Theme.spXs >= Theme.px(64)
                                                 // A mirrored issue reads by its
                                                 // tracker key, not the synthetic
                                                 // heap id (HEAP-117).
@@ -711,6 +742,7 @@ Item {
                                                 font.pixelSize: Theme.fsXs
                                             }
                                             Text {
+                                                objectName: "week-due-title"
                                                 Layout.fillWidth: true
                                                 // A planned day (no deadline here) reads
                                                 // as planned, not as due.
@@ -720,9 +752,13 @@ Item {
                                                 font.pixelSize: Theme.fsXs
                                                 elide: Text.ElideRight
                                             }
-                                            Rectangle {
-                                                width: 6; height: 6; radius: 1
+                                            // Priority by shape too (APP-185).
+                                            Text {
+                                                id: chipPri
+                                                objectName: "week-due-priority"
+                                                text: Theme.priorityMark(modelData.priority)
                                                 color: Theme.priorityColor(modelData.priority)
+                                                font.pixelSize: Theme.fsXs
                                             }
                                         }
                                         // The keyboard's way in (design audit
@@ -730,6 +766,7 @@ Item {
                                         // to the pointer: a click still goes
                                         // there, with its Ctrl / Shift.
                                         ClickArea {
+                                            id: dueKey
                                             objectName: "week-due-" + dueChip.modelData.id
                                             label: dueChip.modelData.title
                                             showTip: false
@@ -759,7 +796,8 @@ Item {
                                                     chipMA.open();
                                                 }
                                             }
-                                            ToolTip.visible: containsMouse
+                                            // The full title on Tab too (APP-184).
+                                            ToolTip.visible: containsMouse || dueKey.activeFocus
                                             ToolTip.delay: 400
                                             ToolTip.text: modelData.title
                                         }
@@ -806,7 +844,7 @@ Item {
                 anchors.top: headerBand.bottom
                 anchors.left: parent.left; anchors.right: parent.right
                 anchors.rightMargin: gridHost.railW
-                height: visible ? (root.strip.rows * 24 + 8) : 0
+                height: visible ? (root.strip.rows * Theme.px(24) + 8) : 0
                 visible: root.strip.rows > 0
                 color: Theme.panel
                 z: 2
@@ -823,9 +861,9 @@ Item {
                         required property var modelData
                         objectName: "allday-" + weekBar.modelData.id
                         x: gridHost.gutterW + weekBar.modelData.from * gridHost.dayW + 2
-                        y: 4 + weekBar.modelData.row * 24
+                        y: 4 + weekBar.modelData.row * Theme.px(24)
                         width: weekBar.modelData.span * gridHost.dayW - 4
-                        height: 22
+                        height: Theme.px(22)
                         // Square off the clipped end so a bar that runs past
                         // the week reads as continuing rather than ending here.
                         radius: Theme.radiusSm
@@ -1073,13 +1111,13 @@ Item {
                             x: gridHost.gutterW + weEv.effDayIndex * gridHost.dayW + 2 + weEv._lane.x
                             y: (weEv.effStart - root.hoursStart) * root.hourH + weEv.dragDy
                             width: weEv._lane.w - (weEv._cols > 1 ? 2 : 0)
-                            height: Math.max(18, (effEnd - effStart) * root.hourH - 2)
-                            // A half-hour meeting is the most common kind and
-                            // the block is too short for two lines of text:
-                            // the title was being clipped away, leaving a row
-                            // of blocks labelled only "09:30". Short blocks put
-                            // the time and the title on one line instead.
-                            readonly property bool compact: height < 30
+                            // Half an hour or more is at least two lines high,
+                            // the time small on top of the title; anything
+                            // shorter is one line (APP-199). A half-hour
+                            // meeting used to be 17px, its title clipped away.
+                            readonly property var _block: root.eventBlock(effStart, effEnd)
+                            height: weEv._block.height
+                            readonly property bool compact: !weEv._block.twoLine
                             radius: Theme.radiusSm
                             color: Theme.withAlpha(Theme.eventColor(modelData.type), 0.18)
                             border.color: Theme.withAlpha(Theme.eventColor(modelData.type), 0.55)
@@ -1108,10 +1146,19 @@ Item {
                                     font.pixelSize: Theme.fsXs
                                 }
                                 RowLayout {
+                                    id: evLine
                                     width: parent.width
                                     spacing: Theme.spXs
+                                    // On one line the time and the context give
+                                    // way before the title does: a 15-minute
+                                    // meeting beside a focus block read "15:00"
+                                    // and nothing else (SCALE-7). The time is on
+                                    // the block's edge in the grid anyway.
+                                    readonly property bool roomy: evLine.width - evTime.implicitWidth - Theme.spXs >= Theme.px(64)
                                     Text {
-                                        visible: weEv.compact
+                                        id: evTime
+                                        objectName: "week-event-time"
+                                        visible: weEv.compact && evLine.roomy
                                         text: Theme.fmtHour(weEv.effStart)
                                         color: Theme.textMuted
                                         font.family: Theme.fontUi
@@ -1119,26 +1166,26 @@ Item {
                                         font.pixelSize: Theme.fsXs
                                     }
                                     Text {
-                                        visible: (weEv.modelData.context || "").length > 0
+                                        visible: (weEv.modelData.context || "").length > 0 && evLine.roomy
                                         text: weEv.modelData.context
                                         color: Theme.textMuted
                                         font.pixelSize: Theme.fsXs
-                                        font.weight: Font.DemiBold
                                         elide: Text.ElideRight
                                         Layout.maximumWidth: parent.width * 0.5
                                     }
                                     Rectangle {
-                                        visible: (weEv.modelData.context || "").length > 0
+                                        visible: (weEv.modelData.context || "").length > 0 && evLine.roomy
                                         Layout.preferredWidth: 5; Layout.preferredHeight: 5
                                         radius: 2.5
                                         color: Theme.eventColor(weEv.modelData.type)
                                     }
                                     Text {
+                                        objectName: "week-event-title"
                                         Layout.fillWidth: true
                                         text: weEv.modelData.title
                                         color: Theme.text
-                                        font.pixelSize: Theme.fsXs
-                                        font.weight: Font.DemiBold
+                                        font.pixelSize: weEv.compact ? Theme.fsXs : Theme.fsSm
+                                        font.weight: weEv.compact ? Theme.fwBody : Theme.fwTitle
                                         elide: Text.ElideRight
                                     }
                                 }
@@ -1307,7 +1354,7 @@ Item {
                                 text: "▸ " + (wkBlock.modelData.title || "")
                                 color: Theme.text
                                 font.pixelSize: Theme.fsXs
-                                font.weight: Font.DemiBold
+                                font.weight: Theme.fwTitle
                                 elide: Text.ElideRight
                             }
                             ClickArea {
@@ -1324,15 +1371,17 @@ Item {
     }
 
     // Empty-week hint — shown only when the week has no tasks and no events, so
-    // the grid does not read as blank. Non-interactive.
-    Text {
+    // the grid does not read as blank. Non-interactive: a click goes through
+    // to the slot under it, which is what the hint says to do.
+    EmptyState {
+        objectName: "week-empty"
         anchors.centerIn: parent
-        width: parent.width - 64
+        width: Math.min(parent.width - 2 * Theme.sp3xl, 420)
         visible: root.weekEmpty
-        horizontalAlignment: Text.AlignHCenter
-        wrapMode: Text.WordWrap
-        text: I18n.t("week.noEvents")
-        color: Theme.textDim
-        font.pixelSize: Theme.fsMd
+        readonly property bool searching: root.searchText.trim().length > 0
+        icon: searching ? "" : "heap-03-week"
+        title: I18n.t(searching ? "view.empty.noMatch.title" : "week.empty.title")
+        line: searching ? I18n.t("view.empty.noMatch.hint")
+                        : I18n.t("week.empty.hint").arg(AppController.shortcutFor("task.new"))
     }
 }

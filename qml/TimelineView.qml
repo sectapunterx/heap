@@ -24,6 +24,8 @@ Item {
     // J/K or the arrows walk the rows, Enter opens, Space selects; "O" (the
     // app-wide open-in-tracker key) acts on the row the cursor is on.
     property string cursorTaskId: ""
+    // A new card the keyboard cursor reaches has been seen (APP-180).
+    onCursorTaskIdChanged: if (root.cursorTaskId) AppController.markTaskSeen(root.cursorTaskId)
     property string _hoverId: ""
     readonly property string hoveredTaskId: cursorTaskId.length > 0 ? cursorTaskId : _hoverId
     function _taskRowIndexes() {
@@ -266,17 +268,22 @@ Item {
     }
 
     // Every bucket's rows in display order, flat, for the virtualised list.
-    // `first` marks the row that carries its bucket's label.
+    // `first` marks the row that carries its bucket's label, `last` the
+    // row that makes room for it when the bucket is shorter than its label;
+    // `firstIndex` is where the bucket starts in this list.
     readonly property var flatRows: {
         const out = [];
         for (const k of root.bucketOrder) {
             const list = root.groups[k] || [];
             if (list.length === 0) continue;
             const rows = root.bucketRows(k, list);
+            const firstIndex = out.length;
             for (let i = 0; i < rows.length; i++) {
                 const r = rows[i];
                 r.bucketId = k;
                 r.first = i === 0;
+                r.last = i === rows.length - 1;
+                r.firstIndex = firstIndex;
                 out.push(r);
             }
         }
@@ -311,12 +318,13 @@ Item {
                 Column {
                     spacing: 1
                     Text {
-                        text: I18n.t("timeline.title"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold
+                        text: I18n.t("timeline.title"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Theme.fwHeading
                     }
+                    // One count (APP-197). Today's date was here too; the
+                    // "Today" bucket below already says it.
                     Text {
-                        text: I18n.t("timeline.subtitle")
-                                .arg(I18n.tasks(root.totalShown()))
-                                .arg(AppController.today.toLocaleDateString(I18n.locale, "yyyy-MM-dd"))
+                        objectName: "timeline-count"
+                        text: I18n.tasks(root.totalShown())
                         color: Theme.textDim
                         font.family: Theme.fontUi
                         font.features: Theme.tabularNums
@@ -392,11 +400,95 @@ Item {
                 required property int index
                 readonly property var rd: root.flatRows[index] ?? null
                 readonly property bool first: !!(rd && rd.first)
+                readonly property bool last: !!(rd && rd.last)
                 readonly property var meta: rd ? root.bucketMeta[rd.bucketId] : null
                 readonly property var list: rd ? (root.groups[rd.bucketId] || []) : []
+                readonly property real _ownH: (rowLoader.item ? (rowLoader.item as Item).implicitHeight : 0) + (first ? 14 : 0) + 6
+                // The bucket's label runs down beside its rows instead of
+                // making the first row as tall as itself: that row is often a
+                // date sub-header, and the label (two or three lines at
+                // 125-150 %) left an empty band between it and the first task
+                // (SCALE-5). Only a bucket shorter than its label grows, at its
+                // last row, so the label never runs into the next bucket.
+                // This row's own label column lays out the same as the first
+                // row's (same bucket, same lines shown).
+                readonly property real _labelRoom: {
+                    if (!last || !rd) return 0;
+                    const labelBottom = 14 + labelCol.implicitHeight + Theme.spSm;
+                    if (first) return Math.max(0, labelBottom - _ownH);
+                    const head = rowItem.ListView.view.itemAtIndex(rd.firstIndex);
+                    if (!head) return 0;
+                    return Math.max(0, labelBottom - (rowItem.y + _ownH - head.y));
+                }
                 width: rowList.width
-                height: Math.max(first ? labelCol.implicitHeight : 0, rowLoader.item ? rowLoader.item.implicitHeight : 0)
-                        + (first ? 14 : 0) + 6
+                height: _ownH + _labelRoom
+
+                // Left side — label / marker, on the bucket's first row only.
+                // Placed beside the rows rather than in this layout, so it
+                // can run down past a short first row (SCALE-5).
+                ColumnLayout {
+                    id: labelCol
+                    objectName: "timeline-label-col"
+                    // One width for every bucket (design audit DES-12): a
+                    // preferred width alone let "На следующей неделе" push
+                    // its column wider, and that bucket's rows started
+                    // ~32px right of the others. A long name wraps instead.
+                    x: Theme.inset
+                    y: rowItem.first ? 14 : 0
+                    // Grows with the scale: at 150 % a fixed 160 broke
+                    // "На следующей неделе" mid-word.
+                    width: Theme.px(160)
+                    spacing: Theme.spXs
+                    // On the bucket's last row it is only measured (see
+                    // _labelRoom).
+                    opacity: rowItem.first ? 1 : 0
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.spMd
+                        Rectangle {
+                            Layout.alignment: Qt.AlignTop
+                            Layout.preferredWidth: Theme.px(26); Layout.preferredHeight: Theme.px(26)
+                            radius: Theme.px(26) / 2
+                            color: rowItem.meta ? rowItem.meta.color : "transparent"
+                            Text {
+                                anchors.centerIn: parent
+                                text: rowItem.meta ? rowItem.meta.icon : ""
+                                color: Theme.textOnAccent
+                                font.weight: Theme.fwTitle
+                                font.pixelSize: Theme.fsMd
+                            }
+                        }
+                        Text {
+                            text: rowItem.meta ? rowItem.meta.name : ""
+                            color: rowItem.rd.bucketId === "overdue" ? Theme.danger
+                                 : rowItem.rd.bucketId === "today" ? Theme.accentStrong
+                                 : Theme.text
+                            font.pixelSize: Theme.fsLg
+                            font.weight: Theme.fwTitle
+                            Layout.fillWidth: true
+                            wrapMode: Text.Wrap
+                        }
+                    }
+                    Text {
+                        visible: (rowItem.first || rowItem.last)
+                                 && (rowItem.rd.bucketId === "overdue" || rowItem.rd.bucketId === "today" || rowItem.rd.bucketId === "tomorrow")
+                                 && rowItem.list.length > 0 && rowItem.list[0].when && rowItem.list[0].when.getTime
+                        text: rowItem.list.length > 0 && rowItem.list[0].when && rowItem.list[0].when.getTime
+                              ? I18n.relang(AppController.shortDate(rowItem.list[0].when)) : ""
+                        color: Theme.textMuted
+                        font.pixelSize: Theme.fsSm
+                        leftPadding: Theme.px(26) + Theme.spMd
+                    }
+                    Text {
+                        visible: rowItem.first || rowItem.last
+                        text: I18n.tasks(rowItem.list.length)
+                        color: Theme.textDim
+                        font.family: Theme.fontUi
+                        font.features: Theme.tabularNums
+                        font.pixelSize: Theme.fsSm
+                        leftPadding: Theme.px(26) + Theme.spMd
+                    }
+                }
 
                 RowLayout {
                     anchors.fill: parent
@@ -405,65 +497,10 @@ Item {
                     anchors.bottomMargin: Theme.spSm
                     spacing: Theme.sp2xl
 
-                    // Left side — label / marker, on the bucket's first row only
-                    ColumnLayout {
-                        id: labelCol
-                        objectName: "timeline-label-col"
-                        // One width for every bucket (design audit DES-12): a
-                        // preferred width alone let "На следующей неделе" push
-                        // its column wider, and that bucket's rows started
-                        // ~32px right of the others. A long name wraps instead.
-                        Layout.preferredWidth: 160
-                        Layout.minimumWidth: 160
-                        Layout.maximumWidth: 160
-                        Layout.alignment: Qt.AlignTop
-                        spacing: Theme.spXs
-                        opacity: rowItem.first ? 1 : 0
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Theme.spMd
-                            Rectangle {
-                                Layout.alignment: Qt.AlignTop
-                                width: 26; height: 26; radius: 13
-                                color: rowItem.meta ? rowItem.meta.color : "transparent"
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: rowItem.meta ? rowItem.meta.icon : ""
-                                    color: Theme.textOnAccent
-                                    font.weight: Font.DemiBold
-                                    font.pixelSize: Theme.fsMd
-                                }
-                            }
-                            Text {
-                                text: rowItem.meta ? rowItem.meta.name : ""
-                                color: rowItem.rd.bucketId === "overdue" ? Theme.danger
-                                     : rowItem.rd.bucketId === "today" ? Theme.accentStrong
-                                     : Theme.text
-                                font.pixelSize: Theme.fsLg
-                                font.weight: Font.DemiBold
-                                Layout.fillWidth: true
-                                wrapMode: Text.Wrap
-                            }
-                        }
-                        Text {
-                            visible: rowItem.first
-                                     && (rowItem.rd.bucketId === "overdue" || rowItem.rd.bucketId === "today" || rowItem.rd.bucketId === "tomorrow")
-                                     && rowItem.list.length > 0 && rowItem.list[0].when && rowItem.list[0].when.getTime
-                            text: rowItem.list.length > 0 && rowItem.list[0].when && rowItem.list[0].when.getTime
-                                  ? I18n.relang(AppController.shortDate(rowItem.list[0].when)) : ""
-                            color: Theme.textMuted
-                            font.pixelSize: Theme.fsSm
-                            leftPadding: 34
-                        }
-                        Text {
-                            visible: rowItem.first
-                            text: I18n.tasks(rowItem.list.length)
-                            color: Theme.textDim
-                            font.family: Theme.fontUi
-                            font.features: Theme.tabularNums
-                            font.pixelSize: Theme.fsSm
-                            leftPadding: 34
-                        }
+                    Item {
+                        Layout.preferredWidth: Theme.px(160)
+                        Layout.minimumWidth: Theme.px(160)
+                        Layout.maximumWidth: Theme.px(160)
                     }
 
                     Loader {
@@ -481,23 +518,15 @@ Item {
                 anchors.left: parent.left; anchors.right: parent.right
                 anchors.top: parent.top; anchors.topMargin: Theme.sp2xl
                 height: 200
-                Column {
+                // "No tasks match the filters" only when something is
+                // filtering; an empty timeline is not a filter's fault.
+                EmptyState {
+                    objectName: "timeline-empty"
                     anchors.centerIn: parent
-                    spacing: Theme.spSm
-                    Text { anchors.horizontalCenter: parent.horizontalCenter; text: "✓"; color: Theme.stDone; font.pixelSize: Theme.fs2xl }
-                    // "No tasks match the filters" only when something is
-                    // filtering; an empty timeline is not a filter's fault.
-                    Text {
-                        objectName: "timeline-empty-title"
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: I18n.t(root._filtering ? "timeline.empty.title" : "timeline.empty.none.title")
-                        color: Theme.text; font.pixelSize: Theme.fsMd
-                    }
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: root._filtering ? I18n.t("timeline.empty.hint") : I18n.t("timeline.empty.none.hint").arg(AppController.shortcutFor("task.new"))
-                        color: Theme.textDim; font.pixelSize: Theme.fsMd
-                    }
+                    width: Math.min(parent.width - 2 * Theme.sp3xl, 420)
+                    icon: root._filtering ? "" : "heap-02-timeline"
+                    title: I18n.t(root._filtering ? "timeline.empty.title" : "timeline.empty.none.title")
+                    line: root._filtering ? I18n.t("timeline.empty.hint") : I18n.t("timeline.empty.none.hint").arg(AppController.shortcutFor("task.new"))
                 }
             }
         }
@@ -522,7 +551,7 @@ Item {
                         font.family: Theme.fontUi
                         font.features: Theme.tabularNums
                         font.pixelSize: Theme.fsSm
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwTitle
                         font.capitalization: Font.MixedCase
                     }
                     Rectangle {
@@ -554,144 +583,121 @@ Item {
                     width: parent ? parent.width : 0
                     radius: Theme.radius
                     color: _selected ? Theme.withAlpha(Theme.accent, 0.10)
-                        : rowMA.containsMouse ? Theme.panel2 : Theme.panel
+                        : rowMA.containsMouse ? Theme.surfaceCardHover : Theme.surfaceCard
                     border.color: _selected ? Theme.accent
                         : _cursored ? Theme.accentStrong
-                        : rowMA.containsMouse ? Theme.borderStrong : Theme.border
+                        : rowMA.containsMouse ? Theme.cardBorderHover : Theme.cardBorder
                     border.width: _selected || _cursored ? 2 : 1
                     implicitHeight: rowContent.implicitHeight + 16
 
-                    // Left accent stripe
-                    Rectangle {
-                        anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
-                        anchors.leftMargin: 0
-                        width: 3
-                        color: (tlRow.rd ? tlRow.rd.bucketId : "") === "overdue" ? Theme.withAlpha(Theme.danger, 0.6)
-                             : (tlRow.rd ? tlRow.rd.bucketId : "") === "today" ? Theme.accent
-                             : (tlRow.rd ? tlRow.rd.bucketId : "") === "tomorrow" ? Theme.withAlpha(Theme.warning, 0.6)
-                             : "transparent"
-                        radius: 1
-                    }
+                    // A row says three things (APP-197): what the task is, when
+                    // it is due, and where it stands. The key, the description
+                    // and a booked block open under the cursor; priority and
+                    // branch are the editor's.
+                    readonly property string _excerpt: MdPlain.plain(tlRow.t.desc, 120)
+                    readonly property string _booked: root.scheduleMap[tlRow.t.id] !== undefined
+                        ? String(root.scheduleMap[tlRow.t.id]) : ""
+                    readonly property bool _overdue: (tlRow.rd ? tlRow.rd.bucketId : "") === "overdue"
 
-                    RowLayout {
+                    ColumnLayout {
                         id: rowContent
                         anchors.fill: parent
-                        anchors.leftMargin: Theme.sp2xl
+                        anchors.leftMargin: Theme.spXl
                         anchors.rightMargin: Theme.spXl
                         anchors.topMargin: Theme.spMd
                         anchors.bottomMargin: Theme.spMd
-                        spacing: Theme.spLg
+                        spacing: Theme.sp2xs
 
-                        Rectangle { width: 10; height: 10; radius: Theme.radiusXs; color: tlRow.st.color }
-                        Rectangle {
-                            radius: Theme.radiusSm
-                            color: Theme.withAlpha(Theme.priorityColor(tlRow.t.priority), 0.14)
-                            implicitWidth: priT.implicitWidth + 10; implicitHeight: 18
-                            Text {
-                                id: priT
-                                anchors.centerIn: parent
-                                text: tlRow.t.priority
-                                color: Theme.priorityColor(tlRow.t.priority)
-                                font.pixelSize: Theme.fsXs
-                                font.weight: Font.DemiBold
-                            }
-                        }
-                        Text {
-                            // A mirrored issue reads by its
-                            // tracker key (HEAP-117).
-                            text: (tlRow.t.ticket && tlRow.t.ticket.key)
-                                  ? tlRow.t.ticket.key : tlRow.t.id
-                            textFormat: Text.PlainText
-                            color: Theme.accentStrong
-                            font.family: Theme.fontMono
-                            font.pixelSize: Theme.fsSm
-                            font.weight: Font.Medium
-                        }
-                        ColumnLayout {
+                        RowLayout {
                             Layout.fillWidth: true
-                            spacing: 1
+                            spacing: Theme.spLg
                             Text {
+                                objectName: "tl-title"
                                 Layout.fillWidth: true
                                 text: tlRow.t.title
                                 textFormat: Text.PlainText
                                 color: Theme.text
                                 font.pixelSize: Theme.fsMd
-                                font.weight: Font.Medium
                                 elide: Text.ElideRight
                             }
+                            // Where it stands: the column's colour on the
+                            // status's shape (APP-185) and its name in dim
+                            // text, no outlined pill.
+                            Row {
+                                objectName: "tl-status"
+                                spacing: Theme.spSm
+                                Text {
+                                    objectName: "timeline-status-mark"
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: Theme.statusMark(tlRow.t.status)
+                                    color: tlRow.st.color
+                                    font.pixelSize: Theme.fsSm
+                                }
+                                Text {
+                                    text: tlRow.st.name
+                                    color: Theme.textDim
+                                    font.pixelSize: Theme.fsSm
+                                }
+                            }
+                            // When: the clock time of a timed deadline (or the
+                            // day of a task that only has a schedule), then how
+                            // far off it is. Red only once it is past.
                             Text {
-                                Layout.fillWidth: true
-                                visible: tlRow.t.desc && String(tlRow.t.desc).length > 0
-                                // Markdown read as prose, not as "**Steps:** - [ ]".
-                                text: MdPlain.plain(tlRow.t.desc, 120)
+                                objectName: "tl-when"
+                                readonly property var at: tlRow.t.scheduledOnly ? tlRow.t.scheduledAt : tlRow.t.dueAt
+                                readonly property bool timed: tlRow.t.scheduledOnly ? tlRow.t.scheduledHasTime : tlRow.t.dueHasTime
+                                visible: text.length > 0
+                                text: (tlRow.t.scheduledOnly ? "▸ " : "")
+                                      + (timed ? I18n.fmtTime(at) : "")
                                 color: Theme.textMuted
+                                font.family: Theme.fontUi
+                                font.features: Theme.tabularNums
                                 font.pixelSize: Theme.fsSm
-                                elide: Text.ElideRight
+                            }
+                            Text {
+                                objectName: "tl-due"
+                                text: I18n.relang((AppController.today, AppController.deadlineDiffLabel(tlRow.t.when)))
+                                color: tlRow._overdue ? Theme.danger : Theme.textMuted
+                                font.family: Theme.fontUi
+                                font.features: Theme.tabularNums
+                                font.pixelSize: Theme.fsSm
                             }
                         }
-                        Rectangle {
-                            radius: Theme.radiusPill
-                            color: "transparent"
-                            border.color: Theme.withAlpha(tlRow.st.color, 0.4)
-                            border.width: 1
-                            implicitWidth: stT.implicitWidth + 14; implicitHeight: 20
+                        // Under the cursor: the key, a block booked for it, and
+                        // the description's first line.
+                        RowLayout {
+                            objectName: "tl-more"
+                            Layout.fillWidth: true
+                            visible: tlRow._cursored
+                            spacing: Theme.spLg
                             Text {
-                                id: stT
-                                anchors.centerIn: parent
-                                text: tlRow.st.name
-                                color: Theme.readable(tlRow.st.color)
+                                objectName: "tl-key"
+                                // A mirrored issue reads by its tracker key (HEAP-117).
+                                text: (tlRow.t.ticket && tlRow.t.ticket.key) ? tlRow.t.ticket.key : tlRow.t.id
+                                textFormat: Text.PlainText
+                                color: Theme.textDim
+                                font.family: Theme.fontMono
                                 font.pixelSize: Theme.fsXs
-                                font.weight: Font.DemiBold
                             }
-                        }
-                        Text {
-                            visible: tlRow.t.branch && String(tlRow.t.branch).length > 0
-                            text: tlRow.t.branch ? "⎇ " + String(tlRow.t.branch).split("/").pop() : ""
-                            color: Theme.textDim
-                            font.family: Theme.fontMono
-                            font.pixelSize: Theme.fsXs
-                        }
-                        Rectangle {
-                            visible: root.scheduleMap[tlRow.t.id] !== undefined && String(root.scheduleMap[tlRow.t.id]).length > 0
-                            radius: Theme.radiusSm
-                            color: Theme.accentSoft
-                            implicitWidth: schT.implicitWidth + 10; implicitHeight: 18
                             Text {
-                                id: schT
-                                anchors.centerIn: parent
-                                text: "▸ " + (root.scheduleMap[tlRow.t.id] || "")
-                                color: Theme.accentStrong
+                                visible: tlRow._booked.length > 0
+                                text: "▸ " + tlRow._booked
+                                color: Theme.textMuted
                                 font.family: Theme.fontUi
                                 font.features: Theme.tabularNums
                                 font.pixelSize: Theme.fsXs
                             }
-                        }
-                        // The clock time of a timed deadline, and the day of a
-                        // task that only has a schedule.
-                        Text {
-                            objectName: "tl-when"
-                            readonly property var at: tlRow.t.scheduledOnly ? tlRow.t.scheduledAt : tlRow.t.dueAt
-                            readonly property bool timed: tlRow.t.scheduledOnly ? tlRow.t.scheduledHasTime : tlRow.t.dueHasTime
-                            visible: text.length > 0
-                            text: (tlRow.t.scheduledOnly ? "▸ " : "")
-                                  + (timed && at && at.getHours
-                                     ? String(at.getHours()).padStart(2, "0") + ":" + String(at.getMinutes()).padStart(2, "0")
-                                     : "")
-                            color: Theme.textMuted
-                            font.family: Theme.fontUi
-                            font.features: Theme.tabularNums
-                            font.pixelSize: Theme.fsSm
-                        }
-                        Text {
-                            text: I18n.relang((AppController.today, AppController.deadlineDiffLabel(tlRow.t.when)))
-                            color: (tlRow.rd ? tlRow.rd.bucketId : "") === "overdue" ? Theme.danger
-                                 : (tlRow.rd ? tlRow.rd.bucketId : "") === "today" ? Theme.accentStrong
-                                 : (tlRow.rd ? tlRow.rd.bucketId : "") === "tomorrow" ? Theme.warning
-                                 : Theme.textMuted
-                            font.family: Theme.fontUi
-                            font.features: Theme.tabularNums
-                            font.pixelSize: Theme.fsSm
-                            font.weight: (tlRow.rd ? tlRow.rd.bucketId : "") === "overdue" || (tlRow.rd ? tlRow.rd.bucketId : "") === "today" ? Font.DemiBold : Font.Normal
+                            Text {
+                                Layout.fillWidth: true
+                                visible: tlRow._excerpt.length > 0
+                                // Markdown read as prose, not as "**Steps:** - [ ]".
+                                text: tlRow._excerpt
+                                textFormat: Text.PlainText
+                                color: Theme.textMuted
+                                font.pixelSize: Theme.fsSm
+                                elide: Text.ElideRight
+                                maximumLineCount: 1
+                            }
                         }
                     }
 

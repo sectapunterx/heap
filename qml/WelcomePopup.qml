@@ -43,18 +43,11 @@ Popup {
     property var captured: []
     property string lastCapturedId: ""
 
-    Overlay.modal: Rectangle {
-        color: Theme.scrim
-    }
+    Overlay.modal: ModalScrim {}
     // A press beside the tour ends it like ✕ and Esc do (APP-126).
     Overlay.onPressed: if (PopupStack.isTopmost(root, Overlay.overlay)) root._finish()
 
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
 
     // A hint with the shortcuts as bound now, not as they shipped (DES-15).
     function withKeys(key, ids) {
@@ -164,7 +157,7 @@ Popup {
                 color: Theme.accentStrong
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsSm
-                font.weight: Font.DemiBold
+                font.weight: Theme.fwTitle
             }
             Text {
                 text: chip.fixedLabel.length > 0 ? chip.fixedLabel : AppController.shortcutLabel(chip.sid)
@@ -205,7 +198,7 @@ Popup {
                 text: I18n.t(root.cur.title)
                 color: Theme.text
                 font.pixelSize: Theme.fsXl
-                font.weight: Font.Bold
+                font.weight: Theme.fwHeading
                 elide: Text.ElideRight
             }
 
@@ -220,7 +213,7 @@ Popup {
                         height: 6
                         radius: 3
                         color: index <= root.step ? Theme.accent : Theme.border
-                        Behavior on width { NumberAnimation { duration: Theme.durFast } }
+                        Behavior on width { NumberAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     }
                 }
             }
@@ -240,16 +233,24 @@ Popup {
             }
         }
 
-        // ── Body (fixed height so the frame doesn't jump between steps) ──
+        // ── Body: as tall as the step's content (APP-201). A fixed 212px
+        // left a blank band under "Learn more" on the short steps; the
+        // height eases between steps instead of jumping. ──
         Item {
             id: body
+            objectName: "welcome-body"
             Layout.fillWidth: true
             Layout.topMargin: Theme.sp2xl
-            Layout.preferredHeight: 212
+            Layout.bottomMargin: Theme.sp2xl
+            property real contentHeight: bodyCol.implicitHeight
+            Behavior on contentHeight { NumberAnimation { duration: Theme.durMove; easing.type: Theme.easeEnter } }
+            Layout.preferredHeight: contentHeight
             clip: true
             activeFocusOnTab: false
 
             ColumnLayout {
+                id: bodyCol
+                objectName: "welcome-body-content"
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
@@ -370,7 +371,7 @@ Popup {
                         color: Theme.accentStrong
                         font.underline: learnMa.hovered
                         font.pixelSize: Theme.fsMd
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwTitle
                         ClickArea {
                             id: learnMa
                             label: I18n.t("welcome.learnMore")

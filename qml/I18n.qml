@@ -9,9 +9,13 @@
 pragma Singleton
 import QtQuick
 import TodoCpp
+import "Pseudo.js" as Pseudo
 
 QtObject {
-    readonly property string lang: AppController.language || "en"
+    // HEAP_LANG=pseudo (APP-189): English, stretched and accented by
+    // Pseudo.js, to find text that is cut short or never translated.
+    readonly property bool pseudo: AppController.pseudoLocale
+    readonly property string lang: pseudo ? "en" : (AppController.language || "en")
 
     // ── Catalogue ─────────────────────────────────────────────────────
     readonly property var dict: ({
@@ -142,7 +146,7 @@ QtObject {
             "welcome.skip": "Skip",
             "welcome.back": "Back",
             "welcome.next": "Next",
-            "welcome.learnMore": "Learn more →",
+            "welcome.learnMore": "Learn more",
             "welcome.resume": "Continue tour",
             "welcome.giveUp": "End the tour",
             "welcome.replay": "Take the tour again",
@@ -268,7 +272,7 @@ QtObject {
             "archive.selectAll": "Select all",
             "archive.restoreSelected": "Restore selected",
             "archive.empty.title": "Archive is empty",
-            "archive.empty.hint": "Tickets you archive show up here. Multi-select + restore to bring them back.",
+            "archive.empty.hint": "Archived tasks show up here. On the board, %1 archives the task under the cursor.",
 
             // ── FilterBar ──
             "filter.all": "All",
@@ -287,7 +291,6 @@ QtObject {
             "filter.sort.title": "Title",
             "filter.sort.id": "ID",
             "filter.sort.reverse": "Reverse order",
-            "filter.label": "Filters:",
             "filter.clear": "clear",
             "filter.counts": "%1 tasks · %2 active · %3 blocked · %4 review",
 
@@ -300,8 +303,15 @@ QtObject {
             "board.sorted.noReorder": "The board is sorted — switch the sort to Manual to reorder cards",
             "board.empty.title": "No tasks yet",
             "board.empty.hint": "Press %1 to add your first task, or use quick-capture (%2).",
-            "day.noEvents": "No events today — drag an empty slot to create one, or drop a task to schedule it.",
-            "week.noEvents": "No events this week — switch to Day and drag to create one.",
+            "day.noEvents": "No events. Drag across free time to create one, or drop a task here to schedule it.",
+            "week.empty.title": "Nothing this week",
+            "week.empty.hint": "Tasks with a date and events show up here. Click an empty slot to add an event, or press %1 for a task.",
+            "month.empty.title": "Nothing this month",
+            "month.empty.hint": "Tasks with a date and events show up on their day. Press %1 to add a task.",
+            "view.empty.noMatch.title": "Nothing matches the search",
+            "view.empty.noMatch.hint": "Clear the search or the filters to see everything again.",
+            "docs.empty.hint": "Specs, snippets and contacts you keep at hand live here. Add one with + Add in a section, or start a section with + New section.",
+            "docs.noMatches.hint": "Titles, tags and links are searched. Try fewer words.",
             "kanban.dropHere": "Drop here",
             "kanban.deleteColumn": "Delete column",
             "kanban.moveLeft": "Move left",
@@ -318,6 +328,8 @@ QtObject {
             "kanban.wip.title": "Limit for %1",
             "kanban.wip.hint": "0 means no limit. Over it the count turns red — nothing is blocked.",
             "kanban.wip.over": "%1 is over its limit of %2",
+            "kanban.hiddenColumns": "Columns to the right: %1",
+            "kanban.hiddenColumns.tip": "Scroll the board to the right to see them",
             "kanban.archive.set": "Auto-archive…",
             "kanban.archive.title": "Auto-archive %1",
             "kanban.archive.hint": "Days a card stays in this column before it goes to the archive. 0 — never.",
@@ -591,7 +603,6 @@ QtObject {
             "timeline.title": "Timeline · by deadlines",
             "timeline.empty.title": "No tasks match the filters.",
             "timeline.empty.hint": "Reset filters or add a task.",
-            "timeline.subtitle": "%1 · today is %2",
             "timeline.showDone": "Show done",
             "timeline.bucket.overdue": "Overdue",
             "timeline.bucket.today": "Today",
@@ -600,9 +611,9 @@ QtObject {
             "timeline.bucket.nextweek": "Next week",
             "timeline.bucket.later": "Later",
             "timeline.bucket.nodl": "No deadline",
-            "week.number": "WEEK %1",
+            "week.number": "Week %1",
             "week.summary": "%1 · %2",
-            "week.todayBadge": "TODAY",
+            "week.todayBadge": "Today",
             "week.more": "+ %1 more",
             "week.weekOf": "Week %1",
             "miniweek.prevWeek": "Previous week",
@@ -619,13 +630,13 @@ QtObject {
             "day.newEvent": "+ New event",
             "day.dragHint": "Drag empty area → create · drag task → schedule",
             "day.dragHint.short": "drag to plan",
-            "people.label.title": "PEOPLE TO PING",
+            "people.label.title": "People to ping",
             "people.tip.add": "Ping someone",
             "people.tip.edit": "Edit",
-            "people.state.idle.tag": "IDLE",
-            "people.state.todo.tag": "TO CALL",
-            "people.state.pinged.tag": "CALLED",
-            "people.state.replied.tag": "ANSWERED",
+            "people.state.idle.tag": "Idle",
+            "people.state.todo.tag": "To call",
+            "people.state.pinged.tag": "Called",
+            "people.state.replied.tag": "Answered",
             "people.tip.cycle": "to call → called → answered → off the list",
             "notes.legend": "Markdown · @ — contacts · # — tickets",
             "notes.placeholderBody": "Start writing a note…  (markdown, @mentions and #tickets supported)",
@@ -650,6 +661,7 @@ QtObject {
             "people.title": "People to talk to",
             "people.empty": "Nothing pending on anyone",
             "people.badge": "%1 pending · %2",
+            "people.badge.pending": "%1 pending",
             "people.menu.edit": "Edit…",
             "people.menu.cycle": "Cycle state",
             "people.menu.dismiss": "Take off the list",
@@ -658,7 +670,7 @@ QtObject {
             "people.pick.ph": "Search contacts and people…",
             "people.pick.none": "Type a name to add a contact",
             "people.pick.create": "Create contact “%1”",
-            "people.pick.inrail": "ON LIST",
+            "people.pick.inrail": "On list",
             "people.add": "+ Add person",
             "people.todo": "To talk",
             "people.done": "Talked",
@@ -671,7 +683,15 @@ QtObject {
             "docs.noMatches": "Nothing in the docs matches “%1”",
             "docs.search.clear": "Clear search",
             "docs.header": "Docs · spec & references",
-            "docs.counts": "%1 entries · %2 snippets · %3 contacts",
+            "plural.entry.one": "entry",
+            "plural.entry.few": "entries",
+            "plural.entry.many": "entries",
+            "plural.snippet.one": "snippet",
+            "plural.snippet.few": "snippets",
+            "plural.snippet.many": "snippets",
+            "plural.contact.one": "contact",
+            "plural.contact.few": "contacts",
+            "plural.contact.many": "contacts",
             "docs.snippets": "Snippets",
             "docs.contacts": "Contacts & channels",
             "docs.nav.contacts": "Contacts",
@@ -817,7 +837,7 @@ QtObject {
             "settings.groups": "%1 groups · %2",
             "settings.footer.stable": "heap. · %1 · stable",
             "settings.crumb": "Settings / %1",
-            "settings.debug.label": "DEBUG",
+            "settings.debug.label": "Debug",
             "settings.debug.showUnimpl": "Show unimplemented",
             "settings.notImpl.title": "△ Not implemented",
             "settings.notImpl.body": "Settings in this section have no effect yet. They are shown for preview — switches are disabled in every build.",
@@ -834,11 +854,24 @@ QtObject {
             "settings.section.safety.sub": "Gentle, opt-in heads-ups. All off by default.",
             "settings.safety.group.endOfDay": "End of day",
             "settings.safety.endOfDay": "Wrap-up check",
-            "settings.safety.endOfDay.hint": "Once a day: a running timer, uncommitted work in the current branch's repo, tasks in progress that have stopped moving.",
+            "settings.safety.endOfDay.hint": "Once a day: what was closed, what carries over to tomorrow, running timers, uncommitted work in the current branch's repo, tasks in progress that have stopped moving. It only shows; nothing is moved.",
             "settings.safety.endOfDayTime": "At",
             "settings.safety.staleDays": "In progress without a move for",
             "settings.safety.time.invalid": "Use HH:MM, e.g. 18:00",
             "safety.show": "Show",
+            "sync.show": "Show",
+            "topbar.syncing": "Syncing",
+            "topbar.syncing.tip": "A sync is running — click for the integrations' status",
+            "eventLog.title": "Event log",
+            "eventLog.note": "What the notices said this session, newest first. Open an entry to go to what it is about.",
+            "eventLog.empty": "Nothing yet. Syncs, refusals and errors show up here, so a missed notice can be read again.",
+            "eod.open": "Day summary",
+            "eod.title": "End of day · %1",
+            "eod.closed": "Closed today",
+            "eod.carryOver": "Carries over to tomorrow",
+            "eod.timers": "Timers running",
+            "eod.since": "since %1",
+            "eod.empty": "Nothing closed today, nothing dated for today or earlier, no timer running.",
             "settings.safety.group.waiting": "Waiting on a reply",
             "settings.safety.waiting": "Remind me who I'm waiting on",
             "settings.safety.waiting.hint": "Link a task to the person whose answer it needs. One gentle reminder if they haven't replied; marking them replied ends the wait.",
@@ -851,6 +884,7 @@ QtObject {
             "waiting.clear": "Got the answer",
             "waiting.pickTitle": "Who are you waiting on?",
             "waiting.chip": "waiting: %1 · %2d",
+            "waiting.chip.card": "waiting %1d",
             "settings.safety.group.seen": "Seen it before",
             "settings.safety.seen": "Recognise familiar errors",
             "settings.safety.seen.hint": "When an error or stack trace lands in quick capture, a description or search, look for it in your notes, docs and tasks and quietly say where it came up. Local only.",
@@ -870,6 +904,7 @@ QtObject {
             "settings.safety.standup": "Standup draft",
             "settings.safety.standup.hint": "A “Yesterday / Today / Blockers” draft from column moves, commits, the timer, meetings and blocked cards — in the palette and the weekly recap. You edit and copy it; nothing is sent.",
             "palette.cmd.standupDraft": "Standup draft",
+            "palette.cmd.endOfDay": "End of day: today's summary",
             "standup.open": "Standup draft",
             "standup.title": "Standup draft",
             "standup.note": "Built from what heap saw. Edit it, then copy — nothing is sent anywhere.",
@@ -1022,12 +1057,23 @@ QtObject {
             "theme.token.mdHighlight": "Highlight",
             "settings.appearance.reducedMotion": "Reduced motion",
             "settings.appearance.reducedMotion.hint": "Turns off animations and smooth transitions. On from the start when the system asks for less motion.",
-            "settings.appearance.completionSound": "Completion sound",
-            "settings.appearance.completionSound.hint": "A short click when a task moves to Done.",
+            "settings.sound.group": "Sound",
+            "settings.sound.enabled": "Sounds",
+            "settings.sound.enabled.hint": "Low, muffled: a task closed, an undo, a refused action. Never on navigation or typing; silent during “Do not disturb” and focus mode.",
+            "settings.sound.volume": "Volume",
+            "settings.sound.meeting": "Before a meeting",
+            "settings.sound.meeting.hint": "Two chords, then a rise, then a call at the last moment. Not for a meeting already under way or one you snoozed.",
+            "settings.sound.meetingMinutes": "Minutes before",
+            "settings.sound.meetingMinutes.hint": "Up to three moments, comma-separated.",
+            "settings.sound.meetingMinutes.invalid": "Up to three numbers from 1 to 120, comma-separated.",
             "settings.appearance.scale": "Scale",
             "settings.appearance.scale.hint": "Text and spacing across the app, applied at once.",
+            "settings.appearance.scale.system": "Follows the system text size until you pick a scale here.",
             "toast.uiScale": "Scale %1%",
             "settings.appearance.contrast": "Contrast",
+            "settings.appearance.cursorColor": "Cursor colour",
+            "settings.appearance.cursorColor.hint": "The ring around whatever the keyboard is on: a card, a field, a menu row.",
+            "settings.appearance.cursorColor.accent": "Theme accent",
             "settings.appearance.contrast.hint": "Soft: hairline borders, quieter panels and muted colour, over any theme. High: stronger text and borders.",
             "settings.appearance.contrast.soft": "Soft",
             "settings.appearance.contrast.normal": "Normal",
@@ -1278,7 +1324,7 @@ QtObject {
             "siderail.saved.moveUp": "Move up   Ctrl+↑",
             "siderail.saved.moveDown": "Move down   Ctrl+↓",
             "siderail.saved.delete": "Delete   Del",
-            "filter.saveView": "Save view…",
+            "filter.saveView": "Save view",
             "filter.saveViewTip": "Keep these filters as a view in the sidebar — Alt+1…9 applies one",
             "filter.viewModified": "%1 · modified",
             "filter.leaveView": "Stop following this view (the filters stay as they are)",
@@ -1579,7 +1625,7 @@ QtObject {
             "welcome.skip": "Пропустить",
             "welcome.back": "Назад",
             "welcome.next": "Далее",
-            "welcome.learnMore": "Подробнее →",
+            "welcome.learnMore": "Подробнее",
             "welcome.resume": "Продолжить тур",
             "welcome.giveUp": "Завершить тур",
             "welcome.replay": "Пройти тур заново",
@@ -1704,7 +1750,7 @@ QtObject {
             "archive.selectAll": "Выделить все",
             "archive.restoreSelected": "Вернуть выделенные",
             "archive.empty.title": "Архив пуст",
-            "archive.empty.hint": "Тикеты, отправленные в архив, появятся здесь. Множественный выбор + «Вернуть».",
+            "archive.empty.hint": "Здесь появляются задачи из архива. На доске %1 отправляет в архив задачу под курсором.",
 
             "filter.all": "Все",
             "filter.mine": "Мои",
@@ -1722,7 +1768,6 @@ QtObject {
             "filter.sort.title": "Название",
             "filter.sort.id": "По ID",
             "filter.sort.reverse": "Обратный порядок",
-            "filter.label": "Фильтры:",
             "filter.clear": "сбросить",
             "filter.counts": "%1 задач · %2 в работе · %3 заблокировано · %4 на ревью",
 
@@ -1734,14 +1779,23 @@ QtObject {
             "board.sorted.noReorder": "Доска отсортирована — чтобы менять порядок карточек, включите сортировку «Вручную»",
             "board.empty.title": "Пока нет задач",
             "board.empty.hint": "Нажмите %1, чтобы добавить первую задачу, или откройте быстрый ввод (%2).",
-            "day.noEvents": "Событий сегодня нет — потяни пустой слот, чтобы создать, или брось задачу для планирования.",
-            "week.noEvents": "Событий на этой неделе нет — переключись на День и потяни, чтобы создать.",
+            "day.noEvents": "Событий нет. Протяните по свободному времени, чтобы создать событие, или перетащите сюда задачу.",
+            "week.empty.title": "На этой неделе пусто",
+            "week.empty.hint": "Здесь появляются задачи с датой и события. Кликните по свободному месту, чтобы добавить событие, или нажмите %1 для задачи.",
+            "month.empty.title": "В этом месяце пусто",
+            "month.empty.hint": "Задачи с датой и события появляются в своём дне. Нажмите %1, чтобы добавить задачу.",
+            "view.empty.noMatch.title": "По поиску ничего не найдено",
+            "view.empty.noMatch.hint": "Сбросьте поиск или фильтры, чтобы снова видеть всё.",
+            "docs.empty.hint": "Здесь лежат спеки, сниппеты и контакты, которые нужны под рукой. Добавьте запись кнопкой «+ Добавить» в секции или начните секцию через «+ Новая секция».",
+            "docs.noMatches.hint": "Ищет по названиям, тегам и ссылкам. Попробуйте меньше слов.",
             "kanban.dropHere": "Перетащите сюда",
             "kanban.deleteColumn": "Удалить колонку",
             "kanban.wip.set": "Лимит незавершённого…",
             "kanban.wip.title": "Лимит для %1",
             "kanban.wip.hint": "0 — без лимита. При превышении счётчик краснеет, ничего не блокируется.",
             "kanban.wip.over": "%1: превышен лимит %2",
+            "kanban.hiddenColumns": "Колонок справа: %1",
+            "kanban.hiddenColumns.tip": "Прокрутите доску вправо, чтобы их увидеть",
             "kanban.archive.set": "Автоархив…",
             "kanban.archive.title": "Автоархив: %1",
             "kanban.archive.hint": "Через сколько дней в этой колонке карточка уходит в архив. 0 — никогда.",
@@ -2016,7 +2070,6 @@ QtObject {
             "timeline.later": "Позже",
             "timeline.nodl": "Без дедлайна",
             "timeline.noDate": "Без даты",
-            "timeline.subtitle": "%1 · сегодня %2",
             "timeline.showDone": "Показывать сделанные",
             "timeline.bucket.overdue": "Просрочено",
             "timeline.bucket.today": "Сегодня",
@@ -2025,9 +2078,9 @@ QtObject {
             "timeline.bucket.nextweek": "На следующей неделе",
             "timeline.bucket.later": "Позже",
             "timeline.bucket.nodl": "Без дедлайна",
-            "week.number": "НЕДЕЛЯ %1",
+            "week.number": "Неделя %1",
             "week.summary": "%1 · %2",
-            "week.todayBadge": "СЕГОДНЯ",
+            "week.todayBadge": "Сегодня",
             "week.more": "+ ещё %1",
             "timeline.title": "Лента · по дедлайнам",
             "timeline.empty.title": "Нет задач по фильтрам.",
@@ -2047,13 +2100,13 @@ QtObject {
             "day.newEvent": "+ Новое событие",
             "day.dragHint": "Перетащите пустую область, чтобы создать событие, или задачу, чтобы запланировать её",
             "day.dragHint.short": "перетащите, чтобы спланировать",
-            "people.label.title": "КОМУ НАПИСАТЬ",
+            "people.label.title": "Кому написать",
             "people.tip.add": "Кому написать",
             "people.tip.edit": "Редактировать",
-            "people.state.idle.tag": "НЕЙТР",
-            "people.state.todo.tag": "НАПИСАТЬ",
-            "people.state.pinged.tag": "НАПИСАЛ",
-            "people.state.replied.tag": "ОТВЕТИЛ",
+            "people.state.idle.tag": "Нейтр.",
+            "people.state.todo.tag": "Написать",
+            "people.state.pinged.tag": "Написал",
+            "people.state.replied.tag": "Ответил",
             "people.tip.cycle": "написать → написал → ответил → убрать",
             "notes.legend": "Markdown · @ — контакты · # — тикеты",
             "notes.placeholderBody": "Начните писать заметку…  (поддерживается markdown, @упоминания и #тикеты)",
@@ -2077,6 +2130,7 @@ QtObject {
             "people.title": "С кем поговорить",
             "people.empty": "Никому писать не нужно",
             "people.badge": "%1 в ожидании · %2",
+            "people.badge.pending": "%1 в ожидании",
             "people.menu.edit": "Редактировать…",
             "people.menu.cycle": "Сменить статус",
             "people.menu.dismiss": "Убрать из списка",
@@ -2085,7 +2139,7 @@ QtObject {
             "people.pick.ph": "Поиск по контактам и людям…",
             "people.pick.none": "Введите имя, чтобы добавить контакт",
             "people.pick.create": "Создать контакт «%1»",
-            "people.pick.inrail": "В СПИСКЕ",
+            "people.pick.inrail": "В списке",
             "people.add": "+ Добавить человека",
             "people.todo": "Позвонить",
             "people.done": "Поговорили",
@@ -2097,7 +2151,15 @@ QtObject {
             "docs.noMatches": "В доках ничего не нашлось по запросу «%1»",
             "docs.search.clear": "Сбросить поиск",
             "docs.header": "Доки · спеки и справочники",
-            "docs.counts": "%1 записей · %2 сниппетов · %3 контактов",
+            "plural.entry.one": "запись",
+            "plural.entry.few": "записи",
+            "plural.entry.many": "записей",
+            "plural.snippet.one": "сниппет",
+            "plural.snippet.few": "сниппета",
+            "plural.snippet.many": "сниппетов",
+            "plural.contact.one": "контакт",
+            "plural.contact.few": "контакта",
+            "plural.contact.many": "контактов",
             "docs.snippets": "Сниппеты",
             "docs.contacts": "Контакты и каналы",
             "docs.nav.contacts": "Контакты",
@@ -2242,7 +2304,7 @@ QtObject {
             "settings.groups": "%1 групп · %2",
             "settings.footer.stable": "heap. · %1 · стабильная",
             "settings.crumb": "Настройки / %1",
-            "settings.debug.label": "DEBUG",
+            "settings.debug.label": "Debug",
             "settings.debug.showUnimpl": "Показать нереализованные",
             "settings.notImpl.title": "△ Не реализовано",
             "settings.notImpl.body": "Настройки этой секции пока без эффекта. Они отображены для предварительного просмотра — переключатели заблокированы во всех сборках.",
@@ -2259,11 +2321,24 @@ QtObject {
             "settings.section.safety.sub": "Мягкие подсказки по желанию. Всё выключено по умолчанию.",
             "settings.safety.group.endOfDay": "Конец дня",
             "settings.safety.endOfDay": "Проверка перед уходом",
-            "settings.safety.endOfDay.hint": "Раз в день: идущий таймер, незакоммиченное в репозитории текущей ветки, задачи в работе без движения.",
+            "settings.safety.endOfDay.hint": "Раз в день: что закрыто, что переходит на завтра, идущие таймеры, незакоммиченное в репозитории текущей ветки, задачи в работе без движения. Только показывает, ничего не переносит.",
             "settings.safety.endOfDayTime": "Во сколько",
             "settings.safety.staleDays": "В работе без движения",
             "settings.safety.time.invalid": "Формат ЧЧ:ММ, например 18:00",
             "safety.show": "Показать",
+            "sync.show": "Показать",
+            "topbar.syncing": "Синхронизация",
+            "topbar.syncing.tip": "Идёт синхронизация — нажмите, чтобы открыть статус интеграций",
+            "eventLog.title": "Журнал событий",
+            "eventLog.note": "Что говорили уведомления в этом сеансе, новые сверху. Откройте запись, чтобы перейти к её объекту.",
+            "eventLog.empty": "Пока пусто. Сюда попадают синхронизации, отказы и ошибки — пропущенное уведомление можно прочитать снова.",
+            "eod.open": "Итог дня",
+            "eod.title": "Конец дня · %1",
+            "eod.closed": "Закрыто сегодня",
+            "eod.carryOver": "Переходит на завтра",
+            "eod.timers": "Идут таймеры",
+            "eod.since": "с %1",
+            "eod.empty": "Сегодня ничего не закрыто, на сегодня и раньше ничего не назначено, таймеры не идут.",
             "settings.safety.group.waiting": "Жду ответа",
             "settings.safety.waiting": "Напоминать, чьего ответа жду",
             "settings.safety.waiting.hint": "Свяжите задачу с человеком, от которого ждёте ответа. Одно мягкое напоминание, если он молчит; отметка «ответил» снимает ожидание.",
@@ -2276,6 +2351,7 @@ QtObject {
             "waiting.clear": "Ответили",
             "waiting.pickTitle": "Чьего ответа ждёте?",
             "waiting.chip": "ждёт: %1 · %2д",
+            "waiting.chip.card": "ждёт ответа %1д",
             "settings.safety.group.seen": "Уже встречалось",
             "settings.safety.seen": "Узнавать знакомые ошибки",
             "settings.safety.seen.hint": "Если в быстрый ввод, описание или поиск попадает ошибка или стектрейс, heap поищет её в ваших заметках, документах и задачах и тихо подскажет, где она уже встречалась. Только локально.",
@@ -2295,6 +2371,7 @@ QtObject {
             "settings.safety.standup": "Черновик стендапа",
             "settings.safety.standup.hint": "Черновик «Вчера / Сегодня / Блокеры» из перемещений по колонкам, коммитов, таймера, встреч и заблокированных задач — в палитре и в сводке недели. Вы правите и копируете; ничего не отправляется.",
             "palette.cmd.standupDraft": "Черновик стендапа",
+            "palette.cmd.endOfDay": "Конец дня: итог дня",
             "standup.open": "Черновик стендапа",
             "standup.title": "Черновик стендапа",
             "standup.note": "Собрано из того, что видел heap. Поправьте и скопируйте — никуда не отправляется.",
@@ -2445,12 +2522,23 @@ QtObject {
             "theme.token.mdHighlight": "Выделение",
             "settings.appearance.reducedMotion": "Меньше анимаций",
             "settings.appearance.reducedMotion.hint": "Отключает анимации и плавные переходы. Включено сразу, если так настроена система.",
-            "settings.appearance.completionSound": "Звук завершения",
-            "settings.appearance.completionSound.hint": "Короткий щелчок, когда задача уходит в Готово.",
+            "settings.sound.group": "Звук",
+            "settings.sound.enabled": "Звуки",
+            "settings.sound.enabled.hint": "Низкие и глухие: задача закрыта, отмена, отказ. Никогда при навигации и вводе; молчат в «Не беспокоить» и в режиме погружения.",
+            "settings.sound.volume": "Громкость",
+            "settings.sound.meeting": "Сигналы перед встречей",
+            "settings.sound.meeting.hint": "Два аккорда, затем подъём, затем оклик в последний момент. Не для встречи, которая уже идёт, и не после «Отложить».",
+            "settings.sound.meetingMinutes": "За сколько минут",
+            "settings.sound.meetingMinutes.hint": "До трёх моментов через запятую.",
+            "settings.sound.meetingMinutes.invalid": "До трёх чисел от 1 до 120 через запятую.",
             "settings.appearance.scale": "Масштаб",
             "settings.appearance.scale.hint": "Текст и отступы во всём приложении, сразу.",
+            "settings.appearance.scale.system": "Как размер текста в системе, пока здесь не выбран свой.",
             "toast.uiScale": "Масштаб %1 %",
             "settings.appearance.contrast": "Контраст",
+            "settings.appearance.cursorColor": "Цвет курсора",
+            "settings.appearance.cursorColor.hint": "Рамка вокруг того, на чём сейчас клавиатура: карточки, поля, строки меню.",
+            "settings.appearance.cursorColor.accent": "Акцент темы",
             "settings.appearance.contrast.hint": "Мягкий: тонкие границы, спокойные панели и приглушённый цвет — поверх любой темы. Высокий: ярче текст и границы.",
             "settings.appearance.contrast.soft": "Мягкий",
             "settings.appearance.contrast.normal": "Обычный",
@@ -2691,7 +2779,7 @@ QtObject {
             "siderail.saved.moveUp": "Выше   Ctrl+↑",
             "siderail.saved.moveDown": "Ниже   Ctrl+↓",
             "siderail.saved.delete": "Удалить   Del",
-            "filter.saveView": "Сохранить вид…",
+            "filter.saveView": "Сохранить вид",
             "filter.saveViewTip": "Сохраните эти фильтры как вид на боковой панели — Alt+1…9 применяет его",
             "filter.viewModified": "%1 · изменён",
             "filter.leaveView": "Перестать следовать этому виду (фильтры останутся как есть)",
@@ -2870,8 +2958,8 @@ QtObject {
 
     function t(key) {
         const table = dict[lang] || dict.en;
-        if (table[key] !== undefined) return table[key];
-        if (dict.en[key] !== undefined) return dict.en[key];
+        if (table[key] !== undefined) return pseudo ? Pseudo.pseudo(table[key]) : table[key];
+        if (dict.en[key] !== undefined) return pseudo ? Pseudo.pseudo(dict.en[key]) : dict.en[key];
         return key;
     }
 
@@ -2893,6 +2981,12 @@ QtObject {
     function tasks(n)     { return n + " " + _plural(n, t("plural.task.one"),     t("plural.task.few"),     t("plural.task.many")); }
     function events(n)    { return n + " " + _plural(n, t("plural.event.one"),    t("plural.event.few"),    t("plural.event.many")); }
     function deadlines(n) { return n + " " + _plural(n, t("plural.deadline.one"), t("plural.deadline.few"), t("plural.deadline.many")); }
+    // Docs header: "31 entries · 5 snippets · 6 contacts", each counted on its own.
+    function docsCounts(entries, snippets, contacts) {
+        return [entries + " " + _plural(entries, t("plural.entry.one"), t("plural.entry.few"), t("plural.entry.many")),
+                snippets + " " + _plural(snippets, t("plural.snippet.one"), t("plural.snippet.few"), t("plural.snippet.many")),
+                contacts + " " + _plural(contacts, t("plural.contact.one"), t("plural.contact.few"), t("plural.contact.many"))].join(" · ");
+    }
 
     // ── Dates ────────────────────────────────────────────────────────
     // Calendars used to pull names from three different places — a hardcoded
@@ -2907,6 +3001,26 @@ QtObject {
     // dependency — the day header stayed English after switching to Russian.
     function relang(s) { return lang === "ru" ? s : String(s); }
 
+    // A date as the UI shows it, in a named style from the one table in
+    // src/text/LocaleFormat.h: "dayMonth" (Oct 6 / 6 окт.), "dayMonthYear",
+    // "weekdayDay" (Tue, Oct 6 / вт, 6 окт.), "longDay", "longWeekday"…
+    // Never a pattern of its own: a literal "d MMM" reads wrong in English,
+    // and .github/scripts/date_format_check.py fails the build on one.
+    function fmtDate(d, style) {
+        if (!d || !d.getTime || isNaN(d.getTime())) return "";
+        return d.toLocaleDateString(locale, AppController.datePattern(style || "dayMonth", lang));
+    }
+    // The clock part: the 12h / 24h setting decides, not the language.
+    function fmtTime(d) {
+        if (!d || !d.getTime || isNaN(d.getTime())) return "";
+        return Theme.fmtHour(d.getHours() + d.getMinutes() / 60);
+    }
+    // "Oct 6, 15:15" / "6 окт., 15:15".
+    function fmtDateTime(d, style) {
+        const day = fmtDate(d, style);
+        return day.length > 0 ? day + ", " + fmtTime(d) : "";
+    }
+
     // Month 0..11, standalone form ("сентябрь", not "сентября").
     function monthName(month) {
         return locale.standaloneMonthName(month, Locale.LongFormat);
@@ -2914,9 +3028,5 @@ QtObject {
     // JS day-of-week 0..6 (0 = Sunday), short form: "Mon" / "пн".
     function dayName(jsDow) {
         return locale.standaloneDayName(jsDow, Locale.ShortFormat);
-    }
-    // Same, upper-cased for the column strips ("MON" / "ПН").
-    function dayNameUpper(jsDow) {
-        return dayName(jsDow).toUpperCase();
     }
 }

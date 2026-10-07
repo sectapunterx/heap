@@ -27,12 +27,7 @@ Popup {
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     width: 252
 
-    background: Rectangle {
-        radius: Theme.radius
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: PopupSurface {}
 
     function _hex(c) {
         const h2 = (n) => ("0" + Math.round(n * 255).toString(16)).slice(-2);

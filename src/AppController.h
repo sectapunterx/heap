@@ -5,6 +5,7 @@
 #include "board/Rank.h"
 #include "history/TaskHistory.h"
 #include "integrations/SyncHealth.h"
+#include "notify/EventLog.h"
 #include "notify/NotifyPayload.h"
 #include "safety/EndOfDay.h"
 #include "undo/UndoStack.h"
@@ -107,6 +108,7 @@ class AppController : public QObject {
   Q_PROPERTY(QString theme READ theme WRITE setTheme NOTIFY themeChanged)
   Q_PROPERTY(QString density READ density WRITE setDensity NOTIFY densityChanged)
   Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)
+  Q_PROPERTY(bool pseudoLocale READ pseudoLocale CONSTANT)
   Q_PROPERTY(QString currentView READ currentView WRITE setCurrentView NOTIFY currentViewChanged)
   Q_PROPERTY(QString focusedStatus READ focusedStatus NOTIFY focusedStatusChanged)
 
@@ -173,6 +175,17 @@ class AppController : public QObject {
   // — the card stays connected. `outOfScope` counts cards left behind by a
   // filter change (repo, JQL…), which the card offers to archive.
   Q_PROPERTY(QVariantMap integrationStates READ integrationStates NOTIFY integrationStatesChanged)
+  // A tracker or directory pull is out and has not answered yet (APP-186).
+  // The header shows it only once it has taken long enough to notice.
+  Q_PROPERTY(bool syncing READ syncing NOTIFY syncingChanged)
+  // Cards a sync brought in that the user has not looked at yet (APP-180):
+  // read isTaskUnseen(id) with this in the binding, so a card follows.
+  Q_PROPERTY(int unseenRevision READ unseenRevision NOTIFY unseenTasksChanged)
+  // The cards the latest sync brought in, which `is:new` filters to.
+  Q_PROPERTY(QStringList syncNewTaskIds READ syncNewTaskIds NOTIFY syncNewTaskIdsChanged)
+  // The event log (APP-187), newest first: { id, at, kind, message, taskIds,
+  // route, count }. This session only, at most 100 entries.
+  Q_PROPERTY(QVariantList eventLog READ eventLog NOTIFY eventLogChanged)
 
   // ---- Git focus banner ----
   Q_PROPERTY(QString focusedTaskId READ focusedTaskId NOTIFY focusedGitChanged)
@@ -209,11 +222,15 @@ class AppController : public QObject {
   }
 
   // `heap done` sent to the open window goes through moveTask() like a drag
-  // does. The CLI executor mutes the completion sound (APP-167) around it:
-  // only the user's own action in this window ticks.
-  void setCompletionSoundMuted(bool muted) {
-    m_completionSoundMuted = muted;
+  // does. The CLI executor mutes the sound palette (APP-177) around it: only
+  // the user's own action in this window makes a sound.
+  void setSoundMuted(bool muted) {
+    m_soundMuted = muted;
   }
+
+  // Settings → Sound: the "done" sound once at `volume` (0–100), so the user
+  // hears what the slider set. Asked for, so quiet hours do not hold it.
+  Q_INVOKABLE void previewSound(int volume);
 
   Q_INVOKABLE void flushSave();
 
@@ -277,6 +294,12 @@ class AppController : public QObject {
 
   QString language() const {
     return m_language;
+  }
+
+  // HEAP_LANG=pseudo: the UI in a stretched, accented English (APP-189), to
+  // find text cut short by a fixed width. For development; no setting.
+  bool pseudoLocale() const {
+    return qEnvironmentVariable("HEAP_LANG") == QLatin1String("pseudo");
   }
 
   void setLanguage(const QString& v);
@@ -596,6 +619,39 @@ class AppController : public QObject {
   // language. Read-only.
   Q_INVOKABLE QVariantList integrationHealth() const;
   QVariantList integrationHealthAt(const QDateTime& now) const;
+
+  // ---- Sync visibility (APP-180/186/187) ----
+  bool syncing() const {
+    return !m_syncInFlight.isEmpty();
+  }
+
+  int unseenRevision() const {
+    return m_unseenRevision;
+  }
+
+  QStringList syncNewTaskIds() const {
+    return m_syncNewIds;
+  }
+
+  // A card a sync brought in, not yet opened or reached by the cursor.
+  Q_INVOKABLE bool isTaskUnseen(const QString& taskId) const {
+    return m_unseenTaskIds.contains(taskId);
+  }
+
+  // Opened, or the keyboard cursor landed on it: the dot goes.
+  Q_INVOKABLE void markTaskSeen(const QString& taskId);
+  // What a pull does for the cards it adds; public so the QML tests can set
+  // the state up the way a sync does.
+  Q_INVOKABLE void markTasksUnseen(const QStringList& taskIds);
+
+  QVariantList eventLog() const {
+    return m_eventLog.toVariantList();
+  }
+
+  // Adds an entry to the event log. QML uses it for the failures it reports
+  // itself (an import that did not read); everything C++ reports is logged
+  // where it is said.
+  Q_INVOKABLE void logEvent(const QString& kind, const QString& message, const QStringList& taskIds = {}, const QString& route = QString());
   // What happened to a task, newest first: [{ at, kind, from, to, sync }]
   // (APP-165). kind: created | status | title | priority | due | scheduled
   // | pushed. Capped per task; see history/TaskHistory.h.
@@ -734,6 +790,9 @@ class AppController : public QObject {
     int outOfScope = 0;
     // The keys of the cards behind `conflicts`, so the toast can name them.
     QStringList conflictKeys;
+    // The heap ids of the cards behind `added`, in pull order, so the toast
+    // can name them and "Show" can filter to them (APP-180).
+    QStringList addedIds;
   };
 
   // Fold a batch of pulled external tasks into the model. providerId tags the
@@ -765,6 +824,12 @@ class AppController : public QObject {
   // re-sync does not churn docsState. Public for the same reason as
   // mergeExternalTasks: the rules are worth testing without a live server.
   int mergeExternalContacts(const QString& providerId, const QVector<heap::integrations::ExternalContact>& contacts);
+
+  // The one message for one pull's stats: a toast, an event-log entry and,
+  // when it brought cards, syncNews naming them (APP-180). Quiet when a
+  // follow-up pull found nothing. Public so the wording can be tested
+  // without a live tracker.
+  void reportSync(const QString& label, const MergeStats& stats, bool settlePull);
 
   // ---- Durability audit (HEAP-156) ----
   // Every quarantine / backup recovery / failed write, oldest first. Local file,
@@ -1152,11 +1217,20 @@ class AppController : public QObject {
   Q_INVOKABLE QString eventHourLabel(double hour) const;
   Q_INVOKABLE QString sprintLabel() const;
   Q_INVOKABLE QString humanDate(const QDate& date) const;
+  // Displayed dates in the UI language (APP-188): the pattern of a named
+  // style ("dayMonth", "weekdayDay", "longWeekday"… see text/LocaleFormat.h)
+  // for `lang` (empty = the current one). QML formats through I18n.date(),
+  // which passes its own lang so the binding repaints on a language switch.
+  Q_INVOKABLE QString datePattern(const QString& style, const QString& lang = QString()) const;
+  // "Oct 6" / "6 окт." and "Oct 6, 15:15" — the clock follows the 12h/24h
+  // setting.
+  Q_INVOKABLE QString dateLabel(const QDate& d, const QString& style) const;
+  Q_INVOKABLE QString dateTimeLabel(const QDateTime& dt, const QString& style) const;
 
   // ---- Timeline / week helpers ----
   Q_INVOKABLE QString deadlineBucket(const QDate& deadline) const;  // overdue/today/tomorrow/thisweek/nextweek/later/nodl
   Q_INVOKABLE QString deadlineDiffLabel(const QDate& deadline) const;
-  Q_INVOKABLE QString shortDate(const QDate& d) const;  // "Пт, 15 май"
+  Q_INVOKABLE QString shortDate(const QDate& d) const;  // "Fri, May 15" / "пт, 15 мая"
   Q_INVOKABLE int isoWeekNumber(const QDate& d) const;
 
   // ---- Free-form datetime parser (heap chrono) ----
@@ -1306,6 +1380,10 @@ class AppController : public QObject {
   // `steps` (Theme.scaleSteps), written to settings.appearance.uiScale like
   // Settings → Appearance → Scale does. Returns the new scale.
   Q_INVOKABLE double stepUiScale(int direction, const QVariantList& steps);
+  // The step of `steps` the system's text size asks for (APP-183): what
+  // Theme.scale is while settings.appearance.uiScale is unset. 1.0 under
+  // tests unless HEAP_TEXT_SCALE says otherwise.
+  Q_INVOKABLE double systemUiScale(const QVariantList& steps) const;
   // How the capture hotkey reaches heap from other apps (APP-171): "native"
   // (Windows, macOS), "x11", "portal" (Wayland), or "none" — then Settings
   // says to bind `heap --capture` in the desktop's own keyboard settings.
@@ -1457,6 +1535,13 @@ class AppController : public QObject {
   // shows its buttons as busy until this arrives and keeps the last error on
   // screen, since the toast is gone in a few seconds (design audit DES-5).
   void integrationActionFinished(const QString& providerId, const QString& action, bool ok, const QString& message);
+  // A sync brought new cards (APP-180): the toast names them and offers to
+  // show them. One per pull, instead of the plain toast.
+  void syncNews(const QString& message, const QStringList& taskIds);
+  void syncingChanged();
+  void unseenTasksChanged();
+  void syncNewTaskIdsChanged();
+  void eventLogChanged();
   // Raised whenever the keychain contents change — on the async load at startup
   // and after every write. integrationSecret() is a plain Q_INVOKABLE (secrets
   // are not properties), so QML re-reads it by binding to this signal.
@@ -1511,6 +1596,8 @@ class AppController : public QObject {
   void runAutomation();
 
  private:
+  // settings.calendar.timeFormat == "12h".
+  bool twelveHourClock() const;
   // `base` if no task holds it, else "base-2", "base-3", … Two pulled issues
   // can want the same id (the same number from two repos), and upsert on a
   // colliding id replaces the other task rather than adding one.
@@ -1563,11 +1650,18 @@ class AppController : public QObject {
   QHash<QString, QString> m_pendingPushes;
   // Non-zero while a bulk move runs moveTask per card: one toast for the lot.
   int m_bulkMoveDepth = 0;
-  // Completion sound (APP-167): muted for CLI requests; a bulk move to Done
-  // ticks once when the loop ends, not once per card.
-  bool m_completionSoundMuted = false;
-  bool m_completionSoundPending = false;
+  // Sound palette (APP-177): muted for CLI requests; a bulk move plays one
+  // sound when the loop ends, not one per card — "done" if anything closed,
+  // else "refuse" if a card was refused. -1: nothing pending.
+  bool m_soundMuted = false;
+  int m_soundPending = -1;
   void completionSoundOnMove_(const QString& fromStatus, const QString& toStatus);
+  // Plays `cue` (a heap::platform::SoundCue) if the Sound settings, quiet
+  // hours (judged at `at`, the wall clock when invalid), focus mode and the
+  // system allow it.
+  void playSound_(int cue, const QDateTime& at = QDateTime());
+  // The meeting chimes due at `now` (APP-178): one melody per tick at most.
+  void meetingChimesAt(const QDateTime& now);
   // Providers already asked for their full status list this session.
   QSet<QString> m_statusesAsked;
   // Providers whose next tasksFetched answers a quiet follow-up pull.
@@ -1581,9 +1675,6 @@ class AppController : public QObject {
   };
 
   QHash<QString, PendingSyncReport> m_pendingLookups;
-  // The sync toast for one pull's stats; quiet when a follow-up pull found
-  // nothing.
-  void reportSync(const QString& label, const MergeStats& stats, bool settlePull);
 
   // `notesState` must always belong to a note. Text that arrives with no note
   // open — typed into an empty editor, or captured with Ctrl+Shift+N — becomes
@@ -1629,6 +1720,10 @@ class AppController : public QObject {
   // The palette rows for one profile's notes and doc pages (see searchFullText).
   QVariantList fullTextEntries(const Profile& p) const;
   QString m_appSettingsJson;
+  // The profile's language while HEAP_LANG=pseudo shows English (APP-189).
+  QString m_languageUnderPseudo;
+  // heap::platform::systemTextScale(), read on first use (APP-183).
+  mutable double m_systemTextScale = 0;
   // settingsMap()'s parse cache, keyed on the string above so that no writer
   // of it has to remember to invalidate anything.
   mutable QString m_settingsCacheSource;
@@ -2127,6 +2222,26 @@ class AppController : public QObject {
   // When each tracker last answered and how its last failure read (APP-164).
   // This session only: a restart starts the page over.
   QHash<QString, heap::integrations::ProviderHealth> m_syncHealth;
+  // ---- Sync visibility (APP-180/186/187) ----
+  // Pulls out right now, by provider id, each with the serial of its start:
+  // a pull that never answers is let go after kSyncWatchdogMs.
+  QHash<QString, int> m_syncInFlight;
+  int m_syncStartSerial = 0;
+  void setSyncInFlight(const QString& providerId, bool inFlight);
+  QSet<QString> m_unseenTaskIds;
+  int m_unseenRevision = 0;
+  // `is:new`: the cards of the latest sync that brought any. A sync run
+  // (Sync now, one card's sync, an auto-sync tick) starts a new set; the
+  // pulls inside it, a Jira follow-up included, add to it.
+  QStringList m_syncNewIds;
+  int m_syncRunSerial = 0;
+  int m_syncNewSerial = -1;
+  void noteSyncAdded(const QStringList& ids, bool markUnseen);
+  heap::notify::EventLog m_eventLog;
+  // Set while a toast that was already logged with more to it (the tasks or
+  // the place it is about) goes out, so the plain toast hook skips it.
+  bool m_eventLogMuted = false;
+  void toastAndLog(const QString& message, const QString& kind, const QStringList& taskIds = {}, const QString& route = QString());
   // Task history (APP-165). Saved as the root key "taskHistory" of state.json.
   heap::history::TaskHistory m_history;
   // True while a tracker pull is the one changing tasks.
@@ -2243,9 +2358,18 @@ class AppController : public QObject {
   // and the blocked cards. Text for the user to edit; nothing is sent.
   Q_INVOKABLE QString standupDraft();
   QString standupDraftFor(const QDate& today);
+  // The day's summary (APP-190) for the end-of-day dialog: { date,
+  // closed: [{id, title}], carryOver: [{id, title}], timers: [{id, title,
+  // since}] }. Closed today and still-open work dated today or earlier come
+  // from the active workspace; running timers from every workspace. It only
+  // reads. The *At form takes `now`, for tests.
+  Q_INVOKABLE QVariantMap endOfDaySummary() const;
+  Q_INVOKABLE QVariantMap endOfDaySummaryAt(const QDateTime& now) const;
   // What the end-of-day check reads from the workspace at `now`; the
   // repository part is filled in by git, asynchronously.
   heap::safety::EndOfDayFacts endOfDayFacts() const;
+  // The tasks the day's summary reads (APP-190).
+  QVector<heap::safety::DayTask> dayTasks() const;
 
  signals:
   // A safety-net notice for the in-app toast. `taskIds` are the tasks its

@@ -20,9 +20,7 @@ Popup {
     x: root.standalone ? Math.round((root.parent.width - root.width) / 2) : 0
     y: root.standalone ? Theme.sp2xl : 0
 
-    Overlay.modal: Rectangle {
-        color: Theme.scrim
-    }
+    Overlay.modal: ModalScrim {}
 
     // What was just created, for the confirmation the owner shows: a toast in
     // the app, an OS notification when captured from outside it. `taskId` is
@@ -147,9 +145,9 @@ Popup {
         const diff = Math.round((day - today) / 86400000);
         const rel = ["quick.day.yesterday", "quick.day.today", "quick.day.tomorrow",
                      "quick.day.afterTomorrow"][diff + 1];
-        let out = rel ? I18n.t(rel) + ", " + d.toLocaleDateString(I18n.locale, "ddd d MMM")
-                      : d.toLocaleDateString(I18n.locale, "dddd, d MMMM");
-        if (hasTime) out += ", " + d.toLocaleTimeString(I18n.locale, "HH:mm");
+        let out = rel ? I18n.t(rel) + ", " + I18n.fmtDate(d, "weekdayDay")
+                      : I18n.fmtDate(d, "longWeekday");
+        if (hasTime) out += ", " + I18n.fmtTime(d);
         return out;
     }
     function _cap(t) { return t.charAt(0).toUpperCase() + t.slice(1); }
@@ -375,12 +373,7 @@ Popup {
         inputField.forceActiveFocus();
     }
 
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
 
     contentItem: ColumnLayout {
         spacing: Theme.spLg
@@ -391,10 +384,9 @@ Popup {
         Text {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             text: I18n.t("quick.title")
-            color: Theme.textMuted
-            font.pixelSize: Theme.fsXs
-            font.weight: Font.DemiBold
-            font.letterSpacing: 1
+            color: Theme.textDim
+            font.pixelSize: Theme.fsSm
+            font.weight: Theme.fwTitle
         }
 
         TextField {
@@ -500,16 +492,8 @@ Popup {
                         if (!root._preview || !root._preview.ok) return "";
                         const d = root._preview.start;
                         if (!d) return "";
-                        const iso = d.getFullYear() + "-" +
-                            String(d.getMonth() + 1).padStart(2, "0") + "-" +
-                            String(d.getDate()).padStart(2, "0");
-                        if (root._preview.hasTime) {
-                            const hh = String(d.getHours()).padStart(2, "0");
-                            const mm = String(d.getMinutes()).padStart(2, "0");
-                            return iso + " " + hh + ":" + mm;
-
-                        }
-                        return iso;
+                        return root._preview.hasTime ? I18n.fmtDateTime(d, "weekdayDayYear")
+                                                     : I18n.fmtDate(d, "weekdayDayYear");
                     }
                 }
             }

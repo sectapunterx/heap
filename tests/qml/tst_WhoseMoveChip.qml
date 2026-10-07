@@ -15,9 +15,10 @@ TestCase {
 
     Item { id: host; anchors.fill: parent }
 
+    // Cursored: whose move is one of the details under the cursor (APP-179).
     Component {
         id: cardComp
-        TaskCard { width: 360 }
+        TaskCard { width: 360; cursored: true }
     }
 
     function make(fields) {

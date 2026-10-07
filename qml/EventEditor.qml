@@ -17,9 +17,7 @@ Popup {
     anchors.centerIn: Overlay.overlay
 
     // Dimmed backdrop so the underlying app stays visible behind the popup.
-    Overlay.modal: Rectangle {
-        color: Theme.scrim
-    }
+    Overlay.modal: ModalScrim {}
     // A press beside the editor (APP-126); see PopupStack.js.
     Overlay.onPressed: if (PopupStack.isTopmost(root, Overlay.overlay)) root._requestClose()
 
@@ -454,12 +452,7 @@ Popup {
         onActivated: attSuggest.isOpen ? attSuggest.dismiss() : root._requestClose()
     }
 
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
 
     // "This event, this and following, or all events?" — asked whenever an
     // occurrence of a series is saved or deleted, because every wrong answer
@@ -467,10 +460,9 @@ Popup {
     SeriesScopeDialog { id: scopePrompt }
 
     component FieldLabel: Text {
-        color: Theme.textMuted
-        font.pixelSize: Theme.fsXs
-        font.weight: Font.DemiBold
-        font.letterSpacing: 1
+        color: Theme.textDim
+        font.pixelSize: Theme.fsSm
+        font.weight: Theme.fwTitle
     }
     component Field: TextField {
         id: fieldRoot
@@ -490,7 +482,7 @@ Popup {
             text: I18n.t("editor.label.eventTitle")
             color: Theme.text
             font.pixelSize: Theme.fsLg
-            font.weight: Font.DemiBold
+            font.weight: Theme.fwHeading
         }
 
         Rectangle {
@@ -524,7 +516,7 @@ Popup {
         }
 
         FieldLabel {
-            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("common.title").toUpperCase()
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("common.title")
         }
         Field {
             id: titleField
@@ -538,8 +530,8 @@ Popup {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             columns: 2; columnSpacing: Theme.spLg; rowSpacing: Theme.spXs
 
-            FieldLabel { text: I18n.t("editor.label.eventType").toUpperCase() }
-            FieldLabel { text: I18n.t("editor.label.attendees").toUpperCase() }
+            FieldLabel { text: I18n.t("editor.label.eventType") }
+            FieldLabel { text: I18n.t("editor.label.attendees") }
 
             AppComboBox {
                 id: typeBox
@@ -601,10 +593,7 @@ Popup {
                         dismiss();
                     }
 
-                    background: Rectangle {
-                        radius: Theme.radiusMd; color: Theme.panel2
-                        border.color: Theme.borderStrong; border.width: 1
-                    }
+                    background: PopupSurface {}
                     contentItem: ListView {
                         clip: true
                         interactive: false
@@ -675,6 +664,7 @@ Popup {
                         onToggled: root.allDay = checked
                         Accessible.name: I18n.t("editor.label.allDay")
                         indicator: Rectangle {
+                            id: allDayTrack
                             objectName: "event-allday-track"
                             implicitWidth: 36
                             implicitHeight: 20
@@ -685,24 +675,22 @@ Popup {
                             border.color: allDaySwitch.checked ? Theme.accent : Theme.fieldBorder
                             border.width: 1
                             Rectangle {
+                                id: allDayKnob
                                 objectName: "event-allday-knob"
                                 width: 16; height: 16; radius: 8
-                                x: allDaySwitch.checked ? parent.width - width - 2 : 2
+                                x: 2
                                 y: 2
                                 color: Theme.knob
                                 border.color: Theme.fieldBorder
                                 border.width: 1
-                                Behavior on x { NumberAnimation { duration: Theme.scaledMs(90) } }
+                                // Slides by transform, not by x: only transform and opacity
+                                // animate (APP-175).
+                                transform: Translate {
+                                    x: allDaySwitch.checked ? allDayTrack.width - allDayKnob.width - 4 : 0
+                                    Behavior on x { NumberAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
+                                }
                             }
-                            Rectangle {
-                                anchors.fill: parent
-                                anchors.margins: -3
-                                radius: parent.radius + 3
-                                color: "transparent"
-                                border.color: Theme.focusRing
-                                border.width: 2
-                                visible: allDaySwitch.visualFocus
-                            }
+                            FocusRing { visible: allDaySwitch.visualFocus }
                         }
                     }
                     Text {
@@ -716,11 +704,11 @@ Popup {
 
             FieldLabel {
                 visible: !root.allDay
-                text: I18n.t("editor.label.start").toUpperCase()
+                text: I18n.t("editor.label.start")
             }
             FieldLabel {
                 visible: !root.allDay
-                text: I18n.t("editor.label.end").toUpperCase()
+                text: I18n.t("editor.label.end")
             }
 
             Field {
@@ -744,8 +732,8 @@ Popup {
             }
 
             // DATE — the day this event lands on, and the last day it covers.
-            FieldLabel { text: I18n.t("editor.label.date").toUpperCase() }
-            FieldLabel { text: I18n.t("editor.label.endDate").toUpperCase() }
+            FieldLabel { text: I18n.t("editor.label.date") }
+            FieldLabel { text: I18n.t("editor.label.endDate") }
             Rectangle {
                 id: dateBtn
                 Layout.fillWidth: true
@@ -758,7 +746,7 @@ Popup {
                     spacing: Theme.spSm
                     Text {
                         Layout.fillWidth: true
-                        text: root.pickedDate && root.pickedDate.toLocaleDateString ? root.pickedDate.toLocaleDateString(I18n.locale, "ddd, d MMM yyyy") : ""
+                        text: root.pickedDate && root.pickedDate.toLocaleDateString ? I18n.fmtDate(root.pickedDate, "weekdayDayYear") : ""
                         color: Theme.text; font.family: Theme.fontUi; font.features: Theme.tabularNums; font.pixelSize: Theme.fsMd
                     }
                     Rectangle {   // mini calendar glyph
@@ -772,7 +760,7 @@ Popup {
                     objectName: "event-date-pick"
                     label: I18n.t("editor.a11y.dateValue").arg(I18n.t("editor.label.date"))
                                                           .arg(root.pickedDate && root.pickedDate.toLocaleDateString
-                                                               ? root.pickedDate.toLocaleDateString(I18n.locale, "d MMMM yyyy") : "")
+                                                               ? I18n.fmtDate(root.pickedDate, "longDayYear") : "")
                     tip: I18n.t("editor.a11y.pickDate")
                     onActivated: eventDatePicker.openAt(root.pickedDate, dateBtn)
                 }
@@ -807,7 +795,7 @@ Popup {
                     Text {
                         Layout.fillWidth: true
                         text: root.pickedEndDate && root.pickedEndDate.getFullYear
-                            ? root.pickedEndDate.toLocaleDateString(I18n.locale, "ddd, d MMM yyyy")
+                            ? I18n.fmtDate(root.pickedEndDate, "weekdayDayYear")
                             : ""
                         color: Theme.text; font.family: Theme.fontUi; font.features: Theme.tabularNums; font.pixelSize: Theme.fsMd
                     }
@@ -821,7 +809,7 @@ Popup {
                     id: endDateMA
                     label: I18n.t("editor.a11y.dateValue").arg(I18n.t("editor.label.endDate"))
                                                           .arg(root.pickedEndDate && root.pickedEndDate.getFullYear
-                                                               ? root.pickedEndDate.toLocaleDateString(I18n.locale, "d MMMM yyyy") : "")
+                                                               ? I18n.fmtDate(root.pickedEndDate, "longDayYear") : "")
                     tip: I18n.t("editor.a11y.pickDate")
                     onActivated: endDatePicker.openAt(root.pickedEndDate, endDateBtn)
                 }
@@ -836,10 +824,10 @@ Popup {
             }
 
             // REPEAT — the rule, its days and its end.
-            FieldLabel { text: I18n.t("editor.label.repeat").toUpperCase() }
+            FieldLabel { text: I18n.t("editor.label.repeat") }
             FieldLabel {
                 visible: root._kind() !== "never" && root._kind() !== "custom"
-                text: I18n.t("repeat.ends").toUpperCase()
+                text: I18n.t("repeat.ends")
             }
             AppComboBox {
                 id: repeatBox
@@ -897,7 +885,7 @@ Popup {
                     border.color: Theme.border; border.width: 1
                     Text {
                         anchors.centerIn: parent
-                        text: root.untilDate && root.untilDate.getFullYear ? root.untilDate.toLocaleDateString(I18n.locale, "d MMM yyyy") : ""
+                        text: root.untilDate && root.untilDate.getFullYear ? I18n.fmtDate(root.untilDate, "dayMonthYear") : ""
                         color: Theme.text; font.family: Theme.fontUi; font.features: Theme.tabularNums; font.pixelSize: Theme.fsSm
                     }
                     ClickArea {
@@ -905,7 +893,7 @@ Popup {
                         objectName: "event-until-pick"
                         label: I18n.t("editor.a11y.dateValue").arg(I18n.t("repeat.ends"))
                                                               .arg(root.untilDate && root.untilDate.getFullYear
-                                                                   ? root.untilDate.toLocaleDateString(I18n.locale, "d MMMM yyyy") : "")
+                                                                   ? I18n.fmtDate(root.untilDate, "longDayYear") : "")
                         tip: I18n.t("editor.a11y.pickDate")
                         onActivated: untilPicker.openAt(root.untilDate, untilBtn)
                     }
@@ -975,8 +963,8 @@ Popup {
             }
 
             // WHERE / LINK
-            FieldLabel { text: I18n.t("editor.label.location").toUpperCase() }
-            FieldLabel { text: I18n.t("editor.label.link").toUpperCase() }
+            FieldLabel { text: I18n.t("editor.label.location") }
+            FieldLabel { text: I18n.t("editor.label.link") }
             Field {
                 id: locationField
                 objectName: "event-location"
@@ -997,7 +985,7 @@ Popup {
                     visible: /^https?:\/\//i.test(linkField.text.trim())
                     text: "↗"
                     Accessible.name: I18n.t("event.a11y.openLink")
-                    ToolTip.visible: hovered
+                    ToolTip.visible: hovered || visualFocus
                     ToolTip.delay: 500
                     ToolTip.text: I18n.t("event.a11y.openLink")
                     onClicked: Qt.openUrlExternally(linkField.text.trim())
@@ -1005,8 +993,8 @@ Popup {
             }
 
             // CONTEXT / REMINDER
-            FieldLabel { text: I18n.t("editor.label.context").toUpperCase() }
-            FieldLabel { text: I18n.t("editor.label.reminder").toUpperCase() }
+            FieldLabel { text: I18n.t("editor.label.context") }
+            FieldLabel { text: I18n.t("editor.label.reminder") }
             // Free-form context label — rendered before the event title in the
             // calendar so the same profile can mean different things per event
             // (sprint name, feature, on-call rotation, …).
@@ -1026,7 +1014,7 @@ Popup {
         ColumnLayout {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             spacing: Theme.spXs
-            FieldLabel { text: I18n.t("editor.label.notes").toUpperCase() }
+            FieldLabel { text: I18n.t("editor.label.notes") }
             ScrollView {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 64

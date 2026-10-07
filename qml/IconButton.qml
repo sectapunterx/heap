@@ -26,7 +26,12 @@ Rectangle {
     height: 22
     radius: Theme.radiusSm
     opacity: shown ? 1 : 0
-    Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
+    Behavior on opacity {
+        NumberAnimation {
+            duration: btn.shown ? Theme.durTap : Theme.durTapOut
+            easing.type: btn.shown ? Theme.easeEnter : Theme.easeExit
+        }
+    }
     color: hot ? (danger ? Theme.withAlpha(Theme.danger, 0.16) : Theme.panel3) : restColor
     border.color: hot && danger ? Theme.danger : Theme.border
     border.width: 1
@@ -53,7 +58,7 @@ Rectangle {
         cursorShape: Qt.PointingHandCursor
         onClicked: btn.activated()
     }
-    ToolTip.visible: ma.containsMouse && btn.label.length > 0
+    ToolTip.visible: (ma.containsMouse || btn.activeFocus) && btn.label.length > 0
     ToolTip.delay: 500
     ToolTip.text: btn.label
     FocusRing {}

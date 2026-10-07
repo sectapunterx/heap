@@ -23,6 +23,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QScopeGuard>
 #include <QSignalSpy>
 #include <QStandardPaths>
 #include <QStringList>
@@ -411,6 +412,31 @@ TEST_F(AppControllerTest, StepUiScaleWritesTheAppearanceSetting) {
   app_->stepUiScale(0, steps);
 }
 
+// While the user has not picked a scale, the system's text size is the scale
+// (APP-183) — and Ctrl+= steps on from there, not from 100 %.
+TEST_F(AppControllerTest, UnsetUiScaleStartsFromTheSystemTextSize) {
+  const QVariantList steps{0.9, 1, 1.1, 1.25, 1.5};
+  // A test run ignores the machine's own setting.
+  EXPECT_DOUBLE_EQ(app_->systemUiScale(steps), 1.0);
+
+  qputenv("HEAP_TEXT_SCALE", "125");
+  const auto restore = qScopeGuard([] {
+    qunsetenv("HEAP_TEXT_SCALE");
+  });
+  AppController large;
+  EXPECT_DOUBLE_EQ(large.systemUiScale(steps), 1.25);
+  QJsonObject settings = QJsonDocument::fromJson(large.appSettingsJson().toUtf8()).object();
+  QJsonObject appearance = settings.value(QStringLiteral("appearance")).toObject();
+  appearance.remove(QStringLiteral("uiScale"));
+  settings.insert(QStringLiteral("appearance"), appearance);
+  large.setAppSettingsJson(QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact)));
+  EXPECT_DOUBLE_EQ(large.stepUiScale(1, steps), 1.5);
+  // Once picked, the pick wins over the system.
+  EXPECT_DOUBLE_EQ(large.stepUiScale(-1, steps), 1.25);
+  EXPECT_DOUBLE_EQ(large.stepUiScale(-1, steps), 1.1);
+  large.stepUiScale(0, steps);
+}
+
 TEST_F(AppControllerTest, ResetShortcutRestoresAndSwaps) {
   app_->setShortcut(QStringLiteral("task.new"), QStringLiteral("Ctrl+K"));  // frees palette.open
   app_->resetShortcut(QStringLiteral("palette.open"));                      // default Ctrl+K conflicts with task.new
@@ -742,10 +768,43 @@ TEST_F(AppControllerTest, HumanDateEnRu) {
 
 TEST_F(AppControllerTest, ShortDateEnRu) {
   app_->setLanguage(QStringLiteral("en"));
-  EXPECT_EQ(app_->shortDate(QDate(2026, 5, 15)), QString::fromUtf8("Fri, 15 May"));
+  EXPECT_EQ(app_->shortDate(QDate(2026, 5, 15)), QString::fromUtf8("Fri, May 15"));
   app_->setLanguage(QStringLiteral("ru"));
-  EXPECT_EQ(app_->shortDate(QDate(2026, 5, 15)), QString::fromUtf8("Пт, 15 май"));
+  EXPECT_EQ(app_->shortDate(QDate(2026, 5, 15)), QString::fromUtf8("пт, 15 мая"));
   EXPECT_EQ(app_->shortDate(QDate()), QString());
+}
+
+// APP-188: every displayed date goes through one table of named styles, in
+// the UI language; the clock follows the 12h/24h setting, not the language.
+TEST_F(AppControllerTest, DateLabelsFollowTheUiLanguage) {
+  const QDate oct6(2026, 10, 6);
+  app_->setLanguage(QStringLiteral("en"));
+  EXPECT_EQ(app_->dateLabel(oct6, QStringLiteral("dayMonth")), QStringLiteral("Oct 6"));
+  EXPECT_EQ(app_->dateLabel(oct6, QStringLiteral("dayMonthYear")), QStringLiteral("Oct 6, 2026"));
+  EXPECT_EQ(app_->dateLabel(oct6, QStringLiteral("longWeekdayYear")), QStringLiteral("Tuesday, October 6, 2026"));
+  EXPECT_EQ(app_->dateLabel(oct6, QStringLiteral("no-such-style")), QStringLiteral("Oct 6"));
+  app_->setLanguage(QStringLiteral("ru"));
+  EXPECT_EQ(app_->dateLabel(oct6, QStringLiteral("dayMonth")), QString::fromUtf8("6 окт."));
+  EXPECT_EQ(app_->dateLabel(oct6, QStringLiteral("weekdayDay")), QString::fromUtf8("вт, 6 окт."));
+  EXPECT_EQ(app_->dateLabel(oct6, QStringLiteral("longDayYear")), QString::fromUtf8("6 октября 2026"));
+  EXPECT_EQ(app_->datePattern(QStringLiteral("dayMonth"), QStringLiteral("en")), QStringLiteral("MMM d"));
+  EXPECT_EQ(app_->dateLabel(QDate(), QStringLiteral("dayMonth")), QString());
+}
+
+TEST_F(AppControllerTest, DateTimeLabelUsesTheClockSetting) {
+  const QString before = app_->appSettingsJson();
+  const QDateTime at(QDate(2026, 10, 6), QTime(15, 15));
+  app_->setLanguage(QStringLiteral("en"));
+  app_->setAppSettingsJson(QStringLiteral(R"({"calendar":{"timeFormat":"24h"}})"));
+  EXPECT_EQ(app_->dateTimeLabel(at, QStringLiteral("dayMonth")), QStringLiteral("Oct 6, 15:15"));
+  app_->setAppSettingsJson(QStringLiteral(R"({"calendar":{"timeFormat":"12h"}})"));
+  EXPECT_EQ(app_->dateTimeLabel(at, QStringLiteral("dayMonth")), QStringLiteral("Oct 6, 3:15pm"));
+  app_->setLanguage(QStringLiteral("ru"));
+  EXPECT_EQ(app_->dateTimeLabel(at, QStringLiteral("dayMonth")), QString::fromUtf8("6 окт., 3:15pm"));
+  app_->setAppSettingsJson(QStringLiteral(R"({"calendar":{"timeFormat":"24h"}})"));
+  EXPECT_EQ(app_->dateTimeLabel(at, QStringLiteral("dayMonth")), QString::fromUtf8("6 окт., 15:15"));
+  app_->setLanguage(QStringLiteral("en"));
+  app_->setAppSettingsJson(before);
 }
 
 // ─── parseDateTime wrapper key contract ───────────────────────────────
@@ -2146,13 +2205,16 @@ TEST_F(AppControllerTest, AQuietResyncReportsNoChangeAndWritesNothing) {
                          });
   app_->tasks()->reset({});
 
-  // syncProvider announces itself before it starts, so collect only the
-  // toast that reports the outcome.
+  // Collect only what reports the outcome. A pull that brought cards says
+  // so through syncNews, which names them (APP-180).
   QStringList outcomes;
   QObject::connect(app_.get(), &AppController::toast, app_.get(), [&outcomes](const QString& text) {
     if(text.contains(QStringLiteral("new")) || text.contains(QStringLiteral("up to date"))) {
       outcomes << text;
     }
+  });
+  QObject::connect(app_.get(), &AppController::syncNews, app_.get(), [&outcomes](const QString& text) {
+    outcomes << text;
   });
 
   app_->syncProvider(QStringLiteral("gitea"));

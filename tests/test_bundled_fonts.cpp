@@ -118,6 +118,26 @@ TEST(BundledFonts, EachWeightResolvesToItsFace) {
       << qPrintable(heap::platform::missingBundledFonts().join(QStringLiteral(", ")));
 }
 
+// tools/gen_bundled_fonts.py cuts both fonts smaller than upstream by raising
+// unitsPerEm (1000 / scale), so the Theme.fs* scale, set for Segoe UI and
+// Consolas, keeps its size: at 13px the x-height is Segoe's (0.50 em) and
+// Consolas' (0.49 em) within a few percent rather than 6% and 12% over.
+TEST(BundledFonts, SizedToTheSegoeAndConsolasScale) {
+  const QDir dir(QStringLiteral(":/fonts"));
+  for(const QString& file : dir.entryList({QStringLiteral("*.ttf")}, QDir::Files)) {
+    QFile f(dir.filePath(file));
+    ASSERT_TRUE(f.open(QIODevice::ReadOnly));
+    const QRawFont raw(f.readAll(), 13);
+    ASSERT_TRUE(raw.isValid()) << qPrintable(file);
+    const bool isMono = file.startsWith(QStringLiteral("JetBrainsMono"));
+    EXPECT_DOUBLE_EQ(raw.unitsPerEm(), isMono ? 1136.0 : 1075.0) << qPrintable(file);
+    EXPECT_LE(raw.xHeight(), isMono ? 13 * 0.49 * 1.05 : 13 * 0.50 * 1.01) << qPrintable(file);
+    // Smaller, not shrunk out of shape: still well above a 13px Segoe UI's
+    // x-height of ~5.5px.
+    EXPECT_GE(raw.xHeight(), 13 * 0.45) << qPrintable(file);
+  }
+}
+
 TEST(BundledFonts, CoverCyrillic) {
   // The interface is Russian as well as English.
   for(const QString& family : {ui(), mono()}) {

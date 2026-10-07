@@ -122,6 +122,10 @@ TestCase {
         compare(String(knob.border.color), String(Theme.fieldBorder));
         ed.allDay = true;
         compare(String(track.color), String(Theme.accent));
+        // APP-175: the knob slides by transform; its x never moves.
+        compare(knob.x, 2);
+        tryVerify(() => knob.mapToItem(track, 0, 0).x === track.width - knob.width - 2, 1000,
+                  "the knob ends at the right edge");
         ed.close();
     }
 

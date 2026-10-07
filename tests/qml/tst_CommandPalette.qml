@@ -189,4 +189,34 @@ TestCase {
         compare(AppController.currentView, "board", "notes shows no tasks; the board takes over");
         AppController.currentView = savedView;
     }
+
+    // APP-192: every app-wide action in the catalog is a palette command, with
+    // its key as the hint; the 0.6 tools are among them. (Main.runCommand
+    // running each one is checked in test_palette_catalog.cpp.)
+    function test_palette_covers_the_action_catalog() {
+        const saved = AppController.appSettingsJson;
+        let cmds = [];
+        let catalog = [];
+        try {
+            AppController.setSafetySetting("immersion", true);
+            AppController.setSafetySetting("standupDraft", true);
+            const cp = make('import TodoCpp; CommandPalette { }');
+            cp._refresh();
+            cmds = cp._entries.filter(e => e.kind === "command");
+            catalog = AppController.shortcuts.filter(c => !cp._isContextual(c.id));
+        } finally {
+            AppController.appSettingsJson = saved;
+        }
+        verify(catalog.length > 0);
+        for (const c of catalog) {
+            const hit = cmds.filter(e => e.commandId === c.id)[0];
+            verify(hit !== undefined, c.id + " is not in the palette");
+            compare(hit.sub, c.sequence || "", c.id + " shows its key");
+            verify(String(hit.label).length > 0 && hit.label !== c.id, c.id + " has a name");
+        }
+        for (const id of ["timeMachine.open", "standup.draft", "focus.immersion", "endOfDay.open", "log.open",
+                          "recap.open", "welcome.replay"]) {
+            verify(cmds.some(e => e.commandId === id), id + " missing from the palette");
+        }
+    }
 }

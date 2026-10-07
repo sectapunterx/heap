@@ -9,6 +9,7 @@
 #include "storage/AsyncSaver.h"
 #include "storage/Snapshots.h"
 #include "storage/StateIO.h"
+#include "text/LocaleFormat.h"
 
 #include <QDir>
 #include <QFile>
@@ -137,7 +138,7 @@ QVariantList AppController::listSnapshots() const {
     out.append(QVariantMap{{QStringLiteral("name"), f.name},
                            {QStringLiteral("at"), f.at.toString(Qt::ISODate)},
                            {QStringLiteral("day"), f.at.date().toString(Qt::ISODate)},
-                           {QStringLiteral("time"), f.at.toString(QStringLiteral("HH:mm"))},
+                           {QStringLiteral("time"), heap::text::formatTime(f.at.time(), twelveHourClock())},
                            {QStringLiteral("sizeKb"), qMax<qint64>(1, f.bytes / 1024)},
                            {QStringLiteral("tag"), f.tag},
                            {QStringLiteral("profiles"), s.value(QStringLiteral("profiles")).toInt()},
@@ -352,7 +353,7 @@ bool AppController::restoreSnapshot(const QString& name) {
   }
   QDateTime at;
   heap::history::parseName(name, &at);
-  emit toast(tr_("history.restored").arg(at.toString(QStringLiteral("dd.MM HH:mm"))));
+  emit toast(tr_("history.restored").arg(dateTimeLabel(at, QStringLiteral("dayMonth"))));
   return true;
 }
 
@@ -372,7 +373,7 @@ QString AppController::restoreSnapshotProfile(const QString& name, const QString
   QDateTime at;
   heap::history::parseName(name, &at);
   Profile copy = *it;
-  copy.name = uniqueProfileName(tr_("history.restoredName").arg(copy.name).arg(at.toString(QStringLiteral("HH:mm"))));
+  copy.name = uniqueProfileName(tr_("history.restoredName").arg(copy.name).arg(heap::text::formatTime(at.time(), twelveHourClock())));
   copy.id = makeProfileId(copy.name);
   copy.createdAt = QDateTime::currentDateTime();
   QVector<CalEvent> events;

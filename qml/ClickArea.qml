@@ -18,7 +18,7 @@ import TodoCpp
 // - Tab reaches it, Return / Enter / Space run it, the focus ring is drawn
 //   around the parent's shape.
 // - `label` is its accessible name and, unless `tip` says otherwise, its
-//   tooltip; `shortcutId` adds the shortcut as bound now to the tooltip, and
+//   tooltip — under the pointer and on keyboard focus; `shortcutId` adds the shortcut as bound now to the tooltip, and
 //   a third click on it suggests the key once (APP-166).
 // - The hit area grows to `minTarget` (24px, WCAG 2.5.8) around a smaller
 //   parent without moving anything.
@@ -86,21 +86,17 @@ Item {
         const keys = ca.shortcutId.length > 0 ? AppController.shortcutFor(ca.shortcutId) : "";
         return keys.length > 0 && base.length > 0 ? base + "  " + keys : base;
     }
-    ToolTip.visible: ca.showTip && ma.containsMouse && ca._tipText.length > 0
+    // The keyboard opens it too (APP-184): Tab onto an icon and its name
+    // and key show, as they do under the pointer.
+    ToolTip.visible: ca.showTip && (ma.containsMouse || ca.activeFocus) && ca._tipText.length > 0
     ToolTip.delay: 500
     ToolTip.text: ca._tipText
 
     // var, not Item: the parent's `radius` is not an Item member.
     readonly property var _shape: ca.parent
-    // Around the parent's shape, outside it, like FocusRing.
-    Rectangle {
-        anchors.fill: parent
-        anchors.margins: -3
+    // The cursor, around the parent's shape.
+    FocusRing {
+        target: ca
         radius: (ca._shape && typeof ca._shape.radius === "number" ? ca._shape.radius : Theme.radiusSm) + 3
-        color: "transparent"
-        border.color: Theme.focusRing
-        border.width: 2
-        visible: ca.activeFocus
-        z: 100
     }
 }

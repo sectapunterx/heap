@@ -52,6 +52,7 @@ Item {
         // here while a saved view counts it (TASKS-5).
         statuses: AppController.statuses
         today: AppController.today
+        newIds: AppController.syncNewTaskIds
         searchText: root.searchText
         priorities: root.activePriorities
         sortMode: "priority"
@@ -164,7 +165,7 @@ Item {
                         text: I18n.t("archive.title")
                         color: Theme.text
                         font.pixelSize: Theme.fsLg
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwHeading
                     }
                     Text {
                         text: archFilter.count + " " + I18n.t("archive.count")
@@ -232,9 +233,12 @@ Item {
                     objectName: "archive-empty"
                     anchors.centerIn: parent
                     width: Math.min(parent.width - 2 * Theme.sp3xl, 420)
-                    icon: "heap-05-archive"
-                    title: I18n.t("archive.empty.title")
-                    line: I18n.t("archive.empty.hint")
+                    // A search that matches nothing is not an empty archive.
+                    readonly property bool searching: root.searchText.trim().length > 0
+                    icon: searching ? "" : "heap-05-archive"
+                    title: I18n.t(searching ? "view.empty.noMatch.title" : "archive.empty.title")
+                    line: searching ? I18n.t("view.empty.noMatch.hint")
+                                    : I18n.t("archive.empty.hint").arg(AppController.shortcutFor("board.archive"))
                 }
             }
 
@@ -303,7 +307,7 @@ Item {
                         text: row.st.name
                         color: Theme.readable(row.st.color)
                         font.pixelSize: Theme.fsXs
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwTitle
                     }
                 }
 

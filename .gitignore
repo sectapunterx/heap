@@ -13,7 +13,7 @@ CMakeFiles/
 .DS_Store
 /design/*
 !design/brand-export/
-# The completion sound (APP-167), made by tools/gen_completion_sound.py.
+# The sound palette (APP-177), made by tools/gen_sounds.py.
 !design/sounds/
 # CLion's build directories. Deliberately not the bare "cmake*": git matches
 # ignore patterns case-insensitively on Windows and macOS, so that pattern also

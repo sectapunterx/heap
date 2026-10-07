@@ -213,6 +213,9 @@ Item {
     // with the right panel open it used to be hidden with no way back, which
     // left no way to reach another note at all.
     property string _listPref: "auto"
+    // A header too narrow for its words (150 % beside the right panel)
+    // packs tighter and says "Links" with its "#" alone (SCALE-3).
+    readonly property bool _headerTight: root.width < Theme.px(640)
     readonly property bool _listShown: _listPref === "auto" ? root.width > 560 : _listPref === "shown"
     function toggleList() { root._listPref = root._listShown ? "hidden" : "shown"; }
 
@@ -605,10 +608,17 @@ Item {
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: Theme.inset; anchors.rightMargin: Theme.inset
-                spacing: Theme.sp2xl
+                spacing: root._headerTight ? Theme.spMd : Theme.sp2xl
                 Rectangle { width: 4; height: 28; radius: 2; color: Theme.accent }
+                // The title gives way first when the header runs short — at
+                // 150 % with the right panel open the mode toggle was pushed
+                // past the view's edge, "Preview" under the panel (SCALE-3).
                 ColumnLayout {
+                    objectName: "notes-title-col"
                     spacing: 1
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: Theme.px(80)
+                    Layout.maximumWidth: Math.min(implicitWidth, root.width * 0.4)
                     // Which note this is: the header used to say
                     // "Notes · scratchpad" whatever was open.
                     Text {
@@ -616,11 +626,13 @@ Item {
                         text: root._activeTitle.length > 0 ? root._activeTitle : I18n.t("notes.header")
                         color: Theme.text
                         font.pixelSize: Theme.fsLg
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwHeading
                         elide: Text.ElideRight
-                        Layout.maximumWidth: root.width * 0.4
+                        Layout.fillWidth: true
                     }
                     Text {
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
                         text: {
                             const s = root._stats;
                             const saved = root._savedAgo;
@@ -638,6 +650,12 @@ Item {
                 Text {
                     visible: editor.length > 0 && root.viewMode !== "preview" && root.width > 900
                     text: I18n.t("notes.legend")
+                    // Gives way to the buttons when a language runs long
+                    // (APP-189) instead of pushing them off the header.
+                    Layout.fillWidth: true
+                    Layout.maximumWidth: implicitWidth
+                    horizontalAlignment: Text.AlignRight
+                    elide: Text.ElideRight
                     color: Theme.textDim
                     font.family: Theme.fontUi
                     font.features: Theme.tabularNums
@@ -648,7 +666,7 @@ Item {
                 Rectangle {
                     id: attachBtn
                     objectName: "notes-attach"
-                    Layout.preferredHeight: 24
+                    Layout.preferredHeight: Theme.px(24)
                     radius: Theme.radiusMd
                     color: attachMA.containsMouse ? Theme.panel3 : Theme.panel2
                     border.color: Theme.border
@@ -675,7 +693,7 @@ Item {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: attachDialog.open()
                     }
-                    ToolTip.visible: attachMA.containsMouse
+                    ToolTip.visible: attachMA.containsMouse || activeFocus
                     ToolTip.delay: 500
                     ToolTip.text: I18n.t("att.button.tip.note")
                 }
@@ -683,7 +701,7 @@ Item {
                 // ── List toggle ────────────────────────────────────────
                 Rectangle {
                     objectName: "notes-list-toggle"
-                    Layout.preferredHeight: 24
+                    Layout.preferredHeight: Theme.px(24)
                     radius: Theme.radiusMd
                     color: root._listShown ? Theme.accentSoft : (listToggleMA.hovered ? Theme.panel3 : Theme.panel2)
                     border.color: root._listShown ? Theme.accent : Theme.border
@@ -708,7 +726,7 @@ Item {
 
                 // ── Backlinks pane toggle (HEAP-79) ────────────────────
                 Rectangle {
-                    Layout.preferredHeight: 24
+                    Layout.preferredHeight: Theme.px(24)
                     radius: Theme.radiusMd
                     color: root.showBacklinks ? Theme.accent : (blToggleMA.hovered ? Theme.panel3 : Theme.panel2)
                     border.color: root.showBacklinks ? Theme.accent : Theme.border
@@ -717,15 +735,15 @@ Item {
                     Text {
                         id: blToggleTxt
                         anchors.centerIn: parent
-                        text: I18n.t("notes.links")
+                        text: root._headerTight ? "#" : I18n.t("notes.links")
                         color: root.showBacklinks ? Theme.textOnAccent : Theme.textMuted
                         font.pixelSize: Theme.fsSm
-                        font.weight: Font.Medium
+                        font.weight: Theme.fwTitle
                     }
                     ClickArea {
                         id: blToggleMA
                         label: I18n.t("notes.links")
-                        showTip: false
+                        showTip: root._headerTight
                         role: Accessible.CheckBox
                         checkable: true
                         checked: root.showBacklinks
@@ -736,14 +754,19 @@ Item {
                 // ── Edit · Split · Preview toggle ──────────────────────
                 // One frame around the group instead of a border per segment,
                 // which doubled up into a 2px seam between them.
+                // Each segment as wide as its word needs (APP-189): a fixed
+                // 64px cut longer translations.
                 Rectangle {
-                    Layout.preferredWidth: 3 * 64 + 6
-                    Layout.preferredHeight: 26
+                    objectName: "notes-mode-toggle"
+                    Layout.preferredWidth: segRow.implicitWidth + 2 * Theme.sp2xs
+                    Layout.minimumWidth: segRow.implicitWidth + 2 * Theme.sp2xs
+                    Layout.preferredHeight: Theme.px(26)
                     radius: Theme.radiusMd
                     color: Theme.panel2
                     border.color: Theme.border
                     border.width: 1
                     Row {
+                        id: segRow
                         anchors.fill: parent
                         anchors.margins: Theme.sp2xs
                         spacing: 0
@@ -757,7 +780,8 @@ Item {
                                 id: segBtn
                                 required property var modelData
                                 readonly property bool active: root.viewMode === modelData.id
-                                width: 64
+                                width: root._headerTight ? segTxt.implicitWidth + 2 * Theme.spMd
+                                                         : Math.max(Theme.px(64), segTxt.implicitWidth + 2 * Theme.spLg)
                                 height: parent.height
                                 radius: Theme.radiusSm
                                 color: active ? Theme.accentSoft
@@ -768,7 +792,7 @@ Item {
                                     text: modelData.label
                                     color: parent.active ? Theme.accentStrong : Theme.text
                                     font.pixelSize: Theme.fsSm
-                                    font.weight: parent.active ? Font.DemiBold : Font.Medium
+                                    font.weight: Theme.fwTitle
                                 }
                                 ClickArea {
                                     id: segMA
@@ -849,8 +873,8 @@ Item {
                     id: wheelAnim
                     target: notesScroll
                     property: "contentY"
-                    duration: Theme.scaledMs(220)
-                    easing.type: Easing.OutCubic
+                    duration: Theme.durMove
+                    easing.type: Theme.easeEnter
                 }
                 WheelHandler {
                     acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
@@ -1056,7 +1080,7 @@ Item {
                             text: I18n.t("notes.backlinks")
                             color: Theme.text
                             font.pixelSize: Theme.fsMd
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                         }
                         Text {
                             visible: root._incoming.length === 0
@@ -1079,7 +1103,7 @@ Item {
                                     text: "← " + modelData.title
                                     color: Theme.mdTicket
                                     font.pixelSize: Theme.fsSm
-                                    font.weight: Font.DemiBold
+                                    font.weight: Theme.fwTitle
                                     font.underline: incomingMA.hovered
                                     elide: Text.ElideRight
                                     ClickArea {
@@ -1111,7 +1135,7 @@ Item {
                             text: I18n.t("notes.outgoing")
                             color: Theme.text
                             font.pixelSize: Theme.fsMd
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                         }
                         Text {
                             visible: root._outgoing.length === 0
@@ -1136,7 +1160,7 @@ Item {
                                         text: (modelData.resolved ? "→ " : "△ ") + modelData.target
                                         color: modelData.resolved ? Theme.mdTicket : Theme.warning
                                         font.pixelSize: Theme.fsSm
-                                        font.weight: Font.DemiBold
+                                        font.weight: Theme.fwTitle
                                         font.underline: outgoingMA.hovered
                                         elide: Text.ElideRight
                                         Layout.fillWidth: true
@@ -1278,12 +1302,7 @@ Item {
         width: 320
         height: Math.min(8, Math.max(1, acMatches.length)) * 38 + 8
 
-        background: Rectangle {
-            radius: Theme.radius
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
+        background: PopupSurface {}
 
         contentItem: ListView {
             id: acList
@@ -1321,7 +1340,7 @@ Item {
 
                     Rectangle {
                         visible: modelData.kind === "person"
-                        width: 22; height: 22; radius: 11
+                        width: Theme.px(22); height: width; radius: width / 2
                         color: modelData.color || Theme.accent
                         Text {
                             anchors.centerIn: parent
@@ -1333,7 +1352,7 @@ Item {
                             font.family: Theme.fontUi
                             font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsXs
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                         }
                     }
                     Rectangle {
@@ -1347,7 +1366,7 @@ Item {
                             color: Theme.accentStrong
                             font.family: Theme.fontMono
                             font.pixelSize: Theme.fsXs
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                         }
                     }
                     Rectangle {
@@ -1360,7 +1379,7 @@ Item {
                             text: "⌗"
                             color: Theme.heading
                             font.pixelSize: Theme.fsSm
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                         }
                     }
 
@@ -1584,6 +1603,7 @@ Item {
         objectName: "missing-link"
         property string wanted: ""
         modal: true
+        Overlay.modal: ModalScrim {}
         anchors.centerIn: Overlay.overlay
         parent: Overlay.overlay
         padding: Theme.inset
@@ -1595,12 +1615,7 @@ Item {
             missingLinkPopup.open();
         }
 
-        background: Rectangle {
-            radius: Theme.radiusXl
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
+        background: ModalSurface {}
 
         contentItem: Text {
             text: I18n.t("notes.link.missingBody").arg(missingLinkPopup.wanted)

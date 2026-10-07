@@ -12,12 +12,17 @@ Rectangle {
     // collapsed form is the original 56px icon rail. Main owns the state and
     // persists it — this only draws it.
     property bool expanded: true
-    readonly property int expandedWidth: 216
-    readonly property int collapsedWidth: 56
+    // Wide enough for its labels at any interface scale (APP-183): at 150 %
+    // a fixed 216 cut "Blocked" and "Hotkeys" to an ellipsis.
+    readonly property int expandedWidth: Theme.px(216)
+    // The 36px icon cell plus the rail's margins, which grow with the
+    // scale: a fixed 56 left the cell 30px wide at 125 %, so the icons and
+    // their count badges were cut by the rail's edge (SCALE-1).
+    readonly property int collapsedWidth: 36 + 2 * Theme.spLg
     // implicitWidth, not width: a Layout writes width itself, which would
     // break a binding on it.
     implicitWidth: expanded ? expandedWidth : collapsedWidth
-    Behavior on implicitWidth { NumberAnimation { duration: Theme.scaledMs(120); easing.type: Easing.OutCubic } }
+    Behavior on implicitWidth { NumberAnimation { duration: Theme.durMove; easing.type: Theme.easeEnter } }
     clip: true
 
     signal openTweaks(Item anchor)
@@ -78,22 +83,37 @@ Rectangle {
     // Everything above the bottom group scrolls when the window is too short
     // for it — with saved views in the list, a laptop screen was — instead of
     // the lower buttons being cut off. The keyboard's row is kept in view.
-    function _revealFocus() {
-        const w = root.Window.window;
-        const f = w ? w.activeFocusItem : null;
+    function _reveal(f: Item) {
         for (let p = f; p; p = p.parent) {
             if (p !== railUpper) continue;
             const y = f.mapToItem(railUpper, 0, 0).y;
             if (y < railScroll.contentY)
                 railScroll.contentY = Math.max(0, y - Theme.spMd);
             else if (y + f.height > railScroll.contentY + railScroll.height)
-                railScroll.contentY = Math.min(railScroll.contentHeight - railScroll.height, y + f.height - railScroll.height + Theme.spMd);
+                railScroll.contentY = Math.max(0, Math.min(railScroll.contentHeight - railScroll.height, y + f.height - railScroll.height + Theme.spMd));
             return;
+        }
+    }
+    function _revealFocus() {
+        const w = root.Window.window;
+        root._reveal(w ? w.activeFocusItem : null);
+    }
+    // The open view's row too (SCALE-1): opening Notes on a short window
+    // left its highlighted row cut in half below the fold.
+    function _revealActive() {
+        const name = "rail-" + AppController.currentView;
+        for (let i = 0; i < railUpper.children.length; i++) {
+            const c = railUpper.children[i];
+            if (c.objectName === name) { root._reveal(c); return; }
         }
     }
     Connections {
         target: root.Window.window
         function onActiveFocusItemChanged() { root._revealFocus(); }
+    }
+    Connections {
+        target: AppController
+        function onCurrentViewChanged() { Qt.callLater(root._revealActive); }
     }
 
     ColumnLayout {
@@ -113,7 +133,10 @@ Rectangle {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             interactive: contentHeight > height
-            ScrollBar.vertical: ThinScrollBar {}
+            onHeightChanged: Qt.callLater(root._revealActive)
+            // When the rows do not fit, the thumb stays drawn and the cut
+            // edge fades, so the list says it goes on (SCALE-1).
+            ScrollBar.vertical: ThinScrollBar { objectName: "rail-scrollbar"; cue: true }
 
             ColumnLayout {
                 id: railUpper
@@ -216,24 +239,34 @@ Rectangle {
                         required property var modelData
                         required property int index
                         width: savedList.width
-                        height: 34
+                        height: svBtn.implicitHeight
                         objectName: "rail-saved-" + svBtn.index
                         expanded: root.expanded
-                        glyph: svBtn.index < 9 ? String(svBtn.index + 1) : "·"
-                        glyphMono: true
+                        // A bookmark with the Alt+N digit in it: a bare digit
+                        // with its count in the corner read as "1⁶" in the
+                        // collapsed rail (EYE-7).
+                        iconSource: "qrc:/brand/icons/heap-36-saved-view.svg"
+                        iconText: svBtn.index < 9 ? String(svBtn.index + 1) : ""
                         label: svBtn.modelData.name
                         readonly property bool _active: svBtn.modelData.id === root.activeSavedViewId
                         active: svBtn._active
                         modified: svBtn._active && root.savedViewModified
                         readonly property var _problems: svBtn.modelData.problems || []
-                        countText: svBtn._problems.length > 0 ? "?"
-                                 : (root._savedCounts[svBtn.modelData.id] !== undefined ? String(root._savedCounts[svBtn.modelData.id]) : "")
+                        readonly property string _count: root._savedCounts[svBtn.modelData.id] !== undefined
+                            ? String(root._savedCounts[svBtn.modelData.id]) : ""
+                        // The count pill in the expanded list; the icon rail
+                        // keeps only the "?" of a broken query and moves the
+                        // count to the tooltip — a corner number on a
+                        // numbered bookmark still read as a power (EYE-7).
+                        countText: svBtn._problems.length > 0 ? "?" : (root.expanded ? svBtn._count : "")
                         countColor: svBtn._problems.length > 0 ? Theme.warning : Theme.panel3
                         shortcutId: svBtn.index < 9 ? "savedView." + (svBtn.index + 1) : ""
                         tooltipText: svBtn._problems.length > 0
                             ? svBtn.modelData.name + " — " + I18n.t("topbar.searchUnknown").arg(svBtn._problems.join("  "))
-                            : svBtn.modelData.name + (svBtn.modelData.query.length > 0 ? "  ·  " + svBtn.modelData.query : "")
-                        Accessible.name: svBtn.modelData.name + (svBtn._problems.length > 0 ? "" : ", " + I18n.t("siderail.saved.count").arg(svBtn.countText))
+                            : svBtn.modelData.name
+                              + (!root.expanded && svBtn._count.length > 0 ? "  ·  " + I18n.t("siderail.saved.count").arg(svBtn._count) : "")
+                              + (svBtn.modelData.query.length > 0 ? "  ·  " + svBtn.modelData.query : "")
+                        Accessible.name: svBtn.modelData.name + (svBtn._problems.length > 0 ? "" : ", " + I18n.t("siderail.saved.count").arg(svBtn._count))
                         onActivated: root.savedViewActivated(svBtn.modelData.id)
                         onContextRequested: root._openSavedMenu(svBtn, svBtn.modelData.id, svBtn.index)
                         Keys.onUpPressed: (e) => {
@@ -377,13 +410,12 @@ Rectangle {
             anchors.left: parent.left; anchors.leftMargin: Theme.spMd
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            text: sh.text.toUpperCase()
+            text: sh.text
             elide: Text.ElideRight
             color: Theme.textDim
             font.family: Theme.fontUi
-            font.pixelSize: Theme.fsXs
-            font.weight: Font.DemiBold
-            font.letterSpacing: 0.8
+            font.pixelSize: Theme.fsSm
+            font.weight: Theme.fwTitle
         }
         Rectangle {
             visible: !sh.expanded
@@ -409,10 +441,12 @@ Rectangle {
         property bool active: false
         property string countText: ""
         property color countColor: Theme.danger
+        // The icons are drawn on an 18px grid with 1px lines on the pixel
+        // grid (APP-195); shown at 18, every line is one device pixel.
         property int iconSize: 18
-        // Saved views: the glyph is the Alt+N digit, set in the mono face; a
+        // Saved views: a short text (the Alt+N digit) set inside the icon; a
         // view whose filters were changed since it was applied gets a dot.
-        property bool glyphMono: false
+        property string iconText: ""
         property bool modified: false
         signal activated()
         // Right click, or the Menu key on a row that has a menu.
@@ -425,7 +459,9 @@ Rectangle {
         Keys.onEnterPressed: btn.activated()
         Keys.onSpacePressed: btn.activated()
         Layout.fillWidth: true
-        Layout.preferredHeight: 34
+        // Taller only when a long name needs its second line (APP-200).
+        implicitHeight: Math.max(34, railLabel.implicitHeight + Theme.spMd)
+        Layout.preferredHeight: implicitHeight
 
         readonly property color _fg: btn.active ? Theme.accentStrong
                                     : (ma.containsMouse ? Theme.text : Theme.textMuted)
@@ -456,35 +492,66 @@ Rectangle {
                 color: btn._fg
             }
             Text {
+                objectName: "rail-icon-text"
+                visible: btn.glyph === "" && btn.iconText !== ""
+                anchors.horizontalCenter: parent.horizontalCenter
+                // In the bookmark's body, above its notch.
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.verticalCenterOffset: -1
+                text: btn.iconText
+                color: btn._fg
+                font.family: Theme.fontUi
+                font.features: Theme.tabularNums
+                font.pixelSize: Theme.fsXs
+                font.weight: Theme.fwTitle
+            }
+            Text {
                 visible: btn.glyph !== ""
                 anchors.centerIn: parent
                 text: btn.glyph
                 color: btn._fg
-                font.family: btn.glyphMono ? Theme.fontMono : Theme.fontUi
-                font.pixelSize: btn.glyphMono ? Theme.fsSm : Theme.fsLg
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsLg
             }
         }
+        // A name that does not fit on the line steps down a size and, if it
+        // still does not, takes a second line (APP-200): saved views are
+        // named by the user, and "Срок на этой нед…" said less than its name.
+        TextMetrics {
+            id: labelFull
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsMd
+            font.weight: btn.active ? Theme.fwTitle : Theme.fwBody
+            font.italic: btn.modified
+            text: railLabel.text
+        }
         Text {
+            id: railLabel
             objectName: "rail-label"
+            readonly property bool tight: labelFull.advanceWidth > railLabel.width
             visible: btn.expanded
             opacity: btn.width > 96 ? 1 : 0
-            Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
+            Behavior on opacity { NumberAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             anchors.left: iconCell.right
             anchors.right: countBox.visible && btn.expanded ? countBox.left
                          : comboT.visible ? comboT.left : parent.right
             anchors.rightMargin: Theme.spMd
             anchors.verticalCenter: parent.verticalCenter
             text: btn.modified ? btn.label + " •" : btn.label
+            wrapMode: railLabel.tight ? Text.WordWrap : Text.NoWrap
+            maximumLineCount: 2
             elide: Text.ElideRight
+            lineHeight: 0.95
             font.italic: btn.modified
             color: btn.active ? Theme.accentStrong : (ma.containsMouse ? Theme.text : Theme.textMuted)
             font.family: Theme.fontUi
-            font.pixelSize: Theme.fsMd
-            font.weight: btn.active ? Font.DemiBold : Font.Normal
+            font.pixelSize: railLabel.tight ? Theme.fsSm : Theme.fsMd
+            font.weight: btn.active ? Theme.fwTitle : Theme.fwBody
         }
         Text {
             id: comboT
-            visible: btn.expanded && !countBox.visible && ma.containsMouse && btn._combo.length > 0
+            // Under the pointer or the keyboard (APP-184).
+            visible: btn.expanded && !countBox.visible && (ma.containsMouse || btn.activeFocus) && btn._combo.length > 0
             anchors.right: parent.right; anchors.rightMargin: Theme.spMd
             anchors.verticalCenter: parent.verticalCenter
             text: btn._combo
@@ -511,7 +578,7 @@ Rectangle {
                 font.family: Theme.fontUi
                 font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsXs
-                font.weight: Font.DemiBold
+                font.weight: Theme.fwTitle
             }
         }
         MouseArea {
@@ -528,11 +595,23 @@ Rectangle {
                 if (btn.shortcutId.length > 0) AppController.noteMouseAction(btn.shortcutId);
                 btn.activated();
             }
-            // Labels are on screen when expanded; the tooltip is only for
-            // the icon-only rail.
-            ToolTip.visible: containsMouse && !btn.expanded && btn.tooltipText !== ""
+            // Labels are on screen when expanded; the tooltip is for the
+            // icon-only rail, or a label a longer language cut short
+            // (APP-189) — under the pointer, or on Tab (APP-184).
+            ToolTip.visible: (containsMouse || btn.activeFocus) && (!btn.expanded || railLabel.truncated)
+                             && btn.tooltipText !== ""
             ToolTip.text: btn._combo.length ? btn.tooltipText + "   " + btn._combo : btn.tooltipText
             ToolTip.delay: 400
         }
+    }
+
+    // Over the list, not in it: parented to the Flickable itself (not
+    // its content), so it stays put while the rows scroll.
+    ScrollFade {
+        objectName: "rail-fade"
+        parent: railScroll
+        anchors.fill: parent
+        flick: railScroll
+        color: Theme.panel
     }
 }

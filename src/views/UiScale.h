@@ -38,4 +38,22 @@ inline double nextUiScale(double current, int direction, QList<double> steps) {
   return steps.first();
 }
 
+// The interface scale a system text size asks for (APP-183), while the user
+// has not picked one in heap: the step of `steps` nearest to `textScale`
+// (1.0 = 100 %), a tie going up. Larger text than the top step gets the top
+// step; nothing unreadable or below 100 % shrinks heap.
+inline double uiScaleForTextScale(double textScale, QList<double> steps) {
+  if(steps.isEmpty() || !std::isfinite(textScale) || textScale <= 1.0) {
+    return 1.0;
+  }
+  std::sort(steps.begin(), steps.end());
+  double best = steps.first();
+  for(const double s : steps) {
+    if(std::abs(s - textScale) <= std::abs(best - textScale) + 1e-9) {
+      best = s;
+    }
+  }
+  return std::max(best, 1.0);
+}
+
 }  // namespace heap::ui

@@ -187,7 +187,7 @@ Item {
                             text: card.modelData.actionLabel
                             color: Theme.accentStrong
                             font.pixelSize: Theme.fsSm
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                         }
                         ClickArea {
                             id: actionMA

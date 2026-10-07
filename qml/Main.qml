@@ -18,6 +18,10 @@ ApplicationWindow {
     height: 900
     minimumWidth: 1100
     minimumHeight: 680
+    // Every control that names no size of its own (a TextField, a combo's
+    // text) reads the body size, so it follows the interface scale and the
+    // system's text size with everything else (APP-183).
+    font.pixelSize: Theme.fsMd
 
     // ── Window geometry ───────────────────────────────────────────────
     // The window opened at a hardcoded 1440x900 in the same spot on every
@@ -57,7 +61,7 @@ ApplicationWindow {
     function openTaskById(key) {
         const t = AppController.taskById(AppController.taskIdForBranchMatch(key));
         if (t && t.id) taskEditor.showFor(Object.assign({}, t));
-        else toast.show(I18n.t("notes.link.noTask").arg(key), "warning");
+        else win.notice(I18n.t("notes.link.noTask").arg(key), "warning");
     }
 
     // A profile that has never opened Docs has no docs blob yet, so the
@@ -90,7 +94,7 @@ ApplicationWindow {
             }
             const t = AppController.taskById(String(target).trim());
             if (t && t.id) { taskEditor.showFor(Object.assign({}, t)); return; }
-            toast.show(I18n.t("notes.link.noNote").arg(target), "warning");
+            win.notice(I18n.t("notes.link.noNote").arg(target), "warning");
         }
     }
 
@@ -349,6 +353,28 @@ ApplicationWindow {
         AppController.appSettingsJson = JSON.stringify(s);
     }
 
+    // Every attached ToolTip in the app is one shared instance. Dressed here
+    // as the popup level of elevation (APP-182) — the control style drew a
+    // square grey box in the system palette, unlike any menu or drop-down.
+    property Item _tipSurface: PopupSurface {}
+    property Item _tipText: Text {
+        text: ToolTip.toolTip ? ToolTip.toolTip.text : ""
+        color: Theme.text
+        font.family: Theme.fontUi
+        font.pixelSize: Theme.fsSm
+        wrapMode: Text.Wrap
+    }
+    // An Item, since the window cannot take the ToolTip attached property.
+    property Item _tipStyler: Item {
+        Component.onCompleted: {
+            const tt = ToolTip.toolTip;
+            if (!tt) return;
+            tt.background = win._tipSurface;
+            tt.contentItem = win._tipText;
+            tt.padding = Theme.spMd;
+        }
+    }
+
     Component.onCompleted: {
         _keepRetiredThemes();
         _restoreGeometry();
@@ -408,25 +434,21 @@ ApplicationWindow {
         id: closeAsk
         objectName: "close-to-tray-ask"
         modal: true
+        Overlay.modal: ModalScrim {}
         parent: Overlay.overlay
         anchors.centerIn: parent
         width: 440
         padding: Theme.inset
         topPadding: Theme.spMd
         title: I18n.t("close.ask.title")
-        background: Rectangle {
-            radius: Theme.radiusXl
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
+        background: ModalSurface {}
         // Drawn in the theme like every other dialog title; Basic's own
         // header was an unstyled bar in the palette's window colour.
         header: Text {
             text: closeAsk.title
             color: Theme.text
             font.pixelSize: Theme.fsLg
-            font.weight: Font.DemiBold
+            font.weight: Theme.fwHeading
             leftPadding: Theme.inset; rightPadding: Theme.inset; topPadding: Theme.inset
             wrapMode: Text.Wrap
         }
@@ -495,7 +517,7 @@ ApplicationWindow {
         || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
         || tweaks.opened || hotkeys.opened || closeAsk.opened || goToDatePopup.opened
-        || weeklyRecap.opened || standupDraft.opened || timeMachine.opened
+        || weeklyRecap.opened || standupDraft.opened || timeMachine.opened || eventLog.opened || endOfDay.opened
 
     // ── Keyboard scope ────────────────────────────────────────────────
     // Board and calendar keys (Return, Esc, the arrows, bare letters) are
@@ -628,7 +650,7 @@ ApplicationWindow {
     readonly property bool _modalOpen: taskEditor.opened || eventEditor.opened
         || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
-        || closeAsk.opened || goToDatePopup.opened
+        || closeAsk.opened || goToDatePopup.opened || eventLog.opened
         || (_focusInPopup && !_focusInPopover) || _dimmerShown
     readonly property bool _globalKeysOn: !hotkeys.isCapturing && !_modalOpen
 
@@ -729,6 +751,34 @@ ApplicationWindow {
 
     // The tasks a safety-net notice is about: one opens in the editor, several
     // narrow the board to them. Only what is shown changes.
+    // A toast QML says itself; what went wrong or was refused also goes to
+    // the event log (APP-187), as the C++ side's do.
+    function notice(msg, kind) {
+        toast.show(msg, kind);
+        if (kind === "error" || kind === "warning") AppController.logEvent(kind, msg);
+    }
+
+    // "Show" on a sync's toast (APP-180): the board, filtered to the cards
+    // that sync brought in.
+    function showSyncNew() {
+        AppController.currentView = "board";
+        topBar.searchText = "is:new";
+        win.searchText = topBar.searchText;
+    }
+
+    // An event-log entry was opened (APP-187): the task it names, the cards
+    // of a sync, or the place it points at.
+    function openLogEntry(entry) {
+        const ids = (entry && entry.taskIds) || [];
+        if (ids.length > 0) {
+            const latest = AppController.syncNewTaskIds;
+            if (entry.kind === "sync" && ids.length > 1 && ids.every(id => latest.indexOf(id) >= 0)) win.showSyncNew();
+            else win.showSafetyTasks(ids);
+            return;
+        }
+        if (entry && entry.route) win.runCommand(entry.route);
+    }
+
     function showSafetyTasks(ids) {
         const list = (ids || []).filter(id => id && id.length > 0);
         if (list.length === 0) return;
@@ -770,11 +820,19 @@ ApplicationWindow {
         // Tray click / "Show heap." menu entry — just restore the window.
         function onShowWindowRequested() { win._summon(); }
         function onToast(msg, kind) { toast.show(msg, kind || "info") }
+        // A sync brought new cards (APP-180): the toast names them, and
+        // "Show" filters the board to them.
+        function onSyncNews(msg, taskIds) {
+            toast.showWithAction(msg, I18n.t("sync.show"), 10, function () { win.showSyncNew() });
+        }
         // A safety-net notice (APP-157…): one toast, and "Show" takes the
         // board to the tasks it is about.
         function onSafetyNotice(kind, title, body, taskIds) {
             const msg = title.length > 0 ? title + " · " + body : body;
-            if (taskIds && taskIds.length > 0)
+            // The end-of-day check opens the day's summary (APP-190).
+            if (kind === "endOfDay")
+                toast.showWithAction(msg, I18n.t("eod.open"), 15, function () { endOfDay.showNow() });
+            else if (taskIds && taskIds.length > 0)
                 toast.showWithAction(msg, I18n.t("safety.show"), 10, function () { win.showSafetyTasks(taskIds) });
             else
                 toast.show(msg, "info");
@@ -866,6 +924,7 @@ ApplicationWindow {
             onLeaveRequested: win.focusActiveView()
             onSeenBeforeActivated: (hit) => win.openSeenBefore(hit)
             onNewTaskRequested: taskEditor.showFor(AppController.newTaskDraft("todo"))
+            onSyncStatusRequested: win.runCommand("settings:integrations")
             rightPanelShown: win.rightPanelShown
             onRightPanelToggleRequested: win.toggleRightPanel()
             onNewProfileRequested: profileEditor.showCreate()
@@ -956,7 +1015,8 @@ ApplicationWindow {
                             objectName: "demo-start-fresh"
                             property bool armed: false
                             text: armed ? I18n.t("demo.banner.startFresh.confirm") : I18n.t("demo.banner.startFresh")
-                            primary: !armed
+                            // Quiet until armed (APP-198): a banner is no
+                            // dialog, and its offer was the brightest spot.
                             danger: armed
                             onClicked: {
                                 if (!armed) {
@@ -1020,6 +1080,9 @@ ApplicationWindow {
                 Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    // A view wider than its column is cut at the column, not
+                    // drawn under the right panel (SCALE-3).
+                    clip: true
                     // Board, Notes and Docs are kept alive once visited.
                     // Swapping a Loader's sourceComponent destroys the item,
                     // and these three hold state the user notices losing: the
@@ -1387,7 +1450,7 @@ ApplicationWindow {
                 text: I18n.t("welcome.resume")
                 color: Theme.text
                 font.pixelSize: Theme.fsMd
-                font.weight: Font.DemiBold
+                font.weight: Theme.fwTitle
             }
             Rectangle { width: 1; height: 18; color: Theme.border }
             // Give up on the tour. Nested (declared last) so it wins the click
@@ -1554,6 +1617,8 @@ ApplicationWindow {
         case "focus.immersion":      win.toggleImmersion(); break;
         case "standup.draft":        standupDraft.showNow(); break;
         case "timeMachine.open":     timeMachine.showNow(); break;
+        case "log.open":             eventLog.showNow(); break;
+        case "endOfDay.open":        endOfDay.showNow(); break;
         case "zoom.in":              win.zoomInterface(1); break;
         case "zoom.out":             win.zoomInterface(-1); break;
         case "zoom.reset":           win.zoomInterface(0); break;
@@ -1773,6 +1838,38 @@ ApplicationWindow {
         enabled: sequence.length > 0 && win._globalKeysOn && !!(AppController.safety && AppController.safety.immersion)
         onActivated: win.toggleImmersion()
     }
+    // The 0.6 tools (APP-192): no key by default; live once one is bound in
+    // Settings → Hotkeys, and they run what the palette runs.
+    Shortcut {
+        sequence: win._kbd("timeMachine.open")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: win.runCommand("timeMachine.open")
+    }
+    Shortcut {
+        sequence: win._kbd("standup.draft")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn && !!(AppController.safety && AppController.safety.standupDraft)
+        onActivated: win.runCommand("standup.draft")
+    }
+    Shortcut {
+        sequence: win._kbd("recap.open")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: win.runCommand("recap.open")
+    }
+    Shortcut {
+        sequence: win._kbd("endOfDay.open")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: win.runCommand("endOfDay.open")
+    }
+    Shortcut {
+        sequence: win._kbd("welcome.replay")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: win.runCommand("welcome.replay")
+    }
     Shortcut {
         sequence: "Escape"
         context: Qt.ApplicationShortcut
@@ -1830,6 +1927,14 @@ ApplicationWindow {
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: rail.openTweaks(rail.tweaksAnchor)
+    }
+    // The event log (APP-187).
+    Shortcut {
+        objectName: "shortcut-log-open"
+        sequence: win._kbd("log.open")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: eventLog.showNow()
     }
     Shortcut {
         sequence: _kbd("hotkeys.open")
@@ -2006,6 +2111,11 @@ ApplicationWindow {
         id: timeMachine
     }
 
+    EventLogDialog {
+        id: eventLog
+        onEntryActivated: (entry) => win.openLogEntry(entry)
+    }
+
     WeeklyRecapDialog {
         id: weeklyRecap
         onTaskActivated: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
@@ -2013,6 +2123,11 @@ ApplicationWindow {
     }
     // The standup draft (APP-170): text to edit and copy, sent nowhere.
     StandupDraftDialog { id: standupDraft }
+    // The day's summary (APP-190): closed, carrying over, timers. Read-only.
+    EndOfDayDialog {
+        id: endOfDay
+        onTaskActivated: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+    }
     Connections {
         target: AppController
         function onTodayChanged() {
@@ -2181,7 +2296,7 @@ ApplicationWindow {
             if (AppController.exportActiveProfileToFile(selectedFile))
                 toast.show(I18n.t("toast.profile.exported"), "success");
             else
-                toast.show(I18n.t("toast.profile.exportFail"), "error");
+                win.notice(I18n.t("toast.profile.exportFail"), "error");
         }
     }
     FileDialog {
@@ -2193,7 +2308,7 @@ ApplicationWindow {
             const err = AppController.importProfileFromJson === undefined
                 ? "" : AppController.importProfileFromFile(selectedFile, true);
             if (err && err.length > 0)
-                toast.show(I18n.t("toast.profile.importFail") + err, "error");
+                win.notice(I18n.t("toast.profile.importFail") + err, "error");
         }
     }
 
@@ -2206,7 +2321,7 @@ ApplicationWindow {
         onAccepted: {
             const r = AppController.importIcs(selectedFile);
             if (r.error) {
-                toast.show(r.error, "error");
+                win.notice(r.error, "error");
                 return;
             }
             // Counts, not a bare "done": a file that brought in nine events
@@ -2217,7 +2332,7 @@ ApplicationWindow {
             let msg = I18n.t("toast.ics.imported").arg(r.imported).arg(r.updated).arg(r.skipped);
             if (warns.length > 0)
                 msg += " · " + (warns.length === 1 ? warns[0] : I18n.t("toast.ics.warnings").arg(warns.length).arg(warns[0]));
-            toast.show(msg, (r.skipped > 0 || warns.length > 0) ? "warning" : "success");
+            win.notice(msg, (r.skipped > 0 || warns.length > 0) ? "warning" : "success");
             for (let i = 0; i < warns.length; i++) console.warn("[ics]", warns[i]);
         }
     }
@@ -2229,7 +2344,7 @@ ApplicationWindow {
         title: I18n.t("dialog.exportIcs.title")
         onAccepted: {
             const ok = AppController.exportIcsToFile(selectedFile);
-            toast.show(ok ? I18n.t("toast.ics.exported") : I18n.t("toast.ics.exportFail"),
+            win.notice(ok ? I18n.t("toast.ics.exported") : I18n.t("toast.ics.exportFail"),
                        ok ? "success" : "error");
         }
     }
@@ -2250,9 +2365,9 @@ ApplicationWindow {
     VaultImportDialog {
         id: vaultImportConfirm
         onImported: (r) => {
-            if (r.error) { toast.show(r.error, "error"); return; }
+            if (r.error) { win.notice(r.error, "error"); return; }
             const trouble = r.skipped > 0 || r.conflicts > 0;
-            toast.show(I18n.t("toast.notes.importedFull")
+            win.notice(I18n.t("toast.notes.importedFull")
                        .arg(r.imported).arg(r.updated).arg(r.kept).arg(r.conflicts).arg(r.skipped),
                        trouble ? "warning" : "success");
             for (let i = 0; i < r.warnings.length; i++) console.warn("[vault]", r.warnings[i]);
@@ -2269,7 +2384,7 @@ ApplicationWindow {
             const file = String(selectedFile);
             const name = decodeURIComponent(file.substring(file.lastIndexOf("/") + 1));
             const r = AppController.exportNotesFolder(currentFolder, name);
-            toast.show(r.error ? r.error
+            win.notice(r.error ? r.error
                                : I18n.t("toast.notes.exportedTo").arg(r.written).arg(r.folder),
                        r.error ? "error" : "success");
         }
@@ -2305,7 +2420,7 @@ ApplicationWindow {
         NumberAnimation {
             id: splashFade
             target: splash; property: "opacity"; to: 0
-            duration: Theme.reducedMotion ? 0 : 350; easing.type: Easing.OutCubic
+            duration: Theme.durMoveOut; easing.type: Theme.easeExit
             onFinished: splash.visible = false
         }
     }

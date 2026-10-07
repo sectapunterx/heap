@@ -16,7 +16,7 @@ Popup {
     anchors.centerIn: Overlay.overlay
 
     // Dimmed backdrop so the underlying app stays visible behind the popup.
-    Overlay.modal: Rectangle { color: Theme.scrim }
+    Overlay.modal: ModalScrim {}
 
     signal navigateToDoc(string sectionId)
     signal navigateToSnippets()
@@ -31,7 +31,7 @@ Popup {
     // A command the palette cannot run itself (it needs a popup Main owns):
     // Main.runCommand(id) handles it. Ids are the shortcut catalog's
     // ("view.board", "task.new", "theme.toggle"…) plus "settings:<section>"
-    // and a few palette-only ones ("event.new", "welcome.replay").
+    // and a palette-only one ("event.new").
     signal commandRequested(string id)
 
     property var _entries: []           // cached full list
@@ -49,6 +49,15 @@ Popup {
         return _contextual.indexOf(id) >= 0 || id.indexOf("board.") === 0 || id.indexOf("savedView.") === 0
             || id.indexOf("cal.") === 0 || id.indexOf("selection.") === 0;
     }
+
+    // Catalog actions whose palette name says more than their hotkey label.
+    readonly property var _paletteLabels: ({
+        "timeMachine.open": "palette.cmd.timeMachine",
+        "standup.draft":    "palette.cmd.standupDraft",
+        "recap.open":       "palette.cmd.weeklyRecap",
+        "endOfDay.open":    "palette.cmd.endOfDay",
+        "welcome.replay":   "palette.cmd.replayTour"
+    })
 
     readonly property var _settingsSections: ["profile", "appearance", "language", "notifications", "safety",
                                               "calendar", "tasks", "shortcuts", "integrations", "git", "data", "help", "about"]
@@ -70,16 +79,17 @@ Popup {
                            label: AppController.immersion ? I18n.t("palette.cmd.immersionOff") : c.label });
                 continue;
             }
-            out.push({ kind: "command", commandId: c.id, label: c.label, sub: c.sequence || "",
+            // The standup draft (APP-170), once Settings → Safety net turns it on.
+            if (c.id === "standup.draft" && !(AppController.safety && AppController.safety.standupDraft)) continue;
+            // The 0.6 tools read clearer in the palette with what they do.
+            const label = _paletteLabels[c.id] ? I18n.t(_paletteLabels[c.id]) : c.label;
+            out.push({ kind: "command", commandId: c.id, label: label, sub: c.sequence || "",
                        body: c.description || "" });
         }
-        out.push({ kind: "command", commandId: "event.new", label: I18n.t("palette.cmd.newEvent"), sub: "" });
-        out.push({ kind: "command", commandId: "welcome.replay", label: I18n.t("palette.cmd.replayTour"), sub: "" });
-        out.push({ kind: "command", commandId: "recap.open", label: I18n.t("palette.cmd.weeklyRecap"), sub: "" });
-        // The standup draft (APP-170), once Settings → Safety net turns it on.
-        if (AppController.safety && AppController.safety.standupDraft)
-            out.push({ kind: "command", commandId: "standup.draft", label: I18n.t("palette.cmd.standupDraft"), sub: "" });
-        out.push({ kind: "command", commandId: "timeMachine.open", label: I18n.t("palette.cmd.timeMachine"), sub: "" });
+        // A new event at 9:00 of the selected day; the catalog's key for a
+        // new event (at the next free slot) is the nearest thing to a hint.
+        out.push({ kind: "command", commandId: "event.new", label: I18n.t("palette.cmd.newEvent"),
+                   sub: AppController.shortcutFor("cal.newEvent") });
         // Saved views: one command per view, by name, plus saving the current
         // filters as one.
         const views = AppController.savedViews;
@@ -326,10 +336,7 @@ Popup {
         Qt.callLater(searchField.forceActiveFocus);
     }
 
-    background: Rectangle {
-        radius: Theme.radiusXl; color: Theme.panel
-        border.color: Theme.borderStrong; border.width: 1
-    }
+    background: ModalSurface {}
 
     contentItem: ColumnLayout {
         spacing: 0
@@ -426,7 +433,7 @@ Popup {
                             color: modelData.color || Theme.accentStrong
                             font.family: Theme.fontMono
                             font.pixelSize: Theme.fsXs
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                         }
                     }
 

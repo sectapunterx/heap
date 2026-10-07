@@ -117,6 +117,45 @@ TEST(EndOfDayGit, StashListCountsEntries) {
   EXPECT_EQ(countStashEntries("\n"), 0);
 }
 
+// ── APP-190: the day's summary ──
+
+TEST(DaySummary, ClosedTodayCarryOverAndTimers) {
+  const QDateTime morning(kDay, QTime(9, 0));
+  QVector<DayTask> tasks;
+  tasks.append({.id = "closed", .done = true, .closedAt = morning.addSecs(3600)});
+  tasks.append({.id = "closed-yesterday", .done = true, .closedAt = morning.addDays(-1)});
+  tasks.append({.id = "due-today", .dueAt = QDateTime(kDay, QTime(17, 0))});
+  tasks.append({.id = "overdue", .scheduledAt = morning.addDays(-3)});
+  tasks.append({.id = "tomorrow", .dueAt = morning.addDays(1)});
+  tasks.append({.id = "undated"});
+  tasks.append({.id = "archived-overdue", .archived = true, .dueAt = morning.addDays(-1)});
+  tasks.append({.id = "late-timer", .timerStartedAt = QDateTime(kDay, QTime(15, 0))});
+  tasks.append({.id = "early-timer", .timerStartedAt = morning});
+
+  const DaySummary s = daySummary(tasks, kEvening);
+
+  EXPECT_EQ(s.closedTaskIds, QStringList{"closed"});
+  EXPECT_EQ(s.carryOverTaskIds, (QStringList{"due-today", "overdue"}));
+  EXPECT_EQ(s.timerTaskIds, (QStringList{"early-timer", "late-timer"}));
+  EXPECT_FALSE(s.empty());
+}
+
+TEST(DaySummary, AQuietDayIsEmpty) {
+  QVector<DayTask> tasks;
+  tasks.append({.id = "undated"});
+  tasks.append({.id = "next-week", .dueAt = kEvening.addDays(7)});
+  EXPECT_TRUE(daySummary(tasks, kEvening).empty());
+  EXPECT_EQ(daySummaryLine(daySummary(tasks, kEvening), false), QString());
+}
+
+TEST(DaySummary, TheLineCountsBothLists) {
+  DaySummary s;
+  s.closedTaskIds = {"a", "b", "c"};
+  s.carryOverTaskIds = {"d"};
+  EXPECT_EQ(daySummaryLine(s, false), QStringLiteral("3 closed today · 1 carry over to tomorrow"));
+  EXPECT_EQ(daySummaryLine(s, true), QString::fromUtf8("Закрыто сегодня: 3 · Переходит на завтра: 1"));
+}
+
 TEST(EndOfDayText, TheSummaryReadsLikeTheSpec) {
   EndOfDayFindings f;
   f.timerTaskIds << QStringLiteral("A-1");

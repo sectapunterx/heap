@@ -285,17 +285,14 @@ Item {
                             text: I18n.relang(AppController.humanDate(AppController.selectedDate))
                             color: Theme.text
                             font.pixelSize: Theme.fsMd
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                             font.capitalization: Font.MixedCase
                         }
                         Text {
                             text: {
                                 const d = AppController.selectedDate;
                                 if (!d || !d.getFullYear) return "";
-                                const y = d.getFullYear();
-                                const m = (d.getMonth()+1).toString().padStart(2,"0");
-                                const dd = d.getDate().toString().padStart(2,"0");
-                                return y + "-" + m + "-" + dd + " · " + I18n.events(root._eventsToday);
+                                return I18n.fmtDate(d, "dayMonthYear") + " · " + I18n.events(root._eventsToday);
                             }
                             color: Theme.textDim
                             font.family: Theme.fontUi
@@ -317,6 +314,8 @@ Item {
                         elide: Text.ElideRight
                         Layout.fillWidth: true
                         horizontalAlignment: Text.AlignRight
+                        // The whole sentence for a screen reader too (APP-184).
+                        Accessible.name: I18n.t("day.dragHint")
                         HoverHandler { id: hintHover }
                         ToolTip.visible: hintHover.hovered
                         ToolTip.delay: 400
@@ -411,8 +410,28 @@ Item {
                 }
             }
 
+            // No-events hint for an empty day: a line under the header, not
+            // a card over the grid. Over the grid it covered an hour label
+            // (it read "19:00 No events") whatever it was drawn on.
+            Text {
+                id: dayEmptyText
+                objectName: "day-empty"
+                Layout.fillWidth: true
+                Layout.leftMargin: Theme.sp2xl
+                Layout.rightMargin: Theme.sp2xl
+                Layout.topMargin: Theme.spSm
+                Layout.bottomMargin: Theme.spSm
+                // Only on a day with nothing on it, task blocks included.
+                visible: root._eventsToday === 0 && root._visibleTaskBlocks === 0
+                wrapMode: Text.WordWrap
+                text: I18n.t("day.noEvents")
+                color: Theme.textDim
+                font.pixelSize: Theme.fsSm
+            }
+
             ScrollView {
                 id: scroll
+                objectName: "day-scroll"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
@@ -660,14 +679,10 @@ Item {
                                 readonly property bool repeating: evRect.masterId.length > 0
 
                                 // Marked by the keyboard (↑/↓ on the panel).
-                                Rectangle {
+                                FocusRing {
                                     objectName: "event-kb-ring"
-                                    anchors.fill: parent
                                     anchors.margins: -2
                                     radius: Theme.radiusSm + 2
-                                    color: "transparent"
-                                    border.color: Theme.focusRing
-                                    border.width: 2
                                     visible: root._kbEventKey !== "" && root._kbEventKey === root._kbKey(evRect.modelData)
                                     z: 50
                                 }
@@ -751,7 +766,7 @@ Item {
                                             text: evRect.context
                                             color: Theme.textMuted
                                             font.pixelSize: Theme.fsMd
-                                            font.weight: Font.DemiBold
+                                            font.weight: Theme.fwTitle
                                             elide: Text.ElideRight
                                             Layout.maximumWidth: parent.width * 0.45
                                         }
@@ -770,7 +785,7 @@ Item {
                                                   + (evRect.compactRow ? "  " + Theme.fmtHour(evRect.effStart) : "")
                                             color: Theme.text
                                             font.pixelSize: Theme.fsMd
-                                            font.weight: Font.DemiBold
+                                            font.weight: Theme.fwTitle
                                             elide: Text.ElideRight
                                         }
                                     }
@@ -987,33 +1002,5 @@ Item {
                 }
             }
         }
-    }
-
-    // No-events hint for an empty day — faint, non-interactive so drag-to-create
-    // on the grid underneath still works.
-    // On a chip of the panel's colour, so it does not print over an hour
-    // label and read as "19:00 No events".
-    Rectangle {
-        objectName: "day-empty"
-        anchors.centerIn: dayEmptyText
-        width: dayEmptyText.contentWidth + 2 * Theme.spXl
-        height: dayEmptyText.contentHeight + 2 * Theme.spSm
-        radius: Theme.radiusMd
-        color: Theme.panel
-        border.color: Theme.border
-        border.width: 1
-        visible: dayEmptyText.visible
-    }
-    Text {
-        id: dayEmptyText
-        anchors.centerIn: parent
-        width: parent.width - 48
-        // Not over a day that has task blocks on it.
-        visible: root._eventsToday === 0 && root._visibleTaskBlocks === 0
-        horizontalAlignment: Text.AlignHCenter
-        wrapMode: Text.WordWrap
-        text: I18n.t("day.noEvents")
-        color: Theme.textDim
-        font.pixelSize: Theme.fsSm
     }
 }
