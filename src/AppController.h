@@ -16,6 +16,7 @@
 #include <QJsonObject>
 #include <QMap>
 #include <QObject>
+#include <QPointF>
 #include <qqmlregistration.h>
 #include <QStringList>
 #include <QTimer>
@@ -1384,6 +1385,16 @@ class AppController : public QObject {
   // Theme.scale is while settings.appearance.uiScale is unset. 1.0 under
   // tests unless HEAP_TEXT_SCALE says otherwise.
   Q_INVOKABLE double systemUiScale(const QVariantList& steps) const;
+  // Paints a window's own title bar dark or light to match the theme; the
+  // OS otherwise follows its own app mode (a white bar over a dark heap).
+  Q_INVOKABLE void setWindowFrameDark(QObject* window, bool dark) const;
+
+  // Where the last mouse press or touch landed, in global coordinates. The
+  // window overlay's pressed() fires for presses inside a dialog too, so a
+  // dialog that closes on a press beside it (APP-126) checks the point.
+  Q_INVOKABLE QPointF lastPressGlobalPos() const {
+    return m_lastPressGlobal;
+  }
   // How the capture hotkey reaches heap from other apps (APP-171): "native"
   // (Windows, macOS), "x11", "portal" (Wayland), or "none" — then Settings
   // says to bind `heap --capture` in the desktop's own keyboard settings.
@@ -1843,6 +1854,8 @@ class AppController : public QObject {
   bool isWorkDay(const QDate& day) const;
   // Fires at the next local midnight; see refreshToday().
   QTimer* m_midnightTimer = nullptr;
+  // Set by an application event filter before any item sees the press.
+  QPointF m_lastPressGlobal{-1e9, -1e9};
   void armMidnightTimer();
   QVariantMap settingsMap() const;
   // The calendar snap grid in hours, from settings.calendar.snapMinutes. Every

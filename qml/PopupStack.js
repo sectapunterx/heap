@@ -26,3 +26,17 @@ function isTopmost(popup, overlay) {
     }
     return top !== null && top === mine;
 }
+
+// False when the last press (AppController.lastPressGlobalPos) landed on the
+// popup itself. Since Qt 6.11 the overlay's pressed() also fires for a press
+// inside a modal popup, so a dialog that closed on pressed() closed on every
+// click in it — its title, its fields, its Details.
+function pressedOutside(popup, globalPos) {
+    if (!popup || !popup.contentItem || !globalPos)
+        return true;
+    var item = popup.contentItem.parent;
+    if (!item)
+        return true;
+    var p = item.mapFromGlobal(globalPos.x, globalPos.y);
+    return p.x < 0 || p.y < 0 || p.x >= item.width || p.y >= item.height;
+}

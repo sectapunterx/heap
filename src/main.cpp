@@ -22,6 +22,8 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QFont>
+#include <QGuiApplication>
 #include <QIcon>
 #include <QImageReader>
 #include <QMessageBox>
@@ -378,10 +380,17 @@ int main(int argc, char* argv[]) {
 
   // Qt Quick draws text from distance fields by default: no hinting, so at
   // 100% scale the small UI sizes come out soft and smeared. Native rendering
-  // uses the platform rasterizer (DirectWrite / CoreText / FreeType) and keeps
-  // stems on the pixel grid. The cost is scaled text: a card lifted for a drag
-  // (scale 1.03) blurs slightly until it is dropped.
+  // uses the platform rasterizer (DirectWrite / CoreText / FreeType), but with
+  // the font's full hinting it snaps every curve to the pixel grid and round
+  // letters turn into steps. No hinting keeps the outlines as drawn and still
+  // gets the platform's sharp antialiasing. The cost is scaled text: a card
+  // lifted for a drag (scale 1.03) blurs slightly until it is dropped.
   QQuickWindow::setTextRenderType(QQuickWindow::NativeTextRendering);
+  {
+    QFont uiFont = QGuiApplication::font();
+    uiFont.setHintingPreference(QFont::PreferNoHinting);
+    QGuiApplication::setFont(uiFont);
+  }
   QQmlApplicationEngine engine;
   engine.rootContext()->setContextProperty("INITIAL_VIEW", cli.initialView);
   // A snooze clicked while heap was closed starts it in the tray: the click

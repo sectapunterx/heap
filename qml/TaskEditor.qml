@@ -25,7 +25,7 @@ Popup {
     // Dimmed backdrop so the underlying app stays visible behind the popup.
     Overlay.modal: ModalScrim {}
     // A press beside the editor (APP-126); see PopupStack.js.
-    Overlay.onPressed: if (PopupStack.isTopmost(root, Overlay.overlay)) root.requestClose()
+    Overlay.onPressed: if (PopupStack.isTopmost(root, Overlay.overlay) && PopupStack.pressedOutside(root, AppController.lastPressGlobalPos())) root.requestClose()
 
     property var draft: ({})
     // What the fields held when the editor opened; anything else is an edit.

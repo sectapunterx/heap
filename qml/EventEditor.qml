@@ -19,7 +19,7 @@ Popup {
     // Dimmed backdrop so the underlying app stays visible behind the popup.
     Overlay.modal: ModalScrim {}
     // A press beside the editor (APP-126); see PopupStack.js.
-    Overlay.onPressed: if (PopupStack.isTopmost(root, Overlay.overlay)) root._requestClose()
+    Overlay.onPressed: if (PopupStack.isTopmost(root, Overlay.overlay) && PopupStack.pressedOutside(root, AppController.lastPressGlobalPos())) root._requestClose()
 
     property string eventId: ""
     // A meeting from a calendar link (APP-118): that calendar owns it, so the

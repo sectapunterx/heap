@@ -218,6 +218,8 @@ qt_add_library(heap_core STATIC
     src/platform/Sound.cpp
     # The UI and mono fonts shipped inside the binary (qrc :/fonts below).
     src/platform/BundledFonts.cpp
+    # The window frame follows heap's theme, not the system's app mode.
+    src/platform/WindowFrame.cpp
     src/TypeAhead.cpp
     # ── audit-plat: begin ──
     src/storage/StateIO.cpp
@@ -513,6 +515,8 @@ if (WIN32)
     target_link_libraries(heap_core PUBLIC runtimeobject shell32)
     # PlaySoundW for the sound palette (Sound_win.cpp).
     target_link_libraries(heap_core PUBLIC winmm)
+    # DwmSetWindowAttribute for a dark title bar (WindowFrame.cpp).
+    target_link_libraries(heap_core PUBLIC dwmapi)
 endif ()
 if(UNIX AND NOT APPLE)
     target_link_libraries(heap_core PUBLIC Qt6::DBus)

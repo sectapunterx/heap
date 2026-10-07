@@ -46,6 +46,7 @@
 #include "platform/GlobalHotkey.h"
 #include "platform/Paths.h"
 #include "platform/Sound.h"
+#include "platform/WindowFrame.h"
 #include "query/TaskQuery.h"
 #include "recap/WeeklyRecap.h"
 #include "recur/RecurrenceEngine.h"
@@ -84,6 +85,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QPair>
+#include <QPointerEvent>
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QSaveFile>
@@ -96,6 +98,7 @@
 #include <QUrl>
 #include <QUrlQuery>
 #include <QUuid>
+#include <QWindow>
 
 #include <algorithm>
 #include <cmath>
@@ -649,6 +652,30 @@ const QHash<QString, I18nEntry>& i18nTable() {
 
 }  // namespace
 
+namespace {
+// Notes where every mouse press and touch begins, before Qt Quick delivers
+// it (see AppController::lastPressGlobalPos).
+class PressTracker : public QObject {
+ public:
+  PressTracker(QPointF* out, QObject* parent) : QObject(parent), m_out(out) {
+  }
+
+ protected:
+  bool eventFilter(QObject* watched, QEvent* event) override {
+    if(event->type() == QEvent::MouseButtonPress || event->type() == QEvent::TouchBegin) {
+      auto* pointer = static_cast<QPointerEvent*>(event);
+      if(pointer->pointCount() > 0) {
+        *m_out = pointer->point(0).globalPosition();
+      }
+    }
+    return QObject::eventFilter(watched, event);
+  }
+
+ private:
+  QPointF* m_out;
+};
+}  // namespace
+
 AppController::AppController(QObject* parent) :
     QObject(parent),
     m_today(QDate::currentDate()),
@@ -656,6 +683,9 @@ AppController::AppController(QObject* parent) :
     m_automationTimer(new QTimer(this)),
     m_saveTimer(new QTimer(this)),
     m_chrono(std::make_unique<heap::chrono::ChronoParser>(QLocale())) {
+  if(QCoreApplication* const app = QCoreApplication::instance()) {
+    app->installEventFilter(new PressTracker(&m_lastPressGlobal, this));
+  }
   m_saveTimer->setSingleShot(true);
   m_saveTimer->setInterval(300);
   connect(m_saveTimer, &QTimer::timeout, this, &AppController::saveStateNow);
@@ -11820,6 +11850,10 @@ QList<double> uiScaleSteps(const QVariantList& steps) {
 }
 
 }  // namespace
+
+void AppController::setWindowFrameDark(QObject* window, bool dark) const {
+  heap::platform::setWindowFrameDark(qobject_cast<QWindow*>(window), dark);
+}
 
 double AppController::systemUiScale(const QVariantList& steps) const {
   if(m_systemTextScale <= 0) {

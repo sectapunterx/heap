@@ -69,6 +69,35 @@ TestCase {
         verify(!p.visible, row.tag + " stayed open after a press beside it");
     }
 
+    // A press on a dialog's own body (a label, padding) is not a press beside
+    // it: in 0.7.0 it reached the overlay and closed the task editor on any
+    // click.
+    function test_a_press_inside_keeps_the_dialog_open_data() {
+        return [
+            { tag: "TaskEditor", qml: "TaskEditor { }", fn: "task" },
+            { tag: "EventEditor", qml: "EventEditor { }", fn: "event" },
+            { tag: "WelcomePopup", qml: "WelcomePopup { }" },
+            { tag: "QuickCaptureNotesPopup", qml: "QuickCaptureNotesPopup { }" },
+        ];
+    }
+
+    function test_a_press_inside_keeps_the_dialog_open(row) {
+        const p = _make(row.qml);
+        if (row.fn === "task")
+            p.showFor(AppController.newTaskDraft("todo"));
+        else if (row.fn === "event")
+            p.showForDraft(AppController.newEventDraft(10, new Date()));
+        else
+            p.open();
+        tryCompare(p, "opened", true);
+        // Near the top edge, mid-width: the header, not a field or button.
+        const inside = p.contentItem.mapToItem(tc, p.contentItem.width / 2, 4);
+        mouseClick(tc, inside.x, inside.y);
+        wait(50);
+        verify(p.visible, row.tag + " closed after a press inside it");
+        p.close();
+    }
+
     // Typed text is not thrown away by a stray press: the editor asks first.
     function test_a_press_beside_an_edited_task_asks_first() {
         const ed = _make("TaskEditor { }");

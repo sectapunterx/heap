@@ -33,7 +33,7 @@ Popup {
     Overlay.modal: ModalScrim {}
     // A press beside the popup acts like Esc (APP-126): close when empty,
     // otherwise ask before dropping the text. See PopupStack.js.
-    Overlay.onPressed: if (!root.standalone && PopupStack.isTopmost(root, Overlay.overlay)) root._maybeDiscard()
+    Overlay.onPressed: if (!root.standalone && PopupStack.isTopmost(root, Overlay.overlay) && PopupStack.pressedOutside(root, AppController.lastPressGlobalPos())) root._maybeDiscard()
 
     // The note just saved, for the owner's confirmation (see QuickCapturePopup).
     signal captured(string title, string body, string taskId)
