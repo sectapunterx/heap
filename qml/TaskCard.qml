@@ -1093,7 +1093,7 @@ Rectangle {
                 else AppController.startTaskTimer(card.task.id);
             }
         }
-        AppMenuSeparator { visible: card._isTicket }
+        AppMenuSeparator { objectName: "tc-menu-ticketSep"; visible: card._isTicket }
         AppMenuItem {
             objectName: "tc-menu-open"
             visible: card._isTicket && String(card._ticket.url || "").length > 0

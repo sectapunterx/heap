@@ -588,7 +588,7 @@ Item {
                     Text {
                         Layout.fillWidth: true
                         elide: Text.ElideRight
-                        text: I18n.t("docs.counts").arg(root.totalDocs()).arg(root.snippets.length).arg(root.contacts.length)
+                        text: I18n.docsCounts(root.totalDocs(), root.snippets.length, root.contacts.length)
                         color: Theme.textDim
                         font.family: Theme.fontUi
                         font.features: Theme.tabularNums
@@ -1433,6 +1433,10 @@ Item {
         // they blinked out as the pointer approached.
         property bool cardHovered: false
         HoverHandler { onHoveredChanged: card.cardHovered = hovered }
+        // The ⋮⋮ ✎ × overlay sits where the version and ↗ are; while it
+        // shows they step aside rather than show through between the
+        // buttons (EYE-5).
+        readonly property bool actionsShown: card.cardHovered || cardEdit.activeFocus || cardDelete.activeFocus
         color: cardHovered ? Theme.panel2 : Theme.panel
         border.color: cardHovered ? Theme.borderStrong : Theme.border
         border.width: 1
@@ -1472,7 +1476,9 @@ Item {
                 }
                 Item { Layout.fillWidth: true }
                 Text {
+                    objectName: "docs-card-version"
                     visible: (card.item.version || "").length > 0
+                    opacity: card.actionsShown ? 0 : 1
                     text: card.item.version || ""
                     color: Theme.textDim
                     font.family: Theme.fontUi
@@ -1480,8 +1486,10 @@ Item {
                     font.pixelSize: Theme.fsSm
                 }
                 Text {
+                    objectName: "docs-card-link"
+                    opacity: card.actionsShown ? 0 : 1
                     text: card.isInternal ? "→" : "↗"
-                    color: card.cardHovered ? Theme.accentStrong : Theme.textDim
+                    color: Theme.textDim
                     font.pixelSize: Theme.fsMd
                 }
             }
@@ -1607,6 +1615,7 @@ Item {
                 }
             }
             IconButton {
+                id: cardEdit
                 objectName: "docs-card-edit"
                 glyph: "✎"
                 label: I18n.t("docs.menu.edit")
@@ -1614,6 +1623,7 @@ Item {
                 onActivated: root.openDocEdit(card.sectionId, card.item)
             }
             IconButton {
+                id: cardDelete
                 objectName: "docs-card-delete"
                 glyph: "×"
                 danger: true

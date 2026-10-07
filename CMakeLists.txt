@@ -721,6 +721,7 @@ qt_add_resources(heap_core "brand"
         design/brand-export/icons/heap-33-jira.svg
         design/brand-export/icons/heap-34-trello.svg
         design/brand-export/icons/heap-35-mattermost.svg
+        design/brand-export/icons/heap-36-saved-view.svg
         design/brand-export/surfaces/heap-splash.svg
         design/brand-export/surfaces/heap-readme-banner.svg
         design/brand-export/surfaces/heap-marketing-hero.svg
