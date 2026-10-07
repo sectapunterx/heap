@@ -46,6 +46,34 @@ TestCase {
         verify(s.line.indexOf(AppController.shortcutFor("task.new")) >= 0 || AppController.tasks.rowCount() > 0);
     }
 
+    // EYE-4: a board with no cards says so once. Every column used to add
+    // its own "Nothing here yet" under the board's state: eight at once.
+    function test_empty_board_has_one_empty_state() {
+        const prev = AppController.activeProfileId;
+        const pid = AppController.createProfile("eyes-probe-empty", "#5cc2dd");
+        verify(pid !== "");
+        try {
+            tryVerify(() => (AppController.statusCounts["_total"] || 0) === 0, 2000, "the new profile is not empty");
+            const b = make('import TodoCpp; KanbanBoard { anchors.fill: parent }');
+            const s = findChild(b, "board-empty-state");
+            verifyState(s, "empty board");
+            const shown = [];
+            let cols = 0;
+            (function walk(it) {
+                if (!it) return;
+                if (it.objectName === "column-empty") cols++;
+                if (it.objectName === "column-empty" && it.visible && it.parent.visible) shown.push(it);
+                const kids = it.children || [];
+                for (let i = 0; i < kids.length; i++) walk(kids[i]);
+            })(b);
+            verify(cols > 0, "no columns on the board");
+            compare(shown.length, 0, "columns still say they are empty under the board's state");
+        } finally {
+            AppController.deleteProfile(pid);
+            AppController.activeProfileId = prev;
+        }
+    }
+
     // FUNC-1: a search that hides every card says so once, for the board,
     // like the other views — not "Nothing here yet" in every column, nor an
     // invitation to drag a card into a column the search emptied.

@@ -134,6 +134,36 @@ TestCase {
     }
 
     // ── VISU-19 / PERA-7: the board scrolls to the cursor ──
+    // EYE-1: a hidden separator takes no room. The ticket group's separator
+    // on a local task left a blank row above "Schedule".
+    function test_a_hidden_separator_collapses() {
+        const sep = make('import TodoCpp; AppMenuSeparator { visible: false }');
+        compare(sep.height, 0);
+        sep.visible = true;
+        verify(sep.height > 0);
+
+        const id = addTask(AppController.statuses[0].id, "separator");
+        const b = makeBoard();
+        const m = openCardMenu(b, id);
+        const at = indexOfItem(m.menu, "tc-menu-ticketSep");
+        verify(at > 0);
+        const ticketSep = m.menu.itemAt(at);
+        verify(!ticketSep.visible);
+        compare(ticketSep.height, 0);
+        // The row before it and the next shown row sit on one regular
+        // separator's distance, not two.
+        const prev = m.menu.itemAt(at - 1);
+        let next = null;
+        for (let i = at + 1; i < m.menu.count; i++) {
+            const it = m.menu.itemAt(i);
+            if (it && it.visible && it.height > 0) { next = it; break; }
+        }
+        verify(next !== null);
+        const gap = next.y - (prev.y + prev.height);
+        verify(gap < Theme.spSm, "blank band of " + gap + "px in the card menu");
+        m.menu.close();
+    }
+
     function test_the_board_scrolls_to_a_cursor_past_the_right_edge() {
         const sts = AppController.statuses;
         verify(sts.length >= 4);

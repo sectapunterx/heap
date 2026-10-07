@@ -303,7 +303,7 @@ QtObject {
             "board.sorted.noReorder": "The board is sorted — switch the sort to Manual to reorder cards",
             "board.empty.title": "No tasks yet",
             "board.empty.hint": "Press %1 to add your first task, or use quick-capture (%2).",
-            "day.noEvents": "No events today — drag an empty slot to create one, or drop a task to schedule it.",
+            "day.noEvents": "No events. Drag across free time to create one, or drop a task here to schedule it.",
             "week.empty.title": "Nothing this week",
             "week.empty.hint": "Tasks with a date and events show up here. Click an empty slot to add an event, or press %1 for a task.",
             "month.empty.title": "Nothing this month",
@@ -683,7 +683,15 @@ QtObject {
             "docs.noMatches": "Nothing in the docs matches “%1”",
             "docs.search.clear": "Clear search",
             "docs.header": "Docs · spec & references",
-            "docs.counts": "%1 entries · %2 snippets · %3 contacts",
+            "plural.entry.one": "entry",
+            "plural.entry.few": "entries",
+            "plural.entry.many": "entries",
+            "plural.snippet.one": "snippet",
+            "plural.snippet.few": "snippets",
+            "plural.snippet.many": "snippets",
+            "plural.contact.one": "contact",
+            "plural.contact.few": "contacts",
+            "plural.contact.many": "contacts",
             "docs.snippets": "Snippets",
             "docs.contacts": "Contacts & channels",
             "docs.nav.contacts": "Contacts",
@@ -1771,7 +1779,7 @@ QtObject {
             "board.sorted.noReorder": "Доска отсортирована — чтобы менять порядок карточек, включите сортировку «Вручную»",
             "board.empty.title": "Пока нет задач",
             "board.empty.hint": "Нажмите %1, чтобы добавить первую задачу, или откройте быстрый ввод (%2).",
-            "day.noEvents": "Событий сегодня нет — потяни пустой слот, чтобы создать, или брось задачу для планирования.",
+            "day.noEvents": "Событий нет. Протяните по свободному времени, чтобы создать событие, или перетащите сюда задачу.",
             "week.empty.title": "На этой неделе пусто",
             "week.empty.hint": "Здесь появляются задачи с датой и события. Кликните по свободному месту, чтобы добавить событие, или нажмите %1 для задачи.",
             "month.empty.title": "В этом месяце пусто",
@@ -2143,7 +2151,15 @@ QtObject {
             "docs.noMatches": "В доках ничего не нашлось по запросу «%1»",
             "docs.search.clear": "Сбросить поиск",
             "docs.header": "Доки · спеки и справочники",
-            "docs.counts": "%1 записей · %2 сниппетов · %3 контактов",
+            "plural.entry.one": "запись",
+            "plural.entry.few": "записи",
+            "plural.entry.many": "записей",
+            "plural.snippet.one": "сниппет",
+            "plural.snippet.few": "сниппета",
+            "plural.snippet.many": "сниппетов",
+            "plural.contact.one": "контакт",
+            "plural.contact.few": "контакта",
+            "plural.contact.many": "контактов",
             "docs.snippets": "Сниппеты",
             "docs.contacts": "Контакты и каналы",
             "docs.nav.contacts": "Контакты",
@@ -2965,6 +2981,12 @@ QtObject {
     function tasks(n)     { return n + " " + _plural(n, t("plural.task.one"),     t("plural.task.few"),     t("plural.task.many")); }
     function events(n)    { return n + " " + _plural(n, t("plural.event.one"),    t("plural.event.few"),    t("plural.event.many")); }
     function deadlines(n) { return n + " " + _plural(n, t("plural.deadline.one"), t("plural.deadline.few"), t("plural.deadline.many")); }
+    // Docs header: "31 entries · 5 snippets · 6 contacts", each counted on its own.
+    function docsCounts(entries, snippets, contacts) {
+        return [entries + " " + _plural(entries, t("plural.entry.one"), t("plural.entry.few"), t("plural.entry.many")),
+                snippets + " " + _plural(snippets, t("plural.snippet.one"), t("plural.snippet.few"), t("plural.snippet.many")),
+                contacts + " " + _plural(contacts, t("plural.contact.one"), t("plural.contact.few"), t("plural.contact.many"))].join(" · ");
+    }
 
     // ── Dates ────────────────────────────────────────────────────────
     // Calendars used to pull names from three different places — a hardcoded

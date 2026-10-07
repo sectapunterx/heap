@@ -54,6 +54,21 @@ TestCase {
         }
     }
 
+    // EYE-6: the Docs header counts each of its three numbers on its own;
+    // ru had "31 записей" for every count.
+    function test_docs_counts_are_plural_forms() {
+        const savedLang = AppController.language;
+        AppController.language = "ru";
+        compare(I18n.docsCounts(1, 2, 5), "1 запись · 2 сниппета · 5 контактов");
+        compare(I18n.docsCounts(21, 31, 11), "21 запись · 31 сниппет · 11 контактов");
+        compare(I18n.docsCounts(31, 1, 22), "31 запись · 1 сниппет · 22 контакта");
+        compare(I18n.docsCounts(5, 12, 0), "5 записей · 12 сниппетов · 0 контактов");
+        AppController.language = "en";
+        compare(I18n.docsCounts(1, 2, 5), "1 entry · 2 snippets · 5 contacts");
+        compare(I18n.docsCounts(21, 1, 31), "21 entries · 1 snippet · 31 contacts");
+        AppController.language = savedLang;
+    }
+
     // …and a key that exists only in English still resolves under ru, rather
     // than falling through to the key.
     function test_ru_falls_back_to_english_not_to_the_key() {

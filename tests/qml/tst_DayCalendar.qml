@@ -82,6 +82,22 @@ TestCase {
         compare(dc.hoursEnd, 24);
     }
 
+    // EYE-3: the empty-day line sits under the header, not on the grid,
+    // where it covered an hour label whatever it was drawn on.
+    function test_the_empty_day_hint_is_off_the_grid() {
+        const day = probeDay(431);
+        clearDay(day);
+        AppController.selectedDate = day;
+        const dc = makeDay();
+        const hint = findChild(dc, "day-empty");
+        const grid = findChild(dc, "day-scroll");
+        verify(hint !== null && grid !== null);
+        tryVerify(() => hint.visible, 1000, "an empty day shows no hint");
+        const hintBottom = hint.mapToItem(dc, 0, hint.height).y;
+        const gridTop = grid.mapToItem(dc, 0, 0).y;
+        verify(hintBottom <= gridTop, "the hint overlaps the hour grid: " + hintBottom + " > " + gridTop);
+    }
+
     // Working hours still exist — they just tint rather than clip.
     function test_working_hours_are_reported_separately() {
         const dc = makeDay();

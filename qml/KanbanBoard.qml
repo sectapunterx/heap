@@ -642,6 +642,7 @@ Item {
                     item["bus"] = stackBus;
                     item["filtering"] = Qt.binding(() => root._filtering);
                     item["nothingFound"] = Qt.binding(() => root._nothingFound);
+                    item["boardEmpty"] = Qt.binding(() => root._boardTotal === 0);
                 }
                 // A column's way to the stack: its drops and its cards' menus
                 // ask the board through this, not by the board's id.
@@ -662,9 +663,10 @@ Item {
                     property bool dragOver: false
                     readonly property int visibleCount: colFilter.count
                     // Set by colRepeater: a search or filter is on / it hides
-                    // every card on the board.
+                    // every card on the board / the board has no cards at all.
                     property bool filtering: false
                     property bool nothingFound: false
+                    property bool boardEmpty: false
                     // Advisory work-in-progress limit. 0 = none. Over the
                     // limit the badge turns, and that is all it does: a hard
                     // cap would make a drag silently do nothing, which reads
@@ -1252,8 +1254,11 @@ Item {
                                 // matches" and no invitation to drag cards in,
                                 // and nothing at all when the whole board came
                                 // up empty — the board says that once (FUNC-1).
+                                // Same on a board with no cards yet: one
+                                // board-level state, the columns keep only
+                                // their headers (EYE-4).
                                 Item {
-                                    visible: col.visibleCount === 0 && !col.nothingFound
+                                    visible: col.visibleCount === 0 && !col.nothingFound && !col.boardEmpty
                                     width: bodyFlick.width
                                     height: colEmpty.implicitHeight + Theme.spXl
                                     EmptyState {

@@ -242,21 +242,31 @@ Rectangle {
                         height: svBtn.implicitHeight
                         objectName: "rail-saved-" + svBtn.index
                         expanded: root.expanded
-                        glyph: svBtn.index < 9 ? String(svBtn.index + 1) : "·"
-                        glyphMono: true
+                        // A bookmark with the Alt+N digit in it: a bare digit
+                        // with its count in the corner read as "1⁶" in the
+                        // collapsed rail (EYE-7).
+                        iconSource: "qrc:/brand/icons/heap-36-saved-view.svg"
+                        iconText: svBtn.index < 9 ? String(svBtn.index + 1) : ""
                         label: svBtn.modelData.name
                         readonly property bool _active: svBtn.modelData.id === root.activeSavedViewId
                         active: svBtn._active
                         modified: svBtn._active && root.savedViewModified
                         readonly property var _problems: svBtn.modelData.problems || []
-                        countText: svBtn._problems.length > 0 ? "?"
-                                 : (root._savedCounts[svBtn.modelData.id] !== undefined ? String(root._savedCounts[svBtn.modelData.id]) : "")
+                        readonly property string _count: root._savedCounts[svBtn.modelData.id] !== undefined
+                            ? String(root._savedCounts[svBtn.modelData.id]) : ""
+                        // The count pill in the expanded list; the icon rail
+                        // keeps only the "?" of a broken query and moves the
+                        // count to the tooltip — a corner number on a
+                        // numbered bookmark still read as a power (EYE-7).
+                        countText: svBtn._problems.length > 0 ? "?" : (root.expanded ? svBtn._count : "")
                         countColor: svBtn._problems.length > 0 ? Theme.warning : Theme.panel3
                         shortcutId: svBtn.index < 9 ? "savedView." + (svBtn.index + 1) : ""
                         tooltipText: svBtn._problems.length > 0
                             ? svBtn.modelData.name + " — " + I18n.t("topbar.searchUnknown").arg(svBtn._problems.join("  "))
-                            : svBtn.modelData.name + (svBtn.modelData.query.length > 0 ? "  ·  " + svBtn.modelData.query : "")
-                        Accessible.name: svBtn.modelData.name + (svBtn._problems.length > 0 ? "" : ", " + I18n.t("siderail.saved.count").arg(svBtn.countText))
+                            : svBtn.modelData.name
+                              + (!root.expanded && svBtn._count.length > 0 ? "  ·  " + I18n.t("siderail.saved.count").arg(svBtn._count) : "")
+                              + (svBtn.modelData.query.length > 0 ? "  ·  " + svBtn.modelData.query : "")
+                        Accessible.name: svBtn.modelData.name + (svBtn._problems.length > 0 ? "" : ", " + I18n.t("siderail.saved.count").arg(svBtn._count))
                         onActivated: root.savedViewActivated(svBtn.modelData.id)
                         onContextRequested: root._openSavedMenu(svBtn, svBtn.modelData.id, svBtn.index)
                         Keys.onUpPressed: (e) => {
@@ -434,9 +444,9 @@ Rectangle {
         // The icons are drawn on an 18px grid with 1px lines on the pixel
         // grid (APP-195); shown at 18, every line is one device pixel.
         property int iconSize: 18
-        // Saved views: the glyph is the Alt+N digit, set in the mono face; a
+        // Saved views: a short text (the Alt+N digit) set inside the icon; a
         // view whose filters were changed since it was applied gets a dot.
-        property bool glyphMono: false
+        property string iconText: ""
         property bool modified: false
         signal activated()
         // Right click, or the Menu key on a row that has a menu.
@@ -482,12 +492,26 @@ Rectangle {
                 color: btn._fg
             }
             Text {
+                objectName: "rail-icon-text"
+                visible: btn.glyph === "" && btn.iconText !== ""
+                anchors.horizontalCenter: parent.horizontalCenter
+                // In the bookmark's body, above its notch.
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.verticalCenterOffset: -1
+                text: btn.iconText
+                color: btn._fg
+                font.family: Theme.fontUi
+                font.features: Theme.tabularNums
+                font.pixelSize: Theme.fsXs
+                font.weight: Theme.fwTitle
+            }
+            Text {
                 visible: btn.glyph !== ""
                 anchors.centerIn: parent
                 text: btn.glyph
                 color: btn._fg
-                font.family: btn.glyphMono ? Theme.fontMono : Theme.fontUi
-                font.pixelSize: btn.glyphMono ? Theme.fsSm : Theme.fsLg
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsLg
             }
         }
         // A name that does not fit on the line steps down a size and, if it
