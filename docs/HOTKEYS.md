@@ -276,10 +276,13 @@ Every one of these is a single undo step.
 
 ## Notes
 
-- **Quick-capture** opens a single-field popup that parses your line as you type
+- **Quick-capture** opens a popup that parses your text as you type
   — see [TUTORIAL.md](TUTORIAL.md#quick-capture-syntax) for the syntax.
-  `Return` adds and closes, `Ctrl+Return` adds and stays open for the next
-  item; `Tab` (or the arrows, then `Return`) takes a suggestion. From
+  `Ctrl+Return` adds and closes, `Ctrl+Shift+Return` adds and stays open for
+  the next item; `Return` and `Shift+Return` start a new line (the lines after
+  the first are the description). `Tab` (or the arrows, then `Return`) takes a
+  suggestion. The quick note is the same: `Ctrl+Return` saves, `Return` is a
+  new line, `Esc` asks before dropping the text. From
   another app it comes up on its own, without the main window, and a
   notification confirms what was created.
 - **Task editor:** `Ctrl+Return` saves. `Esc` (or a click on the backdrop) closes

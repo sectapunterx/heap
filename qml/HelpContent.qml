@@ -399,8 +399,8 @@ Item {
                               "Быстрый ввод")
             }
             Body {
-                text: root.tr2("When you need to dump a thought without breaking away from what you're doing — open Quick Capture (Ctrl+Shift+Space; rebind it in the Hotkeys panel). You type one line or a paragraph — the popup parses it into title, description, @-mentions, and deadline on its own.",
-                              "Когда нужно выгрузить мысль, не отрываясь от дела, — откройте быстрый ввод (Ctrl+Shift+Space; переназначается в панели «Горячие клавиши»). Пишете строку или абзац — окно само разберёт их на название, описание, @-упоминания и срок.")
+                text: root.tr2("When you need to dump a thought without breaking away from what you're doing — open Quick Capture (Ctrl+Shift+Space; rebind it in the Hotkeys panel). You type one line or a paragraph — the popup parses it into title, description, @-mentions, and deadline on its own. Enter starts a new line; Ctrl+Enter saves, Ctrl+Shift+Enter saves and stays open for the next one; Esc closes.",
+                              "Когда нужно выгрузить мысль, не отрываясь от дела, — откройте быстрый ввод (Ctrl+Shift+Space; переназначается в панели «Горячие клавиши»). Пишете строку или абзац — окно само разберёт их на название, описание, @-упоминания и срок. Enter — новая строка; Ctrl+Enter сохраняет, Ctrl+Shift+Enter сохраняет и оставляет окно для следующей; Esc закрывает.")
             }
 
             H3 {

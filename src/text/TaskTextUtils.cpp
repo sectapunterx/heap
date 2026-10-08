@@ -216,6 +216,24 @@ TaskMeta extractMeta(QStringView raw, bool keepTicketKey) {
   TaskMeta out;
   QString text = raw.toString();
 
+  // 0. Quick capture takes several lines (APP-209): the first line that
+  //    says something is the title, the lines after it the description.
+  //    Every kind of line break counts (Shift+Enter in a text area writes a
+  //    Unicode line separator).
+  text.replace(QStringLiteral("\r\n"), QStringLiteral("\n"));
+  for(const QChar sep : {QChar(u'\r'), QChar(0x2028), QChar(0x2029)}) {
+    text.replace(sep, QChar(u'\n'));
+  }
+  QString rest;
+  for(int nl = text.indexOf(QChar(u'\n')); nl >= 0; nl = text.indexOf(QChar(u'\n'))) {
+    if(!text.left(nl).trimmed().isEmpty()) {
+      rest = text.mid(nl + 1).trimmed();
+      text.truncate(nl);
+      break;
+    }
+    text.remove(0, nl + 1);
+  }
+
   // 1. "// comment" → desc. Split on the first occurrence outside a URL:
   //    "see https://example.com/a" used to lose everything after "https:".
   static const QRegularExpression urlRx(QStringLiteral("[A-Za-z][A-Za-z0-9+.\\-]*://\\S*"));
@@ -236,6 +254,9 @@ TaskMeta extractMeta(QStringView raw, bool keepTicketKey) {
   if(dslash >= 0) {
     out.desc = text.mid(dslash + 2).trimmed();
     body = text.left(dslash);
+  }
+  if(!rest.isEmpty()) {
+    out.desc = out.desc.isEmpty() ? rest : out.desc + QChar(u'\n') + rest;
   }
   out.head = body;
 
