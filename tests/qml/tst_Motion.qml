@@ -1,5 +1,6 @@
 // Micro-motions and empty states (APP-167): the pure rules in Motion.js,
-// the stack a closed task is laid on (APP-176), and the EmptyState drawing.
+// when a closed task plays the done moment (APP-176), and the EmptyState
+// drawing.
 import QtQuick
 import QtTest
 import TodoCpp
@@ -15,8 +16,8 @@ TestCase {
 
     Item { id: host; anchors.fill: parent }
 
-    // APP-176: closing one task plays the stack; a bulk move, a move inside
-    // Done and "Reduce motion" do not.
+    // APP-176: closing one task plays the done moment; a bulk move, a move
+    // inside Done and "Reduce motion" do not.
     function test_should_stack_only_for_one_card_into_done_with_motion() {
         verify(Motion.shouldStack(1, "prog", "done", 1));
         verify(!Motion.shouldStack(2, "prog", "done", 1), "a bulk move");
@@ -24,19 +25,6 @@ TestCase {
         verify(!Motion.shouldStack(1, "prog", "review", 1), "not into Done");
         verify(!Motion.shouldStack(1, "done", "done", 1), "already done");
         verify(!Motion.shouldStack(1, "prog", "done", 0), "reduced motion");
-    }
-
-    function test_stack_bars_are_capped_and_keep_their_widths() {
-        compare(Motion.stackBars(0), 0);
-        compare(Motion.stackBars(3), 3);
-        compare(Motion.stackBars(500), Motion.STACK_MAX);
-        compare(Motion.stackBars(-2), 0);
-        for (let i = 0; i < 8; i++) {
-            const w = Motion.stackBarWidth(i);
-            verify(w > 0 && w <= 1, "bar " + i + " is " + w);
-        }
-        compare(Motion.stackBarWidth(0), Motion.stackBarWidth(Motion.STACK_MAX), "the pattern repeats");
-        verify(Motion.stackBarWidth(0) >= Motion.stackBarWidth(1), "widest at the base, like the mark");
     }
 
     function test_settle_offset_follows_motion() {
