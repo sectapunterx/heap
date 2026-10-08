@@ -130,6 +130,13 @@ Profiles own their tasks, people, statuses, docs, and notes. Events are global (
 carry an optional `profileId`. Everything persists as JSON under `QStandardPaths::AppDataLocation`; settings live in a
 single `appSettingsJson` blob edited by `SettingsView`. See [docs/DATA.md](docs/DATA.md) for backups and recovery.
 
+## Writing to other systems
+
+heap reads from trackers and writes to them only where the user switched that write on. Any new write to an external
+system (a status, a comment, a label, a PR/MR action…) gets its own per-tracker switch, **off by default** for new and
+updated installs alike, and a row in the table in [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md#the-rule-every-external-write-is-opt-in).
+Comments are never sent. Local data is never overwritten by a sync.
+
 ## Brand
 
 Logo, palette, tokens and mark geometry live in [`design/brand-export/`](design/brand-export/README.md) and are wired

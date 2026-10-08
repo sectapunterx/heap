@@ -4,6 +4,7 @@ import QtQuick.Controls.Basic
 import TodoCpp
 import "Search.js" as Search
 import "PlainText.js" as MdPlain
+import "Reschedule.js" as Resched
 
 Item {
     id: root
@@ -237,7 +238,7 @@ Item {
         interval: 0
         onTriggered: root._rebuild()
     }
-    Component.onCompleted: { root._rebuild(); rowList.forceActiveFocus(); }
+    Component.onCompleted: { root._rebuild(); root._refreshPills(); rowList.forceActiveFocus(); }
     onModelRevChanged: _scheduleRebuild()
     onSearchTextChanged: _scheduleRebuild()
     onPrioritiesFilterChanged: _scheduleRebuild()
@@ -299,6 +300,125 @@ Item {
         return n;
     }
 
+    // ── Drag to another group (APP-249) ──────────────────────────────
+    // A row dropped on a group gets that group's date on the field it is
+    // grouped by: the deadline, or "when" for a row that only has a schedule.
+    // Today and tomorrow are themselves; this week, next week and later take
+    // the first working day of their span (Reschedule.timelineTarget); "No
+    // date" clears the field; Overdue takes nothing. An empty group has no
+    // rows to drop on, so while a drag is on every group is also offered in
+    // a bar at the top, with the date it would give.
+    readonly property var dropBuckets: ["today", "tomorrow", "thisweek", "nextweek", "later", "nodl"]
+    // { id, field, current, timed, from } while a row is carried.
+    property var drag: null
+    property string dragBucket: ""
+
+    function rowField(t) { return Resched.fieldOf(t); }
+    function rowValue(t) {
+        return rowField(t) === "scheduled" ? { at: t.scheduledAt, timed: !!t.scheduledHasTime }
+                                           : { at: t.dueAt, timed: !!t.dueHasTime };
+    }
+    function findRow(id) {
+        for (const k of root.bucketOrder) {
+            const list = root.groups[k] || [];
+            for (let i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+        }
+        return null;
+    }
+    function dropTarget(bucket) {
+        if (!root.drag || !bucket) return { ok: false };
+        return Resched.timelineTarget(bucket, root.drag.from, root.drag.current, root.drag.timed, AppController.today);
+    }
+    function dropHint(bucket) {
+        const tgt = root.dropTarget(bucket);
+        if (!tgt.ok) return I18n.t("drag.notHere");
+        return tgt.clear ? dragLayer.describeClear(root.drag.field) : dragLayer.describe(root.drag.field, tgt.when, tgt.timed);
+    }
+    function beginDrag(t) {
+        const v = root.rowValue(t);
+        root.drag = { id: t.id, field: root.rowField(t), current: v.at, timed: v.timed, from: t.bucket };
+        root.dragBucket = "";
+        root._refreshPills();
+        dragLayer.begin(t.id, t.title);
+    }
+    // The group under a point in the view: one of the bar's groups, else the
+    // group of the row under it.
+    function bucketAt(x, y) {
+        for (let i = 0; i < dropRep.count; i++) {
+            const pill = dropRep.itemAt(i);
+            if (!pill || !pill.visible) continue;
+            const p = pill.mapFromItem(root, x, y);
+            if (p.x >= 0 && p.y >= 0 && p.x < pill.width && p.y < pill.height) return root.dropBuckets[i];
+        }
+        const lp = rowList.mapFromItem(root, x, y);
+        if (lp.x < 0 || lp.y < 0 || lp.x >= rowList.width || lp.y >= rowList.height) return "";
+        const at = rowList.indexAt(lp.x + rowList.contentX, lp.y + rowList.contentY);
+        const row = at >= 0 ? root.flatRows[at] : null;
+        return row ? String(row.bucketId) : "";
+    }
+    // The bar's pills, each with what it would give. A ListModel updated in
+    // place, not an array binding: a new array rebuilt the pills on every
+    // pointer move, and a pill hit-tested before the Flow had laid it out
+    // again read as the first one.
+    ListModel { id: pillModel }
+    function _refreshPills() {
+        for (let i = 0; i < root.dropBuckets.length; i++) {
+            const b = root.dropBuckets[i];
+            const t = root.dropTarget(b);
+            const name = root.bucketMeta[b].name;
+            const entry = { bucket: b, ok: !!t.ok, hot: root.dragBucket === b,
+                            label: (!t.ok || t.clear) ? name : name + " · " + I18n.fmtDate(t.when, "weekdayDay") };
+            if (i < pillModel.count) pillModel.set(i, entry);
+            else pillModel.append(entry);
+        }
+        // Laid out now, so the next pointer move hit-tests where they are.
+        dropRow.forceLayout();
+    }
+    // What a loaded row reaches the view through (the row components sit
+    // outside the list's delegate; see rowLoader).
+    readonly property Item dragLayerItem: dragLayer
+
+    function moveDrag(x, y) {
+        if (!root.drag) return;
+        const was = root.dragBucket;
+        root.dragBucket = root.bucketAt(x, y);
+        if (root.dragBucket !== was) root._refreshPills();
+        dragLayer.update(x, y, root.dragBucket ? root.dropHint(root.dragBucket) : "", root.dropTarget(root.dragBucket).ok);
+    }
+    function cancelDrag() {
+        root.drag = null;
+        root.dragBucket = "";
+        dragLayer.finish();
+    }
+    function endDrag() {
+        const d = root.drag;
+        const tgt = root.dropTarget(root.dragBucket);
+        root.drag = null;
+        root.dragBucket = "";
+        dragLayer.finish();
+        if (!d || !tgt.ok) return false;
+        if (tgt.clear) return AppController.clearTaskDate(d.id, d.field);
+        return AppController.rescheduleTask(d.id, d.field, tgt.when, tgt.timed);
+    }
+
+    // The keys for the same move (Ctrl+←/→ a day, with Shift a week; Ctrl+↑/↓
+    // a grid step for a timed schedule), on the row under the cursor or the
+    // pointer. Main.qml calls these.
+    function keyTaskId() { return root.cursorTaskId.length > 0 ? root.cursorTaskId : root._hoverId; }
+    function moveKeyTaskByDays(days) {
+        const t = root.findRow(root.keyTaskId());
+        if (!t) return false;
+        const v = root.rowValue(t);
+        const r = Resched.shiftByDays(v.at, v.timed, days, t.when, AppController.today);
+        return AppController.rescheduleTask(t.id, root.rowField(t), r.when, r.timed);
+    }
+    function moveKeyTaskByTime(steps) {
+        const t = root.findRow(root.keyTaskId());
+        if (!t || root.rowField(t) !== "scheduled") return false;
+        const r = Resched.shiftByTime(t.scheduledAt, t.scheduledHasTime, steps, Theme.snapMinutes);
+        return r ? AppController.rescheduleTask(t.id, "scheduled", r.when, true) : false;
+    }
+
     Rectangle { anchors.fill: parent; color: Theme.bg }
 
     ColumnLayout {
@@ -307,6 +427,7 @@ Item {
 
         // Head
         Rectangle {
+            id: headBar
             Layout.fillWidth: true
             Layout.preferredHeight: 50
             color: Theme.panel
@@ -509,6 +630,8 @@ Item {
                     Loader {
                         id: rowLoader
                         property var rowData: rowItem.rd
+                        // The view, for the row's drag (APP-249).
+                        property var view: root
                         Layout.fillWidth: true
                         Layout.alignment: Qt.AlignTop
                         sourceComponent: (rowItem.rd && rowItem.rd.kind === "header") ? subHeaderComp : taskRowComp
@@ -571,6 +694,9 @@ Item {
                 Rectangle {
                     id: tlRow
                     objectName: "tl-row"
+                    // The TimelineView, handed over by the Loader: the drag
+                    // below lives on it.
+                    readonly property var view: parent ? parent.view : null
                     readonly property var rd: parent && parent.rowData ? parent.rowData : null
                     // While the Loader swaps a row between a header and a task
                     // the row has no task for a moment; every binding below
@@ -712,9 +838,49 @@ Item {
                             if (containsMouse) root._hoverId = tlRow.t.id;
                             else if (root._hoverId === tlRow.t.id) root._hoverId = "";
                         }
-                        cursorShape: Qt.PointingHandCursor
+                        cursorShape: rowMA.carrying ? Qt.ClosedHandCursor : Qt.PointingHandCursor
                         acceptedButtons: Qt.LeftButton
+                        // A drag to another group (APP-249). The list must not
+                        // take the vertical drag for a flick.
+                        preventStealing: true
+                        property real pressX: 0
+                        property real pressY: 0
+                        property bool carrying: false
+                        // Esc ended this press's drag; the rest of it is inert,
+                        // and its release is not a click.
+                        property bool inert: false
+                        onPressed: (mouse) => { rowMA.pressX = mouse.x; rowMA.pressY = mouse.y; rowMA.inert = false; rowMA.carrying = false; }
+                        onPositionChanged: (mouse) => {
+                            const v = tlRow.view;
+                            if (!rowMA.pressed || rowMA.inert || !tlRow.t.id || !v) return;
+                            if (!rowMA.carrying) {
+                                if (Math.abs(mouse.x - rowMA.pressX) < 6 && Math.abs(mouse.y - rowMA.pressY) < 6) return;
+                                rowMA.carrying = true;
+                                v.beginDrag(tlRow.t);
+                            }
+                            const p = rowMA.mapToItem(v, mouse.x, mouse.y);
+                            v.moveDrag(p.x, p.y);
+                        }
+                        onReleased: {
+                            if (!rowMA.carrying) return;
+                            rowMA.carrying = false;
+                            rowMA.inert = true;
+                            if (tlRow.view) tlRow.view.endDrag();
+                        }
+                        onCanceled: {
+                            if (rowMA.carrying && tlRow.view) tlRow.view.cancelDrag();
+                            rowMA.carrying = false;
+                        }
+                        Connections {
+                            target: tlRow.view ? tlRow.view.dragLayerItem : null
+                            function onCanceled() {
+                                if (!rowMA.pressed) return;
+                                rowMA.carrying = false;
+                                rowMA.inert = true;
+                            }
+                        }
                         onClicked: (mouse) => {
+                            if (rowMA.inert) { rowMA.inert = false; return; }
                             const ctrl = (mouse.modifiers & Qt.ControlModifier) !== 0;
                             const shift = (mouse.modifiers & Qt.ShiftModifier) !== 0;
                             if (ctrl) {
@@ -731,4 +897,62 @@ Item {
                     }
                 }
             }
+
+    // Every group a row can go to, while one is carried — an empty group has
+    // no rows of its own to drop on. Each says the date it would give.
+    Rectangle {
+        id: dropBar
+        objectName: "tl-drop-bar"
+        visible: root.drag !== null
+        x: Theme.inset
+        y: headBar.height + Theme.spSm
+        width: root.width - 2 * Theme.inset
+        height: dropRow.implicitHeight + 2 * Theme.spSm
+        radius: Theme.radius
+        color: Theme.panel
+        border.color: Theme.border
+        border.width: 1
+        z: 20
+        Flow {
+            id: dropRow
+            anchors.fill: parent
+            anchors.margins: Theme.spSm
+            spacing: Theme.spSm
+            Repeater {
+                id: dropRep
+                model: pillModel
+                delegate: Rectangle {
+                    id: pill
+                    required property string bucket
+                    required property bool ok
+                    required property bool hot
+                    required property string label
+                    readonly property bool lit: pill.hot && pill.ok
+                    objectName: "tl-drop-" + pill.bucket
+                    width: pillText.implicitWidth + 2 * Theme.spMd
+                    height: Theme.px(26)
+                    radius: Theme.radiusPill
+                    opacity: pill.ok ? 1 : 0.45
+                    color: pill.lit ? Theme.accentSoft : Theme.panel2
+                    border.color: pill.lit ? Theme.accent : Theme.border
+                    border.width: 1
+                    Text {
+                        id: pillText
+                        anchors.centerIn: parent
+                        text: pill.label
+                        color: pill.lit ? Theme.accentStrong : Theme.text
+                        font.family: Theme.fontUi
+                        font.features: Theme.tabularNums
+                        font.pixelSize: Theme.fsSm
+                    }
+                }
+            }
+        }
+    }
+
+    RescheduleDrag {
+        id: dragLayer
+        objectName: "tl-drag"
+        onCanceled: { root.drag = null; root.dragBucket = ""; }
+    }
 }

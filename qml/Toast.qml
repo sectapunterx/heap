@@ -79,7 +79,17 @@ Item {
     }
     function showWithAction(s, label, seconds, fn, k) {
         _push({ id: ++_seq, message: String(s), kind: k || "info", actionLabel: label || "",
-                actionFn: fn, ms: _duration(k || "info", seconds && seconds > 0 ? seconds : 5) });
+                actionFn: fn, action2Label: "", action2Fn: null,
+                ms: _duration(k || "info", seconds && seconds > 0 ? seconds : 5) });
+    }
+    // Two actions side by side ([{label, fn}, {label, fn}]): "Open in
+    // tracker" / "Archive" for a refused move (APP-204).
+    function showWithActions(s, actions, seconds, k) {
+        const a = actions || [];
+        _push({ id: ++_seq, message: String(s), kind: k || "info",
+                actionLabel: a.length > 0 ? String(a[0].label) : "", actionFn: a.length > 0 ? a[0].fn : null,
+                action2Label: a.length > 1 ? String(a[1].label) : "", action2Fn: a.length > 1 ? a[1].fn : null,
+                ms: _duration(k || "info", seconds && seconds > 0 ? seconds : 5) });
     }
 
     function dismiss(id) {
@@ -144,6 +154,10 @@ Item {
                 height: rowL.implicitHeight + 14
                 Accessible.role: Accessible.AlertMessage
                 Accessible.name: modelData.message
+                function runAction(fn) {
+                    root.dismiss(card.modelData.id);
+                    if (typeof fn === "function") fn();
+                }
 
                 Row {
                     id: rowL
@@ -162,7 +176,8 @@ Item {
                         // Wraps inside the card's cap instead of growing it.
                         width: Math.min(implicitWidth,
                                         root.maxToastWidth - 28 - 8 - rowL.spacing
-                                        - (actionBox.visible ? actionBox.implicitWidth + rowL.spacing : 0))
+                                        - (actionBox.visible ? actionBox.implicitWidth + rowL.spacing : 0)
+                                        - (action2Box.visible ? action2Box.implicitWidth + rowL.spacing : 0))
                         text: card.modelData.message
                         textFormat: Text.PlainText
                         color: Theme.toastText
@@ -194,11 +209,33 @@ Item {
                             objectName: "toast-action"
                             label: card.modelData.actionLabel
                             showTip: false
-                            onActivated: {
-                                const fn = card.modelData.actionFn;
-                                root.dismiss(card.modelData.id);
-                                if (typeof fn === "function") fn();
-                            }
+                            onActivated: card.runAction(card.modelData.actionFn)
+                        }
+                    }
+                    Rectangle {
+                        id: action2Box
+                        visible: !!card.modelData.action2Label && card.modelData.action2Label.length > 0
+                        anchors.verticalCenter: parent.verticalCenter
+                        radius: Theme.radiusSm
+                        color: action2MA.hovered ? Theme.accentSoft : "transparent"
+                        border.color: Theme.accent
+                        border.width: 1
+                        implicitWidth: action2T.implicitWidth + 14
+                        implicitHeight: action2T.implicitHeight + 6
+                        Text {
+                            id: action2T
+                            anchors.centerIn: parent
+                            text: card.modelData.action2Label || ""
+                            color: Theme.accentStrong
+                            font.pixelSize: Theme.fsSm
+                            font.weight: Theme.fwTitle
+                        }
+                        ClickArea {
+                            id: action2MA
+                            objectName: "toast-action-2"
+                            label: card.modelData.action2Label || ""
+                            showTip: false
+                            onActivated: card.runAction(card.modelData.action2Fn)
                         }
                     }
                 }

@@ -12,7 +12,7 @@ interface Provider {
   mono: string;
   name: string;
   auth: string;
-  /** Status is written back on column moves (open/closed). */
+  /** Can write the status back on column moves, once switched on (off by default). */
   writeBack: boolean;
   ref: (n: number) => string;
   people?: boolean;
@@ -21,7 +21,7 @@ interface Provider {
 const PROVIDERS: Provider[] = [
   { id: 'github', mono: 'GH', name: 'GitHub', auth: 'Browser sign-in, device code or token', writeBack: true, ref: (n) => `acme/web#${n}` },
   { id: 'gitlab', mono: 'GL', name: 'GitLab', auth: 'Browser sign-in or token', writeBack: true, ref: (n) => `acme/web!${n}` },
-  { id: 'jira', mono: 'Ji', name: 'Jira', auth: 'Browser sign-in or token', writeBack: false, ref: (n) => `WEB-${n}` },
+  { id: 'jira', mono: 'Ji', name: 'Jira', auth: 'Browser sign-in or token', writeBack: true, ref: (n) => `WEB-${n}` },
   { id: 'trello', mono: 'Tr', name: 'Trello', auth: 'Browser sign-in or token', writeBack: false, ref: (n) => `card ${n}` },
   { id: 'gitea', mono: 'Gt', name: 'Gitea', auth: 'Token', writeBack: true, ref: (n) => `acme/web#${n}` },
   { id: 'forgejo', mono: 'Fj', name: 'Forgejo', auth: 'Token', writeBack: true, ref: (n) => `acme/web#${n}` },
@@ -78,16 +78,12 @@ export default function ConnectWidget() {
     dispatch({ type: 'setTasks', tasks: [] });
   };
 
-  const onMoved = (task: Task, to: ColId) => {
+  const onMoved = (task: Task) => {
     const ref = task.source?.split(' · ')[1] ?? task.id;
     if (!p.writeBack) {
       show(`Moved on your board. ${p.name} isn’t written back — the change stays in heap.`);
-    } else if (to === 'done') {
-      show(`${ref} closed on ${p.name}`);
-    } else if (task.col === 'done') {
-      show(`${ref} reopened on ${p.name}`);
     } else {
-      show(`Moved on your board — ${p.name} tracks open/closed, so nothing to send`);
+      show(`Moved on your board. ${ref} stays as it is on ${p.name} — write-back is off until you switch it on.`);
     }
   };
 
@@ -98,7 +94,7 @@ export default function ConnectWidget() {
           <button key={x.id} type="button" className="cw__provider" aria-pressed={x.id === pid} onClick={() => pick(x.id)}>
             <span className="cw__mono d-mono">{x.mono}</span>
             {x.name}
-            {x.writeBack && <span className="cw__tag d-mono">write-back</span>}
+            {x.writeBack && <span className="cw__tag d-mono">write-back · opt-in</span>}
           </button>
         ))}
       </nav>
@@ -133,7 +129,7 @@ export default function ConnectWidget() {
             <div className="fw__fill">
               <Board tasks={state.tasks} dispatch={dispatch} columns={['todo', 'prog', 'done']} onMoved={onMoved} label={`${p.name} issues`} />
             </div>
-            <p className="cw__note">{p.writeBack ? `Drag a card to Done and ${p.name} closes the issue.` : `${p.name} issues are mirrored read-only: moves stay on your board.`}</p>
+            <p className="cw__note">{p.writeBack ? `Moves stay on your board. Switch on “Change the status in ${p.name}” and dragging to Done closes the issue.` : `${p.name} issues are mirrored read-only: moves stay on your board.`}</p>
           </>
         )}
         {phase === 'done' && p.people && (

@@ -46,6 +46,11 @@ QString normalizeJiraBaseUrl(const QString& raw);
 // fresh Jira card come back empty.
 QString defaultJiraJql();
 
+// The JQL that asks "is this one issue still in the user's filter?" before a
+// status write (APP-204): `key = "KEY" AND (<filter>)`, with the filter's
+// ORDER BY dropped. An empty filter is the default one. Pure — unit-tested.
+QString jiraJqlForIssue(const QString& key, const QString& jql);
+
 // Which Jira a site is. The two are different products behind the same name:
 // Cloud serves /rest/api/3 and authenticates a pair (account email + API
 // token); Server and Data Center serve /rest/api/2 and take a Personal Access
@@ -127,6 +132,9 @@ class JiraProvider : public IntegrationProvider {
   void pushStatusChange(const QString& externalId, const QString& newStatus, const QString& project) override;
   void fetchComments(const QString& externalId, const QString& project) override;
   void fetchStatuses() override;
+  // GET /issue/{key}?fields=status, then a search for the key within the
+  // user's JQL (jiraJqlForIssue): one issue back means still in the filter.
+  void checkIssue(const QString& externalId, const QString& project) override;
 
   bool canLookUpIssues() const override {
     return true;

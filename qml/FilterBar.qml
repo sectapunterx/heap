@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
+import QtQuick.Controls.impl
 import TodoCpp
 
 Rectangle {
@@ -47,6 +48,12 @@ Rectangle {
     signal updateViewRequested()
     signal saveAsNewRequested()
     signal leaveViewRequested()
+
+    // The weekly recap, from the board (APP-211): opens it any time; the dot
+    // says this week's recap has not been seen yet.
+    property bool showRecap: false
+    property bool recapUnseen: false
+    signal recapRequested()
 
     Rectangle {
         anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
@@ -195,6 +202,20 @@ Rectangle {
             visible: root.savedViewName.length > 0 && root.savedViewModified
             text: I18n.t("filter.saveAsNew")
             onActivated: root.saveAsNewRequested()
+        }
+
+        BarChip {
+            objectName: "recap-button"
+            visible: root.showRecap
+            iconSource: "qrc:/brand/icons/heap-03-week.svg"
+            text: I18n.t("recap.button")
+            dot: root.recapUnseen
+            tip: {
+                const keys = (AppController.shortcuts, AppController.shortcutFor("recap.open"));
+                const what = root.recapUnseen ? I18n.t("recap.button.unseen") : I18n.t("recap.button.tip");
+                return keys.length > 0 ? what + "  " + keys : what;
+            }
+            onActivated: root.recapRequested()
         }
 
         // Sort. Manual is the board's own order — the one a drag writes — so
@@ -355,6 +376,9 @@ Rectangle {
         property string trailing: ""
         property string tip: ""
         property bool selected: false
+        // A brand icon in place of the glyph, and an unread dot on it.
+        property url iconSource: ""
+        property bool dot: false
         signal activated()
         radius: Theme.radiusPill
         color: chip.selected ? Theme.accentSoft : (chipMA.containsMouse ? Theme.panel3 : Theme.panel2)
@@ -379,6 +403,30 @@ Rectangle {
                 text: chip.glyph
                 color: chip.selected ? Theme.accentStrong : Theme.textDim
                 font.pixelSize: Theme.fsSm
+            }
+            Item {
+                visible: chip.iconSource.toString().length > 0
+                implicitWidth: 18
+                implicitHeight: 18
+                IconImage {
+                    anchors.fill: parent
+                    source: chip.iconSource
+                    sourceSize.width: 18
+                    sourceSize.height: 18
+                    color: chip.selected ? Theme.accentStrong : (chipMA.containsMouse ? Theme.text : Theme.textMuted)
+                }
+                Rectangle {
+                    objectName: "bar-chip-dot"
+                    visible: chip.dot
+                    x: parent.width - width / 2 - 1
+                    y: -1
+                    width: 7
+                    height: 7
+                    radius: Theme.radiusPill
+                    color: Theme.accent
+                    border.color: Theme.panel2
+                    border.width: 1
+                }
             }
             Text {
                 Layout.fillWidth: true

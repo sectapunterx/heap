@@ -39,9 +39,12 @@ class AppController : public ::testing::Test {
     app_->events()->reset({});
     app_->people()->reset({});
     app_->setLanguage(QStringLiteral("en"));
+    // No tracker writes unless a test turns them on (APP-243).
+    app_->setAppSettingsJson(QStringLiteral("{}"));
   }
 
   void TearDown() override {
+    app_->setAppSettingsJson(QStringLiteral("{}"));
     app_.reset();
   }
 
@@ -104,6 +107,9 @@ TEST_F(AppController, MergeExternalTasks_RemoteStatusUnchanged_KeepsLocalColumn)
 }
 
 TEST_F(AppController, MergeExternalTasks_RemoteStatusChanged_TakesTrackerColumn) {
+  // Only while heap writes this tracker: the move was (or would be) sent, so
+  // a later move in the tracker is the newer word (APP-243).
+  app_->setAppSettingsJson(QStringLiteral(R"({"integrations":{"github":{"writeStatus":true}}})"));
   merge({issue(QStringLiteral("3"), QStringLiteral("open"))});
   Task t = *task(QStringLiteral("gh-3"));
   t.status = QStringLiteral("prog");
@@ -112,6 +118,23 @@ TEST_F(AppController, MergeExternalTasks_RemoteStatusChanged_TakesTrackerColumn)
   merge({issue(QStringLiteral("3"), QStringLiteral("closed"))});
 
   EXPECT_EQ(task(QStringLiteral("gh-3"))->status, QStringLiteral("done"));
+}
+
+// APP-243: with writes off (the default) a move is the user's own and no pull
+// takes it back, whatever the tracker did meanwhile.
+TEST_F(AppController, MergeExternalTasks_WritesOff_RemoteStatusChanged_KeepsLocalColumn) {
+  merge({issue(QStringLiteral("3"), QStringLiteral("open"))});
+  Task t = *task(QStringLiteral("gh-3"));
+  t.status = QStringLiteral("prog");
+  app_->tasks()->upsert(t);
+
+  merge({issue(QStringLiteral("3"), QStringLiteral("closed"))});
+
+  EXPECT_EQ(task(QStringLiteral("gh-3"))->status, QStringLiteral("prog"));
+  EXPECT_TRUE(task(QStringLiteral("gh-3"))->externalMeta.conflicts.isEmpty());
+  // The tracker's side is still known, for the tooltip and the editor.
+  EXPECT_EQ(task(QStringLiteral("gh-3"))->externalMeta.status, QStringLiteral("closed"));
+  EXPECT_EQ(task(QStringLiteral("gh-3"))->externalMeta.column, QStringLiteral("done"));
 }
 
 TEST_F(AppController, MergeExternalTasks_LegacyCardInOpenColumn_StaysWhileIssueOpen) {
