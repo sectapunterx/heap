@@ -7,6 +7,7 @@
 // The Setup object enables QStandardPaths test mode before any test loads, so
 // component tests that construct AppController (which reads/seeds state.json
 // under AppDataLocation) never touch the real user data.
+#include "diag/FrameLog.h"
 #include "platform/AltGrGuard.h"
 #include "platform/BundledFonts.h"
 
@@ -65,6 +66,8 @@ class Setup : public QObject {
     // app really draws with, on every CI runner alike.
     heap::platform::registerBundledFonts();
     heap::platform::useBundledUiFontByDefault();
+    // HEAP_FRAME_LOG works here too, for scripted jank scenarios (APP-203).
+    heap::frame::installFromEnvironment();
   }
 
   void cleanupTestCase() {

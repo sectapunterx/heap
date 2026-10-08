@@ -57,21 +57,24 @@ Item {
         return true;
     }
 
-    property int taskRev: 0
-    property int eventRev: 0
+    // A burst of model changes (a tracker sync) rebuilds once, not per row (APP-203).
+    ChangeTick { id: taskTick }
+    ChangeTick { id: eventTick }
+    readonly property int taskRev: taskTick.rev
+    readonly property int eventRev: eventTick.rev
     Connections {
         target: AppController.tasks
-        function onDataChanged()  { root.taskRev++ }
-        function onRowsInserted() { root.taskRev++ }
-        function onRowsRemoved()  { root.taskRev++ }
-        function onModelReset()   { root.taskRev++ }
+        function onDataChanged()  { taskTick.bump() }
+        function onRowsInserted() { taskTick.bump() }
+        function onRowsRemoved()  { taskTick.bump() }
+        function onModelReset()   { taskTick.bump() }
     }
     Connections {
         target: AppController.events
-        function onDataChanged()  { root.eventRev++ }
-        function onRowsInserted() { root.eventRev++ }
-        function onRowsRemoved()  { root.eventRev++ }
-        function onModelReset()   { root.eventRev++ }
+        function onDataChanged()  { eventTick.bump() }
+        function onRowsInserted() { eventTick.bump() }
+        function onRowsRemoved()  { eventTick.bump() }
+        function onModelReset()   { eventTick.bump() }
     }
 
     // Anchor month + visible range. Declarative: recompute on selectedDate /
@@ -135,6 +138,9 @@ Item {
         return cells;
     }
     readonly property var cells: buildCells()
+    // What a cell reads for the moment between the grid shrinking (month to
+    // weeks) and the Repeater dropping the cells past the new end.
+    readonly property var _noCell: ({ date: new Date(0), tasks: [], events: [] })
     // Nothing dated in the whole grid: the empty state says what lands here.
     readonly property bool monthEmpty: cells.every(c => c.tasks.length === 0 && c.events.length === 0)
 
@@ -453,18 +459,21 @@ Item {
             columnSpacing: Theme.spSm
             Repeater {
                 id: cellRep
-                model: root.cells
+                // By position, not by the cells array: a new array on every
+                // task change re-created all 42 cells and their chips, most of
+                // a 200 ms rebuild on a 2k-task profile (APP-203). The cells
+                // stay; what they show is rebound.
+                model: root.cells.length
                 delegate: Rectangle {
                     id: dayCell
-                    required property var modelData
                     required property int index
                     objectName: "month-cell-" + dayCell.index
-                    // Named alias so the nested chip Repeaters (whose own
-                    // `modelData` is their int index) can still read the cell.
-                    readonly property var cell: modelData
-                    readonly property bool _inMonth: root.mode !== "month" || modelData.date.getMonth() === root.anchorMonth
-                    readonly property bool _today: root.isSameDay(modelData.date, AppController.today)
-                    readonly property bool _sel: root.isSameDay(modelData.date, AppController.selectedDate)
+                    // Named so the nested chip Repeaters (whose own `index` is
+                    // their row) can still read the cell.
+                    readonly property var cell: root.cells[dayCell.index] || root._noCell
+                    readonly property bool _inMonth: root.mode !== "month" || dayCell.cell.date.getMonth() === root.anchorMonth
+                    readonly property bool _today: root.isSameDay(dayCell.cell.date, AppController.today)
+                    readonly property bool _sel: root.isSameDay(dayCell.cell.date, AppController.selectedDate)
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     radius: Theme.radius
@@ -479,7 +488,7 @@ Item {
                     border.color: _dropHere || _sel || _today ? Theme.accent : Theme.border
                     border.width: _dropHere ? 2 : 1
                     Accessible.role: Accessible.Cell
-                    Accessible.name: root.dayLabel(modelData.date)
+                    Accessible.name: root.dayLabel(dayCell.cell.date)
                     Accessible.selected: _sel
                     // The keyboard's day, while the grid has the keyboard.
                     FocusRing {
@@ -506,12 +515,14 @@ Item {
                     // (3 + 2 on a cell with room for five, as before).
                     readonly property int _eventsShown: Math.min(cell.events.length,
                                                                  Math.max(_slots - cell.tasks.length, Math.floor(_slots / 2)))
-                    readonly property int _tasksShown: Math.min(cell.tasks.length, _slots - _eventsShown)
+                    // Never below zero: a kept cell rebinding to new data can
+                    // read _slots and _eventsShown a step apart for a moment.
+                    readonly property int _tasksShown: Math.max(0, Math.min(cell.tasks.length, _slots - _eventsShown))
 
                     MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: AppController.selectedDate = modelData.date
+                        onClicked: AppController.selectedDate = dayCell.cell.date
                     }
 
                     ColumnLayout {

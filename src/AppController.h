@@ -1930,6 +1930,10 @@ class AppController : public QObject {
   bool reminderSent(const QString& key) const;
   QSet<QString> sentReminderKeys() const;
   void markReminderSent(const QString& key, const QDateTime& at);
+  // While > 0, markReminderSent() leaves the file to the end of the batch:
+  // the minute tick used to rewrite reminders.json once per reminder.
+  int m_reminderBatchDepth = 0;
+  bool m_reminderSavePending = false;
   void holdNotification(const HeldNotification& n);
   void flushHeldNotifications(const QDateTime& now);
   // settings.calendar.workDays, Monday to Friday by default.
@@ -2049,6 +2053,9 @@ class AppController : public QObject {
   bool profileNameTaken(const QString& name, const QString& exceptId) const;
   // `base`, or "base (N)" with the first N no profile uses.
   QString uniqueProfileName(const QString& base) const;
+  // moveTask(), with the card's rank in its new column set in the same model
+  // change (moveTaskTo knows it before the move).
+  void moveTaskRanked(const QString& id, const QString& newStatus, std::optional<double> rank);
   // One column's tasks in board order (rank, then id so the order is total).
   QVector<::Task> columnTasks(const QString& statusId, const QString& excludeId) const;
   // Spread a column's ranks back out when a gap has shrunk too far to take

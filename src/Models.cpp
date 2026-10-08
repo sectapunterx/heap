@@ -416,7 +416,7 @@ int TaskModel::indexOfId(const QString& id) const {
   return m_index.value(id, -1);
 }
 
-void TaskModel::setStatus(const QString& id, const QString& status, const QDateTime& changedAt) {
+void TaskModel::setStatus(const QString& id, const QString& status, const QDateTime& changedAt, std::optional<double> rank) {
   const int row = indexOfId(id);
   if(row < 0 || m_items[row].status == status) {
     return;
@@ -424,8 +424,13 @@ void TaskModel::setStatus(const QString& id, const QString& status, const QDateT
   const Task before = m_observer ? m_items[row] : Task();
   m_items[row].status = status;
   m_items[row].statusChangedAt = changedAt.isValid() ? changedAt : QDateTime::currentDateTime();
+  QList<int> roles{StatusRole, StatusChangedAtRole};
+  if(rank.has_value()) {
+    m_items[row].rank = *rank;
+    roles.append(RankRole);
+  }
   const QModelIndex mi = index(row, 0);
-  emit dataChanged(mi, mi, {StatusRole, StatusChangedAtRole});
+  emit dataChanged(mi, mi, roles);
   if(m_observer) {
     m_observer(&before, m_items[row]);
   }

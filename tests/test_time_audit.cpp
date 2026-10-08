@@ -468,6 +468,87 @@ TEST_F(TimeAudit, ADeadlineInQuietHoursIsHeldNotDropped) {
   EXPECT_GE(spy.count(), 1) << "delivered once the quiet window ends";
 }
 
+// ── APP-203: the minute tick writes reminders.json once, not per reminder ──
+
+// A profile with many tasks coming due at once used to rewrite the file once
+// per reminder inside the tick (~400 ms of frozen window at 2k tasks). The
+// reminders are still each sent once, and all of them reach the file.
+TEST_F(TimeAudit, ManyDeadlinesInOneTickAreEachSentOnceAndRemembered) {
+  QJsonObject n = quietNotif();
+  n["deadlineReminders"] = true;
+  n["deadlineLeadHours"] = 24;
+  app_->setAppSettingsJson(settingsJson(n));
+  constexpr int kDue = 40;
+  QVector<Task> tasks;
+  for(int i = 0; i < kDue; ++i) {
+    Task t;
+    t.id = QStringLiteral("DUE-%1").arg(i);
+    t.title = t.id;
+    t.status = QStringLiteral("todo");
+    t.dueAt = QDateTime(kMon, QTime(12, 0));
+    t.dueHasTime = true;
+    tasks.append(t);
+  }
+  app_->tasks()->reset(tasks);
+  const QDateTime tick(kMon, QTime(10, 0));
+
+  app_->runAutomationAt(tick);
+
+  QFile f(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/reminders.json"));
+  ASSERT_TRUE(f.open(QIODevice::ReadOnly));
+  const QJsonObject sent = QJsonDocument::fromJson(f.readAll()).object();
+  f.close();
+  int deadlineKeys = 0;
+  for(auto it = sent.constBegin(); it != sent.constEnd(); ++it) {
+    if(it.key().startsWith(QLatin1String("dl:DUE-"))) {
+      ++deadlineKeys;
+    }
+  }
+  EXPECT_EQ(deadlineKeys, kDue) << "every reminder of the tick reached the file";
+
+  // The next minute sends none of them again. (The file is what a restart
+  // reads; its contents are checked above.)
+  QSignalSpy again(app_.get(), &AppController::toast);
+  app_->runAutomationAt(tick.addSecs(60));
+  EXPECT_EQ(again.count(), 0);
+}
+
+// The tick skips tasks by calendar date before any clock arithmetic; the edges
+// of the reminder window must still get through.
+TEST_F(TimeAudit, TheDateShortcutKeepsBothEdgesOfTheReminderWindow) {
+  QJsonObject n = quietNotif();
+  n["deadlineReminders"] = true;
+  n["deadlineLeadHours"] = 72;
+  app_->setAppSettingsJson(settingsJson(n));
+  const auto task = [](const QString& id, const QDateTime& due) {
+    Task t;
+    t.id = id;
+    t.title = id;
+    t.status = QStringLiteral("todo");
+    t.dueAt = due;
+    t.dueHasTime = true;
+    return t;
+  };
+  const QDateTime now(kMon, QTime(10, 0));
+  app_->tasks()->reset({task(QStringLiteral("LEAD"), now.addSecs(71 * 3600)),    // inside the 72 h lead
+                        task(QStringLiteral("LATE"), now.addSecs(-23 * 3600)),   // passed less than a day ago
+                        task(QStringLiteral("FAR"), now.addDays(10)),            // nowhere near
+                        task(QStringLiteral("OLD"), now.addSecs(-30 * 3600))});  // passed too long ago
+  QSignalSpy spy(app_.get(), &AppController::toast);
+
+  app_->runAutomationAt(now);
+
+  QStringList said;
+  for(const QList<QVariant>& args : spy) {
+    said << args.value(0).toString();
+  }
+  const QString all = said.join(QChar('|'));
+  EXPECT_TRUE(all.contains(QLatin1String("LEAD"))) << qPrintable(all);
+  EXPECT_TRUE(all.contains(QLatin1String("LATE"))) << qPrintable(all);
+  EXPECT_FALSE(all.contains(QLatin1String("FAR"))) << qPrintable(all);
+  EXPECT_FALSE(all.contains(QLatin1String("OLD"))) << qPrintable(all);
+}
+
 // ── PLAT-11: the in-app toast carries the title ──
 
 TEST_F(TimeAudit, TheInAppToastSaysWhy) {

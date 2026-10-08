@@ -124,12 +124,15 @@ Item {
 
     // Snapshot tasks into a JS array grouped by bucket. We rebuild on
     // changes via the modelRev tick so QML bindings re-evaluate.
-    property int modelRev: 0
+    // A burst of model changes (a tracker sync) rebuilds once, not per row
+    // (APP-203); the row cache below is still told about every row at once.
+    ChangeTick { id: modelTick }
+    readonly property int modelRev: modelTick.rev
     Connections {
         target: AppController.tasks
         function onDataChanged(topLeft, bottomRight) {
             root._forgetRows(topLeft.row, bottomRight.row);
-            root.modelRev++;
+            modelTick.bump();
         }
         // An id can come back: a task renamed to the id of a deleted one, or
         // a new task handed a deleted task's id. Its row was still cached
@@ -138,11 +141,11 @@ Item {
         // removed rows leave the cache like changed ones do.
         function onRowsInserted(parent, first, last) {
             root._forgetRows(first, last);
-            root.modelRev++;
+            modelTick.bump();
         }
         function onRowsAboutToBeRemoved(parent, first, last) { root._forgetRows(first, last) }
-        function onRowsRemoved()  { root.modelRev++ }
-        function onModelReset()   { root._rowCache = ({}); root.modelRev++ }
+        function onRowsRemoved()  { modelTick.bump() }
+        function onModelReset()   { root._rowCache = ({}); modelTick.bump() }
     }
 
     // One snapshot row per task id, kept between rebuilds. A rebuild used to
