@@ -530,10 +530,10 @@ TEST_F(TimeAudit, TheDateShortcutKeepsBothEdgesOfTheReminderWindow) {
     return t;
   };
   const QDateTime now(kMon, QTime(10, 0));
-  app_->tasks()->reset({task(QStringLiteral("LEAD"), now.addSecs(71 * 3600)),     // inside the 72 h lead
-                        task(QStringLiteral("LATE"), now.addSecs(-23 * 3600)),     // passed less than a day ago
-                        task(QStringLiteral("FAR"), now.addDays(10)),              // nowhere near
-                        task(QStringLiteral("OLD"), now.addSecs(-30 * 3600))});    // passed too long ago
+  app_->tasks()->reset({task(QStringLiteral("LEAD"), now.addSecs(71 * 3600)),    // inside the 72 h lead
+                        task(QStringLiteral("LATE"), now.addSecs(-23 * 3600)),   // passed less than a day ago
+                        task(QStringLiteral("FAR"), now.addDays(10)),            // nowhere near
+                        task(QStringLiteral("OLD"), now.addSecs(-30 * 3600))});  // passed too long ago
   QSignalSpy spy(app_.get(), &AppController::toast);
 
   app_->runAutomationAt(now);
