@@ -1,5 +1,3 @@
-pragma ComponentBehavior: Bound
-
 // heap. — month / custom-range calendar.
 //
 // A companion to WeekView: instead of an hour grid it lays out whole days as a
