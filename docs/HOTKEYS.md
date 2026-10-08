@@ -145,7 +145,8 @@ with one of the letters above? Press `Ctrl+F` first.
 ## Timeline
 
 `J` / `K` (or `↓` / `↑`) walk the rows, `Return` opens one, `Space` adds it to
-the selection, and `O` opens the row's issue in its tracker.
+the selection, and `O` opens the row's issue in its tracker. `Ctrl+Left` /
+`Ctrl+Right` move the row's date a day (`Shift` a week) — see Calendar below.
 
 ## Calendar
 
@@ -160,6 +161,18 @@ archive). None of them fires while a dialog or a text field has the keys.
 | Previous / next day | `Alt+Left` / `Alt+Right` |
 | Go to a date… | `G` |
 | New event at the next free slot | `Ctrl+Alt+E` |
+| Move the task a day earlier / later | `Ctrl+Left` / `Ctrl+Right` |
+| Move the task a week earlier / later | `Ctrl+Shift+Left` / `Ctrl+Shift+Right` |
+| Move a timed task a grid step earlier / later | `Ctrl+Up` / `Ctrl+Down` |
+
+The task moves are the keyboard side of drag-to-reschedule, live in Week,
+Month and Timeline only (on the board `Ctrl`+arrows move cards). They act on
+the task that has the keyboard — the Timeline row under the cursor, a chip or
+block reached with `Tab` — or else the one under the pointer. In Week and
+Month they move when the task is planned; in Timeline they move the date the
+row is grouped by (its deadline, or "when" for a row that only has one). Each
+move is one undo step, with an undo toast. While dragging a task in those
+views the target date is shown at the pointer, and `Esc` cancels the drag.
 
 In the date picker: arrows move the day (↑/↓ a week), `PgUp`/`PgDn` a month
 (`Shift` a year), `Home`/`End` the month's ends, `T` today, `Enter` picks,

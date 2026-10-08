@@ -1108,6 +1108,20 @@ class AppController : public QObject {
   Q_INVOKABLE void scheduleTaskAtNextFreeSlot(const QString& taskId, const QDate& date);
   // How long a block for this task is, in minutes.
   Q_INVOKABLE int taskBlockMinutes(const QString& taskId) const;
+  // Drag-to-reschedule in Week, Month and Timeline (APP-249), and the keys
+  // that do the same. Sets one date of one task: `field` is "scheduled" (when
+  // it is planned) or "due" (its deadline). `hasTime` says whether the clock
+  // part of `when` is real; an invalid `when` clears the field. Local only —
+  // nothing is sent to a tracker, and a tracker's deadline changed here stays
+  // the local value (sync keeps a deadline the user edited). A focus block
+  // that the old schedule came from moves with it. One undo step, with an
+  // undo toast. False when the task is unknown or nothing changed.
+  Q_INVOKABLE bool rescheduleTask(const QString& taskId, const QString& field, const QDateTime& when, bool hasTime);
+  Q_INVOKABLE bool clearTaskDate(const QString& taskId, const QString& field);
+  // A task's own block on the week grid, moved or stretched: the schedule
+  // goes to `date` at `startHour`, and the length becomes the estimate. One
+  // undo step.
+  Q_INVOKABLE bool resizeTaskBlock(const QString& taskId, const QDate& date, double startHour, double endHour);
   // A "doing" column gets a focus block for a card that enters it and gives
   // the future ones back when the card leaves. In Progress always is.
   Q_INVOKABLE bool isDoingStatus(const QString& statusId) const;
@@ -1939,6 +1953,9 @@ class AppController : public QObject {
   // Keeps a task's scheduledAt on the focus block it came from: moved with
   // it, cleared when it is deleted (after == nullptr).
   void followFocusBlock(const CalEvent& before, const CalEvent* after);
+  // The reverse of followFocusBlock: a schedule moved from a view takes the
+  // focus block it came from along (APP-249).
+  void moveLinkedFocusBlocks(const QString& taskId, const QDateTime& was, const QDateTime& now);
 
   // Persistence
   QTimer* m_saveTimer = nullptr;

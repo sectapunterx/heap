@@ -430,6 +430,8 @@ qt_add_qml_module(heap_core
         qml/DocsPagesPane.qml
         qml/UnscheduledRail.qml
         qml/Overlap.js
+        qml/Reschedule.js
+        qml/RescheduleDrag.qml
         qml/Segments.js
         qml/Search.js
         qml/PopupStack.js

@@ -7,12 +7,14 @@
 // Each day cell shows its task deadlines + events as compact chips. Clicking a
 // day selects it; clicking a chip opens the task / event editor.
 
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import TodoCpp
 import "Segments.js" as Seg
 import "Search.js" as Search
+import "Reschedule.js" as Resched
 
 Item {
     id: root
@@ -214,6 +216,73 @@ Item {
         return null;
     }
 
+    // ── Moving a task to another day (APP-249) ───────────────────────
+    // A task chip dropped on a day plans the task for that day (scheduledAt),
+    // at the time it was planned for if it had one. Its deadline stays where
+    // it is. The hint at the pointer says what a drop would set; Esc cancels.
+    // { id, scheduledAt, timed } of the chip being carried.
+    property var drag: null
+    property int dropIndex: -1
+
+    function cellIndexAt(x, y) {
+        // `x`, `y` in this view's coordinates.
+        for (let i = 0; i < cellRep.count; i++) {
+            const c = cellRep.itemAt(i);
+            if (!c) continue;
+            const p = c.mapFromItem(root, x, y);
+            if (p.x >= 0 && p.y >= 0 && p.x < c.width && p.y < c.height) return i;
+        }
+        return -1;
+    }
+    function landing(index) {
+        if (!root.drag || index < 0 || index >= root.cells.length) return null;
+        return Resched.dropOnDay(root.cells[index].date, root.drag.scheduledAt, root.drag.timed);
+    }
+    function beginDrag(t) {
+        const full = AppController.taskById(t.id);
+        root.drag = { id: t.id, scheduledAt: full.scheduledAt, timed: !!full.scheduledHasTime };
+        root.dropIndex = -1;
+        dragLayer.begin(t.id, t.title, true);
+    }
+    function moveDrag(x, y) {
+        if (!root.drag) return;
+        root.dropIndex = root.cellIndexAt(x, y);
+        const land = root.landing(root.dropIndex);
+        dragLayer.update(x, y, land ? dragLayer.describe("scheduled", land.when, land.timed) : I18n.t("drag.notHere"), !!land);
+    }
+    function endDrag() {
+        const d = root.drag;
+        const land = root.landing(root.dropIndex);
+        root.drag = null;
+        root.dropIndex = -1;
+        dragLayer.finish();
+        if (!d || !land) return false;
+        return AppController.rescheduleTask(d.id, "scheduled", land.when, land.timed);
+    }
+
+    // The task the move keys act on (Ctrl+←/→ a day, with Shift a week): the
+    // chip that has the keyboard, else the one under the pointer. Kept after
+    // a move rebuilds the grid, so the next press moves it again.
+    property string keyTaskId: ""
+    property var keyTaskDay: null
+    property string hoverTaskId: ""
+    property var hoverTaskDay: null
+    function moveKeyTaskByDays(days) {
+        const id = root.keyTaskId || root.hoverTaskId;
+        if (!id) return false;
+        const t = AppController.taskById(id);
+        if (!t || !t.id) return false;
+        const day = root.keyTaskId ? root.keyTaskDay : root.hoverTaskDay;
+        const r = Resched.shiftByDays(t.scheduledAt, t.scheduledHasTime, days, day, AppController.today);
+        return AppController.rescheduleTask(id, "scheduled", r.when, r.timed);
+    }
+    function moveKeyTaskByTime(steps) {
+        const id = root.keyTaskId || root.hoverTaskId;
+        const t = id ? AppController.taskById(id) : null;
+        const r = t ? Resched.shiftByTime(t.scheduledAt, t.scheduledHasTime, steps, Theme.snapMinutes) : null;
+        return r ? AppController.rescheduleTask(id, "scheduled", r.when, true) : false;
+    }
+
     Rectangle { anchors.fill: parent; color: Theme.bg }
 
     ColumnLayout {
@@ -388,6 +457,8 @@ Item {
                 delegate: Rectangle {
                     id: dayCell
                     required property var modelData
+                    required property int index
+                    objectName: "month-cell-" + dayCell.index
                     // Named alias so the nested chip Repeaters (whose own
                     // `modelData` is their int index) can still read the cell.
                     readonly property var cell: modelData
@@ -404,8 +475,9 @@ Item {
                     color: _sel ? Qt.tint(_inMonth ? Theme.panel : Theme.panel2, Theme.accentSoft)
                          : _inMonth ? Theme.panel : Theme.panel2
                     opacity: _inMonth ? 1.0 : 0.55
-                    border.color: _sel || _today ? Theme.accent : Theme.border
-                    border.width: 1
+                    readonly property bool _dropHere: root.drag !== null && root.dropIndex === dayCell.index
+                    border.color: _dropHere || _sel || _today ? Theme.accent : Theme.border
+                    border.width: _dropHere ? 2 : 1
                     Accessible.role: Accessible.Cell
                     Accessible.name: root.dayLabel(modelData.date)
                     Accessible.selected: _sel
@@ -475,10 +547,56 @@ Item {
                                     Text { id: priMark; objectName: "month-priority"; anchors.verticalCenter: parent.verticalCenter; text: Theme.priorityMark(cell.tasks[index].priority); color: root.priColor(cell.tasks[index].priority); font.pixelSize: Theme.fsXs }
                                     Text { anchors.verticalCenter: parent.verticalCenter; width: parent.width - priMark.width - Theme.spXs; elide: Text.ElideRight; text: (cell.tasks[index].scheduled ? "◷ " : "") + cell.tasks[index].title; color: Theme.text; font.pixelSize: Theme.fsXs }
                                 }
+                                readonly property var task: dayCell.cell.tasks[taskChip.index]
+                                objectName: "month-task-" + taskChip.task.id
+                                // The keyboard's way in; deaf to the pointer, which
+                                // the drag area below takes.
                                 ClickArea {
-                                    label: dayCell.cell.tasks[taskChip.index].title
+                                    label: taskChip.task.title
                                     showTip: false
-                                    onActivated: root.taskClicked(dayCell.cell.tasks[taskChip.index].id)
+                                    acceptedButtons: Qt.NoButton
+                                    onActivated: root.taskClicked(taskChip.task.id)
+                                    onActiveFocusChanged: if (activeFocus) {
+                                        root.keyTaskId = taskChip.task.id;
+                                        root.keyTaskDay = dayCell.cell.date;
+                                    }
+                                }
+                                // A click opens it; a drag takes it to another day
+                                // (APP-249).
+                                MouseArea {
+                                    id: chipMA
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    preventStealing: true
+                                    cursorShape: root.drag ? Qt.ClosedHandCursor : Qt.PointingHandCursor
+                                    property real pressX: 0
+                                    property real pressY: 0
+                                    // Esc ended this press's drag.
+                                    property bool inert: false
+                                    onPressed: (mouse) => { pressX = mouse.x; pressY = mouse.y; inert = false; }
+                                    onPositionChanged: (mouse) => {
+                                        if (!pressed || inert) return;
+                                        if (!root.drag) {
+                                            if (Math.abs(mouse.x - pressX) < 6 && Math.abs(mouse.y - pressY) < 6) return;
+                                            root.beginDrag(taskChip.task);
+                                        }
+                                        const p = chipMA.mapToItem(root, mouse.x, mouse.y);
+                                        root.moveDrag(p.x, p.y);
+                                    }
+                                    onReleased: if (root.drag) { inert = true; root.endDrag(); }
+                                    onCanceled: if (root.drag) { root.drag = null; root.dropIndex = -1; dragLayer.finish(); }
+                                    onClicked: {
+                                        if (inert) { inert = false; return; }
+                                        root.taskClicked(taskChip.task.id);
+                                    }
+                                    onContainsMouseChanged: {
+                                        if (containsMouse) { root.hoverTaskId = taskChip.task.id; root.hoverTaskDay = dayCell.cell.date; }
+                                        else if (root.hoverTaskId === taskChip.task.id) root.hoverTaskId = "";
+                                    }
+                                    Connections {
+                                        target: dragLayer
+                                        function onCanceled() { if (chipMA.pressed) chipMA.inert = true; }
+                                    }
                                 }
                             }
                         }
@@ -556,5 +674,12 @@ Item {
             line: searching ? I18n.t("view.empty.noMatch.hint")
                             : I18n.t("month.empty.hint").arg(AppController.shortcutFor("task.new"))
         }
+    }
+
+    // What a drop would set, at the pointer; Esc cancels (APP-249).
+    RescheduleDrag {
+        id: dragLayer
+        objectName: "month-drag"
+        onCanceled: { root.drag = null; root.dropIndex = -1; }
     }
 }

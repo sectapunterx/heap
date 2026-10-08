@@ -264,6 +264,14 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"undo.changedSince", {"Can't undo that — it has been changed since", "Нельзя отменить — это уже изменили после"}},
       {"undo.column", {"Column change undone: %1", "Изменение колонки отменено: %1"}},
       {"undo.schedule", {"Scheduling undone: %1", "Планирование отменено: %1"}},
+      {"undo.deadline", {"Deadline change undone: %1", "Изменение срока отменено: %1"}},
+      // Drag-to-reschedule (APP-249).
+      {"reschedule.scheduled", {"%1: when → %2", "%1: когда → %2"}},
+      {"reschedule.due", {"%1: deadline → %2", "%1: срок → %2"}},
+      {"reschedule.scheduledCleared", {"%1: no longer planned for a day", "%1: больше не запланировано на день"}},
+      {"reschedule.dueCleared", {"%1: deadline removed", "%1: срок снят"}},
+      {"reschedule.localOnly", {"changed here only, not in the tracker", "изменено только здесь, не в трекере"}},
+      {"reschedule.block", {"%1: %2–%3", "%1: %2–%3"}},
       {"undo.timer", {"Timer change undone: %1", "Изменение таймера отменено: %1"}},
       {"undo.snooze", {"Snooze undone: %1", "Откладывание отменено: %1"}},
       {"undo.bulkEdit", {"Change undone for %1 task(s)", "Изменение отменено для задач: %1"}},
@@ -347,6 +355,28 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.cal.newEvent.desc",
        {"Open the event editor at the next free slot of the selected day.",
         "Открыть редактор события на ближайшем свободном слоте выбранного дня."}},
+      {"shortcut.cal.taskEarlier.label", {"Task: a day earlier", "Задача: на день раньше"}},
+      {"shortcut.cal.taskEarlier.desc",
+       {"Week, Month, Timeline: move the focused task's date back a day.",
+        "Неделя, месяц, лента: сдвинуть дату задачи в фокусе на день назад."}},
+      {"shortcut.cal.taskLater.label", {"Task: a day later", "Задача: на день позже"}},
+      {"shortcut.cal.taskLater.desc",
+       {"Week, Month, Timeline: move the focused task's date forward a day.",
+        "Неделя, месяц, лента: сдвинуть дату задачи в фокусе на день вперёд."}},
+      {"shortcut.cal.taskEarlierWeek.label", {"Task: a week earlier", "Задача: на неделю раньше"}},
+      {"shortcut.cal.taskEarlierWeek.desc",
+       {"Week, Month, Timeline: move the focused task's date back a week.",
+        "Неделя, месяц, лента: сдвинуть дату задачи в фокусе на неделю назад."}},
+      {"shortcut.cal.taskLaterWeek.label", {"Task: a week later", "Задача: на неделю позже"}},
+      {"shortcut.cal.taskLaterWeek.desc",
+       {"Week, Month, Timeline: move the focused task's date forward a week.",
+        "Неделя, месяц, лента: сдвинуть дату задачи в фокусе на неделю вперёд."}},
+      {"shortcut.cal.taskTimeEarlier.label", {"Task: earlier in the day", "Задача: раньше в течение дня"}},
+      {"shortcut.cal.taskTimeEarlier.desc",
+       {"Move a task planned at a time one grid step earlier.", "Сдвинуть задачу, запланированную на время, на шаг сетки раньше."}},
+      {"shortcut.cal.taskTimeLater.label", {"Task: later in the day", "Задача: позже в течение дня"}},
+      {"shortcut.cal.taskTimeLater.desc",
+       {"Move a task planned at a time one grid step later.", "Сдвинуть задачу, запланированную на время, на шаг сетки позже."}},
       {"shortcut.board.cursorDown.label", {"Board: next card", "Доска: следующая карточка"}},
       {"shortcut.board.cursorDown.desc", {"Move the keyboard cursor down a column.", "Сдвинуть курсор вниз по колонке."}},
       {"shortcut.board.cursorUp.label", {"Board: previous card", "Доска: предыдущая карточка"}},
@@ -5371,7 +5401,8 @@ void AppController::scheduleTask(const QString& taskId, double startHour, const 
   t.scheduledHasTime = true;  // the deadline keeps its own flag (schema v10)
   m_tasks.upsert(t);
 
-  emit toast(tr_("event.scheduled").arg(t.id, eventHourLabel(hours.start)));
+  // Undoable from the toast, like every other drop in the calendars (APP-249).
+  emit undoableToast(tr_("event.scheduled").arg(t.id, eventHourLabel(hours.start)), 5);
   scheduleSave();
 }
 
@@ -5381,6 +5412,112 @@ void AppController::scheduleTaskAtNextFreeSlot(const QString& taskId, const QDat
   // used to search for an hour and then book ninety minutes over a meeting.
   const double hours = taskBlockMinutes(taskId) / 60.0;
   scheduleTask(taskId, nextFreeSlot(day, hours), day);
+}
+
+bool AppController::rescheduleTask(const QString& taskId, const QString& field, const QDateTime& when, bool hasTime) {
+  const bool due = field == QStringLiteral("due");
+  if(!due && field != QStringLiteral("scheduled")) {
+    return false;
+  }
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return false;
+  }
+  Task t = m_tasks.items().at(row);
+  // Minutes, not seconds: a view hands over a JS Date, and a stray second
+  // would make "the same time" compare unequal.
+  QDateTime next;
+  bool nextHasTime = false;
+  if(when.isValid() && when.date().isValid()) {
+    nextHasTime = hasTime;
+    next = QDateTime(when.date(), hasTime ? QTime(when.time().hour(), when.time().minute()) : QTime(0, 0));
+  }
+  QDateTime& slot = due ? t.dueAt : t.scheduledAt;
+  bool& slotHasTime = due ? t.dueHasTime : t.scheduledHasTime;
+  if(slot == next && slotHasTime == nextHasTime) {
+    return false;
+  }
+  const UndoScope scope(this, tr_(due ? "undo.deadline" : "undo.schedule").arg(t.id));
+  const QDateTime was = slot;
+  slot = next;
+  slotHasTime = nextHasTime;
+  m_tasks.upsert(t);
+  if(!due && nextHasTime) {
+    moveLinkedFocusBlocks(t.id, was, next);
+  }
+
+  QString what;
+  if(!next.isValid()) {
+    what = tr_(due ? "reschedule.dueCleared" : "reschedule.scheduledCleared").arg(t.id);
+  } else {
+    const QString at =
+        nextHasTime ? dateTimeLabel(next, QStringLiteral("weekdayDay")) : dateLabel(next.date(), QStringLiteral("weekdayDay"));
+    what = tr_(due ? "reschedule.due" : "reschedule.scheduled").arg(t.id, at);
+  }
+  // A tracker's deadline changed here is a local value from now on; the toast
+  // says so rather than letting it look like it went upstream.
+  if(due && !t.externalProvider.isEmpty()) {
+    what += QStringLiteral(" · ") + tr_("reschedule.localOnly");
+  }
+  emit undoableToast(what, 5);
+  scheduleSave();
+  return true;
+}
+
+bool AppController::clearTaskDate(const QString& taskId, const QString& field) {
+  return rescheduleTask(taskId, field, QDateTime(), false);
+}
+
+bool AppController::resizeTaskBlock(const QString& taskId, const QDate& date, double startHour, double endHour) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0 || !date.isValid()) {
+    return false;
+  }
+  Task t = m_tasks.items().at(row);
+  const heap::cal::HourRange hours = heap::cal::clampHours(startHour, endHour, snapStepHours());
+  const QDateTime at(date, heap::cal::hourToTime(hours.start));
+  const int minutes = static_cast<int>(std::lround((hours.end - hours.start) * 60.0));
+  if(t.scheduledAt == at && t.scheduledHasTime && t.estimateMinutes == minutes) {
+    return false;
+  }
+  const UndoScope scope(this, tr_("undo.schedule").arg(t.id));
+  const QDateTime was = t.scheduledAt;
+  t.scheduledAt = at;
+  t.scheduledHasTime = true;
+  t.estimateMinutes = minutes;
+  m_tasks.upsert(t);
+  moveLinkedFocusBlocks(t.id, was, at);
+  emit undoableToast(tr_("reschedule.block").arg(t.id, dateTimeLabel(at, QStringLiteral("weekdayDay")), eventHourLabel(hours.end)), 5);
+  scheduleSave();
+  return true;
+}
+
+void AppController::moveLinkedFocusBlocks(const QString& taskId, const QDateTime& was, const QDateTime& now) {
+  if(!was.isValid() || !now.isValid()) {
+    return;
+  }
+  // Only the block the old schedule was read from, and only a one-off: a
+  // series is moved through its own scope question, not from a task's date.
+  QVector<CalEvent> moved;
+  for(const CalEvent& e : m_events.items()) {
+    if(e.type != QStringLiteral("focus") || e.taskId != taskId || !e.rrule.isEmpty() || e.allDay) {
+      continue;
+    }
+    if(QDateTime(e.date, heap::cal::hourToTime(e.start)) != was) {
+      continue;
+    }
+    CalEvent m = e;
+    const double length = e.end - e.start;
+    const double start = now.time().hour() + (now.time().minute() / 60.0);
+    m.date = now.date();
+    m.start = start;
+    m.end = qMin(24.0, start + length);
+    m.endDate = QDate();
+    moved.append(m);
+  }
+  for(const CalEvent& m : moved) {
+    m_events.upsert(m);
+  }
 }
 
 void AppController::followFocusBlock(const CalEvent& before, const CalEvent* after) {
@@ -11989,6 +12126,15 @@ void AppController::seedShortcutCatalog() {
   add("cal.prevDay", "Alt+Left");
   add("cal.nextDay", "Alt+Right");
   add("cal.newEvent", "Ctrl+Alt+E");
+  // Moving the task under the keyboard (or the pointer) in Week, Month and
+  // Timeline: the keys for what a drag does there (APP-249). Ctrl+arrows are
+  // the board's own card moves; these are live only in those three views.
+  add("cal.taskEarlier", "Ctrl+Left");
+  add("cal.taskLater", "Ctrl+Right");
+  add("cal.taskEarlierWeek", "Ctrl+Shift+Left");
+  add("cal.taskLaterWeek", "Ctrl+Shift+Right");
+  add("cal.taskTimeEarlier", "Ctrl+Up");
+  add("cal.taskTimeLater", "Ctrl+Down");
   // Focus mode (APP-160); live only once Settings → Safety net turns it on.
   add("focus.immersion", "Ctrl+Shift+F");
   // The event log (APP-187): the toasts of this session, to read again.
