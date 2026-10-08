@@ -104,11 +104,12 @@ test('feature widgets load on every area page', async ({ page }) => {
   }
 });
 
-test('connect widget: connecting GitHub brings issues, Done closes one', async ({ page, isMobile }) => {
+test('connect widget: connecting GitHub brings issues, Done moves only the card', async ({ page, isMobile }) => {
   test.skip(isMobile, 'pointer drag');
   await page.goto('features/connect/');
   await page.getByRole('button', { name: 'Connect with browser' }).click();
   await expect(page.locator('[data-card="WEB-231"]')).toBeVisible({ timeout: 5000 });
   await dragTo(page, '[data-card="WEB-231"]', '.cw__panel section[aria-label^="Done"]');
-  await expect(page.locator('.d-toast')).toContainText('closed on GitHub');
+  // Write-back is off by default (APP-243): the issue itself stays as it is.
+  await expect(page.locator('.d-toast')).toContainText('stays as it is on GitHub');
 });
