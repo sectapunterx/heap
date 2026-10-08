@@ -11,6 +11,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QRegularExpression>
 #include <QTimeZone>
 #include <QUrl>
 #include <QUrlQuery>
@@ -1036,6 +1037,68 @@ void JiraProvider::pushStatusChange(const QString& externalId, const QString& ne
           emit taskPushed(externalId, project, post.ok, post.error, post.ok ? targetStatus : QString());
         });
   });
+}
+
+QString jiraJqlForIssue(const QString& key, const QString& jql) {
+  QString filter = (jql.trimmed().isEmpty() ? defaultJiraJql() : jql).trimmed();
+  // "ORDER BY" closes a query and cannot sit inside parentheses.
+  static const QRegularExpression orderBy(QStringLiteral(R"(\border\s+by\b.*$)"),
+                                          QRegularExpression::CaseInsensitiveOption | QRegularExpression::DotMatchesEverythingOption);
+  filter.remove(orderBy);
+  filter = filter.trimmed();
+  QString quoted = key;
+  quoted.replace(QLatin1Char('"'), QStringLiteral("\\\""));
+  const QString keyClause = QStringLiteral("key = \"%1\"").arg(quoted);
+  return filter.isEmpty() ? keyClause : keyClause + QStringLiteral(" AND (") + filter + QLatin1Char(')');
+}
+
+void JiraProvider::checkIssue(const QString& externalId, const QString& project) {
+  if(!isConfigured() || externalId.isEmpty()) {
+    emit issueChecked(externalId, project, false, -1, QStringLiteral("not configured"), QString(), FilterUnknown);
+    return;
+  }
+  // The search path depends on the deployment, like a pull's.
+  if(m_deployment == JiraDeployment::Unknown) {
+    ensureDeployment([this, externalId, project]() {
+      checkIssue(externalId, project);
+    });
+    return;
+  }
+  // Its status now, then whether the user's own JQL still takes it: a key
+  // clause ANDed with the filter answers one issue or none.
+  send("GET",
+       QStringLiteral("/issue/") + externalId + QStringLiteral("?fields=status"),
+       {},
+       [this, externalId, project](const ApiResult& r) {
+         if(!r.ok) {
+           emit issueChecked(externalId, project, false, r.status, r.error, QString(), FilterUnknown);
+           return;
+         }
+         const QString status = QJsonDocument::fromJson(r.body)
+                                    .object()
+                                    .value(QStringLiteral("fields"))
+                                    .toObject()
+                                    .value(QStringLiteral("status"))
+                                    .toObject()
+                                    .value(QStringLiteral("name"))
+                                    .toString();
+         QJsonObject payload;
+         payload.insert(QStringLiteral("jql"), jiraJqlForIssue(externalId, m_jql));
+         payload.insert(QStringLiteral("maxResults"), 1);
+         payload.insert(QStringLiteral("fields"), QJsonArray{QStringLiteral("status")});
+         const QString searchPath = m_deployment == JiraDeployment::Server ? QStringLiteral("/search") : QStringLiteral("/search/jql");
+         send("POST",
+              searchPath,
+              QJsonDocument(payload).toJson(QJsonDocument::Compact),
+              [this, externalId, project, status](const ApiResult& s) {
+                if(!s.ok) {
+                  emit issueChecked(externalId, project, false, s.status, s.error, QString(), FilterUnknown);
+                  return;
+                }
+                const bool in = !QJsonDocument::fromJson(s.body).object().value(QStringLiteral("issues")).toArray().isEmpty();
+                emit issueChecked(externalId, project, true, 200, QString(), status, in ? FilterIn : FilterOut);
+              });
+       });
 }
 
 }  // namespace heap::integrations

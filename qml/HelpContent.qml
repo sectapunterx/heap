@@ -902,8 +902,8 @@ Item {
                               "Интеграции — подключение трекера")
             }
             Body {
-                text: root.tr2("Settings → Integrations lists every tracker heap. can pull issues from. Each card is collapsed; click it to expand. Issues arrive as cards in the active profile, and moving one between columns writes the status back where the tracker allows it.",
-                              "Настройки → Интеграции перечисляют все трекеры, из которых heap. умеет забирать задачи. Каждая карточка свёрнута; нажмите, чтобы развернуть. Задачи приходят карточками в активный профиль, а перенос между колонками записывает статус обратно, где трекер это позволяет.")
+                text: root.tr2("Settings → Integrations lists every tracker heap. can pull issues from. Each card is collapsed; click it to expand. Issues arrive as cards in the active profile. Moving one between columns changes only its column in heap: nothing is written to a tracker until you turn on “Change the status in …” on that tracker's card, and then heap checks the issue before every change.",
+                              "Настройки → Интеграции перечисляют все трекеры, из которых heap. умеет забирать задачи. Каждая карточка свёрнута; нажмите, чтобы развернуть. Задачи приходят карточками в активный профиль. Перенос между колонками меняет только колонку в heap.: в трекер ничего не пишется, пока вы не включите «Менять статус в …» в карточке этого трекера, и тогда heap. сверяет задачу перед каждым изменением.")
             }
 
             H3 {
@@ -954,8 +954,8 @@ Item {
                               "GitHub, GitLab и Jira больше ничего не требуют: оставьте Repo / Project / JQL пустыми — и они заберут задачи, назначенные на вас. Asana, ClickUp, Sentry и Bitbucket так не умеют — у них нет «моих задач», — поэтому им нужны рабочее пространство, список, организация и проект или репозиторий. Карточка называет, чего не хватает, и открывает «Дополнительно» на нужном поле.")
             }
             Hint {
-                text: root.tr2("In that 'my issues' mode there is no single repo to write to, so moving a card between columns does not push the status back.",
-                              "В режиме «мои задачи» нет одного репозитория, куда писать, поэтому перенос карточки между колонками не отправляет статус обратно.")
+                text: root.tr2("With “Change the status in …” on, in that 'my issues' mode each issue is written to the repo it came from, and an issue no longer assigned to you is read-only: its card stays where it is and heap. asks before sending anything.",
+                              "Если «Менять статус в …» включено, в режиме «мои задачи» каждая задача пишется в свой репозиторий, а задача, которая больше не назначена на вас, только читается: карточка остаётся на месте, и heap. спрашивает, прежде чем что-то отправить.")
             }
 
             H3 {

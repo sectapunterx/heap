@@ -2251,6 +2251,7 @@ Item {
                 Repeater {
                     model: AppController.integrationCatalog()
                     delegate: SectionCard {
+                        id: intDelegate
                         required property var modelData
                         ColumnLayout {
                             id: intCard
@@ -2474,6 +2475,22 @@ Item {
                                         text: I18n.t("settings.integrations.archiveOutOfScope")
                                         onClicked: AppController.archiveOutOfScope(intCard.intKey)
                                     }
+                                }
+
+                                // Writing to the tracker is the user's call, per
+                                // tracker, and off until they make it (APP-243):
+                                // with it off a card's move stays in heap.
+                                SwitchRow {
+                                    objectName: "int-write-status-" + intCard.intKey
+                                    visible: intDelegate.modelData.writesStatus === true
+                                    Layout.fillWidth: true
+                                    separator: false
+                                    label: I18n.t("settings.integrations.writeStatus").arg(intDelegate.modelData.name)
+                                    hint: intCard.conf.writeStatus === true
+                                          ? I18n.t("settings.integrations.writeStatus.onHint")
+                                          : I18n.t("settings.integrations.writeStatus.offHint").arg(intDelegate.modelData.name)
+                                    checked: intCard.conf.writeStatus === true
+                                    onToggled: (checked) => AppController.setTrackerWriteEnabled(intCard.intKey, checked)
                                 }
 
                                 // Device-flow banner: show the code the user must

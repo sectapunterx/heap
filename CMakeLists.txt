@@ -332,6 +332,7 @@ qt_add_qml_module(heap_core
         # ── audit-time: begin ──
         qml/SeriesScopeDialog.qml
         qml/SyncConflictDialog.qml
+        qml/TrackerPushConfirmDialog.qml
         qml/IntegrationHealthCard.qml
         qml/IntegrationsInfoCard.qml
         qml/CalendarSubscriptionsCard.qml
