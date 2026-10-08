@@ -771,9 +771,46 @@ Item {
     // then scroll to that setting and focus it once the page is built.
     function revealItem(item) {
         if (!item || !openSection(item.section)) return false;
-        const want = _indexEntry(item);
-        Qt.callLater(() => root._revealNow(want));
+        _reveal = { entry: _indexEntry(item), lastY: -1, steady: 0, ticks: 0 };
+        revealSettle.restart();
         return true;
+    }
+    // The page a section opens on is laid out over the next frames: its
+    // Layouts polish, text wraps, and contentHeight grows with them. A
+    // scroll worked out before that lands short of the setting (on another
+    // platform's fonts, by a lot). So the target is measured each frame and
+    // the scroll redone until its position has stopped moving.
+    property var _reveal: null
+    Timer {
+        id: revealSettle
+        interval: 16
+        repeat: true
+        onTriggered: root._revealStep()
+    }
+    function _revealStep() {
+        const r = _reveal;
+        if (!r) { revealSettle.stop(); return; }
+        r.ticks++;
+        const target = _revealTarget(r.entry);
+        if (!target) {
+            if (r.ticks > 120) { _reveal = null; revealSettle.stop(); }
+            return;
+        }
+        const y = _scrollYFor(target);
+        if (y !== r.lastY) {
+            r.lastY = y;
+            r.steady = 0;
+            _scrollToItem(target);
+        } else {
+            r.steady++;
+        }
+        // A few ticks with nothing moving (and not before the first frames
+        // had a chance to polish), or stop waiting after two seconds.
+        if ((r.ticks >= 10 && r.steady >= 3) || r.ticks > 120) {
+            _reveal = null;
+            revealSettle.stop();
+            _revealNow(r.entry);
+        }
     }
     // The full index entry for a {section, key} or {section, id} pair.
     function _indexEntry(item) {
@@ -811,13 +848,17 @@ Item {
     function _isRow(it) { return it.hasLabel !== undefined && it.stackBelow !== undefined; }
     function _isGroup(it) { return it.framed !== undefined && it.danger !== undefined && it.rows !== undefined; }
 
-    function _revealNow(entry) {
+    function _revealTarget(entry) {
         let target = _findSettingItem(entry);
         // A row shown only in some state (the chime minutes under a sound
         // switch that is off): its group, where the switch that shows it is.
         while (target && !target.visible && target !== bodyCol) target = target.parent;
-        if (!target || target === bodyCol) return;
-        _scrollToItem(target);
+        return target && target !== bodyCol ? target : null;
+    }
+    // Focus the setting once the scroll to it has settled.
+    function _revealNow(entry) {
+        const target = _revealTarget(entry);
+        if (!target) return;
         // The setting's own control when it takes focus (a switch row), else
         // the first focusable thing in it (a text field, a combo).
         // A row with nothing to focus (About → Version) is only scrolled to.
@@ -925,10 +966,13 @@ Item {
         const target = _findChildByName(bodyCol, objectName);
         if (target) _scrollToItem(target);
     }
-    function _scrollToItem(target) {
+    function _scrollYFor(target) {
         const p = target.mapToItem(bodyCol, 0, 0);
         const maxY = Math.max(0, bodyScroll.contentHeight - bodyScroll.height);
-        const newY = Math.max(0, Math.min(bodyCol.y + p.y - Theme.spMd, maxY));
+        return Math.max(0, Math.min(Math.round(bodyCol.y + p.y - Theme.spMd), maxY));
+    }
+    function _scrollToItem(target) {
+        const newY = _scrollYFor(target);
         scrollAnim.from = bodyScroll.contentY;
         scrollAnim.to = newY;
         scrollAnim.restart();

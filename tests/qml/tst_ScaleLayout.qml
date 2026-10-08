@@ -222,8 +222,15 @@ TestCase {
             }
             let rows = [];
             tryVerify(() => (rows = delegates()).some(r => r.rd.task && r.rd.task.id === ids[0]), 3000);
+            // Only the buckets this test seeded: the profile persists between
+            // runs, and whatever earlier runs or other tests left behind
+            // (tasks dated today, say) is not what is being measured.
+            const ours = {};
+            for (const r of rows)
+                if (r.rd.task && ids.indexOf(r.rd.task.id) >= 0) ours[r.rd.bucketId] = true;
             let checkedHead = false;
             for (const r of rows) {
+                if (!ours[r.rd.bucketId]) continue;
                 if (r.first && !r.last) {
                     // As tall as its own row: the label runs down beside the rows.
                     compare(r.height, r._ownH, "row " + r.index + " is sized by its label");

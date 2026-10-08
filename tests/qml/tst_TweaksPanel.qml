@@ -235,7 +235,7 @@ TestCase {
             for (let q = f; q; q = q.parent)
                 if (q.label === text && q.hasLabel !== undefined) return true;
             return false;
-        }, 2000, "the setting is not focused in Settings");
+        }, 4000, "the setting is not focused in Settings");
         openSpy.target = null;
     }
 

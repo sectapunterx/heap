@@ -495,7 +495,8 @@ TestCase {
         compare(sv.activeSection, "appearance");
         tryVerify(() => _row(sv, text) !== null, 2000, "row not built");
         const row = _row(sv, text);
-        tryVerify(() => _inside(sv.Window.activeFocusItem, row), 2000, "focus is not on the setting");
+        // Focus lands once the scroll has settled on the laid-out page.
+        tryVerify(() => _inside(sv.Window.activeFocusItem, row), 4000, "focus is not on the setting");
         // In view: the row sits inside the body's visible band.
         tryVerify(() => {
             let fl = row.parent;
