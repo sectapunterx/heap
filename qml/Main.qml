@@ -849,10 +849,13 @@ ApplicationWindow {
         // to see it. Nothing arrives unless asked for.
         function onImmersionEnded(held, minutes) {
             const msg = I18n.t("immersion.ended").arg(held);
-            if (held > 0)
+            if (held > 0) {
+                // A toast with an action is in the event log too (APP-225).
+                AppController.logEvent("info", msg);
                 toast.showWithAction(msg, I18n.t("immersion.showHeld"), 15, function () { AppController.releaseImmersionHeld() });
-            else
+            } else {
                 toast.show(msg, "info");
+            }
         }
         function onSafetyOpenTasksRequested(taskIds) {
             win._summon();
@@ -985,6 +988,7 @@ ApplicationWindow {
 
         // Main column: filter bar + active view
         Item {
+            id: mainColumn
             objectName: "main-column"
             Layout.row: 1; Layout.column: 1
             Layout.fillWidth: true
@@ -2398,11 +2402,19 @@ ApplicationWindow {
         }
     }
 
+    // Spans the work area (the main column, beside the side rail and the
+    // right panel): a wide one gets the stack in its bottom-right corner,
+    // a narrow one its bottom centre (APP-225). Popups and dialogs sit on
+    // the overlay above it, so a toast never covers Quick Capture or a
+    // dialog's buttons.
     Toast {
         id: toast
+        objectName: "toast"
+        x: mainColumn.x
+        width: mainColumn.width
+        areaWidth: mainColumn.width
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 24 + win._selectionBarSpace + win._resumePillSpace
-        anchors.horizontalCenter: parent.horizontalCenter
         z: 100
     }
 

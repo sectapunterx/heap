@@ -390,6 +390,7 @@ qt_add_qml_module(heap_core
         qml/PersonPicker.qml
         qml/TweaksPanel.qml
         qml/Toast.qml
+        qml/ToastTiming.js
         qml/AppMenu.qml
         qml/AppMenuItem.qml
         qml/AppMenuSeparator.qml
