@@ -6,8 +6,9 @@ import "PopupStack.js" as PopupStack
 
 // Quick-capture popup for Notes — triggered by Ctrl+Shift+N.
 //
-//  • Enter           → submit (append to AppController.notesState)
-//  • Shift+Enter     → newline in the editor
+//  • Ctrl+Enter      → submit (append to AppController.notesState)
+//  • Enter, Shift+Enter → newline in the editor (APP-209: the same keys
+//                      as the task capture)
 //  • @<token>        → people autocomplete via MentionAutocomplete
 //  • Esc (empty)     → close silently
 //  • Esc (non-empty) → discard-confirm child popup
@@ -143,7 +144,7 @@ Popup {
                             }
                         }
                         if ((e.key === Qt.Key_Return || e.key === Qt.Key_Enter)
-                            && !(e.modifiers & Qt.ShiftModifier)) {
+                            && !(e.modifiers & (Qt.ShiftModifier | Qt.ControlModifier))) {
                             if (at.accept()) {
                                 e.accepted = true;
                                 return;
@@ -156,16 +157,19 @@ Popup {
                         }
                     }
 
-                    // Shift+Enter → fall through to TextArea (inserts "\n").
-                    if ((e.key === Qt.Key_Return || e.key === Qt.Key_Enter)
-                        && (e.modifiers & Qt.ShiftModifier)) {
-                        return;
-                    }
-
-                    // Plain Enter → submit the note.
                     if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) {
-                        root._submit();
                         e.accepted = true;
+                        // Ctrl+Enter → save the note (APP-209).
+                        if (e.modifiers & Qt.ControlModifier) {
+                            at.dismiss();
+                            root._submit();
+                            return;
+                        }
+                        // Enter and Shift+Enter → a plain "\n" (Shift+Enter
+                        // in a text area is otherwise a Unicode line separator).
+                        if (editor.selectedText.length > 0)
+                            editor.remove(editor.selectionStart, editor.selectionEnd);
+                        editor.insert(editor.cursorPosition, "\n");
                         return;
                     }
 

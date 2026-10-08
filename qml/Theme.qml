@@ -346,6 +346,21 @@ QtObject {
     readonly property color modalShadow: withAlpha(scrim, dark ? 0.7 : 0.28)
     readonly property int   modalShadowOffset: 6
     readonly property int   modalShadowDepth: 16
+    // Toasts (APP-225): a popup's elevation, a step larger type than body,
+    // and a kind icon instead of a dot, so a notice reads on a 4K monitor
+    // from the other side of the screen. Past `toastWideFrom` of work area
+    // the stack moves from the bottom centre to the bottom-right corner.
+    readonly property int   toastMaxWidth: px(600)
+    readonly property int   toastWideFrom: px(1200)
+    readonly property int   toastIcon: px(18)
+    readonly property int   toastAccentWidth: 3
+    // How far a toast slides in; 0 with "Reduce motion" on.
+    readonly property int   toastSlide: Math.round(sp2xl * motion)
+    // The kind's colour on the toast, at 3:1 at least (WCAG non-text
+    // contrast): the warning amber on a light toast was below it.
+    function toastKindColor(kind) {
+        return Presets.ensureContrast(String(alertColor(kind)), [String(toastBg)], 3);
+    }
 
     // ── Type scale (px) ──────────────────────────────────────────────
     // A modular scale (APP-181): 13px body, each step 1.125 times the one

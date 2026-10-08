@@ -44,6 +44,18 @@ if [[ $status == 0 ]]; then
   exit 0
 fi
 
+# A suite that crashed twice on macOS: run it once more under lldb so the log
+# carries a backtrace instead of a bare "SegFault".
+if [[ "$(uname -s)" == Darwin ]] && command -v lldb >/dev/null; then
+  for name in $failed; do
+    exe=$(ctest --test-dir "$dir" -N -V -R "^${name}\$" 2>/dev/null | sed -n 's/^.*Test command: //p' | head -1 | awk '{print $1}')
+    [[ -n $exe && -x $exe ]] || continue
+    echo "::group::lldb backtrace: $name"
+    (cd "$dir" && lldb --batch -o run -k "thread backtrace all" -k quit -- "$exe") 2>&1 | tail -n 200
+    echo "::endgroup::"
+  done
+fi
+
 # heap_qml_tests also writes its results to a file (see tests/CMakeLists.txt),
 # since its stdout is lost on Windows; name the failing cases from there.
 qml_results="$dir/heap_qml_tests.txt"

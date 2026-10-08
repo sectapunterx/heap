@@ -224,7 +224,9 @@ Popup {
         if (summary) root.captured(summary.title, summary.body, summary.taskId || "");
     }
 
-    // Enter adds and closes; Ctrl+Enter adds and stays open for the next one.
+    // Ctrl+Enter adds and closes; Ctrl+Shift+Enter adds and stays open for
+    // the next one. Enter and Shift+Enter start a new line (APP-209): the
+    // lines after the first are the task's description.
     function _submitFromKey(keep) {
         root.keepOpen = keep;
         root._submit();
@@ -389,64 +391,86 @@ Popup {
             font.weight: Theme.fwTitle
         }
 
-        TextField {
-            id: inputField
-            ContextMenu.menu: TextEditMenu { editor: inputField }
-            objectName: "qc-input"
+        // A few lines tall at most; a longer text scrolls.
+        ScrollView {
+            id: inputScroll
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
-            placeholderText: I18n.t("quick.fieldPh")
-            font.pixelSize: Theme.fsLg
-            background: FieldFrame {}
-            color: Theme.text
-            placeholderTextColor: Theme.textDim
-            onTextChanged: { previewTimer.restart(); at.refresh(); root._hint = ""; }
-            onCursorPositionChanged: at.refresh()
-            Keys.onPressed: (e) => {
-                if (at.isOpen) {
-                    if (e.key === Qt.Key_Down) {
-                        at.moveSelection(+1);
-                        e.accepted = true;
-                        return;
-                    }
-                    if (e.key === Qt.Key_Up) {
-                        at.moveSelection(-1);
-                        e.accepted = true;
-                        return;
-                    }
-                    if (e.key === Qt.Key_Tab
-                        || (e.key === Qt.Key_Return && (e.modifiers & Qt.ShiftModifier))
-                        || (e.key === Qt.Key_Enter && (e.modifiers & Qt.ShiftModifier))) {
-                        // Tab or Shift+Enter → insert suggestion, stay in field.
-                        if (at.accept()) {
+            Layout.preferredHeight: Math.min(inputField.implicitHeight, Theme.rowH * 4)
+            clip: true
+
+            TextArea {
+                id: inputField
+                ContextMenu.menu: TextEditMenu { editor: inputField }
+                objectName: "qc-input"
+                placeholderText: I18n.t("quick.fieldPh")
+                font.pixelSize: Theme.fsLg
+                wrapMode: TextEdit.Wrap
+                background: FieldFrame { control: inputField }
+                color: Theme.text
+                placeholderTextColor: Theme.textDim
+                selectByMouse: true
+                onTextChanged: { previewTimer.restart(); at.refresh(); root._hint = ""; }
+                onCursorPositionChanged: at.refresh()
+
+                // Enter and Shift+Enter both write a plain "\n" (Shift+Enter
+                // in a text area is otherwise a Unicode line separator).
+                function newLine() {
+                    if (inputField.selectedText.length > 0)
+                        inputField.remove(inputField.selectionStart, inputField.selectionEnd);
+                    inputField.insert(inputField.cursorPosition, "\n");
+                }
+
+                Keys.onPressed: (e) => {
+                    const enter = e.key === Qt.Key_Return || e.key === Qt.Key_Enter;
+                    if (at.isOpen) {
+                        if (e.key === Qt.Key_Down) {
+                            at.moveSelection(+1);
+                            e.accepted = true;
+                            return;
+                        }
+                        if (e.key === Qt.Key_Up) {
+                            at.moveSelection(-1);
+                            e.accepted = true;
+                            return;
+                        }
+                        // Tab takes the highlighted suggestion and stays in the field.
+                        if (e.key === Qt.Key_Tab && at.accept()) {
+                            e.accepted = true;
+                            return;
+                        }
+                        // Plain Enter takes a suggestion only once the arrows
+                        // have picked one: "#backend" is a label and "@maria" a
+                        // person as typed, and Enter used to rewrite them into
+                        // whichever task or id came first in the list (#TASK-2700).
+                        if (enter && !(e.modifiers & (Qt.ControlModifier | Qt.ShiftModifier)) && at.navigated) {
+                            at.accept();
+                            e.accepted = true;
+                            return;
+                        }
+                        if (e.key === Qt.Key_Escape) {
+                            at.dismiss();
                             e.accepted = true;
                             return;
                         }
                     }
-                    if (e.key === Qt.Key_Escape) {
-                        at.dismiss();
-                        e.accepted = true; return;
+                    if (enter) {
+                        e.accepted = true;
+                        if (e.modifiers & Qt.ControlModifier) {
+                            // Ctrl+Enter saves; with Shift it stays open for the next.
+                            at.dismiss();
+                            root._submitFromKey((e.modifiers & Qt.ShiftModifier) !== 0);
+                        } else {
+                            inputField.newLine();
+                        }
+                        return;
+                    }
+                    // Tab leaves the field, as it did from a one-line one.
+                    if (e.key === Qt.Key_Tab || e.key === Qt.Key_Backtab) {
+                        const next = inputField.nextItemInFocusChain(e.key === Qt.Key_Tab);
+                        if (next) next.forceActiveFocus(e.key === Qt.Key_Tab ? Qt.TabFocusReason : Qt.BacktabFocusReason);
+                        e.accepted = true;
                     }
                 }
-            }
-            // Enter takes a suggestion only once the arrows have picked one:
-            // "#backend" is a label and "@maria" a person as typed, and Enter
-            // used to rewrite them into whichever task or id came first in the
-            // list (#TASK-2700). Tab always takes the highlighted one.
-            Keys.onReturnPressed: (e) => {
-                if (at.isOpen && at.navigated) {
-                    at.accept();
-                    return;
-                }
-                at.dismiss();
-                root._submitFromKey((e.modifiers & Qt.ControlModifier) !== 0);
-            }
-            Keys.onEnterPressed: (e) => {
-                if (at.isOpen && at.navigated) {
-                    at.accept();
-                    return;
-                }
-                at.dismiss();
-                root._submitFromKey((e.modifiers & Qt.ControlModifier) !== 0);
             }
         }
 
@@ -499,7 +523,7 @@ Popup {
             }
         }
 
-        // Why Enter did nothing, or what the last Ctrl+Enter added.
+        // Why Ctrl+Enter did nothing, or what the last Ctrl+Shift+Enter added.
         Text {
             objectName: "qc-hint"
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
@@ -515,15 +539,16 @@ Popup {
         RowLayout {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.bottomMargin: Theme.sp2xl
             spacing: Theme.spMd
+            // Wraps rather than pushing the buttons out: the keys are four now.
             Text {
+                objectName: "qc-keys-hint"
+                Layout.fillWidth: true
                 text: I18n.t("quick.keysHint")
                 color: Theme.textDim
                 font.family: Theme.fontUi
                 font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsXs
-            }
-            Item {
-                Layout.fillWidth: true
+                wrapMode: Text.Wrap
             }
             PillButton {
                 text: I18n.t("common.cancel")

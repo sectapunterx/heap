@@ -61,7 +61,8 @@ Window {
 
     // Clicking away counts as dismissing it — the task popup's
     // CloseOnPressOutside, for a click that lands outside the window. A note
-    // with text in it stays: it has no undo, so it waits for Esc or Enter.
+    // with text in it stays: it has no undo, so it waits for Esc or
+    // Ctrl+Enter (Enter is a new line in both popups, APP-209).
     onActiveChanged: {
         if (cap.active) {
             cap._wasActive = true;

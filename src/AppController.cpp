@@ -185,6 +185,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"undo.deleteFollowing", {"Following events restored", "Последующие события восстановлены"}},
       {"undo.deleteOccurrence", {"Event restored", "Событие восстановлено"}},
       {"update.available", {"Update available: %1", "Доступно обновление: %1"}},
+      {"update.ready", {"%1 downloaded, SHA-256 checksum verified", "%1 скачано, контрольная сумма SHA-256 проверена"}},
       {"update.upToDate", {"You're up to date", "У вас последняя версия"}},
       {"update.failed", {"Update check failed", "Не удалось проверить обновления"}},
       {"task.recurs", {"Recurs: %1 due %2", "Повтор: %1 на %2"}},
@@ -758,6 +759,31 @@ AppController::AppController(QObject* parent) :
   });
   connect(this, &AppController::undoableToast, this, [this](const QString& message, int) {
     logEvent(QStringLiteral("undo"), message);
+  });
+  // A toast with an action leaves the screen too (APP-225): what it said is
+  // kept, and an entry about tasks opens them.
+  connect(this, &AppController::settingsReset, this, [this](const QString& message) {
+    logEvent(QStringLiteral("undo"), message);
+  });
+  connect(this,
+          &AppController::safetyNotice,
+          this,
+          [this](const QString&, const QString& title, const QString& body, const QStringList& taskIds) {
+            logEvent(QStringLiteral("info"), title.isEmpty() ? body : title + QStringLiteral(" · ") + body, taskIds);
+          });
+  connect(this, &AppController::updateAvailable, this, [this](const QString& version, const QString&) {
+    logEvent(QStringLiteral("info"), tr_("update.available").arg(version), {}, QStringLiteral("settings:about"));
+  });
+  connect(this, &AppController::updateReadyToInstall, this, [this](const QString& version, const QString&) {
+    logEvent(QStringLiteral("info"), tr_("update.ready").arg(version), {}, QStringLiteral("settings:about"));
+  });
+  // A refused move (APP-204) and the one-time "writes are opt-in" notice
+  // (APP-243) carry actions too.
+  connect(this, &AppController::trackerReadOnlyMove, this, [this](const QString& taskId, const QString& message, const QString&) {
+    logEvent(QStringLiteral("warning"), message, {taskId});
+  });
+  connect(this, &AppController::trackerWriteNotice, this, [this](const QString& message) {
+    logEvent(QStringLiteral("info"), message, {}, QStringLiteral("settings:integrations"));
   });
 
   m_automationTimer->setInterval(60 * 1000);
