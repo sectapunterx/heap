@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
@@ -5,6 +6,7 @@ import TodoCpp
 import "Overlap.js" as Overlap
 import "Segments.js" as Seg
 import "Search.js" as Search
+import "Reschedule.js" as Resched
 
 Item {
     id: root
@@ -414,6 +416,85 @@ Item {
                          - Date.UTC(a.getFullYear(), a.getMonth(), a.getDate())) / 86400000);
     }
 
+    // ── Moving a task to another day or time (APP-249) ───────────────
+    // A task's own block moves and stretches like an event; a chip in the
+    // day headers goes to another day. Both change when the task is planned
+    // (scheduledAt), never its deadline: a chip dropped on a day header keeps
+    // the time it was planned for, one dropped on the hour grid takes that
+    // hour. The hint at the pointer says what a drop would set; Esc cancels.
+    // { id, scheduledAt, timed } of the chip being carried.
+    property var chipDrag: null
+    // { day: index, hour: -1 for a header (date only) } under the pointer.
+    property var chipTarget: null
+
+    function _chipTargetAt(x, y) {
+        // `x`, `y` in gridHost's coordinates.
+        const col = Math.floor((x - gridHost.gutterW) / gridHost.dayW);
+        if (x < gridHost.gutterW || col < 0 || col >= root.days.length) return null;
+        if (y >= 0 && y < headerBand.height) return { day: col, hour: -1 };
+        const p = gridContent.mapFromItem(gridHost, x, y);
+        const top = hourScroll.mapToItem(gridHost, 0, 0).y;
+        if (y < top || y >= top + hourScroll.height) return null;
+        return { day: col, hour: root.clampHour(root.snapHour(root.yToHour(p.y))) };
+    }
+    function _chipLanding(tgt) {
+        if (!root.chipDrag || !tgt) return null;
+        const day = root.days[tgt.day].date;
+        if (tgt.hour < 0) return Resched.dropOnDay(day, root.chipDrag.scheduledAt, root.chipDrag.timed);
+        return { when: Resched.atHour(day, Math.min(tgt.hour, 24 - Theme.minEventHours)), timed: true };
+    }
+    function beginChipDrag(t) {
+        const full = AppController.taskById(t.id);
+        root.chipDrag = { id: t.id, scheduledAt: full.scheduledAt, timed: !!full.scheduledHasTime };
+        root.chipTarget = null;
+        dragLayer.begin(t.id, t.title, true);
+    }
+    // `x`, `y` in gridHost's coordinates.
+    function moveChipDrag(x, y) {
+        if (!root.chipDrag) return;
+        root.chipTarget = root._chipTargetAt(x, y);
+        const land = root._chipLanding(root.chipTarget);
+        const p = dragLayer.mapFromItem(gridHost, x, y);
+        dragLayer.update(p.x, p.y, land ? dragLayer.describe("scheduled", land.when, land.timed) : I18n.t("drag.notHere"), !!land);
+    }
+    function endChipDrag() {
+        const d = root.chipDrag;
+        const land = root._chipLanding(root.chipTarget);
+        root.chipDrag = null;
+        root.chipTarget = null;
+        dragLayer.finish();
+        if (!d || !land) return false;
+        return AppController.rescheduleTask(d.id, "scheduled", land.when, land.timed);
+    }
+
+    // The task the move keys act on: the chip or block that has the
+    // keyboard, else the one under the pointer. Kept after a move rebuilds
+    // the week, so the next press moves the same task again.
+    property string keyTaskId: ""
+    property var keyTaskDay: null
+    property string hoverTaskId: ""
+    property var hoverTaskDay: null
+    function _keyTask() {
+        if (root.keyTaskId) return { id: root.keyTaskId, day: root.keyTaskDay };
+        if (root.hoverTaskId) return { id: root.hoverTaskId, day: root.hoverTaskDay };
+        return null;
+    }
+    function moveKeyTaskByDays(days) {
+        const k = root._keyTask();
+        if (!k) return false;
+        const t = AppController.taskById(k.id);
+        if (!t || !t.id) return false;
+        const r = Resched.shiftByDays(t.scheduledAt, t.scheduledHasTime, days, k.day, AppController.today);
+        return AppController.rescheduleTask(k.id, "scheduled", r.when, r.timed);
+    }
+    function moveKeyTaskByTime(steps) {
+        const k = root._keyTask();
+        if (!k) return false;
+        const t = AppController.taskById(k.id);
+        const r = t ? Resched.shiftByTime(t.scheduledAt, t.scheduledHasTime, steps, Theme.snapMinutes) : null;
+        return r ? AppController.rescheduleTask(k.id, "scheduled", r.when, true) : false;
+    }
+
     // All-day events, packed into rows so bars stack instead of overlapping.
     // Computed for the whole week at once: a bar's row has to be the same in
     // every column it crosses, or a trip would jump up and down across the
@@ -772,13 +853,47 @@ Item {
                                             showTip: false
                                             acceptedButtons: Qt.NoButton
                                             onActivated: chipMA.open()
+                                            // The move keys act on it (APP-249).
+                                            onActiveFocusChanged: if (activeFocus) {
+                                                root.keyTaskId = dueChip.modelData.id;
+                                                root.keyTaskDay = headCol.modelData.date;
+                                            }
                                         }
                                         MouseArea {
                                             id: chipMA
                                             anchors.fill: parent
                                             hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
+                                            cursorShape: root.chipDrag ? Qt.ClosedHandCursor : Qt.PointingHandCursor
                                             acceptedButtons: Qt.LeftButton
+                                            // Dragged to another day or onto the
+                                            // hour grid (APP-249).
+                                            preventStealing: true
+                                            property real pressX: 0
+                                            property real pressY: 0
+                                            // Esc ended this press's drag.
+                                            property bool inert: false
+                                            onPressed: (mouse) => { pressX = mouse.x; pressY = mouse.y; inert = false; }
+                                            onPositionChanged: (mouse) => {
+                                                if (!pressed || inert) return;
+                                                if (!root.chipDrag) {
+                                                    if (Math.abs(mouse.x - pressX) < 6 && Math.abs(mouse.y - pressY) < 6) return;
+                                                    root.beginChipDrag(dueChip.modelData);
+                                                }
+                                                const p = chipMA.mapToItem(gridHost, mouse.x, mouse.y);
+                                                root.moveChipDrag(p.x, p.y);
+                                            }
+                                            onReleased: {
+                                                if (root.chipDrag) { inert = true; root.endChipDrag(); }
+                                            }
+                                            onCanceled: if (root.chipDrag) { root.chipDrag = null; dragLayer.finish(); }
+                                            onContainsMouseChanged: {
+                                                if (containsMouse) { root.hoverTaskId = dueChip.modelData.id; root.hoverTaskDay = headCol.modelData.date; }
+                                                else if (root.hoverTaskId === dueChip.modelData.id) root.hoverTaskId = "";
+                                            }
+                                            Connections {
+                                                target: dragLayer
+                                                function onCanceled() { if (chipMA.pressed) chipMA.inert = true; }
+                                            }
                                             // A plain click, and Return on the
                                             // ClickArea above.
                                             function open() {
@@ -786,6 +901,7 @@ Item {
                                                 root.taskClicked(modelData.id);
                                             }
                                             onClicked: (mouse) => {
+                                                if (inert) { inert = false; return; }
                                                 const ctrl = (mouse.modifiers & Qt.ControlModifier) !== 0;
                                                 const shift = (mouse.modifiers & Qt.ShiftModifier) !== 0;
                                                 if (ctrl) {
@@ -997,7 +1113,9 @@ Item {
                                 Rectangle {
                                     required property int index
                                     visible: index < root.workStart || index >= root.workEnd
-                                    anchors.left: parent.left; anchors.right: parent.right
+                                    // The column by id: under Bound a Repeater's
+                                    // row is built before it has a parent.
+                                    width: dayCol.width
                                     y: index * root.hourH
                                     height: root.hourH
                                     color: Theme.bg2
@@ -1010,7 +1128,7 @@ Item {
                                 model: root.hoursEnd - root.hoursStart
                                 Rectangle {
                                     required property int index
-                                    anchors.left: parent.left; anchors.right: parent.right
+                                    width: dayCol.width
                                     y: index * root.hourH
                                     height: 1
                                     color: Theme.border
@@ -1337,17 +1455,61 @@ Item {
                             id: wkBlock
                             required property var modelData
                             objectName: "week-taskblock-" + wkBlock.modelData.id
+                            // Moved and stretched like an event (APP-249): the
+                            // drag follows the pointer, the drop sets when the
+                            // task is planned, a stretch sets its estimate.
+                            property real dragDx: 0
+                            property real dragDy: 0
+                            property real pendingStartH: NaN
+                            property real pendingEndH: NaN
+                            readonly property bool moving: dragDx !== 0 || dragDy !== 0
+                            readonly property int effDayIndex: Math.max(0, Math.min(root.days.length - 1,
+                                wkBlock.modelData.dayIndex + Math.round(wkBlock.dragDx / gridHost.dayW)))
+                            readonly property real effStart: !isNaN(pendingStartH) ? pendingStartH : modelData.start
+                            readonly property real effEnd: !isNaN(pendingEndH) ? pendingEndH : modelData.end
                             readonly property var _slot: root.overlaps[wkBlock.modelData.key] || ({ col: 0, cols: 1 })
-                            readonly property var _lane: Overlap.lane(wkBlock._slot.col, wkBlock._slot.cols, gridHost.dayW - 4)
-                            x: gridHost.gutterW + wkBlock.modelData.dayIndex * gridHost.dayW + 2 + wkBlock._lane.x
-                            y: (wkBlock.modelData.start - root.hoursStart) * root.hourH
-                            width: wkBlock._lane.w - (wkBlock._slot.cols > 1 ? 2 : 0)
-                            height: Math.max(18, (wkBlock.modelData.end - wkBlock.modelData.start) * root.hourH - 2)
+                            readonly property int _cols: wkBlock.moving ? 1 : Math.max(1, wkBlock._slot.cols)
+                            readonly property var _lane: Overlap.lane(wkBlock.moving ? 0 : wkBlock._slot.col, wkBlock._cols, gridHost.dayW - 4)
+                            x: gridHost.gutterW + wkBlock.effDayIndex * gridHost.dayW + 2 + wkBlock._lane.x
+                            y: (wkBlock.effStart - root.hoursStart) * root.hourH + wkBlock.dragDy
+                            width: wkBlock._lane.w - (wkBlock._cols > 1 ? 2 : 0)
+                            height: Math.max(18, (wkBlock.effEnd - wkBlock.effStart) * root.hourH - 2)
                             radius: Theme.radiusSm
-                            color: Theme.withAlpha(Theme.eventColor("focus"), wkBlockMA.hovered ? 0.18 : 0.10)
+                            color: Theme.withAlpha(Theme.eventColor("focus"), wkBlockMA.hovered || wkMove.containsMouse ? 0.18 : 0.10)
                             border.color: Theme.withAlpha(Theme.eventColor("focus"), 0.6)
                             border.width: 1
-                            z: 5 + wkBlock._slot.col / Math.max(1, wkBlock._slot.cols)
+                            // Task blocks sit under events (4 < 5), as in the
+                            // day grid; a carried one above everything.
+                            z: wkBlock.moving ? 7 : 4 + wkBlock._slot.col / Math.max(1, wkBlock._slot.cols)
+
+                            // Where the block would land, for the hint and the drop.
+                            function landing() {
+                                const dur = wkBlock.modelData.end - wkBlock.modelData.start;
+                                const newY = (wkBlock.modelData.start - root.hoursStart) * root.hourH + wkBlock.dragDy;
+                                let ns = root.snapHour(root.yToHour(newY));
+                                ns = Math.max(root.hoursStart, Math.min(ns, root.hoursEnd - dur));
+                                return { day: root.days[wkBlock.effDayIndex].date, start: ns };
+                            }
+                            function resetDrag() {
+                                wkBlock.dragDx = 0; wkBlock.dragDy = 0;
+                                wkBlock.pendingStartH = NaN; wkBlock.pendingEndH = NaN;
+                            }
+                            function hintAt(mouseItem, mx, my, text) {
+                                const p = dragLayer.mapFromItem(mouseItem, mx, my);
+                                dragLayer.update(p.x, p.y, text, true);
+                            }
+                            function rangeText(day, s, e) {
+                                return dragLayer.describe("scheduled", Resched.atHour(day, s), true) + "–" + Theme.fmtHour(e);
+                            }
+                            Connections {
+                                target: dragLayer
+                                function onCanceled() {
+                                    if (!wkMove.pressed && !wkTop.pressed && !wkBot.pressed) return;
+                                    wkBlock.resetDrag();
+                                    wkMove.inert = true; wkTop.inert = true; wkBot.inert = true;
+                                }
+                            }
+
                             Text {
                                 anchors.fill: parent
                                 anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spSm; anchors.topMargin: Theme.sp2xs
@@ -1357,11 +1519,146 @@ Item {
                                 font.weight: Theme.fwTitle
                                 elide: Text.ElideRight
                             }
+                            // Opening from the keyboard; under the drag areas
+                            // and deaf to the pointer, like an event's.
                             ClickArea {
                                 id: wkBlockMA
                                 label: wkBlock.modelData.title || ""
                                 showTip: false
+                                acceptedButtons: Qt.NoButton
+                                cursorShape: Qt.ArrowCursor
                                 onActivated: root.taskClicked(wkBlock.modelData.id)
+                                onActiveFocusChanged: if (activeFocus) {
+                                    root.keyTaskId = wkBlock.modelData.id;
+                                    root.keyTaskDay = root.days[wkBlock.modelData.dayIndex].date;
+                                }
+                            }
+                            // Move — vertical = time, horizontal = day.
+                            MouseArea {
+                                id: wkMove
+                                objectName: "week-taskblock-move"
+                                anchors.fill: parent
+                                anchors.topMargin: Theme.spSm
+                                anchors.bottomMargin: Theme.spSm
+                                hoverEnabled: true
+                                cursorShape: didDrag ? Qt.ClosedHandCursor : Qt.PointingHandCursor
+                                preventStealing: true
+                                property real grabX: 0
+                                property real grabY: 0
+                                property real baseX: 0
+                                property real baseY: 0
+                                property bool didDrag: false
+                                property bool inert: false
+                                onContainsMouseChanged: {
+                                    if (containsMouse) { root.hoverTaskId = wkBlock.modelData.id; root.hoverTaskDay = root.days[wkBlock.modelData.dayIndex].date; }
+                                    else if (root.hoverTaskId === wkBlock.modelData.id) root.hoverTaskId = "";
+                                }
+                                onPressed: (mouse) => {
+                                    grabX = mouse.x; grabY = mouse.y;
+                                    baseX = wkBlock.x; baseY = wkBlock.y;
+                                    didDrag = false; inert = false;
+                                    wkBlock.resetDrag();
+                                }
+                                onPositionChanged: (mouse) => {
+                                    if (!pressed || inert) return;
+                                    const pt = wkMove.mapToItem(gridContent, mouse.x, mouse.y);
+                                    const dx = pt.x - grabX - baseX;
+                                    const dy = pt.y - grabY - wkMove.anchors.topMargin - baseY;
+                                    if (!didDrag && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
+                                        didDrag = true;
+                                        dragLayer.begin(wkBlock.modelData.id, wkBlock.modelData.title, false);
+                                    }
+                                    if (!didDrag) return;
+                                    wkBlock.dragDx = dx;
+                                    wkBlock.dragDy = dy;
+                                    const l = wkBlock.landing();
+                                    wkBlock.hintAt(wkMove, mouse.x, mouse.y, dragLayer.describe("scheduled", Resched.atHour(l.day, l.start), true));
+                                }
+                                onReleased: {
+                                    if (inert) return;
+                                    if (didDrag) {
+                                        const l = wkBlock.landing();
+                                        didDrag = false;
+                                        dragLayer.finish();
+                                        const changed = AppController.rescheduleTask(wkBlock.modelData.id, "scheduled", Resched.atHour(l.day, l.start), true);
+                                        if (!changed && wkBlock) wkBlock.resetDrag();
+                                        return;
+                                    }
+                                    root.taskClicked(wkBlock.modelData.id);
+                                }
+                                onCanceled: { wkBlock.resetDrag(); didDrag = false; dragLayer.finish(); }
+                            }
+                            // Top edge: the start moves, the end stays.
+                            MouseArea {
+                                id: wkTop
+                                objectName: "week-taskblock-top"
+                                anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                                height: Theme.spSm
+                                cursorShape: Qt.SizeVerCursor
+                                preventStealing: true
+                                property bool inert: false
+                                // By how far the pointer moved, not where it is:
+                                // the handle sits a few pixels inside the edge.
+                                property real pressY: 0
+                                onPressed: (mouse) => {
+                                    inert = false;
+                                    pressY = wkTop.mapToItem(gridContent, mouse.x, mouse.y).y;
+                                    wkBlock.pendingStartH = wkBlock.modelData.start;
+                                    dragLayer.begin(wkBlock.modelData.id, wkBlock.modelData.title, false);
+                                }
+                                onPositionChanged: (mouse) => {
+                                    if (!pressed || inert) return;
+                                    const pt = wkTop.mapToItem(gridContent, mouse.x, mouse.y);
+                                    const h = Math.min(root.snapHour(wkBlock.modelData.start + (pt.y - wkTop.pressY) / root.hourH),
+                                                       wkBlock.modelData.end - Theme.minEventHours);
+                                    wkBlock.pendingStartH = Math.max(root.hoursStart, h);
+                                    wkBlock.hintAt(wkTop, mouse.x, mouse.y,
+                                                   wkBlock.rangeText(root.days[wkBlock.modelData.dayIndex].date, wkBlock.pendingStartH, wkBlock.modelData.end));
+                                }
+                                onReleased: {
+                                    dragLayer.finish();
+                                    if (inert) return;
+                                    const ns = wkBlock.pendingStartH;
+                                    if (isNaN(ns) || Math.abs(ns - wkBlock.modelData.start) < 1e-9) { wkBlock.resetDrag(); return; }
+                                    AppController.resizeTaskBlock(wkBlock.modelData.id, root.days[wkBlock.modelData.dayIndex].date, ns, wkBlock.modelData.end);
+                                }
+                                onCanceled: { wkBlock.resetDrag(); dragLayer.finish(); }
+                            }
+                            // Bottom edge: the length, which becomes the estimate.
+                            MouseArea {
+                                id: wkBot
+                                objectName: "week-taskblock-bottom"
+                                anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+                                height: Theme.spSm
+                                cursorShape: Qt.SizeVerCursor
+                                preventStealing: true
+                                property bool inert: false
+                                // By how far the pointer moved, not where it is:
+                                // the handle sits a few pixels inside the edge.
+                                property real pressY: 0
+                                onPressed: (mouse) => {
+                                    inert = false;
+                                    pressY = wkBot.mapToItem(gridContent, mouse.x, mouse.y).y;
+                                    wkBlock.pendingEndH = wkBlock.modelData.end;
+                                    dragLayer.begin(wkBlock.modelData.id, wkBlock.modelData.title, false);
+                                }
+                                onPositionChanged: (mouse) => {
+                                    if (!pressed || inert) return;
+                                    const pt = wkBot.mapToItem(gridContent, mouse.x, mouse.y);
+                                    const h = Math.max(root.snapHour(wkBlock.modelData.end + (pt.y - wkBot.pressY) / root.hourH),
+                                                       wkBlock.modelData.start + Theme.minEventHours);
+                                    wkBlock.pendingEndH = Math.min(root.hoursEnd, h);
+                                    wkBlock.hintAt(wkBot, mouse.x, mouse.y,
+                                                   wkBlock.rangeText(root.days[wkBlock.modelData.dayIndex].date, wkBlock.modelData.start, wkBlock.pendingEndH));
+                                }
+                                onReleased: {
+                                    dragLayer.finish();
+                                    if (inert) return;
+                                    const ne = wkBlock.pendingEndH;
+                                    if (isNaN(ne) || Math.abs(ne - wkBlock.modelData.end) < 1e-9) { wkBlock.resetDrag(); return; }
+                                    AppController.resizeTaskBlock(wkBlock.modelData.id, root.days[wkBlock.modelData.dayIndex].date, wkBlock.modelData.start, ne);
+                                }
+                                onCanceled: { wkBlock.resetDrag(); dragLayer.finish(); }
                             }
                         }
                     }
@@ -1383,5 +1680,12 @@ Item {
         title: I18n.t(searching ? "view.empty.noMatch.title" : "week.empty.title")
         line: searching ? I18n.t("view.empty.noMatch.hint")
                         : I18n.t("week.empty.hint").arg(AppController.shortcutFor("task.new"))
+    }
+
+    // What a drag would set, at the pointer; Esc cancels it (APP-249).
+    RescheduleDrag {
+        id: dragLayer
+        objectName: "week-drag"
+        onCanceled: { root.chipDrag = null; root.chipTarget = null; }
     }
 }

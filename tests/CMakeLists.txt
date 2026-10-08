@@ -330,6 +330,8 @@ endfunction()
 # Widgets/Qml + Test. Uses offscreen QGuiApplication + AppDataLocation test
 # mode so it runs headless and never touches the user's real state file.
 heap_add_appcontroller_test(heap_selection_tests test_selection.cpp)
+# Drag-to-reschedule in Week, Month and Timeline (APP-249).
+heap_add_appcontroller_test(heap_reschedule_tests test_reschedule.cpp)
 
 # ─── Safety net (APP-157…) as AppController runs it ───
 heap_add_appcontroller_test(heap_safety_net_tests test_safety_appcontroller.cpp)

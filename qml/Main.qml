@@ -2106,6 +2106,54 @@ ApplicationWindow {
         sequences: [_kbd("cal.next")]
         onActivated: { const v = win.activeViewItem(); if (v && v.step) v.step(1); }
     }
+    // What a drag does in Week, Month and Timeline, from the keyboard
+    // (APP-249): the task that has the keyboard (or the pointer) moves a day,
+    // a week, or a grid step. Ctrl+arrows are the board's own card moves;
+    // these are live only in the three views that drag dates.
+    readonly property bool _moveKeysOn: !win._viewKeysBlocked
+        && ["week", "month", "timeline"].indexOf(AppController.currentView) >= 0
+    function _moveViewTask(days, steps) {
+        const v = win.activeViewItem();
+        if (!v) return;
+        if (days !== 0 && v.moveKeyTaskByDays) v.moveKeyTaskByDays(days);
+        else if (steps !== 0 && v.moveKeyTaskByTime) v.moveKeyTaskByTime(steps);
+    }
+    Shortcut {
+        sequences: [win._kbd("cal.taskEarlier")]
+        context: Qt.ApplicationShortcut
+        enabled: win._moveKeysOn && win._kbd("cal.taskEarlier").length > 0
+        onActivated: win._moveViewTask(-1, 0)
+    }
+    Shortcut {
+        sequences: [win._kbd("cal.taskLater")]
+        context: Qt.ApplicationShortcut
+        enabled: win._moveKeysOn && win._kbd("cal.taskLater").length > 0
+        onActivated: win._moveViewTask(1, 0)
+    }
+    Shortcut {
+        sequences: [win._kbd("cal.taskEarlierWeek")]
+        context: Qt.ApplicationShortcut
+        enabled: win._moveKeysOn && win._kbd("cal.taskEarlierWeek").length > 0
+        onActivated: win._moveViewTask(-7, 0)
+    }
+    Shortcut {
+        sequences: [win._kbd("cal.taskLaterWeek")]
+        context: Qt.ApplicationShortcut
+        enabled: win._moveKeysOn && win._kbd("cal.taskLaterWeek").length > 0
+        onActivated: win._moveViewTask(7, 0)
+    }
+    Shortcut {
+        sequences: [win._kbd("cal.taskTimeEarlier")]
+        context: Qt.ApplicationShortcut
+        enabled: win._moveKeysOn && win._kbd("cal.taskTimeEarlier").length > 0
+        onActivated: win._moveViewTask(0, -1)
+    }
+    Shortcut {
+        sequences: [win._kbd("cal.taskTimeLater")]
+        context: Qt.ApplicationShortcut
+        enabled: win._moveKeysOn && win._kbd("cal.taskTimeLater").length > 0
+        onActivated: win._moveViewTask(0, 1)
+    }
     DayKey {
         sequences: [_kbd("cal.goToDate")]
         onActivated: goToDatePopup.openAt(AppController.selectedDate, win.contentItem)
