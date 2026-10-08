@@ -32,6 +32,13 @@ Rectangle {
     readonly property var _badge: card._isTicket
         ? (AppController.providerBadges[card._ticket.provider] || ({}))
         : ({})
+    // heap changes this tracker's status when the card moves (APP-243; off
+    // unless the user turned it on in Settings → Integrations).
+    readonly property bool _writeOn: card._isTicket
+        && AppController.trackerWriteProviders.indexOf(card._ticket.provider) >= 0
+    // Outside the filter or gone while writes are on: the tracker is
+    // read-only for this card, so its status does not move (APP-204).
+    readonly property bool _statusLocked: card._writeOn && (!!card._ticket.outOfScope || !!card._ticket.gone)
     // Read by the views so a bare "O" can open whichever card is under the
     // cursor when nothing is selected.
     readonly property bool hovered: hoverArea.containsMouse
@@ -208,7 +215,13 @@ Rectangle {
             if (tracker.length > 0) parts.push(tracker);
             if (syncChip.visible) parts.push(syncChip.tip);
             if (card._ticket.conflict) parts.push(I18n.t("taskcard.conflict.tip"));
-            if (card._ticket.outOfScope && !card._ticket.gone) parts.push(I18n.t("taskcard.outOfScope.tip"));
+            if (card._ticket.outOfScope && !card._ticket.gone)
+                parts.push(I18n.t("taskcard.outOfScope.tip") + (card._writeOn ? " " + I18n.t("taskcard.outOfScope.noSync") : ""));
+            // The tracker's own status, when the card sits somewhere else:
+            // with writes off that is the normal case, and the card itself
+            // stays uncluttered (APP-243).
+            if (card._ticket.remoteStatus && card._ticket.remoteColumn !== card.task.status)
+                parts.push(I18n.t("taskcard.trackerStatus").arg(card._ticket.remoteStatus));
         }
         if (moveChip.visible && moveChip.tip.length > 0) parts.push(moveChip.tip);
         const labels = card.task.labels || [];
@@ -382,6 +395,7 @@ Rectangle {
                     anchors.centerIn: parent
                     text: syncChip.state === "gone" ? I18n.t("taskcard.gone")
                         : syncChip.state === "pushing" ? I18n.t("taskcard.pushing")
+                        : syncChip.unsent ? I18n.t("taskcard.unsent")
                         : syncChip.state === "queued" ? I18n.t("taskcard.queued")
                         : I18n.t("taskcard.unsynced")
                     textFormat: Text.PlainText
@@ -389,8 +403,13 @@ Rectangle {
                     font.pixelSize: Theme.fsXs
                     font.weight: syncChip.quiet ? Theme.fwBody : Theme.fwTitle
                 }
+                // A move left over while the tracker's switch is off: it only
+                // goes out when the user sends it (APP-243).
+                readonly property bool unsent: !card._writeOn && (state === "queued" || state === "error")
                 readonly property string tip: syncChip.state === "gone" ? I18n.t("taskcard.gone.tip")
                     : syncChip.state === "pushing" ? I18n.t("taskcard.pushing.tip")
+                    : syncChip.unsent ? I18n.t("taskcard.unsent.tip")
+                        + (card._ticket.syncError ? "\n" + I18n.t("taskcard.syncError").arg(card._ticket.syncError) : "")
                     : syncChip.state === "queued" ? I18n.t("taskcard.queued.tip")
                     : I18n.t("taskcard.unsynced.tip")
                         + (card._ticket.syncError ? "\n" + I18n.t("taskcard.syncError").arg(card._ticket.syncError) : "")
@@ -702,6 +721,8 @@ Rectangle {
                         QQC.ToolTip.visible: badgeHover.hovered
                         QQC.ToolTip.text: (card._badge.name || card._ticket.provider || "")
                             + (card._ticket.project ? " · " + card._ticket.project : "")
+                            + (card._ticket.remoteStatus
+                               ? "\n" + I18n.t("taskcard.trackerStatus").arg(card._ticket.remoteStatus) : "")
                         HoverHandler { id: badgeHover }
                     }
                     Text {
@@ -933,7 +954,10 @@ Rectangle {
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         drag.target: card
         drag.threshold: 5
-        cursorShape: dragArea.drag.active ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+        // A card the tracker is read-only for does not offer the hand: its
+        // status cannot move while heap writes to that tracker (APP-204).
+        cursorShape: card._statusLocked ? Qt.ArrowCursor
+                   : dragArea.drag.active ? Qt.ClosedHandCursor : Qt.OpenHandCursor
         property bool didDrag: false
         onPressed: (mouse) => {
             card.homeX = card.x; card.homeY = card.y; didDrag = false;
@@ -974,11 +998,18 @@ Rectangle {
         if (!card._menu) {
             card._menu = taskMenuComponent.createObject(card);
             card._menu.subMenuRequested.connect(card.openSubMenu);
+            card._menu.pushActionRequested.connect(card.runPushAction);
         }
         // The keys its rows show (APP-166), as they stand when it opens.
         card._menu.editKey = card.boardKeys ? "board.open" : "";
         card._menu.archiveKey = card.boardKeys && !card._isArchived ? "board.archive" : "";
+        card._menu.canSendPush = card._isTicket && !!card._ticket.unsynced && !card._ticket.gone;
+        card._menu.canDropPush = card._isTicket && !!card._ticket.unsynced;
         return card._menu;
+    }
+    function runPushAction(send) {
+        if (send) AppController.retryTrackerPush(card.taskId);
+        else AppController.discardTrackerPush(card.taskId);
     }
     // The status and priority lists are built the same way, on first use.
     property var _statusMenu: null
@@ -1037,6 +1068,11 @@ Rectangle {
         // Set by contextMenu(): the catalogue ids of Return and E on the board.
         property string editKey: ""
         property string archiveKey: ""
+        // A move that never reached the tracker (APP-243): send or drop it.
+        // Set by contextMenu(), like the keys above.
+        property bool canSendPush: false
+        property bool canDropPush: false
+        signal pushActionRequested(bool send)
         AppMenuItem {
             enabled: false
             contentItem: Text {
@@ -1110,6 +1146,24 @@ Rectangle {
             glyph: "⎘"
             text: I18n.t("taskcard.copyLink")
             onTriggered: AppController.copyToClipboard(String(card._ticket.url || ""))
+        }
+        // A move that never reached the tracker: send it (after heap checks
+        // the issue) or drop it and keep the column here only (APP-243).
+        AppMenuItem {
+            objectName: "tc-menu-send-push"
+            visible: taskMenu.canSendPush
+            height: visible ? implicitHeight : 0
+            glyph: "↑"
+            text: I18n.t("taskcard.sendPush")
+            onTriggered: taskMenu.pushActionRequested(true)
+        }
+        AppMenuItem {
+            objectName: "tc-menu-discard-push"
+            visible: taskMenu.canDropPush
+            height: visible ? implicitHeight : 0
+            glyph: "✕"
+            text: I18n.t("taskcard.discardPush")
+            onTriggered: taskMenu.pushActionRequested(false)
         }
         AppMenuSeparator {}
         AppMenuItem {

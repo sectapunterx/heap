@@ -332,6 +332,7 @@ qt_add_qml_module(heap_core
         # ── audit-time: begin ──
         qml/SeriesScopeDialog.qml
         qml/SyncConflictDialog.qml
+        qml/TrackerPushConfirmDialog.qml
         qml/IntegrationHealthCard.qml
         qml/IntegrationsInfoCard.qml
         qml/CalendarSubscriptionsCard.qml
@@ -430,8 +431,11 @@ qt_add_qml_module(heap_core
         qml/DocsPagesPane.qml
         qml/UnscheduledRail.qml
         qml/Overlap.js
+        qml/Reschedule.js
+        qml/RescheduleDrag.qml
         qml/Segments.js
         qml/Search.js
+        qml/SettingsIndex.js
         qml/PopupStack.js
     SOURCES
         src/AppController.h

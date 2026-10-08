@@ -866,6 +866,23 @@ ApplicationWindow {
         function onShortcutHintRequested(shortcutId, sequence, label) {
             toast.show(I18n.t("hint.shortcut").arg(sequence).arg(label), "info")
         }
+        // The tracker is read-only for this card (outside the filter, gone):
+        // the drop was refused. Open the issue, or archive the card (APP-204).
+        function onTrackerReadOnlyMove(taskId, msg, url) {
+            toast.showWithActions(msg, [
+                { label: I18n.t("tracker.readOnly.open"), fn: function () { if (url) Qt.openUrlExternally(url) } },
+                { label: I18n.t("tracker.readOnly.archive"), fn: function () { AppController.setArchived(taskId, true) } }
+            ], 10, "warning");
+        }
+        function onTrackerPushNeedsConfirm(taskId, key, title, tracker, remoteStatus, target) {
+            trackerPushConfirm.ask(taskId, key, title, tracker, remoteStatus, target);
+        }
+        // Once, after the update that made tracker writes opt-in (APP-243).
+        function onTrackerWriteNotice(msg) {
+            toast.showWithAction(msg, I18n.t("tracker.writeNotice.open"), 20, function () {
+                win.runCommand("settings:integrations")
+            });
+        }
         function onTrackerPushFailed(taskId, msg) {
             toast.showWithAction(msg, I18n.t("sync.retry"), 10, function () {
                 AppController.retryTrackerPush(taskId)
@@ -1571,6 +1588,14 @@ ApplicationWindow {
     // What a palette command does. Ids are the shortcut catalog's, so the
     // palette offers exactly what the keys do; "settings:<section>" opens a
     // Settings section, and a few have no key of their own.
+    // Settings, opened on one setting: scrolled to and focused (APP-210).
+    function openSettingsItem(item) {
+        AppController.currentView = "settings";
+        Qt.callLater(function () {
+            const v = win.activeViewItem();
+            if (v && v.revealItem) v.revealItem(item);
+        });
+    }
     function runCommand(id) {
         if (id.indexOf("settings:") === 0) {
             const section = id.slice(9);
@@ -2110,6 +2135,54 @@ ApplicationWindow {
         sequences: [_kbd("cal.next")]
         onActivated: { const v = win.activeViewItem(); if (v && v.step) v.step(1); }
     }
+    // What a drag does in Week, Month and Timeline, from the keyboard
+    // (APP-249): the task that has the keyboard (or the pointer) moves a day,
+    // a week, or a grid step. Ctrl+arrows are the board's own card moves;
+    // these are live only in the three views that drag dates.
+    readonly property bool _moveKeysOn: !win._viewKeysBlocked
+        && ["week", "month", "timeline"].indexOf(AppController.currentView) >= 0
+    function _moveViewTask(days, steps) {
+        const v = win.activeViewItem();
+        if (!v) return;
+        if (days !== 0 && v.moveKeyTaskByDays) v.moveKeyTaskByDays(days);
+        else if (steps !== 0 && v.moveKeyTaskByTime) v.moveKeyTaskByTime(steps);
+    }
+    Shortcut {
+        sequences: [win._kbd("cal.taskEarlier")]
+        context: Qt.ApplicationShortcut
+        enabled: win._moveKeysOn && win._kbd("cal.taskEarlier").length > 0
+        onActivated: win._moveViewTask(-1, 0)
+    }
+    Shortcut {
+        sequences: [win._kbd("cal.taskLater")]
+        context: Qt.ApplicationShortcut
+        enabled: win._moveKeysOn && win._kbd("cal.taskLater").length > 0
+        onActivated: win._moveViewTask(1, 0)
+    }
+    Shortcut {
+        sequences: [win._kbd("cal.taskEarlierWeek")]
+        context: Qt.ApplicationShortcut
+        enabled: win._moveKeysOn && win._kbd("cal.taskEarlierWeek").length > 0
+        onActivated: win._moveViewTask(-7, 0)
+    }
+    Shortcut {
+        sequences: [win._kbd("cal.taskLaterWeek")]
+        context: Qt.ApplicationShortcut
+        enabled: win._moveKeysOn && win._kbd("cal.taskLaterWeek").length > 0
+        onActivated: win._moveViewTask(7, 0)
+    }
+    Shortcut {
+        sequences: [win._kbd("cal.taskTimeEarlier")]
+        context: Qt.ApplicationShortcut
+        enabled: win._moveKeysOn && win._kbd("cal.taskTimeEarlier").length > 0
+        onActivated: win._moveViewTask(0, -1)
+    }
+    Shortcut {
+        sequences: [win._kbd("cal.taskTimeLater")]
+        context: Qt.ApplicationShortcut
+        enabled: win._moveKeysOn && win._kbd("cal.taskTimeLater").length > 0
+        onActivated: win._moveViewTask(0, 1)
+    }
     DayKey {
         sequences: [_kbd("cal.goToDate")]
         onActivated: goToDatePopup.openAt(AppController.selectedDate, win.contentItem)
@@ -2135,6 +2208,9 @@ ApplicationWindow {
     }
     // The standup draft (APP-170): text to edit and copy, sent nowhere.
     StandupDraftDialog { id: standupDraft }
+    // "Send the status anyway?" for an issue the check found outside the
+    // filter (APP-204). Cancel is the default.
+    TrackerPushConfirmDialog { id: trackerPushConfirm }
     // The day's summary (APP-190): closed, carrying over, timers. Read-only.
     EndOfDayDialog {
         id: endOfDay
@@ -2291,6 +2367,8 @@ ApplicationWindow {
     TweaksPanel  {
         id: tweaks
         onHeightChanged: if (opened && parent) win._placePopover(tweaks, parent)
+        // A setting found by the panel's search (APP-210).
+        onOpenSettingsItem: (item) => win.openSettingsItem(item)
     }
     HotkeysPanel {
         id: hotkeys

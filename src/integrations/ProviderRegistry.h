@@ -22,6 +22,12 @@ const QVector<ProviderDescriptor>& providerCatalog();
 // Look up one descriptor by id; returns nullptr if unknown.
 const ProviderDescriptor* findDescriptor(const QString& id);
 
+// Whether heap can change an issue's status in this tracker at all (APP-243).
+// Only these trackers get a "change the status in …" switch, and the switch is
+// off until the user turns it on: being able to write is not permission to.
+bool writesStatus(const ProviderDescriptor& d);
+bool writesStatus(const QString& id);
+
 // Construct and configure a bespoke provider (Jira, Trello) from a merged config
 // map (non-secret settings + keychain secrets). Returns nullptr for an unknown
 // id or when required fields are missing.

@@ -139,6 +139,9 @@ ProviderDescriptor github() {
   d.pushPathTemplate = QStringLiteral("/repos/{repo}/issues/{externalId}");
   d.pushBodyTemplate = R"({"state":"{state}"})";
   d.pushMap = githubStateForColumn;
+  d.issuePathTemplate = QStringLiteral("/repos/{repo}/issues/{externalId}");
+  d.selfUserPath = QStringLiteral("/user");
+  d.selfLoginKey = QStringLiteral("login");
   return d;
 }
 
@@ -190,6 +193,9 @@ ProviderDescriptor gitlab() {
   d.pushMethod = QStringLiteral("PUT");
   d.pushPathTemplate = QStringLiteral("/api/v4/projects/{projectId:enc}/issues/{externalId}?state_event={state}");
   d.pushMap = gitlabStateEventForColumn;
+  d.issuePathTemplate = QStringLiteral("/api/v4/projects/{projectId:enc}/issues/{externalId}");
+  d.selfUserPath = QStringLiteral("/api/v4/user");
+  d.selfLoginKey = QStringLiteral("username");
   return d;
 }
 
@@ -255,6 +261,9 @@ ProviderDescriptor giteaLike(const QString& id,
   d.pushPathTemplate = QStringLiteral("/api/v1/repos/{repo}/issues/{externalId}");
   d.pushBodyTemplate = R"({"state":"{state}"})";
   d.pushMap = githubStateForColumn;  // Gitea state is "open"/"closed" like GitHub
+  d.issuePathTemplate = QStringLiteral("/api/v1/repos/{repo}/issues/{externalId}");
+  d.selfUserPath = QStringLiteral("/api/v1/user");
+  d.selfLoginKey = QStringLiteral("login");
   return d;
 }
 
@@ -554,6 +563,8 @@ ProviderDescriptor jira() {
   d.icon = QStringLiteral("J");
   d.descKey = QStringLiteral("settings.int.jira.desc");
   d.bespoke = true;
+  // Status goes back through the issue's workflow transitions (JiraProvider).
+  d.bespokeStatusWrite = true;
   d.uiFields = {plain(QStringLiteral("baseUrl"), QStringLiteral("Base URL"), QStringLiteral("https://acme.atlassian.net")),
                 // Cloud authenticates an email + API token pair; Server/DC
                 // authenticates a Personal Access Token on its own, so there
@@ -683,6 +694,15 @@ const ProviderDescriptor* findDescriptor(const QString& id) {
     }
   }
   return nullptr;
+}
+
+bool writesStatus(const ProviderDescriptor& d) {
+  return d.kind == ProviderKind::Tracker && (!d.pushPathTemplate.isEmpty() || d.bespokeStatusWrite);
+}
+
+bool writesStatus(const QString& id) {
+  const ProviderDescriptor* d = findDescriptor(id);
+  return d != nullptr && writesStatus(*d);
 }
 
 std::unique_ptr<IntegrationProvider> makeBespokeProvider(const QString& id, const QVariantMap& cfg, QObject* parent) {

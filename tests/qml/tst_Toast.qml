@@ -145,6 +145,29 @@ TestCase {
         compare(t._items[2].ms, 8000);
     }
 
+    // Two actions (APP-204's refused move): same look, same clock, both
+    // buttons inside the width cap, and either one closes the toast.
+    function test_two_actions_get_the_same_rules() {
+        const t = make();
+        let ran = "";
+        t.showWithActions("WEB-5 is no longer in your filter — the drop was refused", [
+            { label: "Open in tracker", fn: function () { ran = "open"; } },
+            { label: "Archive", fn: function () { ran = "archive"; } }
+        ], 0, "warning");
+        compare(t._items[0].ms, 8000, "a toast with actions stays at least 8 s");
+        t.showWithActions("short", [{ label: "Go", fn: function () {} }], 3);
+        compare(t._items[1].ms, 8000);
+        wait(0);
+        const c = cards(t)[0];
+        verify(c.width <= Theme.toastMaxWidth);
+        verify(child(c, "toast-accent").visible);
+        const second = child(c, "toast-action-2");
+        verify(second !== null && second.parent.visible);
+        second.activated();
+        compare(ran, "archive");
+        compare(t.count, 1, "the second action closed its toast");
+    }
+
     // The clock itself, with `now` passed in.
     function test_timing_rules_are_pure() {
         const a = Timing.start({}, 1000, 0, false);
