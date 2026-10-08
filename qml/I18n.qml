@@ -1500,6 +1500,7 @@ QtObject {
             "settings.integrations.archiveOutOfScope": "Archive them",
             // APP-243 / APP-204: writing to a tracker is opt-in, per tracker.
             "settings.integrations.writeStatus": "Change the status in %1 when I move a card",
+            "settings.integrations.writeStatus.any": "the tracker",
             "settings.integrations.writeStatus.offHint": "Off: moving a card changes only its column in heap. %1 is only read; the card's tooltip shows the status it has there.",
             "settings.integrations.writeStatus.onHint": "Before each change heap checks the issue in the tracker. Issues outside your filter are read-only; if the status there changed meanwhile, you choose.",
             "taskcard.trackerStatus": "In the tracker: %1",
@@ -2982,6 +2983,7 @@ QtObject {
             "settings.integrations.archiveOutOfScope": "Архивировать",
             // APP-243 / APP-204: запись в трекер — по желанию, у каждого трекера своя.
             "settings.integrations.writeStatus": "Менять статус в %1 при перемещении карточки",
+            "settings.integrations.writeStatus.any": "трекере",
             "settings.integrations.writeStatus.offHint": "Выкл.: перемещение карточки меняет только её колонку в heap. %1 только читается; статус оттуда виден в подсказке карточки.",
             "settings.integrations.writeStatus.onHint": "Перед каждой отправкой heap сверяет задачу с трекером. Задачи вне вашего фильтра только читаются; если статус там успел смениться — выбираете вы.",
             "taskcard.trackerStatus": "В трекере: %1",

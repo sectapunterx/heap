@@ -143,7 +143,8 @@ var ITEMS = [
     ["integrations", "group", "health.title"],
     ["integrations", "card", "calsub.title"],
     ["integrations", "card", "settings.integrations.autoSync"],
-    ["integrations", "card", "settings.integrations.writeStatus"],
+    // The card row names its tracker ("%1"); search shows it with a generic word.
+    ["integrations", "card", "settings.integrations.writeStatus", "settings.integrations.writeStatus.any"],
     ["integrations", "group", "settings.integrations.group.services"],
 
     ["git", "group", "settings.git.repos"],
@@ -187,14 +188,17 @@ function build(i18n, lang, catalog) {
         const it = ITEMS[i];
         const key = it[2];
         const hasHint = i18n.dict.en[key + ".hint"] !== undefined;
+        // A title with a "%1" gets the word named by the entry's 4th field.
+        const argKey = it.length > 3 ? it[3] : "";
+        const fill = (s, lang) => argKey === "" ? s : s.replace("%1", lang === "en" ? _en(i18n, argKey) : i18n.t(argKey));
         out.push({
             id: it[0] + ":" + key,
             section: it[0],
             kind: it[1],
             key: key,
             objectName: "",
-            title: i18n.t(key),
-            titleEn: _en(i18n, key),
+            title: fill(i18n.t(key), ""),
+            titleEn: fill(_en(i18n, key), "en"),
             hint: hasHint ? i18n.t(key + ".hint") : "",
             hintEn: hasHint ? _en(i18n, key + ".hint") : ""
         });
