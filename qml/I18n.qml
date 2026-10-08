@@ -834,6 +834,11 @@ QtObject {
             // ── SettingsView — left nav ──
             "settings.title": "Settings",
             "settings.search": "Search settings…",
+            // Settings / Tweaks search (APP-207, APP-210).
+            "settings.search.empty": "Nothing found",
+            "settings.search.emptyLine": "Try another word, in Russian or English",
+            "tweaks.search": "Search tweaks and settings…",
+            "tweaks.search.inSettings": "In Settings",
             "settings.groups": "%1 groups · %2",
             "settings.footer.stable": "heap. · %1 · stable",
             "settings.crumb": "Settings / %1",
@@ -2301,6 +2306,11 @@ QtObject {
             // ── SettingsView ──
             "settings.title": "Настройки",
             "settings.search": "Поиск настроек…",
+            // Поиск по Настройкам / Твикам (APP-207, APP-210).
+            "settings.search.empty": "Ничего не найдено",
+            "settings.search.emptyLine": "Попробуйте другое слово — по-русски или по-английски",
+            "tweaks.search": "Поиск по твикам и настройкам…",
+            "tweaks.search.inSettings": "В Настройках",
             "settings.groups": "%1 групп · %2",
             "settings.footer.stable": "heap. · %1 · стабильная",
             "settings.crumb": "Настройки / %1",

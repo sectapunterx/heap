@@ -1,8 +1,8 @@
 // Tests for qml/TweaksPanel.qml — the compact Tweaks popup.
 // Surface: readonly themeChoices, and the settings-shadow functions
 // (_reload / _setAppearance / _appearanceValue) that round-trip through the
-// live AppController.appSettingsJson. No objectName / root signal exists, so
-// there are no click- or signal-contract layers here.
+// live AppController.appSettingsJson; and the search (APP-210) with its
+// openSettingsItem signal.
 import QtQuick
 import QtQuick.Controls
 import QtTest
@@ -153,5 +153,145 @@ TestCase {
         compare(parsed.appearance.highContrast, true, "new key not written");
         verify(parsed.calendar !== undefined, "unrelated settings section dropped");
         compare(parsed.calendar.weekStart, "mon", "unrelated settings section dropped");
+    }
+
+    // ─── Search (APP-210) ─────────────────────────────────────────────
+
+    SignalSpy { id: openSpy; signalName: "openSettingsItem" }
+
+    function _open() {
+        const p = make('import TodoCpp; TweaksPanel { }');
+        p.open();
+        tryVerify(() => p.opened);
+        return p;
+    }
+    function _shown(p, name) {
+        const it = findChild(p.contentItem, name);
+        return it !== null && it.visible;
+    }
+
+    // Opened, typing goes into the search.
+    function test_search_is_focused_on_open() {
+        const p = _open();
+        const field = findChild(p.contentItem, "tweaks-search");
+        verify(field !== null);
+        tryVerify(() => field.activeFocus, 2000, "the search box does not have focus");
+        keyClick(Qt.Key_M);
+        compare(p.query, "m");
+        p.close();
+    }
+
+    // A tweak's own name leaves only that row, in either language.
+    function test_query_keeps_only_the_matching_tweak() {
+        const p = _open();
+        p.query = "motion";
+        verify(_shown(p, "tweaks-reduced-motion"), "Reduced motion hidden");
+        verify(!_shown(p, "tweaks-contrast"), "contrast kept for 'motion'");
+        verify(!_shown(p, "tweaks-appearance"), "appearance kept for 'motion'");
+        verify(!_shown(p, "tweaks-themes"), "themes kept for 'motion'");
+
+        p.query = I18n.t("settings.appearance.contrast");
+        verify(_shown(p, "tweaks-contrast"));
+        verify(!_shown(p, "tweaks-reduced-motion"));
+        // Already in the panel: not listed again under Settings.
+        verify(p.settingsMatches.every((m) => m.key !== "settings.appearance.contrast"));
+        p.close();
+    }
+
+    // A theme's name leaves only that theme.
+    function test_query_by_theme_name_keeps_that_theme() {
+        const p = _open();
+        p.query = "crimson";
+        compare(p.visibleThemes.length, 1);
+        compare(p.visibleThemes[0].id, "crimson");
+        verify(_shown(p, "tweaks-themes"));
+        verify(findChild(p.contentItem, "tweaks-theme-heap-dark") === null, "other themes still drawn");
+        p.close();
+    }
+
+    // A setting that lives only in Settings is listed as "Section → item";
+    // Enter opens Settings on it (focused there) and closes the panel.
+    function test_settings_hit_opens_settings_on_the_item() {
+        const p = _open();
+        const sv = make('import TodoCpp; SettingsView { width: 900; height: 600 }');
+        sv.activeSection = "profile";
+        p.openSettingsItem.connect(sv.revealItem);
+        openSpy.target = p;
+        openSpy.clear();
+        const text = I18n.t("settings.notif.weeklyRecap");
+        p.query = text;
+        verify(p.settingsMatches.length >= 1, "no settings hit for " + text);
+        verify(!p.tweakHits);
+        verify(_shown(p, "tweaks-settings-hit-0"));
+        const field = findChild(p.contentItem, "tweaks-search");
+        field.forceActiveFocus();
+        keyClick(Qt.Key_Return);
+        compare(openSpy.count, 1);
+        compare(openSpy.signalArguments[0][0].section, "notifications");
+        tryVerify(() => !p.opened, 2000, "the panel stayed open");
+        compare(sv.activeSection, "notifications");
+        tryVerify(() => {
+            const f = sv.Window.activeFocusItem;
+            for (let q = f; q; q = q.parent)
+                if (q.label === text && q.hasLabel !== undefined) return true;
+            return false;
+        }, 2000, "the setting is not focused in Settings");
+        openSpy.target = null;
+    }
+
+    // Nothing anywhere: the panel says so.
+    function test_nothing_found() {
+        const p = _open();
+        p.query = "zzqxv-no-such-tweak";
+        verify(p.nothingFound);
+        verify(_shown(p, "tweaks-search-empty"));
+        p.query = "";
+        verify(!_shown(p, "tweaks-search-empty"));
+        p.close();
+    }
+
+    // Esc clears the query first; the second Esc closes the panel.
+    function test_escape_clears_then_closes() {
+        const p = _open();
+        const field = findChild(p.contentItem, "tweaks-search");
+        tryVerify(() => field.activeFocus);
+        p.query = "motion";
+        keyClick(Qt.Key_Escape);
+        compare(p.query, "");
+        verify(p.opened, "the first Esc closed the panel");
+        keyClick(Qt.Key_Escape);
+        tryVerify(() => !p.opened, 2000, "the second Esc did not close the panel");
+    }
+
+    // ↓ from the search walks the results, ↑ goes back up to the search.
+    function test_arrows_walk_the_results() {
+        const p = _open();
+        const field = findChild(p.contentItem, "tweaks-search");
+        tryVerify(() => field.activeFocus);
+        p.query = I18n.t("settings.appearance.contrast");
+        keyClick(Qt.Key_Down);
+        tryVerify(() => findChild(p.contentItem, "tweaks-contrast-soft").activeFocus, 2000, "Down did not reach the first result");
+        keyClick(Qt.Key_Down);
+        verify(findChild(p.contentItem, "tweaks-contrast-normal").activeFocus);
+        keyClick(Qt.Key_Up);
+        keyClick(Qt.Key_Up);
+        verify(field.activeFocus, "Up did not come back to the search");
+        p.close();
+    }
+
+    // Typing does not change the panel's height, so it never jumps.
+    function test_height_stays_put_while_typing() {
+        const p = _open();
+        // The theme dots wrap a frame after the panel opens.
+        wait(100);
+        const h = p.height;
+        verify(h > 100);
+        const queries = ["m", "mo", "motion", "zzqxv", "a", I18n.t("settings.notif.weeklyRecap"), ""];
+        for (let i = 0; i < queries.length; i++) {
+            p.query = queries[i];
+            wait(0);
+            compare(p.height, h, "height changed for '" + queries[i] + "'");
+        }
+        p.close();
     }
 }

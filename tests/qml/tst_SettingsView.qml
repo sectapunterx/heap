@@ -427,4 +427,158 @@ TestCase {
         verify(sv.sections[sv._navTabIndex].id !== "appearance");
         sv.searchText = "";
     }
+
+    // ─── Search finds single settings (APP-207) ───────────────────────
+
+    // The page item showing `text` as a row label.
+    function _row(sv, text) {
+        const walk = (it) => {
+            const kids = it ? it.children : [];
+            for (let i = 0; i < kids.length; i++) {
+                const k = kids[i];
+                if (k && k.hasLabel !== undefined && k.stackBelow !== undefined && k.label === text) return k;
+                const sub = walk(k);
+                if (sub) return sub;
+            }
+            return null;
+        };
+        return walk(sv);
+    }
+    function _inside(item, ancestor) {
+        for (let p = item; p; p = p.parent)
+            if (p === ancestor) return true;
+        return false;
+    }
+
+    // A setting's own title finds its section in every section that has
+    // settings, and the nav row says how many it found.
+    function test_search_finds_a_setting_of_every_section() {
+        const sv = make();
+        const seen = {};
+        for (let i = 0; i < sv.searchIndex.length; i++) {
+            const e = sv.searchIndex[i];
+            if (e.kind !== "row" || seen[e.section] || !sv.openSection(e.section)) continue;
+            seen[e.section] = true;
+            sv.searchText = e.title;
+            const sec = sv.sections.filter((s) => s.id === e.section)[0];
+            verify(sv._sectionMatches(sec), e.title + " does not find " + e.section);
+            verify((sv.searchCounts[e.section] || 0) >= 1, "no count for " + e.section);
+            const navRow = findChild(sv, "settings-nav-" + e.section);
+            verify(navRow.visible, e.section + " hidden while its setting matches");
+            const badge = findChild(sv, "settings-nav-count-" + e.section);
+            verify(badge.visible && Number(badge.text) >= 1, "no count shown for " + e.section);
+        }
+        sv.searchText = "";
+        verify(Object.keys(seen).length >= 10, "too few sections with rows: " + Object.keys(seen));
+    }
+
+    // A section with no matching setting and a title that does not match
+    // leaves the nav.
+    function test_search_hides_sections_without_a_hit() {
+        const sv = make();
+        sv.searchText = I18n.t("settings.sound.meetingMinutes");
+        verify(findChild(sv, "settings-nav-appearance").visible);
+        verify(!findChild(sv, "settings-nav-git").visible, "Git kept with nothing matching");
+        sv.searchText = "";
+    }
+
+    // Enter: the section opens, the page scrolls to the first matching
+    // setting and focus lands on it.
+    function test_enter_opens_the_section_on_the_setting() {
+        const sv = make();
+        sv.activeSection = "profile";
+        const text = I18n.t("settings.sound.enabled");   // low on the Appearance page
+        sv.searchText = text;
+        const field = findChild(sv, "settings-search");
+        field.forceActiveFocus();
+        keyClick(Qt.Key_Return);
+        compare(sv.activeSection, "appearance");
+        tryVerify(() => _row(sv, text) !== null, 2000, "row not built");
+        const row = _row(sv, text);
+        tryVerify(() => _inside(sv.Window.activeFocusItem, row), 2000, "focus is not on the setting");
+        // In view: the row sits inside the body's visible band.
+        tryVerify(() => {
+            let fl = row.parent;
+            while (fl && fl.contentY === undefined) fl = fl.parent;
+            const y = row.mapToItem(fl, 0, 0).y;
+            return y >= 0 && y + row.height <= fl.height;
+        }, 3000, "the setting was not scrolled into view");
+        compare(row.searchMark, 1, "the matching row is not marked");
+        sv.searchText = "";
+    }
+
+    // Matching rows of the open section are marked, the rest step back;
+    // clearing the search puts them all back.
+    function test_open_section_marks_hits_and_dims_the_rest() {
+        const sv = make();
+        sv.activeSection = "appearance";
+        const hitText = I18n.t("settings.appearance.reducedMotion");
+        const other = I18n.t("settings.system.startAtLogin");
+        tryVerify(() => _row(sv, hitText) !== null && _row(sv, other) !== null);
+        sv.searchText = hitText;
+        tryCompare(_row(sv, hitText), "searchMark", 1);
+        tryCompare(_row(sv, other), "searchMark", -1);
+        verify(_row(sv, other).opacity < 1);
+        sv.searchText = "";
+        tryCompare(_row(sv, other), "searchMark", 0);
+        compare(_row(sv, other).opacity, 1);
+    }
+
+    // People search in English in a Russian UI: an English title still finds
+    // the setting.
+    function test_english_query_finds_in_russian() {
+        const savedLang = AppController.language;
+        AppController.language = "ru";
+        const sv = make();
+        sv.searchText = "Reduced motion";
+        const found = sv.searchMatches.map((m) => m.key);
+        const appearanceHit = sv._sectionMatches(sv.sections.filter((s) => s.id === "appearance")[0]);
+        const ruTitle = I18n.t("settings.appearance.reducedMotion");
+        sv.searchText = "";
+        AppController.language = savedLang;
+        verify(found.indexOf("settings.appearance.reducedMotion") >= 0, "English query found nothing in ru: " + found);
+        verify(appearanceHit);
+        verify(ruTitle !== "Reduced motion", "the UI was not in Russian");
+    }
+
+    // Nothing matches: the nav says so; Esc clears and every section is back.
+    function test_nothing_found_then_escape_clears() {
+        const sv = make();
+        const field = findChild(sv, "settings-search");
+        field.forceActiveFocus();
+        sv.searchText = "zzqxv-no-such-setting";
+        verify(sv.searchEmpty);
+        const empty = findChild(sv, "settings-search-empty");
+        verify(empty !== null && empty.visible, "no empty state");
+        keyClick(Qt.Key_Escape);
+        compare(sv.searchText, "");
+        compare(field.text, "");
+        verify(!empty.visible);
+        for (let i = 0; i < sv.sections.length; i++)
+            verify(findChild(sv, "settings-nav-" + sv.sections[i].id).visible, sv.sections[i].id + " still hidden");
+    }
+
+    // Down from the search walks the filtered nav, skipping hidden rows.
+    function test_arrows_walk_the_filtered_nav() {
+        const sv = make();
+        sv.activeSection = "profile";
+        sv.searchText = I18n.t("settings.sound.meetingMinutes");
+        const field = findChild(sv, "settings-search");
+        field.forceActiveFocus();
+        keyClick(Qt.Key_Down);
+        const f = sv.Window.activeFocusItem;
+        verify(f && f.visible && String(f.objectName).indexOf("settings-nav-") === 0, "Down did not reach a visible nav row");
+        verify(sv._navTabIndex >= 0 && sv._sectionMatches(sv.sections[sv._navTabIndex]));
+        sv.searchText = "";
+    }
+
+    // Integration fields come from the provider catalogue: "JQL" finds Jira.
+    function test_provider_fields_are_searchable() {
+        const sv = make();
+        sv.searchText = "JQL";
+        const hit = sv.searchMatches.filter((m) => m.section === "integrations");
+        sv.searchText = "";
+        verify(hit.length >= 1, "JQL found nothing");
+        compare(hit[0].objectName, "int-card-jira");
+    }
 }
