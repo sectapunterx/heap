@@ -175,21 +175,24 @@ Item {
         return true;
     }
 
-    property int taskRev: 0
-    property int eventRev: 0
+    // A burst of model changes (a tracker sync) rebuilds once, not per row (APP-203).
+    ChangeTick { id: taskTick }
+    ChangeTick { id: eventTick }
+    readonly property int taskRev: taskTick.rev
+    readonly property int eventRev: eventTick.rev
     Connections {
         target: AppController.tasks
-        function onDataChanged()  { root.taskRev++ }
-        function onRowsInserted() { root.taskRev++ }
-        function onRowsRemoved()  { root.taskRev++ }
-        function onModelReset()   { root.taskRev++ }
+        function onDataChanged()  { taskTick.bump() }
+        function onRowsInserted() { taskTick.bump() }
+        function onRowsRemoved()  { taskTick.bump() }
+        function onModelReset()   { taskTick.bump() }
     }
     Connections {
         target: AppController.events
-        function onDataChanged()  { root.eventRev++ }
-        function onRowsInserted() { root.eventRev++ }
-        function onRowsRemoved()  { root.eventRev++ }
-        function onModelReset()   { root.eventRev++ }
+        function onDataChanged()  { eventTick.bump() }
+        function onRowsInserted() { eventTick.bump() }
+        function onRowsRemoved()  { eventTick.bump() }
+        function onModelReset()   { eventTick.bump() }
     }
 
     // Declarative binding: re-evaluates on AppController.selectedDate and
@@ -908,9 +911,13 @@ Item {
                 anchors.top: parent.top; anchors.bottom: parent.bottom
                 anchors.right: parent.right
                 width: gridHost.railW
+                // From the week's dates alone: read off `root.days`, every
+                // task change handed the rail a new array and it rebuilt
+                // twice, once for the change and once for the array (APP-203).
                 days: {
                     const out = [];
-                    for (let i = 0; i < root.days.length; i++) out.push(root.days[i].date);
+                    const ev = root.eventDays.days;
+                    for (let i = 0; i < ev.length; i++) out.push(ev[i].date);
                     return out;
                 }
                 searchText: root.searchText

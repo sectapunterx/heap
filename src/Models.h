@@ -19,6 +19,7 @@
 #include <QVector>
 
 #include <functional>
+#include <optional>
 
 // One tag on a task (HEAP-124). `id` is the label text — it is what a tracker
 // calls the label and what the user types. `color` is a "#rrggbb" string, empty
@@ -572,7 +573,11 @@ class TaskModel : public QAbstractListModel {
   // unless `changedAt` is given — undo passes the original back so restoring a
   // task does not look like a fresh move (the "stuck in this column" badge is
   // computed from that timestamp).
-  void setStatus(const QString& id, const QString& status, const QDateTime& changedAt = {});
+  //
+  // `rank`, when given, lands in the same change: a card dropped into another
+  // column then enters that column's proxy where it belongs, instead of at its
+  // old rank and re-sorting the whole column a moment later (APP-203).
+  void setStatus(const QString& id, const QString& status, const QDateTime& changedAt = {}, std::optional<double> rank = {});
   void upsert(const Task& t);
   void insertAt(int row, const Task& t);
   void removeById(const QString& id);

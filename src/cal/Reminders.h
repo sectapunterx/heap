@@ -105,7 +105,8 @@ inline DeadlineCall deadlineReminder(const QString& taskId, const QDateTime& dea
     return out;
   }
   const qint64 secs = now.secsTo(deadlineAt);
-  const QString stamp = deadlineAt.toString(Qt::ISODate);
+  // Every task is asked every minute; most are nowhere near due, so the key
+  // is only formatted for the ones that are (APP-203).
   if(secs < 0) {
     // Only a deadline that passed recently: a profile full of month-old
     // overdue work must not answer an update with a flood of reminders.
@@ -115,7 +116,7 @@ inline DeadlineCall deadlineReminder(const QString& taskId, const QDateTime& dea
     out.due = true;
     out.overdue = true;
     out.hours = static_cast<int>(-secs / 3600);
-    out.key = QStringLiteral("dl-over:%1@%2").arg(taskId, stamp);
+    out.key = QStringLiteral("dl-over:%1@%2").arg(taskId, deadlineAt.toString(Qt::ISODate));
     return out;
   }
   if(secs > 3600LL * qMax(1, leadHours)) {
@@ -123,7 +124,7 @@ inline DeadlineCall deadlineReminder(const QString& taskId, const QDateTime& dea
   }
   out.due = true;
   out.hours = qMax(1, static_cast<int>((secs + 3599) / 3600));
-  out.key = QStringLiteral("dl:%1@%2").arg(taskId, stamp);
+  out.key = QStringLiteral("dl:%1@%2").arg(taskId, deadlineAt.toString(Qt::ISODate));
   return out;
 }
 

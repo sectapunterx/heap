@@ -16,6 +16,7 @@
 #include "cal/OutlookDesktop.h"
 #include "cal/Reminders.h"
 #include "chrono/ChronoParser.h"
+#include "diag/FrameLog.h"
 #include "diag/IssueReport.h"
 #include "diag/PerfLog.h"
 #include "git/BranchTaskMatcher.h"
@@ -90,6 +91,7 @@
 #include <QQuickWindow>
 #include <QSaveFile>
 #include <QScopedValueRollback>
+#include <QScopeGuard>
 #include <QStandardPaths>
 #include <QSysInfo>
 #include <QSystemTrayIcon>
@@ -1942,6 +1944,10 @@ void AppController::setAppSettingsJson(const QString& v) {
 }
 
 void AppController::moveTask(const QString& id, const QString& newStatus) {
+  moveTaskRanked(id, newStatus, std::nullopt);
+}
+
+void AppController::moveTaskRanked(const QString& id, const QString& newStatus, std::optional<double> rank) {
   const int row = m_tasks.indexOfId(id);
   if(row < 0) {
     return;
@@ -1970,7 +1976,7 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
   // Capture before any upsert can invalidate the `t` reference (HEAP-77).
   const QString recurrence = t.recurrence;
   const QDate recurBase = t.dueAt.isValid() ? t.dueAt.date() : t.scheduledAt.date();
-  m_tasks.setStatus(id, newStatus);
+  m_tasks.setStatus(id, newStatus, {}, rank);
   completionSoundOnMove_(prevStatus, newStatus);
 
   // Mirror the change back to the linked tracker issue (e.g. moving to Done
@@ -2379,16 +2385,6 @@ void AppController::moveTaskTo(const QString& id, const QString& statusId, const
 
   const UndoScope scope(this, tr_("task.moveUndone").arg(id));
 
-  // The status change carries the recurrence spawn, the focus block and the
-  // tracker push with it, so it goes through moveTask rather than being
-  // duplicated here. The nested scope records nothing of its own.
-  if(fromStatus != statusId) {
-    moveTask(id, statusId);
-    if(m_tasks.items().at(m_tasks.indexOfId(id)).status != statusId) {
-      return;  // moveTask declined after all
-    }
-  }
-
   // Neighbours are taken from the destination column with the moved card
   // removed, so dropping a card one place down means what it looks like.
   const QVector<::Task> ordered = columnTasks(statusId, id);
@@ -2407,17 +2403,31 @@ void AppController::moveTaskTo(const QString& id, const QString& statusId, const
   const double beforeRank = hasBefore ? ordered.at(at - 1).rank : 0.0;
   const double afterRank = hasAfter ? ordered.at(at).rank : 0.0;
 
+  double rank = 0.0;
   if(hasBefore && hasAfter && heap::board::needsRebalance(beforeRank, afterRank)) {
     rebalanceColumn(statusId);
     const QVector<::Task> spread = columnTasks(statusId, id);
     const double lo = at > 0 ? spread.at(at - 1).rank : 0.0;
     const double hi = at < spread.size() ? spread.at(at).rank : 0.0;
-    ::Task t = m_tasks.items().at(m_tasks.indexOfId(id));
-    t.rank = heap::board::between(lo, hi, at > 0, at < spread.size());
-    m_tasks.upsert(t);
+    rank = heap::board::between(lo, hi, at > 0, at < spread.size());
+  } else {
+    rank = heap::board::between(beforeRank, afterRank, hasBefore, hasAfter);
+  }
+
+  // The status change carries the recurrence spawn, the focus block and the
+  // tracker push with it, so it goes through moveTask rather than being
+  // duplicated here. The nested scope records nothing of its own. The rank
+  // rides along: set afterwards, it re-sorted the whole destination column
+  // and rebound every card in it while the dropped card was still moving
+  // (APP-203).
+  if(fromStatus != statusId) {
+    moveTaskRanked(id, statusId, rank);
+    if(m_tasks.items().at(m_tasks.indexOfId(id)).status != statusId) {
+      return;  // moveTask declined after all
+    }
   } else {
     ::Task t = m_tasks.items().at(m_tasks.indexOfId(id));
-    t.rank = heap::board::between(beforeRank, afterRank, hasBefore, hasAfter);
+    t.rank = rank;
     m_tasks.upsert(t);
   }
   scheduleSave();
@@ -4031,6 +4041,7 @@ bool AppController::refuseSubscriptionEdit(const QString& id, const QString& mas
 }
 
 void AppController::applyCalendarSubscriptions() {
+  const heap::frame::Span span("applyCalendarSubscriptions");
   const QVariantList list = calendarSubscriptionSettings();
   QVector<QPair<QString, QString>> toLoad;
   for(const QVariant& v : list) {
@@ -7358,6 +7369,7 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
                                                             bool complete,
                                                             QStringList* goneCandidates) {
   using heap::integrations::StatusMap;
+  const heap::frame::Span span("mergeExternalTasks");
   MergeStats stats;
   // Whatever this pull changes on a card is the tracker's doing (APP-165).
   const QScopedValueRollback<bool> fromTracker(m_historySync, true);
@@ -9993,6 +10005,7 @@ void AppController::saveStateNow() {
   if(m_loading || m_saveBlocked) {
     return;
   }
+  const heap::frame::Span span("saveStateNow");
 
   // Push live model state back into the active profile.
   snapshotActiveProfile();
@@ -12568,6 +12581,15 @@ void AppController::runAutomation() {
 }
 
 void AppController::runAutomationAt(const QDateTime& now) {
+  const heap::frame::Span span("runAutomation");
+  // Reminders sent during this tick reach reminders.json once, at its end.
+  ++m_reminderBatchDepth;
+  const auto flushReminders = qScopeGuard([this]() {
+    if(--m_reminderBatchDepth == 0 && m_reminderSavePending) {
+      m_reminderSavePending = false;
+      saveSentReminders();
+    }
+  });
   // The minute tick is also what notices that the date moved on — after
   // midnight, a sleep or a time-zone change.
   refreshToday(now.date());
@@ -12684,41 +12706,61 @@ void AppController::runAutomationAt(const QDateTime& now) {
   // more when it has passed.
   if(notif.value("deadlineReminders", true).toBool() && !quiet) {
     const int leadHours = qMax(1, notif.value("deadlineLeadHours", 24).toInt());
+
     // Each with the profile it is in: the reminder's buttons act there (PRES-2).
-    QVector<std::pair<QString, Task>> candidates;
-    for(const Task& t : m_tasks.items()) {
-      candidates.append({m_activeProfileId, t});
-    }
-    for(const Profile& p : m_profiles) {
-      if(p.id != m_activeProfileId) {
-        for(const Task& t : p.tasks) {
-          candidates.append({p.id, t});
-        }
+    // Only the ones due are kept, and only what the reminder says: copying
+    // every task of every profile each minute was most of the tick (APP-203).
+    struct DueTask {
+      QString profileId;
+      QString id;
+      QString title;
+      QString priority;
+      heap::cal::DeadlineCall call;
+    };
+
+    QVector<DueTask> dueTasks;
+    // A reminder is due from `leadHours` before the deadline to a day after
+    // it. Most deadlines are days away, and the calendar date says so without
+    // the time-zone arithmetic a QDateTime difference costs, every minute,
+    // for every task.
+    const qint64 lastDueDay = leadHours / 24 + 2;
+    const auto consider = [&](const QString& profileId, const Task& t) {
+      if(t.archived || !t.dueAt.isValid() || t.status == QLatin1String("done")) {
+        return;
       }
-    }
-    for(const auto& [profileId, t] : candidates) {
-      if(t.archived) {
-        continue;
-      }
-      if(!t.dueAt.isValid()) {
-        continue;
-      }
-      if(t.status == QStringLiteral("done")) {
-        continue;
+      const qint64 days = today.daysTo(t.dueAt.date());
+      if(days < -2 || days > lastDueDay) {
+        return;
       }
       // A task due at a parsed clock time fires then; a bare due date keeps the
       // old end-of-day horizon.
       const QDateTime deadlineAt = t.dueHasTime ? t.dueAt : QDateTime(t.dueAt.date(), QTime(23, 59));
-      const heap::cal::DeadlineCall call = heap::cal::deadlineReminder(t.id, deadlineAt, now, leadHours);
-      if(!call.due || reminderSent(call.key)) {
-        continue;
+      heap::cal::DeadlineCall call = heap::cal::deadlineReminder(t.id, deadlineAt, now, leadHours);
+      if(call.due && !reminderSent(call.key)) {
+        dueTasks.append({profileId, t.id, t.title, t.priority, std::move(call)});
+      }
+    };
+    for(const Task& t : m_tasks.items()) {
+      consider(m_activeProfileId, t);
+    }
+    for(const Profile& p : m_profiles) {
+      if(p.id != m_activeProfileId) {
+        for(const Task& t : p.tasks) {
+          consider(p.id, t);
+        }
+      }
+    }
+    for(const DueTask& t : dueTasks) {
+      const heap::cal::DeadlineCall& call = t.call;
+      if(reminderSent(call.key)) {
+        continue;  // the same id in two profiles is one reminder
       }
       markReminderSent(call.key, now);
       const QString when = call.overdue
                                ? (call.hours < 1 ? tr_("notify.deadlineWhen.overdue") : tr_("notify.deadlineWhen.overdueH").arg(call.hours))
                            : (call.hours <= 1) ? tr_("notify.deadlineWhen.h1")
                                                : tr_("notify.deadlineWhen.hN").arg(call.hours);
-      notifyTaskAt(heap::notify::taskRef(profileId, t.id),
+      notifyTaskAt(heap::notify::taskRef(t.profileId, t.id),
                    call.overdue ? tr_("notify.overdueTitle").arg(when) : tr_("notify.deadlineTitle").arg(when),
                    QStringLiteral("%1 (%2)").arg(t.title, t.priority),
                    QStringLiteral("deadline"),
@@ -12895,6 +12937,10 @@ void AppController::markReminderSent(const QString& key, const QDateTime& at) {
   const QDateTime horizon = at.addDays(-3);
   for(auto it = m_sentReminders.begin(); it != m_sentReminders.end();) {
     it = it.value() < horizon ? m_sentReminders.erase(it) : std::next(it);
+  }
+  if(m_reminderBatchDepth > 0) {
+    m_reminderSavePending = true;
+    return;
   }
   saveSentReminders();
 }

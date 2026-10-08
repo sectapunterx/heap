@@ -31,18 +31,17 @@ Rectangle {
     color: Theme.panel
     implicitWidth: 240
 
-    function _midnight(d) {
-        if (!d || !d.getFullYear) return null;
-        return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    }
-
-    function _sameDay(a, b) {
-        const x = _midnight(a), y = _midnight(b);
-        return !!x && !!y && x.getTime() === y.getTime();
+    // A day as one number, so a task is tested against the range with a
+    // lookup. Comparing Date objects pairwise made a rebuild ~60 ms at 2k
+    // tasks — 400k Date allocations, on every change to any task (APP-203).
+    function _dayKey(d) {
+        if (!d || !d.getFullYear) return -1;
+        return (d.getFullYear() * 12 + d.getMonth()) * 31 + d.getDate();
     }
 
     function _inRange(d) {
-        for (let i = 0; i < root.days.length; i++) if (_sameDay(root.days[i], d)) return true;
+        const k = _dayKey(d);
+        for (let i = 0; i < root.days.length; i++) if (_dayKey(root.days[i]) === k) return true;
         return false;
     }
 
@@ -68,12 +67,14 @@ Rectangle {
         const occ = AppController.eventOccurrences(first, last);
         for (let i = 0; i < occ.length; i++) if (occ[i].taskId) slotted[String(occ[i].taskId)] = true;
         const needle = root.searchText.trim().toLowerCase();
+        const inRange = {};
+        for (let i = 0; i < root.days.length; i++) inRange[root._dayKey(root.days[i])] = true;
         const list = AppController.calendarTasks(first, last, false);
         for (let i = 0; i < list.length; i++) {
             const t = list[i];
             if (t.status === "done" || t.dueDay < 0) continue;
             const due = t.deadline;
-            if (!due || !due.getFullYear || !root._inRange(due)) continue;
+            if (!due || !due.getFullYear || !inRange[root._dayKey(due)]) continue;
             // Either clock puts it on the grid already (schema v10 keeps one per field).
             if (t.scheduledHasTime || t.dueHasTime || slotted[t.id]) continue;
             if (needle.length > 0 && String(t.searchText || "").indexOf(needle) < 0) continue;

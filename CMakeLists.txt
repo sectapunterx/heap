@@ -254,6 +254,7 @@ qt_add_library(heap_core STATIC
     src/integrations/IntegrationI18n.cpp
     src/diag/IssueReport.cpp
     src/diag/PerfLog.cpp
+    src/diag/FrameLog.cpp
     # ── audit-int: end ──
     # ── audit-perf: begin ──
     # ── audit-perf: end ──
@@ -428,6 +429,7 @@ qt_add_qml_module(heap_core
         qml/MdEditorPane.qml
         qml/DocsPagesPane.qml
         qml/UnscheduledRail.qml
+        qml/ChangeTick.qml
         qml/Overlap.js
         qml/Segments.js
         qml/Search.js
