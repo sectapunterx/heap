@@ -1037,6 +1037,14 @@ AppController::AppController(QObject* parent) :
         checkForUpdates();
       }
     });
+    // Writes to trackers became opt-in (APP-243): say so once to whoever had
+    // a tracker connected, after the toast bar is up.
+    QTimer::singleShot(3500, this, [this]() {
+      const QString notice = trackerWriteNoticeOnce();
+      if(!notice.isEmpty()) {
+        emit trackerWriteNotice(notice);
+      }
+    });
   }  // !s_headless
 
   // ---- Tracker sync (HEAP-74/75) ----
@@ -2178,13 +2186,107 @@ void AppController::previewSound(int volume) {
   heap::platform::playCue(heap::platform::SoundCue::Done, volume);
 }
 
-void AppController::pushStatusToTracker(const QString& taskId, const QString& status) {
+bool AppController::trackerCanWriteStatus(const QString& providerId) const {
+  return heap::integrations::writesStatus(providerId);
+}
+
+bool AppController::trackerWriteEnabled(const QString& providerId) const {
+  // Off unless the user turned it on for this tracker: an existing install
+  // has no such key, and that reads as off too (APP-243).
+  return heap::integrations::writesStatus(providerId) && settingsMap()
+                                                             .value(QStringLiteral("integrations"))
+                                                             .toMap()
+                                                             .value(providerId)
+                                                             .toMap()
+                                                             .value(QStringLiteral("writeStatus"))
+                                                             .toBool();
+}
+
+void AppController::setTrackerWriteEnabled(const QString& providerId, bool enabled) {
+  if(!heap::integrations::writesStatus(providerId) || trackerWriteEnabled(providerId) == enabled) {
+    return;
+  }
+  setIntegrationField(providerId, QStringLiteral("writeStatus"), enabled);
+}
+
+QStringList AppController::trackerWriteProviders() const {
+  QStringList out;
+  for(const heap::integrations::ProviderDescriptor& d : heap::integrations::providerCatalog()) {
+    if(trackerWriteEnabled(d.id)) {
+      out.append(d.id);
+    }
+  }
+  return out;
+}
+
+QString AppController::trackerWriteNoticeOnce() {
+  if(m_trackerWriteNoticeDone) {
+    return {};
+  }
+  m_trackerWriteNoticeDone = true;
+  scheduleSave();
+  // Only a tracker that used to be written to without asking: one that is
+  // connected, can write, and has not been switched on since.
+  QStringList names;
+  const QVariantMap integrations = settingsMap().value(QStringLiteral("integrations")).toMap();
+  for(const heap::integrations::ProviderDescriptor& d : heap::integrations::providerCatalog()) {
+    if(heap::integrations::writesStatus(d) && integrations.value(d.id).toMap().value(QStringLiteral("connected")).toBool() &&
+       !trackerWriteEnabled(d.id)) {
+      names.append(d.displayName);
+    }
+  }
+  if(names.isEmpty()) {
+    return {};
+  }
+  return tr_("int.writeOffNotice").arg(names.join(QStringLiteral(", ")));
+}
+
+QString AppController::columnDisplayName(const QString& statusId) const {
+  for(const QVariant& v : m_statuses) {
+    const QVariantMap m = v.toMap();
+    if(m.value(QStringLiteral("id")).toString() == statusId) {
+      return m.value(QStringLiteral("name")).toString();
+    }
+  }
+  return statusId;
+}
+
+void AppController::markPushHeld(const QString& taskId, const QString& status, const QString& reason) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return;
+  }
+  m_tasks.setPushRuntime(taskId, false, reason);
+  Task t = m_tasks.items().at(row);
+  if(t.externalMeta.unsyncedStatus == status && !t.externalMeta.pushQueued) {
+    return;
+  }
+  t.externalMeta.unsyncedStatus = status;
+  t.externalMeta.pushQueued = false;
+  m_tasks.upsert(t);
+  scheduleSave();
+}
+
+void AppController::pushStatusToTracker(const QString& taskId, const QString& status, PushMode mode) {
   const int row = m_tasks.indexOfId(taskId);
   if(row < 0) {
     return;
   }
   const Task& t = m_tasks.items().at(row);
   if(t.externalId.isEmpty() || t.externalProvider.isEmpty()) {
+    return;
+  }
+  // A tracker heap cannot write to has nothing to send to, and one whose
+  // switch is off is only ever read: the move stays a local one (APP-243).
+  // The card's own "send" is the user asking for this one write.
+  if(!heap::integrations::writesStatus(t.externalProvider) || (mode == PushMode::Auto && !trackerWriteEnabled(t.externalProvider))) {
+    return;
+  }
+  // Outside the filter or gone: read-only for the tracker (APP-204). Nothing
+  // goes out on heap's own initiative; the card says the status is unsent.
+  // The card's "send" still asks the tracker first, and that check decides.
+  if(mode == PushMode::Auto && (t.externalMeta.outOfScope || t.externalMeta.goneUpstream)) {
+    markPushHeld(taskId, status, tr_("int.heldOutOfScope"));
     return;
   }
   // The write goes to the repo the issue came from, never simply the one in
@@ -2213,28 +2315,165 @@ void AppController::pushStatusToTracker(const QString& taskId, const QString& st
   // Remembered until the tracker answers, so a failure can name the card and
   // offer to send the same status again.
   const QString key = pushKey(providerId, project, externalId);
-  m_pendingPushes.insert(key, taskId);
+  // Every write is preceded by a fresh look at the issue (APP-204): still in
+  // the filter, and still in the status heap last saw. Only "send anyway",
+  // which the user confirmed with that very answer in front of them, skips it.
+  const bool check = mode != PushMode::Confirmed;
+  if(check) {
+    m_pendingChecks.insert(key, PendingCheck{.taskId = taskId, .status = status, .mode = mode});
+  } else {
+    m_pendingPushes.insert(key, taskId);
+  }
   // The card says "sending" until the tracker answers (APP-163).
   m_tasks.setPushRuntime(taskId, true, QString());
   ensureFreshToken(
       providerId,
-      [this, providerId, externalId, status, project, key, taskId]() {
+      [this, providerId, externalId, status, project, key, taskId, check]() {
         for(const auto& provider : m_syncProviders) {
           if(provider->id() == providerId) {
-            provider->pushStatusChange(externalId, status, project);
+            if(check) {
+              provider->checkIssue(externalId, project);
+            } else {
+              provider->pushStatusChange(externalId, status, project);
+            }
             return;
           }
         }
         // Rebuilt away while the token renewed (signed out meanwhile).
         m_pendingPushes.remove(key);
+        m_pendingChecks.remove(key);
         queueTrackerPush(taskId, status);
       },
       [this, key, taskId, status]() {
         // The token could not be renewed — offline, or the session ended.
         // Either way the move has not reached the tracker yet.
         m_pendingPushes.remove(key);
+        m_pendingChecks.remove(key);
         queueTrackerPush(taskId, status);
       });
+}
+
+void AppController::onIssueChecked(const QString& providerId,
+                                   const QString& externalId,
+                                   const QString& project,
+                                   bool ok,
+                                   int httpStatus,
+                                   const QString& error,
+                                   const QString& remoteStatus,
+                                   int filterMatch) {
+  const QString key = pushKey(providerId, project, externalId);
+  const auto pending = m_pendingChecks.constFind(key);
+  if(pending == m_pendingChecks.constEnd()) {
+    return;
+  }
+  const PendingCheck check = *pending;
+  m_pendingChecks.erase(pending);
+  const int row = m_tasks.indexOfId(check.taskId);
+  if(row < 0) {
+    return;
+  }
+  // The card moved again while the check was out: that later move is the one
+  // to send, and it asked for its own check.
+  const QString status = m_tasks.items().at(row).status;
+  if(!ok) {
+    if(httpStatus == 0 && error != QStringLiteral("unsupported")) {
+      // Never reached the tracker: the same as a push that could not go out.
+      m_tasks.setPushRuntime(check.taskId, false, QString());
+      queueTrackerPush(check.taskId, status);
+      return;
+    }
+    // A tracker that cannot be asked is not written to, and neither is one
+    // that answered the question with an error: the write would be blind.
+    onTaskPushed(providerId,
+                 externalId,
+                 project,
+                 false,
+                 error == QStringLiteral("unsupported") ? QStringLiteral("the tracker cannot be checked before a write") : error);
+    return;
+  }
+  Task t = m_tasks.items().at(row);
+  using heap::integrations::IntegrationProvider;
+  if(filterMatch == IntegrationProvider::FilterOut) {
+    // Not mine any more (assignee changed, moved out of the JQL…): the write
+    // is held and the user decides, with the tracker's status in front of
+    // them. heap never sends it on its own.
+    t.externalMeta.outOfScope = true;
+    if(!remoteStatus.isEmpty()) {
+      t.externalMeta.status = remoteStatus;
+      t.externalMeta.column = heap::integrations::StatusMap::column(remoteStatus, statusOverridesFor(providerId), QStringLiteral("todo"));
+    }
+    t.externalMeta.unsyncedStatus = status;
+    t.externalMeta.pushQueued = false;
+    m_tasks.upsert(t);
+    m_tasks.setPushRuntime(t.id, false, tr_("int.heldOutOfScope"));
+    scheduleSave();
+    emit integrationStatesChanged();
+    const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
+    emit trackerPushNeedsConfirm(t.id, externalKeyOf(t), t.title, d ? d->displayName : providerId, remoteStatus, columnDisplayName(status));
+    return;
+  }
+  // The tracker moved the issue since heap last saw it. Sending now would
+  // overwrite that move unseen: a status conflict instead, settled by the
+  // user in the existing dialog (APP-163). Moved to where the card already
+  // is, the two sides agree and there is nothing to send.
+  if(!remoteStatus.isEmpty() && !t.externalMeta.status.isEmpty() && remoteStatus != t.externalMeta.status) {
+    const QString mapped = heap::integrations::StatusMap::column(remoteStatus, statusOverridesFor(providerId), QStringLiteral("todo"));
+    t.externalMeta.status = remoteStatus;
+    t.externalMeta.column = mapped;
+    t.externalMeta.pushQueued = false;
+    if(mapped == status) {
+      t.externalMeta.unsyncedStatus.clear();
+      heap::integrations::setConflict(t.externalMeta.conflicts, QStringLiteral("status"), false);
+      m_tasks.setPushRuntime(t.id, false, QString());
+    } else {
+      t.externalMeta.unsyncedStatus = status;
+      heap::integrations::setConflict(t.externalMeta.conflicts, QStringLiteral("status"), true);
+      m_tasks.setPushRuntime(t.id, false, QString());
+      const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
+      const QString message =
+          tr_("int.checkConflict").arg(externalKeyOf(t), d ? d->displayName : providerId, remoteStatus, columnDisplayName(status));
+      logEvent(QStringLiteral("warning"), message, {t.id});
+      emit toast(message, QStringLiteral("warning"));
+    }
+    m_tasks.upsert(t);
+    scheduleSave();
+    return;
+  }
+  // Still mine and where heap left it: the write goes out.
+  m_pendingPushes.insert(key, t.id);
+  for(const auto& provider : m_syncProviders) {
+    if(provider->id() == providerId) {
+      provider->pushStatusChange(externalId, status, project);
+      return;
+    }
+  }
+  m_pendingPushes.remove(key);
+  m_tasks.setPushRuntime(t.id, false, QString());
+  queueTrackerPush(t.id, status);
+}
+
+void AppController::confirmTrackerPush(const QString& taskId) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return;
+  }
+  pushStatusToTracker(taskId, m_tasks.items().at(row).status, PushMode::Confirmed);
+}
+
+void AppController::discardTrackerPush(const QString& taskId) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return;
+  }
+  Task t = m_tasks.items().at(row);
+  m_tasks.setPushRuntime(taskId, false, QString());
+  if(t.externalMeta.unsyncedStatus.isEmpty() && !t.externalMeta.pushQueued) {
+    return;
+  }
+  t.externalMeta.unsyncedStatus.clear();
+  t.externalMeta.pushQueued = false;
+  m_tasks.upsert(t);
+  scheduleSave();
 }
 
 QString AppController::pushKey(const QString& providerId, const QString& project, const QString& externalId) {
@@ -2335,7 +2574,7 @@ void AppController::retryTrackerPush(const QString& taskId) {
   if(row < 0) {
     return;
   }
-  pushStatusToTracker(taskId, m_tasks.items().at(row).status);
+  pushStatusToTracker(taskId, m_tasks.items().at(row).status, PushMode::Explicit);
 }
 
 // Tasks of one column, in the order the board shows them. Ties on rank fall
@@ -7367,6 +7606,9 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
   // up in a sync profile.
   const QHash<QString, QString> statusOverrides = statusOverridesFor(providerId);
   QStringList seenStatuses;
+  // While heap does not write this tracker, a column the user picked here is
+  // theirs and no pull moves it (APP-243).
+  const bool localOwnsColumn = !trackerWriteEnabled(providerId);
 
   // Auto-sync fires wherever the user happens to be, and the integration
   // config is global — so without this, a timer tick while another profile is
@@ -7524,10 +7766,14 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
       return column == QStringLiteral("done");
     };
     using heap::integrations::StatusPull;
-    const StatusPull statusPull =
-        isNewRow ? StatusPull::TakeRemote
-                 : heap::integrations::mergeStatusOnPull(
-                       t.status, t.externalMeta.unsyncedStatus, t.externalMeta.status, ext.status, mapped, t.externalMeta.column);
+    const StatusPull statusPull = isNewRow ? StatusPull::TakeRemote
+                                           : heap::integrations::mergeStatusOnPull(t.status,
+                                                                                   t.externalMeta.unsyncedStatus,
+                                                                                   t.externalMeta.status,
+                                                                                   ext.status,
+                                                                                   mapped,
+                                                                                   t.externalMeta.column,
+                                                                                   localOwnsColumn);
     if(statusPull == StatusPull::TakeRemote) {
       t.status = mapped;
       if(!t.externalMeta.unsyncedStatus.isEmpty() && t.externalMeta.status != ext.status) {
@@ -8118,6 +8364,18 @@ void AppController::applyIntegrationSettings() {
         [this, providerId](const QString& externalId, const QString& project, bool ok, const QString& error, const QString& remoteStatus) {
           onTaskPushed(providerId, externalId, project, ok, error, remoteStatus);
         });
+    connect(provider,
+            &heap::integrations::IntegrationProvider::issueChecked,
+            this,
+            [this, providerId](const QString& externalId,
+                               const QString& project,
+                               bool ok,
+                               int httpStatus,
+                               const QString& error,
+                               const QString& remoteStatus,
+                               int filterMatch) {
+              onIssueChecked(providerId, externalId, project, ok, httpStatus, error, remoteStatus, filterMatch);
+            });
     connect(provider,
             &heap::integrations::IntegrationProvider::connectionTested,
             this,
@@ -8898,6 +9156,8 @@ QVariantList AppController::integrationCatalog() const {
     }
     m.insert(QStringLiteral("loginFields"), loginFields);
     m.insert(QStringLiteral("directory"), d.kind == heap::integrations::ProviderKind::Directory);
+    // Whether the card offers "change the status in …" (APP-243).
+    m.insert(QStringLiteral("writesStatus"), heap::integrations::writesStatus(d));
     out.append(m);
   }
   return out;
@@ -9198,6 +9458,11 @@ void AppController::queueTrackerPush(const QString& taskId, const QString& statu
 }
 
 void AppController::flushQueuedPushes(const QString& providerId) {
+  // With the tracker's switch off a queued move stays on the card as "not
+  // sent", for the user to send or drop (APP-243). Never on its own.
+  if(!trackerWriteEnabled(providerId)) {
+    return;
+  }
   QStringList ids;
   for(const Task& t : m_tasks.items()) {
     // A move held by a status conflict waits for the user, not for a sync.
@@ -9286,6 +9551,13 @@ void AppController::resolveTrackerConflictFields(const QString& taskId, const QS
     const UndoScope scope(this, tr_("task.editUndone").arg(taskId));
     for(const QString& f : pending) {
       send = applyConflictChoice(t, f, useTracker) || send;
+    }
+    if(send && !trackerWriteEnabled(t.externalProvider)) {
+      // Nothing is written to this tracker: keeping mine keeps it here only,
+      // and there is no unsent move left to show (APP-243).
+      t.externalMeta.unsyncedStatus.clear();
+      t.externalMeta.pushQueued = false;
+      send = false;
     }
     m_tasks.upsert(t);
     scheduleSave();
@@ -10011,6 +10283,7 @@ void AppController::saveStateNow() {
   s["crumbUser"] = m_crumbUser;
   s["welcomeSeen"] = m_welcomeSeen;
   s["demoActive"] = m_demoActive;
+  s["trackerWriteNotice"] = m_trackerWriteNoticeDone;
   icsUidDomain();  // mints the id on the first save
   s["installId"] = m_installId;
 
@@ -10428,6 +10701,9 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
     m_welcomeSeen = s.contains("welcomeSeen") ? s["welcomeSeen"].toBool() : true;
     m_demoActive = s.contains("demoActive") ? s["demoActive"].toBool() : false;
     emit onboardingChanged();
+    // Absent in every state.json written before writes became opt-in, which
+    // is exactly who the one-time notice is for (APP-243).
+    m_trackerWriteNoticeDone = s.value("trackerWriteNotice").toBool();
     if(!viewOnly) {
       m_installId = s.value("installId").toString();
     }
@@ -12155,11 +12431,28 @@ bool AppController::canTransitionStatus(const QString& taskId, const QString& ne
       return false;
     }
   }
+  // Only a tracker heap writes to has a say in where its cards go. With the
+  // switch off (the default) a move is a local one, and neither the workflow
+  // nor the filter below can refuse it (APP-243).
+  const bool writes =
+      !t.externalProvider.isEmpty() && !t.externalId.isEmpty() && newStatus != t.status && trackerWriteEnabled(t.externalProvider);
+  // Outside the filter or gone: the tracker is read-only for this card. The
+  // drop is refused rather than sent, so heap never changes the status of an
+  // issue that is not the user's any more (APP-204).
+  if(writes && (t.externalMeta.outOfScope || t.externalMeta.goneUpstream)) {
+    const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(t.externalProvider);
+    const QString label = d ? d->displayName : t.externalProvider;
+    const QString message = t.externalMeta.goneUpstream ? tr_("int.readOnlyGone").arg(externalKeyOf(t), label)
+                                                        : tr_("int.readOnlyOutOfScope").arg(externalKeyOf(t), label);
+    emit trackerReadOnlyMove(taskId, message, t.externalUrl);
+    playSound_(static_cast<int>(heap::platform::SoundCue::Refuse));
+    return false;
+  }
   // A tracker whose workflow decides the moves (Jira) said, on the last pull,
   // which statuses this issue can go to. A column none of them maps to would
   // only be refused after the round trip and leave the card "unsynced" —
   // say so on the drop instead (INT-8).
-  if(!t.externalProvider.isEmpty() && !t.externalId.isEmpty() && newStatus != t.status) {
+  if(writes) {
     const auto known = m_trackerTransitions.constFind(t.externalProvider + QChar('\n') + t.externalId);
     if(known != m_trackerTransitions.constEnd()) {
       using heap::integrations::StatusMap;

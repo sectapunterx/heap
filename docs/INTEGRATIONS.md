@@ -9,6 +9,64 @@ entry — no networking or UI code. Jira and Trello are the two bespoke exceptio
 Access tokens live in the **OS keychain** (QtKeychain), never in `state.json`.
 See [`docs/DATA.md`](DATA.md) for what does get persisted.
 
+## The rule: every external write is opt-in
+
+heap reads from trackers; it writes to one only where the user switched that
+write on. **Every write to an external system sits behind its own switch, per
+tracker, and the switch is off by default** — on a new install and on an
+updated one alike. Today there is exactly one such write:
+
+| Write | Switch | Default |
+|-------|--------|---------|
+| Change an issue's status when its card moves between columns (GitHub, GitLab, Gitea, Forgejo, Jira) | Settings → Integrations → *tracker* → **Change the status in …** (`integrations.<id>.writeStatus`) | off |
+| Comments | — never sent, there is no switch | — |
+
+A contributor adding any new write (a comment, a label, a PR/MR action, an
+assignee…) adds a new switch for it, off by default, and an entry in this
+table. Being able to write is not permission to: `writesStatus()` in
+`ProviderRegistry` says a tracker *can* take a status, `AppController::
+trackerWriteEnabled()` says the user *let* it.
+
+**With the switch off** a move is a local one. The card changes column in
+heap, nothing is sent or queued, and no later pull moves it back: the column
+the user picked is theirs (`mergeStatusOnPull(…, localOwnsColumn)`). A card
+the user never moved keeps following the tracker. The tracker's own status is
+shown where it does not clutter the card — the tracker badge's tooltip, the
+card's keyboard tooltip, and **Status in the tracker** in the editor. Moves
+queued by an older version while a tracker was away are not sent either: the
+card says **not sent**, clicking it (or **Send the status to the tracker** in
+the card menu) sends that one move after the check below, and **Drop the
+unsent status** forgets it.
+
+**With the switch on**, every status write is preceded by a fresh look at the
+issue (`IntegrationProvider::checkIssue`):
+
+- *Still in the filter?* An issue that no longer is — reassigned, unassigned,
+  moved out of the JQL — is not written. The card is marked **outside filter**
+  and a dialog names the issue, its status in the tracker now and the target;
+  **Send anyway** is the only way out, and Cancel is the default.
+- *Still in the status heap last saw?* If the tracker moved it meanwhile, nothing
+  is sent and the card gets a status conflict (the same side-by-side choice as
+  a pull conflict).
+- A card already **outside filter** or **gone** is read-only: dropping it in
+  another column is refused, with **Open in tracker** / **Archive** in the
+  toast, and a queued move for it is held as **not sent**.
+
+| Tracker | Status check | Filter check |
+|---------|--------------|--------------|
+| Jira | `GET /issue/{key}?fields=status` | search `key = "KEY" AND (<your JQL without ORDER BY>)` |
+| GitHub | `GET /repos/{repo}/issues/{n}` | repo filter: the issue lives in the configured repo; "my issues": you are among its assignees (`GET /user`) |
+| GitLab | `GET /projects/{id}/issues/{iid}` | same, with `GET /user` and `assignees[].username` |
+| Gitea / Forgejo | `GET /api/v1/repos/{repo}/issues/{n}` | same, with `GET /api/v1/user` |
+
+Pull-only trackers (Trello, Redmine, Todoist, Asana, ClickUp, Sentry,
+Bitbucket) have no switch and are never written to. A tracker that cannot be
+asked would get no write at all: a blind write is the thing this rule exists to
+prevent.
+
+Updating from 0.7.x turns the write off for every tracker, and the first launch
+says so once: "The status in … no longer changes by itself".
+
 ## Connecting a tracker (users)
 
 Open **Settings → Integrations**. Each card is collapsed; click it to expand.
@@ -322,9 +380,10 @@ kept as they are. The integration card offers to archive them in one go.
 
 ## Moves while a tracker is away
 
-Moving a mirrored card while its tracker is disconnected or unreachable no
-longer vanishes: the card shows **not synced**, and the move is sent after the
-next successful pull. A move made in the tracker in the meantime wins. On Jira,
+With **Change the status in …** on, moving a mirrored card while its tracker
+is disconnected or unreachable no longer vanishes: the card shows **not
+synced**, and the move is sent after the next successful pull (and its check).
+A move made in the tracker in the meantime is a conflict, not an overwrite. On Jira,
 where the workflow decides which moves exist, each pull also asks for every
 issue's available transitions; a drop into a column none of them maps to is
 refused on the spot, with a toast naming the columns the issue can go to.
@@ -335,7 +394,8 @@ With repo/project blank, a sync pulls the issues assigned to you across every
 repo, so there is no single repo to write to. Each such issue remembers the repo
 it came from, and moving its card writes to **that** repo — never to the
 configured one, where the same number is a different issue. An issue whose repo
-the tracker did not name stays read-only.
+the tracker did not name stays read-only. All of this only applies with the
+tracker's write switch on.
 
 ## How much a sync pulls
 

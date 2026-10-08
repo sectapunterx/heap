@@ -24,6 +24,7 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <vector>
@@ -126,6 +127,9 @@ class AppController : public QObject {
   Q_PROPERTY(NoteModel* notes READ notes CONSTANT)
   Q_PROPERTY(QString activeNoteId READ activeNoteId WRITE setActiveNoteId NOTIFY activeNoteChanged)
   Q_PROPERTY(QString appSettingsJson READ appSettingsJson WRITE setAppSettingsJson NOTIFY appSettingsJsonChanged)
+  // Trackers whose "change the status in …" switch is on (APP-243). Every
+  // other tracker only ever gets read.
+  Q_PROPERTY(QStringList trackerWriteProviders READ trackerWriteProviders NOTIFY appSettingsJsonChanged)
   Q_PROPERTY(bool hasPendingUndo READ hasPendingUndo NOTIFY pendingUndoChanged)
   Q_PROPERTY(bool canRedo READ canRedo NOTIFY pendingUndoChanged)
 
@@ -604,7 +608,28 @@ class AppController : public QObject {
   // editor then stays open on it.
   Q_INVOKABLE bool saveTask(const QVariantMap& draft);
   // Send a card's current status to its tracker again, after a failed push.
+  // An explicit "send" from the card: goes out even while the tracker's
+  // switch is off, but only after the same fresh check (APP-204).
   Q_INVOKABLE void retryTrackerPush(const QString& taskId);
+  // The user confirmed "send anyway" for a card whose issue is outside the
+  // filter (trackerPushNeedsConfirm). Sends without asking again.
+  Q_INVOKABLE void confirmTrackerPush(const QString& taskId);
+  // Drop a move that was never sent: the card keeps its column here and the
+  // tracker is left alone (APP-243 "cancel").
+  Q_INVOKABLE void discardTrackerPush(const QString& taskId);
+  // Whether moving this tracker's cards changes the issue's status there.
+  // Off unless the user turned it on for that tracker (APP-243).
+  Q_INVOKABLE bool trackerWriteEnabled(const QString& providerId) const;
+  // The switch itself (Settings → Integrations → tracker). Ignored for a
+  // tracker heap cannot write to.
+  Q_INVOKABLE void setTrackerWriteEnabled(const QString& providerId, bool enabled);
+  // Whether the tracker can be written to at all, i.e. has the switch.
+  Q_INVOKABLE bool trackerCanWriteStatus(const QString& providerId) const;
+  QStringList trackerWriteProviders() const;
+  // Once per install after the update that made writes opt-in: the sentence
+  // naming the connected trackers whose status heap no longer changes, or an
+  // empty string. Marks itself done either way.
+  Q_INVOKABLE QString trackerWriteNoticeOnce();
   // A title/description/priority both sides changed: take the tracker's
   // version of every conflicting field (true), or keep the local one and stop
   // flagging it (false). Undoable.
@@ -1577,6 +1602,21 @@ class AppController : public QObject {
   void trackerPushFailed(const QString& taskId, const QString& message);
   // A conflict on this task was settled, one field or all (APP-163).
   void trackerConflictResolved(const QString& taskId);
+  // The fresh check before a write found the issue outside the filter: the
+  // status was not sent. The UI may offer "send anyway" behind a dialog that
+  // names the issue, its status in the tracker now and the target; answering
+  // it calls confirmTrackerPush (APP-204).
+  void trackerPushNeedsConfirm(const QString& taskId,
+                               const QString& key,
+                               const QString& title,
+                               const QString& tracker,
+                               const QString& remoteStatus,
+                               const QString& target);
+  // A move of a card the tracker is read-only for (outside the filter, gone)
+  // was refused. `url` opens the issue.
+  void trackerReadOnlyMove(const QString& taskId, const QString& message, const QString& url);
+  // The one-time "heap no longer changes the status in …" notice (APP-243).
+  void trackerWriteNotice(const QString& message);
   void focusedGitChanged();
   void showWhoseMoveChanged();
   // `profileId` is the profile the task lives in; the window switches there
@@ -1644,8 +1684,36 @@ class AppController : public QObject {
   // with a different body. Keeps `notesState` pointing at a note that exists.
   void reconcileActiveNote();
 
+  // Who asked for a status write (APP-243/APP-204). Auto = a move, an undo, a
+  // kept conflict or the queue: needs the tracker's switch on. Explicit = the
+  // card's own "send": allowed with the switch off. Both are checked against
+  // the tracker first. Confirmed = "send anyway" after the dialog: no check.
+  enum class PushMode : std::uint8_t { Auto, Explicit, Confirmed };
   // Tell a mirrored card's tracker about its status. No-op for local tasks.
-  void pushStatusToTracker(const QString& taskId, const QString& status);
+  void pushStatusToTracker(const QString& taskId, const QString& status, PushMode mode = PushMode::Auto);
+  // The answer to the fresh check that comes before every write.
+  void onIssueChecked(const QString& providerId,
+                      const QString& externalId,
+                      const QString& project,
+                      bool ok,
+                      int httpStatus,
+                      const QString& error,
+                      const QString& remoteStatus,
+                      int filterMatch);
+  // A board column's name as the user sees it ("prog" → "In progress").
+  QString columnDisplayName(const QString& statusId) const;
+  // Mark a status as not sent, with the reason the card shows.
+  void markPushHeld(const QString& taskId, const QString& status, const QString& reason);
+
+  struct PendingCheck {
+    QString taskId;
+    QString status;
+    PushMode mode = PushMode::Auto;
+  };
+
+  // pushKey → the write waiting on its check.
+  QHash<QString, PendingCheck> m_pendingChecks;
+  bool m_trackerWriteNoticeDone = false;
   // Drop the not-yet-started focus blocks planned for a task that is finished.
   void dropFutureFocusBlocks(const QString& taskId);
   void onTaskPushed(const QString& providerId,

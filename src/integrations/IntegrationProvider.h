@@ -32,6 +32,20 @@ class IntegrationProvider : public QObject {
   // to the configured one, which may since point somewhere else.
   virtual void pushStatusChange(const QString& externalId, const QString& newStatus, const QString& project) = 0;
 
+  // How issueChecked answers "is it still in the filter?". Plain ints: they
+  // travel in a signal argument.
+  static constexpr int FilterUnknown = -1;  // the tracker cannot be asked; only the status was checked
+  static constexpr int FilterOut = 0;
+  static constexpr int FilterIn = 1;
+
+  // A fresh look at one issue right before its status is written (APP-204):
+  // its status now, and whether it still matches the configured filter.
+  // Answers issueChecked once. The default cannot ask, and says so with the
+  // error "unsupported" — no status is then written for that tracker.
+  virtual void checkIssue(const QString& externalId, const QString& project) {
+    emit issueChecked(externalId, project, false, 0, QStringLiteral("unsupported"), QString(), FilterUnknown);
+  }
+
   // Read one issue's most recent comments (HEAP-117). `project` is the issue's
   // own repo/project, which in a cross-project pull is not the configured one.
   // Always answers commentsFetched, including with an error. The default says
@@ -89,6 +103,16 @@ class IntegrationProvider : public QObject {
   void commentsFetched(const QString& externalId, const QVector<ExternalComment>& comments, const QString& error);
   void statusesFetched(const QStringList& statuses);
   void issuesLookedUp(const QVector<ExternalTask>& found, const QStringList& missing);
+  // checkIssue's answer. `httpStatus` 0 with ok=false means the tracker was
+  // never reached (offline). `remoteStatus` is as a pull would report it;
+  // `filterMatch` is FilterIn, FilterOut or FilterUnknown.
+  void issueChecked(const QString& externalId,
+                    const QString& project,
+                    bool ok,
+                    int httpStatus,
+                    const QString& error,
+                    const QString& remoteStatus,
+                    int filterMatch);
 
  protected:
   using QObject::QObject;

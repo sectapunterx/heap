@@ -863,6 +863,23 @@ ApplicationWindow {
         function onShortcutHintRequested(shortcutId, sequence, label) {
             toast.show(I18n.t("hint.shortcut").arg(sequence).arg(label), "info")
         }
+        // The tracker is read-only for this card (outside the filter, gone):
+        // the drop was refused. Open the issue, or archive the card (APP-204).
+        function onTrackerReadOnlyMove(taskId, msg, url) {
+            toast.showWithActions(msg, [
+                { label: I18n.t("tracker.readOnly.open"), fn: function () { if (url) Qt.openUrlExternally(url) } },
+                { label: I18n.t("tracker.readOnly.archive"), fn: function () { AppController.setArchived(taskId, true) } }
+            ], 10, "warning");
+        }
+        function onTrackerPushNeedsConfirm(taskId, key, title, tracker, remoteStatus, target) {
+            trackerPushConfirm.ask(taskId, key, title, tracker, remoteStatus, target);
+        }
+        // Once, after the update that made tracker writes opt-in (APP-243).
+        function onTrackerWriteNotice(msg) {
+            toast.showWithAction(msg, I18n.t("tracker.writeNotice.open"), 20, function () {
+                win.runCommand("settings:integrations")
+            });
+        }
         function onTrackerPushFailed(taskId, msg) {
             toast.showWithAction(msg, I18n.t("sync.retry"), 10, function () {
                 AppController.retryTrackerPush(taskId)
@@ -2131,6 +2148,9 @@ ApplicationWindow {
     }
     // The standup draft (APP-170): text to edit and copy, sent nowhere.
     StandupDraftDialog { id: standupDraft }
+    // "Send the status anyway?" for an issue the check found outside the
+    // filter (APP-204). Cancel is the default.
+    TrackerPushConfirmDialog { id: trackerPushConfirm }
     // The day's summary (APP-190): closed, carrying over, timers. Read-only.
     EndOfDayDialog {
         id: endOfDay

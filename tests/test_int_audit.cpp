@@ -44,6 +44,12 @@ class IntAudit : public ::testing::Test {
     app_->tasks()->reset({});
     app_->setLanguage(QStringLiteral("en"));
     app_->setAppSettingsJson(QStringLiteral("{}"));
+    // These suites pin what a status write does, so every tracker here has
+    // its write switch on (off by default since APP-243). Tests of the off
+    // state live in test_tracker_writes.cpp.
+    for(const char* provider : {"github", "gitea", "jira"}) {
+      writeIntegrationConfig(QString::fromLatin1(provider), QJsonObject{});
+    }
   }
 
   void TearDown() override {
@@ -59,7 +65,11 @@ class IntAudit : public ::testing::Test {
   void writeIntegrationConfig(const QString& providerId, const QJsonObject& cfg) {
     QJsonObject settings = QJsonDocument::fromJson(app_->appSettingsJson().toUtf8()).object();
     QJsonObject integrations = settings.value(QStringLiteral("integrations")).toObject();
-    integrations.insert(providerId, cfg);
+    QJsonObject withWrites = cfg;
+    if(!withWrites.contains(QStringLiteral("writeStatus"))) {
+      withWrites.insert(QStringLiteral("writeStatus"), true);
+    }
+    integrations.insert(providerId, withWrites);
     settings.insert(QStringLiteral("integrations"), integrations);
     app_->setAppSettingsJson(QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact)));
   }
@@ -508,6 +518,9 @@ TEST_F(IntAudit, MoveWhileDisconnected_IsQueuedThenPushedAfterTheNextPull) {
       "GET /api/v1/repos/acme/web/issues",
       {200, R"([{"number":5,"title":"five","body":"","state":"open","html_url":"https://gitea.example.com/acme/web/issues/5"}])", {}});
   gitea.route("PATCH /api/v1/repos/acme/web/issues/5", {200, "{}", {}});
+  gitea.route(
+      "GET /api/v1/repos/acme/web/issues/5",
+      {200, R"({"number":5,"title":"five","body":"","state":"open","html_url":"https://gitea.example.com/acme/web/issues/5"})", {}});
   app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QStringLiteral("tok"));
   writeIntegrationConfig(QStringLiteral("gitea"),
                          QJsonObject{
@@ -693,6 +706,11 @@ TEST_F(IntAudit, JiraGuard_AfterAPush_KnowsTheMovesOutOfTheNewStatus) {
   jira.route("GET /rest/api/2/serverInfo", {200, R"({"deploymentType":"Cloud"})", {}});
   jira.route("GET /rest/api/3/issue/HT-13/transitions", {200, R"({"transitions":[{"id":"21","to":{"name":"In Progress"}}]})", {}});
   jira.route("POST /rest/api/3/issue/HT-13/transitions", {204, "", {}});
+  // The check before each write (APP-204): its status now, and still in the JQL.
+  jira.routeSequence(
+      "GET /rest/api/3/issue/HT-13",
+      {{200, R"({"fields":{"status":{"name":"To Do"}}})", {}}, {200, R"({"fields":{"status":{"name":"In Progress"}}})", {}}});
+  jira.route("POST /rest/api/3/search/jql", {200, R"({"issues":[{"key":"HT-13"}]})", {}});
   app_->setIntegrationSecret(QStringLiteral("jira"), QStringLiteral("token"), QStringLiteral("tok"));
   writeIntegrationConfig(QStringLiteral("jira"),
                          QJsonObject{{QStringLiteral("connected"), true},
@@ -755,9 +773,15 @@ class TrackerPush : public IntAudit {
     QVector<Task> all = app_->tasks()->items();
     all.append(t);
     app_->tasks()->reset(all);
+    // The fresh look every write starts with (APP-204): still open, still mine.
+    if(!project.isEmpty()) {
+      server.route(QStringLiteral("GET /api/v1/repos/%1/issues/%2").arg(project, number).toUtf8(),
+                   {200, giteaIssue(number, QStringLiteral("open"), project), {}});
+    }
   }
 
   void connectGitea(const QString& repo) {
+    server.route("GET /api/v1/user", {200, R"({"login":"me"})", {}});
     app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QStringLiteral("tok"));
     writeIntegrationConfig(QStringLiteral("gitea"),
                            QJsonObject{
@@ -769,7 +793,7 @@ class TrackerPush : public IntAudit {
 
   static QByteArray giteaIssue(const QString& number, const QString& state, const QString& repo = QStringLiteral("acme/web")) {
     return QStringLiteral(
-               R"({"number":%1,"title":"issue %1","body":"","state":"%2","html_url":"https://gitea.example.com/%3/issues/%1","repository":{"full_name":"%3"}})")
+               R"({"number":%1,"title":"issue %1","body":"","state":"%2","html_url":"https://gitea.example.com/%3/issues/%1","repository":{"full_name":"%3"},"assignees":[{"login":"me"}]})")
         .arg(number, state, repo)
         .toUtf8();
   }
@@ -804,14 +828,36 @@ TEST_F(TrackerPush, CardFromThePreviousRepo_IsPushedToItsOwnRepo_AndSoIsTheRetry
                        {{404, R"({"message":"not found"})", {}}, {200, giteaIssue("8", "closed"), {}}});
   connectGitea(QStringLiteral("acme/other"));
   addCard(QStringLiteral("8"), QStringLiteral("acme/web"));
+  QStringList asked;
+  QObject::connect(app_.get(),
+                   &::AppController::trackerPushNeedsConfirm,
+                   app_.get(),
+                   [&asked](const QString& id, const QString&, const QString&, const QString&, const QString&, const QString&) {
+                     asked.append(id);
+                   });
 
+  // A card from the previous repo is outside the filter now (APP-204): the
+  // move is held and the user asked, nothing written yet.
   app_->moveTask(QStringLiteral("gitea-8"), QStringLiteral("done"));
+  ASSERT_TRUE(heap::testing::waitUntil([&asked]() {
+    return asked.size() == 1;
+  })) << "a card outside the filter was not held for the user";
+  EXPECT_EQ(requestsTo("PATCH /api/v1/repos/acme/web/issues/8"), 0);
+  EXPECT_TRUE(task("gitea-8")->externalMeta.outOfScope);
+
+  // "Send anyway": it goes to the card's own repo.
+  app_->confirmTrackerPush(QStringLiteral("gitea-8"));
   ASSERT_TRUE(heap::testing::waitUntil([this]() {
     return task("gitea-8")->externalMeta.unsyncedStatus == QStringLiteral("done") &&
            requestsTo("PATCH /api/v1/repos/acme/web/issues/8") == 1;
   })) << "the push did not go to the card's own repo";
 
+  // The retry asks again, and once confirmed goes to the same repo.
   app_->retryTrackerPush(QStringLiteral("gitea-8"));
+  ASSERT_TRUE(heap::testing::waitUntil([&asked]() {
+    return asked.size() == 2;
+  }));
+  app_->confirmTrackerPush(QStringLiteral("gitea-8"));
   ASSERT_TRUE(heap::testing::waitUntil([this]() {
     return task("gitea-8")->externalMeta.unsyncedStatus.isEmpty();
   })) << "the retry did not go through";

@@ -264,6 +264,22 @@ struct ProviderDescriptor {
   QString pushPathTemplate;     // "/repos/{repo}/issues/{externalId}"
   QByteArray pushBodyTemplate;  // may contain "{state}"; empty = no body
   PushMapFn pushMap = nullptr;
+  // A bespoke provider (Jira) that writes status through code of its own
+  // rather than through pushPathTemplate. See writesStatus().
+  bool bespokeStatusWrite = false;
+
+  // The fresh look at one issue taken right before a status write (APP-204):
+  // GET this path, read the status the way a pull would, and tell whether the
+  // issue still matches the filter. Empty = the provider cannot be asked, and
+  // nothing is written for it. {externalId} and the scope key expand as for
+  // the push, from the issue's own project.
+  QString issuePathTemplate;
+  // Who "me" is, for a filter of "assigned to me": the path answering the
+  // signed-in user, and the key holding the login on that user and on each
+  // entry of the issue's `assignees` array (and its `assignee` object).
+  // Empty path = membership in such a filter cannot be checked.
+  QString selfUserPath;
+  QString selfLoginKey;
 
   // Optional browser OAuth (see OAuthConfig).
   OAuthConfig oauth;

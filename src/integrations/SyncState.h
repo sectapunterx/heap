@@ -84,12 +84,22 @@ enum class StatusPull : std::uint8_t {
 // wins. Moving it while a local move was unsent used to win silently too, and
 // the local move was dropped; now the local column is kept and the user
 // picks — unless both sides already agree.
+//
+// `localOwnsColumn` is true while heap does not write this tracker's status
+// (APP-243, the default). A move made here then never reaches the tracker, so
+// the column the user put the card in is theirs: a pull neither overwrites it
+// nor calls it a conflict, whatever the tracker does meanwhile. A card the
+// user never moved (still in the pull's column) follows the tracker as before.
 inline StatusPull mergeStatusOnPull(const QString& local,
                                     const QString& unsynced,
                                     const QString& prevRemote,
                                     const QString& remote,
                                     const QString& mapped,
-                                    const QString& lastColumn) {
+                                    const QString& lastColumn,
+                                    bool localOwnsColumn = false) {
+  if(localOwnsColumn && (!unsynced.isEmpty() || (!lastColumn.isEmpty() && local != lastColumn))) {
+    return StatusPull::Keep;
+  }
   const bool remoteMoved = !prevRemote.isEmpty() && prevRemote != remote;
   if(remoteMoved) {
     // Nothing of ours was waiting, or both sides already agree.
