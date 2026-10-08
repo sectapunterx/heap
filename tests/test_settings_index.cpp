@@ -42,7 +42,7 @@ struct IndexEntry {
 
 QList<IndexEntry> loadIndex() {
   const QString src = readFile(qmlPath(QStringLiteral("SettingsIndex.js")));
-  static const QRegularExpression rx(QStringLiteral(R"re(\[\s*"(\w+)"\s*,\s*"(\w+)"\s*,\s*"([^"]+)"\s*\])re"));
+  static const QRegularExpression rx(QStringLiteral(R"re(\[\s*"(\w+)"\s*,\s*"(\w+)"\s*,\s*"([^"]+)"\s*(?:,\s*"[^"]+"\s*)?\])re"));
   QList<IndexEntry> out;
   auto it = rx.globalMatch(src);
   while(it.hasNext()) {

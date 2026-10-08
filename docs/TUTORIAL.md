@@ -20,14 +20,14 @@ rail icon to see its shortcut.
 
 ## 2. Capture a task in under two seconds
 
-Press **`Ctrl+Shift+Space`** for Quick-capture, type a line, hit `Enter`. The
+Press **`Ctrl+Shift+Space`** for Quick-capture, type a line, hit `Ctrl+Enter`. The
 popup previews what it parsed (date chip, title) before you commit.
 
 It works from **any app**. When heap. is not the focused window, the hotkey
 brings up only the capture line, over whatever you are working in. The main
 window stays minimized, in the tray or behind your editor. `Esc` puts it away.
 Clicking elsewhere does too, except for a quick note that already has text in
-it: that one waits for `Enter` or `Esc`. `Ctrl+Shift+N` does the same for a
+it: that one waits for `Ctrl+Enter` or `Esc`. `Ctrl+Shift+N` does the same for a
 quick note.
 
 After saving, heap. tells you what it made: a system notification when you
@@ -73,8 +73,10 @@ Everything is optional and order-independent, in **English and Russian**.
 | `every month on the 15th`, `monthly`, `каждый месяц`, `каждое 25 число` | a **monthly** task |
 | `in 2 days`, `через 3 дня`, `через полчаса`, `next week`, `на следующей неделе`, `end of month` | relative dates (next week is its Monday) |
 
-`Return` adds the task and closes; `Ctrl+Return` adds it and stays open for the
-next one. A line that is only a date (`tomorrow`) says so instead of doing
+`Ctrl+Return` adds the task and closes; `Ctrl+Shift+Return` adds it and stays
+open for the next one. `Return` (or `Shift+Return`) starts a new line: the first
+line is the title, the lines after it are the description. A line that is only
+a date (`tomorrow`) says so instead of doing
 nothing.
 
 **Where it lands**

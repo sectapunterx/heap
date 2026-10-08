@@ -105,6 +105,26 @@ TEST(ExtractMeta, DoubleSlashSplitsDesc) {
   EXPECT_EQ(m.desc, QString("обсудить блокеры и even more"));
 }
 
+// APP-209: quick capture takes several lines; the first is the title.
+TEST(ExtractMeta, LinesAfterTheFirstAreTheDescription) {
+  const auto m = extractMeta(QStringLiteral("fix login p1\nsteps:\r\n1. open 2. press"));
+  EXPECT_EQ(m.title, QString("fix login"));
+  EXPECT_EQ(m.priority, QString("P1"));
+  EXPECT_EQ(m.desc, QStringLiteral("steps:\n1. open\n2. press"));
+
+  const auto both = extractMeta(QStringLiteral("call @lena // agenda\nbring notes"));
+  EXPECT_EQ(both.title, QString("call @lena"));
+  EXPECT_EQ(both.desc, QStringLiteral("agenda\nbring notes"));
+
+  const auto blank = extractMeta(QStringLiteral("\n  \nreal title\n\n"));
+  EXPECT_EQ(blank.title, QString("real title"));
+  EXPECT_TRUE(blank.desc.isEmpty());
+
+  const auto link = extractMeta(QStringLiteral("read https://example.com/a\nlater"));
+  EXPECT_EQ(link.title, QString("read https://example.com/a"));
+  EXPECT_EQ(link.desc, QString("later"));
+}
+
 TEST(ExtractMeta, AtHandleCollectedButKeptInTitle) {
   // Handles are recorded but NOT stripped — the user keeps the context
   // they typed ("синк @andrey @alex.t" reads naturally on the card).
