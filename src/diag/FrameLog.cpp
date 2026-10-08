@@ -306,7 +306,7 @@ void shutdown() {
                   .arg(ms(s.maxGap))
                   .arg(s.stalls)
                   .arg(ms(s.maxStall)));
-  s.file.reset();
+  s.file = nullptr;
 }
 
 Span::Span(const char* name) : m_name(name) {
