@@ -66,4 +66,42 @@ TestCase {
                 "discard on empty editor must not touch notesState");
         verify(!qc.opened, "empty discard must leave the popup closed");
     }
+    function editorOf(qc) {
+        const walk = function (it) {
+            if (!it) return null;
+            if (it.objectName === "quicknote-editor") return it;
+            const kids = it.children || [];
+            for (let i = 0; i < kids.length; i++) { const r = walk(kids[i]); if (r) return r; }
+            if (it.contentItem && it.contentItem !== it) return walk(it.contentItem);
+            return null;
+        };
+        return walk(qc.contentItem);
+    }
+
+    // APP-209: the same keys as the task capture — Enter and Shift+Enter
+    // start a new line, Ctrl+Enter saves.
+    function test_enter_is_a_new_line_and_ctrl_enter_saves() {
+        const qc = make('import TodoCpp; QuickCaptureNotesPopup { }');
+        let saved = null;
+        qc.captured.connect(function (title, body) { saved = body; });
+        qc.open();
+        tryVerify(function () { return qc.opened; });
+        const ed = editorOf(qc);
+        verify(ed !== null);
+        ed.forceActiveFocus();
+        ed.text = "qc-note-probe";
+        ed.cursorPosition = ed.text.length;
+        keyClick(Qt.Key_Return);
+        verify(qc.opened, "Enter saved the note");
+        keyClick(Qt.Key_A);
+        keyClick(Qt.Key_Return, Qt.ShiftModifier);
+        verify(qc.opened, "Shift+Enter saved the note");
+        keyClick(Qt.Key_B);
+        compare(ed.text, "qc-note-probe
+a
+b");
+        keyClick(Qt.Key_Return, Qt.ControlModifier);
+        tryVerify(function () { return !qc.opened; });
+        compare(saved, "qc-note-probe a b");
+    }
 }

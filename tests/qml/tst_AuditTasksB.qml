@@ -61,7 +61,7 @@ TestCase {
         input.forceActiveFocus();
         input.text = text;
         input.cursorPosition = input.text.length;
-        keyClick(Qt.Key_Return);
+        keyClick(Qt.Key_Return, Qt.ControlModifier);
         tryVerify(() => !qc.opened);
         const after = probeTasks();
         let made = null;

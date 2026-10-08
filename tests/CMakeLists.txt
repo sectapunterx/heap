@@ -330,6 +330,8 @@ endfunction()
 # Widgets/Qml + Test. Uses offscreen QGuiApplication + AppDataLocation test
 # mode so it runs headless and never touches the user's real state file.
 heap_add_appcontroller_test(heap_selection_tests test_selection.cpp)
+# Drag-to-reschedule in Week, Month and Timeline (APP-249).
+heap_add_appcontroller_test(heap_reschedule_tests test_reschedule.cpp)
 
 # ─── Safety net (APP-157…) as AppController runs it ───
 heap_add_appcontroller_test(heap_safety_net_tests test_safety_appcontroller.cpp)
@@ -383,6 +385,10 @@ target_compile_definitions(heap_ux_audit_tests PRIVATE HEAP_DOCS_DIR="${CMAKE_CU
 heap_add_appcontroller_test(heap_int_audit_tests test_int_audit.cpp)
 # New tickets on the board, the sync flag and the event log (APP-180/186/187).
 heap_add_appcontroller_test(heap_sync_visibility_tests test_sync_visibility.cpp)
+# Tracker writes are opt-in per tracker, and checked before they go (APP-243/204).
+heap_add_appcontroller_test(heap_tracker_writes_tests test_tracker_writes.cpp)
+target_compile_definitions(heap_tracker_writes_tests PRIVATE
+        HEAP_STATE_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/state")
 # ── audit-int: end ──
 # ── audit-perf: begin ──
 # Search/filter input latency at 3k tasks (TASKS-23). Wall-clock budgets, so it
@@ -612,6 +618,12 @@ target_compile_definitions(heap_i18n_keys_tests PRIVATE
         HEAP_SRC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../src")
 target_link_libraries(heap_i18n_keys_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
 add_test(NAME heap_i18n_keys_tests COMMAND heap_i18n_keys_tests)
+
+# ─── Settings search index covers every settings row (APP-207) ───
+add_executable(heap_settings_index_tests test_settings_index.cpp)
+target_compile_definitions(heap_settings_index_tests PRIVATE HEAP_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../qml")
+target_link_libraries(heap_settings_index_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
+add_test(NAME heap_settings_index_tests COMMAND heap_settings_index_tests)
 
 # ─── Integrations (tracker-sync StatusMap) tests ───
 # Pure status/priority translation for the post-release tracker sync. No QObject,
@@ -1051,4 +1063,12 @@ if (Python3_Interpreter_FOUND)
     add_test(NAME heap_date_format_check
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../.github/scripts/date_format_check.py
                      ${CMAKE_CURRENT_SOURCE_DIR}/../qml ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+endif ()
+
+# APP-257: on the macOS runners these suites segfault at a FakeHttpServer
+# request (CFNetwork, no trace yet) — intermittently, sometimes on the retry
+# too. They are off on macOS until 1.0 fixes the cause; Linux, Windows and
+# the sanitizer job still run them.
+if (APPLE)
+    set_tests_properties(heap_jira_tests heap_int_audit_tests PROPERTIES DISABLED TRUE)
 endif ()

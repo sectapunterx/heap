@@ -479,19 +479,21 @@ Item {
         AppController.setSelectedTaskIds(merged);
     }
 
-    // ── Closing a task: the stack (APP-176) ─────────────────────────────
-    // A single card moved into Done folds into a bar where it stood and lays
-    // itself on the stack over the Done column, like a bar in the heap mark.
+    // ── Closing a task: the done moment (APP-176, APP-205) ──────────────
+    // A single card moved into Done folds into a bar where it stood and
+    // flies into the Done column's counter, which ticks up as it lands.
     // The one big move in the app; a bulk move and "Reduce motion" skip it,
     // and so does a Done column that is folded or off screen. Called just
     // before the move, while the card is still where the user saw it.
+    // (Done used to keep a stack of bars under its header for the card to
+    // land on; it was noise over the first card, APP-205.)
     property bool stackRunning: false
     // The columns cannot name the board, so they reach it through this: the
-    // board asks, the column the card goes to answers with where its stack
+    // board asks, the column the card goes to answers with where its counter
     // is (it owns that), and the board flies the card there. A drop or a
     // card's status menu asks the board the same way.
     component StackBus: QtObject {
-        // The column whose top bar waits while a card is on its way.
+        // The column whose counter waits while a card is on its way.
         property string holdStatus: ""
         signal requested(Item card, string title, string toStatus)
         signal launchRequested(Item card, string title, string toStatus, real colLeft, real colRight,
@@ -529,8 +531,8 @@ Item {
         const row = col.taskFilter.ids().indexOf(id);
         return row >= 0 ? col.taskList.itemAtIndex(row) : null;
     }
-    // From the Done column: its left and right edge and its stack's top
-    // bar, in scene coordinates. Nothing flies to a column off screen.
+    // From the Done column: its left and right edge and its counter, in
+    // scene coordinates. Nothing flies to a column off screen.
     function launchStack(card: Item, title: string, toStatus: string, colLeft: real, colRight: real,
                          toX: real, toY: real, toW: real, barColor: color): bool {
         const vp = hscroll.mapToItem(null, 0, 0);
@@ -692,35 +694,28 @@ Item {
                     // Briefly emphasised when the sidebar Blocked / Code Review
                     // button jumps focus to this column.
                     readonly property bool focusPulse: root._focusPulseStatus === col.statusId
-                    // Done's stack (APP-176): a bar per card, up to a few.
-                    // While a closed card is on its way the top bar waits.
-                    readonly property int stackBars: col.statusId === "done" ? Motion.stackBars(col.visibleCount) : 0
                     // Set by the board when the column is made.
                     property StackBus bus: null
+                    // While a closed card is on its way the counter keeps
+                    // the count from before the move, and ticks up when the
+                    // card lands in it (APP-205).
                     readonly property bool stackHold: !!col.bus && col.bus.holdStatus === col.statusId
+                    property int heldCount: 0
+                    readonly property int shownCount: col.stackHold ? col.heldCount : col.visibleCount
+                    onStackHoldChanged: if (!col.stackHold && Theme.motion > 0) cntLand.restart()
                     // The board asks for a card closed into this column.
                     Connections {
                         target: col.bus
                         function onRequested(card: Item, title: string, toStatus: string) {
                             if (toStatus !== col.statusId || col.folded) return;
+                            col.heldCount = col.visibleCount;
                             const left = col.mapToItem(null, 0, 0);
-                            const top = stackCol.mapToItem(null, 0, 0);
-                            // The new top bar: as wide as that row gets once
-                            // the column has one more card.
-                            const bars = Motion.stackBars(col.visibleCount + 1);
-                            col.bus.launchRequested(card, title, col.statusId, left.x, left.x + col.width, top.x, top.y,
-                                                    stackCol.width * Motion.stackBarWidth(bars - 1), col.statusColor);
+                            // Onto the counter: a bar as wide as the pill,
+                            // through its middle.
+                            const pill = cntPill.mapToItem(null, 0, (cntPill.height - 4) / 2);
+                            col.bus.launchRequested(card, title, col.statusId, left.x, left.x + col.width, pill.x, pill.y,
+                                                    cntPill.width, col.statusColor);
                         }
-                    }
-                    // One entry per bar, top first. Widths are counted from
-                    // the bottom, so a bar laid on top leaves the rest as
-                    // they were.
-                    readonly property var stackModel: {
-                        const out = [];
-                        for (let i = 0; i < col.stackBars; i++)
-                            out.push({ w: Motion.stackBarWidth(col.stackBars - 1 - i), c: col.statusColor,
-                                       o: i === 0 && col.stackHold ? 0 : 0.75 });
-                        return out;
                     }
 
                     width: col.folded ? root.foldedWidth : root.columnWidth
@@ -905,6 +900,7 @@ Item {
                                 }
                                 Rectangle {
                                     id: cntPill
+                                    objectName: "column-count"
                                     radius: Theme.radiusPill
                                     color: col.overWip ? Theme.withAlpha(Theme.danger, 0.18) : Theme.panel3
                                     border.color: col.overWip ? Theme.danger : "transparent"
@@ -914,8 +910,8 @@ Item {
                                     Text {
                                         id: cntT; anchors.centerIn: parent
                                         text: col.wipLimit > 0
-                                            ? col.visibleCount + "/" + col.wipLimit
-                                            : col.visibleCount
+                                            ? col.shownCount + "/" + col.wipLimit
+                                            : col.shownCount
                                         color: col.overWip ? Theme.danger : Theme.textDim
                                         font.family: Theme.fontUi
                                         font.features: Theme.tabularNums
@@ -931,6 +927,13 @@ Item {
                                     QQC.ToolTip.visible: col.overWip && wipHover.hovered
                                     QQC.ToolTip.text: I18n.t("kanban.wip.over").arg(col.statusName).arg(col.wipLimit)
                                     HoverHandler { id: wipHover }
+                                    // The closed card has landed: a small
+                                    // pop as the count ticks up.
+                                    SequentialAnimation {
+                                        id: cntLand
+                                        NumberAnimation { target: cntPill; property: "scale"; to: 1.18; duration: Theme.durTap; easing.type: Theme.easeEnter }
+                                        NumberAnimation { target: cntPill; property: "scale"; to: 1; duration: Theme.durPop; easing.type: Theme.easeExit }
+                                    }
                                 }
 
                                 Rectangle {
@@ -1038,33 +1041,6 @@ Item {
                                 AppMenuItem { text: I18n.t("kanban.moveRight"); enabled: !col.isLast;  onTriggered: AppController.moveStatus(col.statusId, col.index + 1) }
                                 AppMenuSeparator {}
                                 AppMenuItem { danger: true; text: I18n.t("kanban.deleteColumn"); enabled: AppController.statuses.length > 1; onTriggered: root.requestDeleteColumn(col.statusId, col.statusName) }
-                            }
-                        }
-
-                        Item {
-                            objectName: "done-stack"
-                            Layout.fillWidth: true
-                            // Laid out even while empty, so the first card
-                            // closed has a place to land.
-                            visible: col.statusId === "done"
-                            Layout.preferredHeight: stackCol.implicitHeight + Theme.spMd + Theme.spXs
-                            Column {
-                                id: stackCol
-                                x: Theme.spXl
-                                y: Theme.spMd
-                                width: parent.width - 2 * Theme.spXl
-                                spacing: Theme.spXs
-                                Repeater {
-                                    model: col.stackModel
-                                    Rectangle {
-                                        required property var modelData
-                                        width: parent ? parent.width * modelData.w : 0
-                                        height: 4
-                                        radius: 2
-                                        color: modelData.c
-                                        opacity: modelData.o
-                                    }
-                                }
                             }
                         }
 
@@ -1598,9 +1574,10 @@ Item {
         z: 1000
     }
 
-    // The closed card on its way to the stack (APP-176): it folds into a bar
-    // where it stood (the first third), then flies onto the stack. One curve
-    // for both. Drawn here, over every column, and gone when it lands.
+    // The closed card on its way to Done (APP-176): it folds into a bar
+    // where it stood (the first third), then flies into the Done column's
+    // counter (APP-205). One curve for both. Drawn here, over every column,
+    // and gone when it lands.
     Rectangle {
         id: stackFlyer
         objectName: "stack-flyer"

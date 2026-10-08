@@ -153,6 +153,9 @@ Popup {
         };
         // No assignee: heap mirrors the issues assigned to you, so it would
         // only ever say your own name.
+        // Where the issue really is: the column here may be the user's own
+        // when heap does not write that tracker (APP-243).
+        add("ticket.trackerStatus", t.remoteStatus);
         add("ticket.author", t.author);
         add("ticket.type", t.issueType);
         add("ticket.milestone", t.milestone);

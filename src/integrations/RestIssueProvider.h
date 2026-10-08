@@ -11,6 +11,8 @@
 #include <QVariantMap>
 #include <QVector>
 
+#include <functional>
+
 class QNetworkAccessManager;
 class QNetworkRequest;
 
@@ -45,8 +47,15 @@ class RestIssueProvider : public IntegrationProvider {
   void pullTasks() override;
   void pushStatusChange(const QString& externalId, const QString& newStatus, const QString& project) override;
   void fetchComments(const QString& externalId, const QString& project) override;
+  // GET issuePathTemplate. In a repo/project filter the issue is in it when
+  // it still lives there; under "assigned to me" when the signed-in user is
+  // one of its assignees (selfUserPath, asked once per provider).
+  void checkIssue(const QString& externalId, const QString& project) override;
 
  private:
+  // The signed-in user's login, fetched once. `done(login, httpStatus, error)`.
+  void withSelfLogin(const std::function<void(const QString&, int, const QString&)>& done);
+  QString m_selfLogin;
   // Expand "{key}" / "{key:enc}" placeholders from the config (plus any `extra`
   // overrides such as {externalId} / {state}). ":enc" percent-encodes the value;
   // host/baseUrl values have trailing slashes trimmed.

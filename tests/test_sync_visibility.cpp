@@ -203,6 +203,25 @@ TEST_F(SyncVisibility, ErrorsRefusalsAndUndoableActionsAreLogged) {
   EXPECT_EQ(app_->eventLog().size(), 100);
 }
 
+// APP-225: a toast with an action is gone in seconds; what it said stays in
+// the log, and one about tasks opens them.
+TEST_F(SyncVisibility, ToastsWithAnActionAreLogged) {
+  emit app_->settingsReset(QStringLiteral("Settings reset"));
+  emit app_->safetyNotice(QStringLiteral("stale"), QStringLiteral("Stuck"), QStringLiteral("A-1 has not moved"), {QStringLiteral("A-1")});
+  emit app_->updateAvailable(QStringLiteral("9.9.9"), QStringLiteral("https://example.invalid"));
+  emit app_->updateReadyToInstall(QStringLiteral("9.9.9"), QStringLiteral("abc"));
+  const QVariantList log = app_->eventLog();
+  ASSERT_EQ(log.size(), 4);
+  const QVariantMap ready = log.at(0).toMap();
+  EXPECT_TRUE(ready.value(QStringLiteral("message")).toString().contains(QStringLiteral("9.9.9")));
+  EXPECT_EQ(ready.value(QStringLiteral("route")).toString(), QStringLiteral("settings:about"));
+  EXPECT_EQ(log.at(1).toMap().value(QStringLiteral("route")).toString(), QStringLiteral("settings:about"));
+  const QVariantMap safety = log.at(2).toMap();
+  EXPECT_EQ(safety.value(QStringLiteral("message")).toString(), QStringLiteral("Stuck · A-1 has not moved"));
+  EXPECT_EQ(safety.value(QStringLiteral("taskIds")).toStringList(), QStringList{QStringLiteral("A-1")});
+  EXPECT_EQ(log.at(3).toMap().value(QStringLiteral("kind")).toString(), QStringLiteral("undo"));
+}
+
 TEST_F(SyncVisibility, SyncingIsTrueWhileAPullIsOut) {
   heap::testing::FakeHttpServer gitea;
   gitea.route("GET /api/v1/repos/acme/web/issues", {200, "[]", {}});

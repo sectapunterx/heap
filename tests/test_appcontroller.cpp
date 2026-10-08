@@ -2081,6 +2081,8 @@ TEST_F(AppControllerTest, MovingACrossProjectTicketPushesToItsOwnRepo) {
   gitea.route("GET /api/v1/repos/acme/web/issues", {200, "[]", {}});
   gitea.route("PATCH /api/v1/repos/acme/web/issues/5", {200, "{}", {}});
   gitea.route("PATCH /api/v1/repos/acme/api/issues/5", {200, "{}", {}});
+  gitea.route("GET /api/v1/repos/acme/api/issues/5",
+              {200, R"({"number":5,"title":"t","state":"open","repository":{"full_name":"acme/api"}})", {}});
 
   app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QStringLiteral("tok"));
   writeIntegrationConfig(QStringLiteral("gitea"),
@@ -2088,6 +2090,7 @@ TEST_F(AppControllerTest, MovingACrossProjectTicketPushesToItsOwnRepo) {
                              {QStringLiteral("connected"), true},
                              {QStringLiteral("host"), gitea.base()},
                              {QStringLiteral("repo"), QStringLiteral("acme/web")},
+                             {QStringLiteral("writeStatus"), true},
                          });
 
   // A ticket that came from another repo entirely.
@@ -2101,7 +2104,20 @@ TEST_F(AppControllerTest, MovingACrossProjectTicketPushesToItsOwnRepo) {
   foreign.externalMeta.crossProject = true;
   app_->tasks()->reset({foreign});
 
+  QStringList asked;
+  QObject::connect(app_.get(),
+                   &::AppController::trackerPushNeedsConfirm,
+                   app_.get(),
+                   [&asked](const QString& id, const QString&, const QString&, const QString&, const QString&, const QString&) {
+                     asked.append(id);
+                   });
   app_->moveTask(QStringLiteral("gitea-api-5"), QStringLiteral("done"));
+  // The repo filter no longer covers it (APP-204): held until the user says.
+  ASSERT_TRUE(heap::testing::waitUntil([&asked]() {
+    return !asked.isEmpty();
+  }));
+  EXPECT_FALSE(gitea.seen().contains("PATCH /api/v1/repos/acme/api/issues/5"));
+  app_->confirmTrackerPush(QStringLiteral("gitea-api-5"));
   ASSERT_TRUE(heap::testing::waitUntil([&gitea]() {
     return gitea.seen().contains("PATCH /api/v1/repos/acme/api/issues/5");
   })) << "the issue's own repo was never told";
@@ -2120,12 +2136,16 @@ TEST_F(AppControllerTest, MovingACrossProjectTicketPushesToItsOwnRepo) {
 TEST_F(AppControllerTest, MyIssuesModeWritesBackThroughTheIssuesOwnRepo) {
   heap::testing::FakeHttpServer gitea;
   gitea.route("PATCH /api/v1/repos/acme/api/issues/7", {200, "{}", {}});
+  gitea.route("GET /api/v1/user", {200, R"({"login":"me"})", {}});
+  gitea.route("GET /api/v1/repos/acme/api/issues/7",
+              {200, R"({"number":7,"title":"t","state":"open","assignees":[{"login":"me"}],"repository":{"full_name":"acme/api"}})", {}});
 
   app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QStringLiteral("tok"));
   writeIntegrationConfig(QStringLiteral("gitea"),
                          QJsonObject{
                              {QStringLiteral("connected"), true},
                              {QStringLiteral("host"), gitea.base()},
+                             {QStringLiteral("writeStatus"), true},
                          });
 
   Task mine;
@@ -2157,12 +2177,16 @@ TEST_F(AppControllerTest, MyIssuesModeWritesBackThroughTheIssuesOwnRepo) {
 TEST_F(AppControllerTest, AFailedCrossProjectPushFlagsOnlyTheMovedCard) {
   heap::testing::FakeHttpServer gitea;
   gitea.route("PATCH /api/v1/repos/acme/api/issues/7", {403, R"({"message":"forbidden"})", {}});
+  gitea.route("GET /api/v1/user", {200, R"({"login":"me"})", {}});
+  gitea.route("GET /api/v1/repos/acme/api/issues/7",
+              {200, R"({"number":7,"title":"t","state":"open","assignees":[{"login":"me"}],"repository":{"full_name":"acme/api"}})", {}});
 
   app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QStringLiteral("tok"));
   writeIntegrationConfig(QStringLiteral("gitea"),
                          QJsonObject{
                              {QStringLiteral("connected"), true},
                              {QStringLiteral("host"), gitea.base()},
+                             {QStringLiteral("writeStatus"), true},
                          });
 
   Task mine;

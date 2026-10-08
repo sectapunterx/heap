@@ -163,10 +163,10 @@ export const FEATURE_AREAS: FeatureArea[] = [
     num: '04',
     label: 'Connect',
     title: 'Connect — issues come to you.',
-    lead: 'Your team keeps its tracker. heap. brings your part of it onto your board and sends status changes back.',
+    lead: 'Your team keeps its tracker. heap. brings your part of it onto your board — and writes nothing back unless you switch it on.',
     summary: 'GitHub, GitLab, Jira, Trello and eight more trackers, mirrored as cards. Mattermost for your contacts.',
     widget: 'connect',
-    widgetHint: 'Pick a tracker and connect it. Then move a card and watch what goes back.',
+    widgetHint: 'Pick a tracker and connect it. Then move a card: it moves in heap, and the issue stays as it is unless you turned write-back on.',
     sections: [
       {
         eyebrow: 'Trackers',
@@ -177,9 +177,9 @@ export const FEATURE_AREAS: FeatureArea[] = [
         shotAlt: 'heap. settings: tracker integrations',
       },
       {
-        eyebrow: 'Write-back',
-        title: 'Move a card, update the issue.',
-        body: 'For GitHub, GitLab, Gitea and Forgejo, moving a card writes its state back: drop it in Done and the issue closes, pull it out again and it reopens. In “my issues” mode each issue is written back to the repository it came from.',
+        eyebrow: 'Write-back, opt-in',
+        title: 'Move a card, update the issue — if you say so.',
+        body: 'Off by default, one switch per tracker. Turn it on for GitHub, GitLab, Gitea, Forgejo or Jira and moving a card writes its state back: drop it in Done and the issue closes. heap. checks the issue first; one that is no longer yours, or that changed in the tracker meanwhile, is never written without asking.',
         snippet: ['APP-108  Review → Done', '  ↳ acme/web#108  open → closed'],
       },
       {

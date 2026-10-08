@@ -77,6 +77,14 @@ For the UI, `heap --perf-log` (or `HEAP_PERF_LOG=1`) writes `perf:` lines to the
 being loaded and to the main window's first frame, and from the capture hotkey (or `open()`) to the first frame
 showing the capture popup. It only logs.
 
+For animation jank, `HEAP_FRAME_LOG=<file>` (off by default, `src/diag/FrameLog.h`) appends one line per late frame
+(more than 16.7 ms after an on-time one, i.e. mid-motion) and per GUI-thread stall (a 4 ms watchdog timer firing
+20 ms or more late), each naming the instrumented work that ran in it (`saveStateNow`, `mergeExternalTasks`,
+`runAutomation`, ...; add a `heap::frame::Span` around anything you suspect). A log message starting
+`frame-note: ` is copied in, so a scripted scenario can mark where it is. Stalls need no vsync and are the number to
+trust under `QT_QPA_PLATFORM=offscreen`; frame gaps are only meaningful on a display that presents. Combine with
+`qmlprofiler` for the QML side of a stall.
+
 ## Project layout
 
 ```
@@ -121,6 +129,13 @@ with native primitives so the brand renders without `Qt6::Svg`.
 Profiles own their tasks, people, statuses, docs, and notes. Events are global (the calendar spans every profile) and
 carry an optional `profileId`. Everything persists as JSON under `QStandardPaths::AppDataLocation`; settings live in a
 single `appSettingsJson` blob edited by `SettingsView`. See [docs/DATA.md](docs/DATA.md) for backups and recovery.
+
+## Writing to other systems
+
+heap reads from trackers and writes to them only where the user switched that write on. Any new write to an external
+system (a status, a comment, a label, a PR/MR action…) gets its own per-tracker switch, **off by default** for new and
+updated installs alike, and a row in the table in [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md#the-rule-every-external-write-is-opt-in).
+Comments are never sent. Local data is never overwritten by a sync.
 
 ## Brand
 

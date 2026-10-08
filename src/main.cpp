@@ -5,6 +5,7 @@
 #include "cli/CliCore.h"
 #include "cli/CliExecutor.h"
 #include "cli/CliMain.h"
+#include "diag/FrameLog.h"
 #include "diag/PerfLog.h"
 #include "notify/NotificationCenter.h"
 #include "notify/NotifyPayload.h"
@@ -391,6 +392,8 @@ int main(int argc, char* argv[]) {
     uiFont.setHintingPreference(QFont::PreferNoHinting);
     QGuiApplication::setFont(uiFont);
   }
+  // Late frames and GUI-thread stalls to a file, when HEAP_FRAME_LOG is set (APP-203).
+  heap::frame::installFromEnvironment();
   QQmlApplicationEngine engine;
   engine.rootContext()->setContextProperty("INITIAL_VIEW", cli.initialView);
   // A snooze clicked while heap was closed starts it in the tray: the click

@@ -471,6 +471,118 @@ void RestIssueProvider::fetchComments(const QString& externalId, const QString& 
   });
 }
 
+namespace {
+
+// The logins an issue is assigned to: every entry of `assignees`, plus the
+// single `assignee` older APIs still fill in.
+QStringList assigneeLogins(const QJsonObject& issue, const QString& loginKey) {
+  QStringList out;
+  const QJsonArray list = issue.value(QStringLiteral("assignees")).toArray();
+  for(const auto& v : list) {
+    const QString login = v.toObject().value(loginKey).toString();
+    if(!login.isEmpty()) {
+      out.append(login);
+    }
+  }
+  const QString single = issue.value(QStringLiteral("assignee")).toObject().value(loginKey).toString();
+  if(!single.isEmpty() && !out.contains(single, Qt::CaseInsensitive)) {
+    out.append(single);
+  }
+  return out;
+}
+
+}  // namespace
+
+void RestIssueProvider::withSelfLogin(const std::function<void(const QString&, int, const QString&)>& done) {
+  if(!m_selfLogin.isEmpty()) {
+    done(m_selfLogin, 200, QString());
+    return;
+  }
+  QNetworkReply* reply = m_nam->get(buildRequest(resolvedBaseUrl() + m_desc.selfUserPath));
+  connect(reply, &QNetworkReply::finished, this, [this, reply, done]() {
+    reply->deleteLater();
+    if(reply->error() != QNetworkReply::NoError) {
+      const int status = replyHttpStatus(reply);
+      done(QString(), status, describeReplyError(reply));
+      return;
+    }
+    m_selfLogin = QJsonDocument::fromJson(reply->readAll()).object().value(m_desc.selfLoginKey).toString();
+    done(m_selfLogin, 200, m_selfLogin.isEmpty() ? QStringLiteral("could not tell who is signed in") : QString());
+  });
+}
+
+void RestIssueProvider::checkIssue(const QString& externalId, const QString& project) {
+  const auto answer = [this, externalId, project](bool ok, int status, const QString& error, const QString& remote, int match) {
+    emit issueChecked(externalId, project, ok, status, error, remote, match);
+  };
+  if(m_desc.issuePathTemplate.isEmpty()) {
+    answer(false, 0, QStringLiteral("unsupported"), QString(), FilterUnknown);
+    return;
+  }
+  // Same rules as the push: the issue's own repo, never a guess.
+  const bool ownProject = !project.isEmpty() && !m_desc.scopeKey.isEmpty();
+  if(inSelfScope() && !ownProject) {
+    answer(false, -1, QStringLiteral("the issue's repo is unknown — sync it again first"), QString(), FilterUnknown);
+    return;
+  }
+  if(!isConfigured() || externalId.isEmpty()) {
+    answer(false, -1, QStringLiteral("not configured"), QString(), FilterUnknown);
+    return;
+  }
+  QVariantMap extra;
+  extra.insert(QStringLiteral("externalId"), externalId);
+  if(ownProject) {
+    extra.insert(m_desc.scopeKey, project);
+  }
+  const QString base = resolvedBaseUrl();
+  QNetworkReply* reply = m_nam->get(buildRequest(base + expand(m_desc.issuePathTemplate, extra)));
+  connect(reply, &QNetworkReply::finished, this, [this, reply, base, project, answer]() {
+    reply->deleteLater();
+    if(reply->error() != QNetworkReply::NoError) {
+      const int status = replyHttpStatus(reply);
+      answer(false, status, describeReplyError(reply), QString(), FilterUnknown);
+      return;
+    }
+    const QByteArray raw = reply->readAll().trimmed();
+    const QByteArray list = raw.startsWith('{') ? '[' + raw + ']' : raw;
+    const QVector<ExternalTask> parsed =
+        m_desc.parser ? m_desc.parser(list, base) : parseWithFieldMap(list, m_desc.fields, m_desc.id, base);
+    if(parsed.size() != 1) {
+      answer(false, -1, QStringLiteral("the tracker's answer did not describe the issue"), QString(), FilterUnknown);
+      return;
+    }
+    const ExternalTask issue = parsed.first();
+    if(!inSelfScope()) {
+      // A repo/project filter takes every issue that lives there. The one the
+      // card came from, or the one the issue answered from after a transfer,
+      // has to be the configured one. A numeric GitLab id cannot be compared
+      // with a path, so it is taken on trust: the issue answered from it.
+      const QString configured = m_cfg.value(m_desc.scopeKey).toString();
+      bool numeric = false;
+      configured.toLongLong(&numeric);
+      const auto differs = [&configured](const QString& where) {
+        return !where.isEmpty() && where.compare(configured, Qt::CaseInsensitive) != 0;
+      };
+      const bool in = configured.isEmpty() || numeric || (!differs(project) && !differs(issue.project));
+      answer(true, 200, QString(), issue.status, in ? FilterIn : FilterOut);
+      return;
+    }
+    if(m_desc.selfUserPath.isEmpty() || m_desc.selfLoginKey.isEmpty()) {
+      answer(true, 200, QString(), issue.status, FilterUnknown);
+      return;
+    }
+    const QStringList assignees = assigneeLogins(QJsonDocument::fromJson(raw).object(), m_desc.selfLoginKey);
+    const QString status = issue.status;
+    withSelfLogin([answer, assignees, status](const QString& me, int httpStatus, const QString& error) {
+      if(me.isEmpty()) {
+        answer(false, httpStatus == 200 ? -1 : httpStatus, error, QString(), FilterUnknown);
+        return;
+      }
+      answer(true, 200, QString(), status, assignees.contains(me, Qt::CaseInsensitive) ? FilterIn : FilterOut);
+    });
+  });
+}
+
 void RestIssueProvider::pushStatusChange(const QString& externalId, const QString& newStatus, const QString& project) {
   if(m_desc.pushPathTemplate.isEmpty()) {
     // Pull-only provider: report success without touching the remote so

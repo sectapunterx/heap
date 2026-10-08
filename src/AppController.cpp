@@ -16,6 +16,7 @@
 #include "cal/OutlookDesktop.h"
 #include "cal/Reminders.h"
 #include "chrono/ChronoParser.h"
+#include "diag/FrameLog.h"
 #include "diag/IssueReport.h"
 #include "diag/PerfLog.h"
 #include "git/BranchTaskMatcher.h"
@@ -90,6 +91,7 @@
 #include <QQuickWindow>
 #include <QSaveFile>
 #include <QScopedValueRollback>
+#include <QScopeGuard>
 #include <QStandardPaths>
 #include <QSysInfo>
 #include <QSystemTrayIcon>
@@ -185,6 +187,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"undo.deleteFollowing", {"Following events restored", "Последующие события восстановлены"}},
       {"undo.deleteOccurrence", {"Event restored", "Событие восстановлено"}},
       {"update.available", {"Update available: %1", "Доступно обновление: %1"}},
+      {"update.ready", {"%1 downloaded, SHA-256 checksum verified", "%1 скачано, контрольная сумма SHA-256 проверена"}},
       {"update.upToDate", {"You're up to date", "У вас последняя версия"}},
       {"update.failed", {"Update check failed", "Не удалось проверить обновления"}},
       {"task.recurs", {"Recurs: %1 due %2", "Повтор: %1 на %2"}},
@@ -264,6 +267,14 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"undo.changedSince", {"Can't undo that — it has been changed since", "Нельзя отменить — это уже изменили после"}},
       {"undo.column", {"Column change undone: %1", "Изменение колонки отменено: %1"}},
       {"undo.schedule", {"Scheduling undone: %1", "Планирование отменено: %1"}},
+      {"undo.deadline", {"Deadline change undone: %1", "Изменение срока отменено: %1"}},
+      // Drag-to-reschedule (APP-249).
+      {"reschedule.scheduled", {"%1: when → %2", "%1: когда → %2"}},
+      {"reschedule.due", {"%1: deadline → %2", "%1: срок → %2"}},
+      {"reschedule.scheduledCleared", {"%1: no longer planned for a day", "%1: больше не запланировано на день"}},
+      {"reschedule.dueCleared", {"%1: deadline removed", "%1: срок снят"}},
+      {"reschedule.localOnly", {"changed here only, not in the tracker", "изменено только здесь, не в трекере"}},
+      {"reschedule.block", {"%1: %2–%3", "%1: %2–%3"}},
       {"undo.timer", {"Timer change undone: %1", "Изменение таймера отменено: %1"}},
       {"undo.snooze", {"Snooze undone: %1", "Откладывание отменено: %1"}},
       {"undo.bulkEdit", {"Change undone for %1 task(s)", "Изменение отменено для задач: %1"}},
@@ -347,6 +358,28 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.cal.newEvent.desc",
        {"Open the event editor at the next free slot of the selected day.",
         "Открыть редактор события на ближайшем свободном слоте выбранного дня."}},
+      {"shortcut.cal.taskEarlier.label", {"Task: a day earlier", "Задача: на день раньше"}},
+      {"shortcut.cal.taskEarlier.desc",
+       {"Week, Month, Timeline: move the focused task's date back a day.",
+        "Неделя, месяц, лента: сдвинуть дату задачи в фокусе на день назад."}},
+      {"shortcut.cal.taskLater.label", {"Task: a day later", "Задача: на день позже"}},
+      {"shortcut.cal.taskLater.desc",
+       {"Week, Month, Timeline: move the focused task's date forward a day.",
+        "Неделя, месяц, лента: сдвинуть дату задачи в фокусе на день вперёд."}},
+      {"shortcut.cal.taskEarlierWeek.label", {"Task: a week earlier", "Задача: на неделю раньше"}},
+      {"shortcut.cal.taskEarlierWeek.desc",
+       {"Week, Month, Timeline: move the focused task's date back a week.",
+        "Неделя, месяц, лента: сдвинуть дату задачи в фокусе на неделю назад."}},
+      {"shortcut.cal.taskLaterWeek.label", {"Task: a week later", "Задача: на неделю позже"}},
+      {"shortcut.cal.taskLaterWeek.desc",
+       {"Week, Month, Timeline: move the focused task's date forward a week.",
+        "Неделя, месяц, лента: сдвинуть дату задачи в фокусе на неделю вперёд."}},
+      {"shortcut.cal.taskTimeEarlier.label", {"Task: earlier in the day", "Задача: раньше в течение дня"}},
+      {"shortcut.cal.taskTimeEarlier.desc",
+       {"Move a task planned at a time one grid step earlier.", "Сдвинуть задачу, запланированную на время, на шаг сетки раньше."}},
+      {"shortcut.cal.taskTimeLater.label", {"Task: later in the day", "Задача: позже в течение дня"}},
+      {"shortcut.cal.taskTimeLater.desc",
+       {"Move a task planned at a time one grid step later.", "Сдвинуть задачу, запланированную на время, на шаг сетки позже."}},
       {"shortcut.board.cursorDown.label", {"Board: next card", "Доска: следующая карточка"}},
       {"shortcut.board.cursorDown.desc", {"Move the keyboard cursor down a column.", "Сдвинуть курсор вниз по колонке."}},
       {"shortcut.board.cursorUp.label", {"Board: previous card", "Доска: предыдущая карточка"}},
@@ -729,6 +762,31 @@ AppController::AppController(QObject* parent) :
   connect(this, &AppController::undoableToast, this, [this](const QString& message, int) {
     logEvent(QStringLiteral("undo"), message);
   });
+  // A toast with an action leaves the screen too (APP-225): what it said is
+  // kept, and an entry about tasks opens them.
+  connect(this, &AppController::settingsReset, this, [this](const QString& message) {
+    logEvent(QStringLiteral("undo"), message);
+  });
+  connect(this,
+          &AppController::safetyNotice,
+          this,
+          [this](const QString&, const QString& title, const QString& body, const QStringList& taskIds) {
+            logEvent(QStringLiteral("info"), title.isEmpty() ? body : title + QStringLiteral(" · ") + body, taskIds);
+          });
+  connect(this, &AppController::updateAvailable, this, [this](const QString& version, const QString&) {
+    logEvent(QStringLiteral("info"), tr_("update.available").arg(version), {}, QStringLiteral("settings:about"));
+  });
+  connect(this, &AppController::updateReadyToInstall, this, [this](const QString& version, const QString&) {
+    logEvent(QStringLiteral("info"), tr_("update.ready").arg(version), {}, QStringLiteral("settings:about"));
+  });
+  // A refused move (APP-204) and the one-time "writes are opt-in" notice
+  // (APP-243) carry actions too.
+  connect(this, &AppController::trackerReadOnlyMove, this, [this](const QString& taskId, const QString& message, const QString&) {
+    logEvent(QStringLiteral("warning"), message, {taskId});
+  });
+  connect(this, &AppController::trackerWriteNotice, this, [this](const QString& message) {
+    logEvent(QStringLiteral("info"), message, {}, QStringLiteral("settings:integrations"));
+  });
 
   m_automationTimer->setInterval(60 * 1000);
   connect(m_automationTimer, &QTimer::timeout, this, &AppController::runAutomation);
@@ -1035,6 +1093,14 @@ AppController::AppController(QObject* parent) :
     QTimer::singleShot(3000, this, [this]() {
       if(settingsMap().value("updates").toMap().value("autoCheck", true).toBool()) {
         checkForUpdates();
+      }
+    });
+    // Writes to trackers became opt-in (APP-243): say so once to whoever had
+    // a tracker connected, after the toast bar is up.
+    QTimer::singleShot(3500, this, [this]() {
+      const QString notice = trackerWriteNoticeOnce();
+      if(!notice.isEmpty()) {
+        emit trackerWriteNotice(notice);
       }
     });
   }  // !s_headless
@@ -1942,6 +2008,10 @@ void AppController::setAppSettingsJson(const QString& v) {
 }
 
 void AppController::moveTask(const QString& id, const QString& newStatus) {
+  moveTaskRanked(id, newStatus, std::nullopt);
+}
+
+void AppController::moveTaskRanked(const QString& id, const QString& newStatus, std::optional<double> rank) {
   const int row = m_tasks.indexOfId(id);
   if(row < 0) {
     return;
@@ -1970,7 +2040,7 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
   // Capture before any upsert can invalidate the `t` reference (HEAP-77).
   const QString recurrence = t.recurrence;
   const QDate recurBase = t.dueAt.isValid() ? t.dueAt.date() : t.scheduledAt.date();
-  m_tasks.setStatus(id, newStatus);
+  m_tasks.setStatus(id, newStatus, {}, rank);
   completionSoundOnMove_(prevStatus, newStatus);
 
   // Mirror the change back to the linked tracker issue (e.g. moving to Done
@@ -2178,13 +2248,107 @@ void AppController::previewSound(int volume) {
   heap::platform::playCue(heap::platform::SoundCue::Done, volume);
 }
 
-void AppController::pushStatusToTracker(const QString& taskId, const QString& status) {
+bool AppController::trackerCanWriteStatus(const QString& providerId) const {
+  return heap::integrations::writesStatus(providerId);
+}
+
+bool AppController::trackerWriteEnabled(const QString& providerId) const {
+  // Off unless the user turned it on for this tracker: an existing install
+  // has no such key, and that reads as off too (APP-243).
+  return heap::integrations::writesStatus(providerId) && settingsMap()
+                                                             .value(QStringLiteral("integrations"))
+                                                             .toMap()
+                                                             .value(providerId)
+                                                             .toMap()
+                                                             .value(QStringLiteral("writeStatus"))
+                                                             .toBool();
+}
+
+void AppController::setTrackerWriteEnabled(const QString& providerId, bool enabled) {
+  if(!heap::integrations::writesStatus(providerId) || trackerWriteEnabled(providerId) == enabled) {
+    return;
+  }
+  setIntegrationField(providerId, QStringLiteral("writeStatus"), enabled);
+}
+
+QStringList AppController::trackerWriteProviders() const {
+  QStringList out;
+  for(const heap::integrations::ProviderDescriptor& d : heap::integrations::providerCatalog()) {
+    if(trackerWriteEnabled(d.id)) {
+      out.append(d.id);
+    }
+  }
+  return out;
+}
+
+QString AppController::trackerWriteNoticeOnce() {
+  if(m_trackerWriteNoticeDone) {
+    return {};
+  }
+  m_trackerWriteNoticeDone = true;
+  scheduleSave();
+  // Only a tracker that used to be written to without asking: one that is
+  // connected, can write, and has not been switched on since.
+  QStringList names;
+  const QVariantMap integrations = settingsMap().value(QStringLiteral("integrations")).toMap();
+  for(const heap::integrations::ProviderDescriptor& d : heap::integrations::providerCatalog()) {
+    if(heap::integrations::writesStatus(d) && integrations.value(d.id).toMap().value(QStringLiteral("connected")).toBool() &&
+       !trackerWriteEnabled(d.id)) {
+      names.append(d.displayName);
+    }
+  }
+  if(names.isEmpty()) {
+    return {};
+  }
+  return tr_("int.writeOffNotice").arg(names.join(QStringLiteral(", ")));
+}
+
+QString AppController::columnDisplayName(const QString& statusId) const {
+  for(const QVariant& v : m_statuses) {
+    const QVariantMap m = v.toMap();
+    if(m.value(QStringLiteral("id")).toString() == statusId) {
+      return m.value(QStringLiteral("name")).toString();
+    }
+  }
+  return statusId;
+}
+
+void AppController::markPushHeld(const QString& taskId, const QString& status, const QString& reason) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return;
+  }
+  m_tasks.setPushRuntime(taskId, false, reason);
+  Task t = m_tasks.items().at(row);
+  if(t.externalMeta.unsyncedStatus == status && !t.externalMeta.pushQueued) {
+    return;
+  }
+  t.externalMeta.unsyncedStatus = status;
+  t.externalMeta.pushQueued = false;
+  m_tasks.upsert(t);
+  scheduleSave();
+}
+
+void AppController::pushStatusToTracker(const QString& taskId, const QString& status, PushMode mode) {
   const int row = m_tasks.indexOfId(taskId);
   if(row < 0) {
     return;
   }
   const Task& t = m_tasks.items().at(row);
   if(t.externalId.isEmpty() || t.externalProvider.isEmpty()) {
+    return;
+  }
+  // A tracker heap cannot write to has nothing to send to, and one whose
+  // switch is off is only ever read: the move stays a local one (APP-243).
+  // The card's own "send" is the user asking for this one write.
+  if(!heap::integrations::writesStatus(t.externalProvider) || (mode == PushMode::Auto && !trackerWriteEnabled(t.externalProvider))) {
+    return;
+  }
+  // Outside the filter or gone: read-only for the tracker (APP-204). Nothing
+  // goes out on heap's own initiative; the card says the status is unsent.
+  // The card's "send" still asks the tracker first, and that check decides.
+  if(mode == PushMode::Auto && (t.externalMeta.outOfScope || t.externalMeta.goneUpstream)) {
+    markPushHeld(taskId, status, tr_("int.heldOutOfScope"));
     return;
   }
   // The write goes to the repo the issue came from, never simply the one in
@@ -2213,28 +2377,165 @@ void AppController::pushStatusToTracker(const QString& taskId, const QString& st
   // Remembered until the tracker answers, so a failure can name the card and
   // offer to send the same status again.
   const QString key = pushKey(providerId, project, externalId);
-  m_pendingPushes.insert(key, taskId);
+  // Every write is preceded by a fresh look at the issue (APP-204): still in
+  // the filter, and still in the status heap last saw. Only "send anyway",
+  // which the user confirmed with that very answer in front of them, skips it.
+  const bool check = mode != PushMode::Confirmed;
+  if(check) {
+    m_pendingChecks.insert(key, PendingCheck{.taskId = taskId, .status = status, .mode = mode});
+  } else {
+    m_pendingPushes.insert(key, taskId);
+  }
   // The card says "sending" until the tracker answers (APP-163).
   m_tasks.setPushRuntime(taskId, true, QString());
   ensureFreshToken(
       providerId,
-      [this, providerId, externalId, status, project, key, taskId]() {
+      [this, providerId, externalId, status, project, key, taskId, check]() {
         for(const auto& provider : m_syncProviders) {
           if(provider->id() == providerId) {
-            provider->pushStatusChange(externalId, status, project);
+            if(check) {
+              provider->checkIssue(externalId, project);
+            } else {
+              provider->pushStatusChange(externalId, status, project);
+            }
             return;
           }
         }
         // Rebuilt away while the token renewed (signed out meanwhile).
         m_pendingPushes.remove(key);
+        m_pendingChecks.remove(key);
         queueTrackerPush(taskId, status);
       },
       [this, key, taskId, status]() {
         // The token could not be renewed — offline, or the session ended.
         // Either way the move has not reached the tracker yet.
         m_pendingPushes.remove(key);
+        m_pendingChecks.remove(key);
         queueTrackerPush(taskId, status);
       });
+}
+
+void AppController::onIssueChecked(const QString& providerId,
+                                   const QString& externalId,
+                                   const QString& project,
+                                   bool ok,
+                                   int httpStatus,
+                                   const QString& error,
+                                   const QString& remoteStatus,
+                                   int filterMatch) {
+  const QString key = pushKey(providerId, project, externalId);
+  const auto pending = m_pendingChecks.constFind(key);
+  if(pending == m_pendingChecks.constEnd()) {
+    return;
+  }
+  const PendingCheck check = *pending;
+  m_pendingChecks.erase(pending);
+  const int row = m_tasks.indexOfId(check.taskId);
+  if(row < 0) {
+    return;
+  }
+  // The card moved again while the check was out: that later move is the one
+  // to send, and it asked for its own check.
+  const QString status = m_tasks.items().at(row).status;
+  if(!ok) {
+    if(httpStatus == 0 && error != QStringLiteral("unsupported")) {
+      // Never reached the tracker: the same as a push that could not go out.
+      m_tasks.setPushRuntime(check.taskId, false, QString());
+      queueTrackerPush(check.taskId, status);
+      return;
+    }
+    // A tracker that cannot be asked is not written to, and neither is one
+    // that answered the question with an error: the write would be blind.
+    onTaskPushed(providerId,
+                 externalId,
+                 project,
+                 false,
+                 error == QStringLiteral("unsupported") ? QStringLiteral("the tracker cannot be checked before a write") : error);
+    return;
+  }
+  Task t = m_tasks.items().at(row);
+  using heap::integrations::IntegrationProvider;
+  if(filterMatch == IntegrationProvider::FilterOut) {
+    // Not mine any more (assignee changed, moved out of the JQL…): the write
+    // is held and the user decides, with the tracker's status in front of
+    // them. heap never sends it on its own.
+    t.externalMeta.outOfScope = true;
+    if(!remoteStatus.isEmpty()) {
+      t.externalMeta.status = remoteStatus;
+      t.externalMeta.column = heap::integrations::StatusMap::column(remoteStatus, statusOverridesFor(providerId), QStringLiteral("todo"));
+    }
+    t.externalMeta.unsyncedStatus = status;
+    t.externalMeta.pushQueued = false;
+    m_tasks.upsert(t);
+    m_tasks.setPushRuntime(t.id, false, tr_("int.heldOutOfScope"));
+    scheduleSave();
+    emit integrationStatesChanged();
+    const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
+    emit trackerPushNeedsConfirm(t.id, externalKeyOf(t), t.title, d ? d->displayName : providerId, remoteStatus, columnDisplayName(status));
+    return;
+  }
+  // The tracker moved the issue since heap last saw it. Sending now would
+  // overwrite that move unseen: a status conflict instead, settled by the
+  // user in the existing dialog (APP-163). Moved to where the card already
+  // is, the two sides agree and there is nothing to send.
+  if(!remoteStatus.isEmpty() && !t.externalMeta.status.isEmpty() && remoteStatus != t.externalMeta.status) {
+    const QString mapped = heap::integrations::StatusMap::column(remoteStatus, statusOverridesFor(providerId), QStringLiteral("todo"));
+    t.externalMeta.status = remoteStatus;
+    t.externalMeta.column = mapped;
+    t.externalMeta.pushQueued = false;
+    if(mapped == status) {
+      t.externalMeta.unsyncedStatus.clear();
+      heap::integrations::setConflict(t.externalMeta.conflicts, QStringLiteral("status"), false);
+      m_tasks.setPushRuntime(t.id, false, QString());
+    } else {
+      t.externalMeta.unsyncedStatus = status;
+      heap::integrations::setConflict(t.externalMeta.conflicts, QStringLiteral("status"), true);
+      m_tasks.setPushRuntime(t.id, false, QString());
+      const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
+      const QString message =
+          tr_("int.checkConflict").arg(externalKeyOf(t), d ? d->displayName : providerId, remoteStatus, columnDisplayName(status));
+      logEvent(QStringLiteral("warning"), message, {t.id});
+      emit toast(message, QStringLiteral("warning"));
+    }
+    m_tasks.upsert(t);
+    scheduleSave();
+    return;
+  }
+  // Still mine and where heap left it: the write goes out.
+  m_pendingPushes.insert(key, t.id);
+  for(const auto& provider : m_syncProviders) {
+    if(provider->id() == providerId) {
+      provider->pushStatusChange(externalId, status, project);
+      return;
+    }
+  }
+  m_pendingPushes.remove(key);
+  m_tasks.setPushRuntime(t.id, false, QString());
+  queueTrackerPush(t.id, status);
+}
+
+void AppController::confirmTrackerPush(const QString& taskId) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return;
+  }
+  pushStatusToTracker(taskId, m_tasks.items().at(row).status, PushMode::Confirmed);
+}
+
+void AppController::discardTrackerPush(const QString& taskId) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return;
+  }
+  Task t = m_tasks.items().at(row);
+  m_tasks.setPushRuntime(taskId, false, QString());
+  if(t.externalMeta.unsyncedStatus.isEmpty() && !t.externalMeta.pushQueued) {
+    return;
+  }
+  t.externalMeta.unsyncedStatus.clear();
+  t.externalMeta.pushQueued = false;
+  m_tasks.upsert(t);
+  scheduleSave();
 }
 
 QString AppController::pushKey(const QString& providerId, const QString& project, const QString& externalId) {
@@ -2335,7 +2636,7 @@ void AppController::retryTrackerPush(const QString& taskId) {
   if(row < 0) {
     return;
   }
-  pushStatusToTracker(taskId, m_tasks.items().at(row).status);
+  pushStatusToTracker(taskId, m_tasks.items().at(row).status, PushMode::Explicit);
 }
 
 // Tasks of one column, in the order the board shows them. Ties on rank fall
@@ -2379,16 +2680,6 @@ void AppController::moveTaskTo(const QString& id, const QString& statusId, const
 
   const UndoScope scope(this, tr_("task.moveUndone").arg(id));
 
-  // The status change carries the recurrence spawn, the focus block and the
-  // tracker push with it, so it goes through moveTask rather than being
-  // duplicated here. The nested scope records nothing of its own.
-  if(fromStatus != statusId) {
-    moveTask(id, statusId);
-    if(m_tasks.items().at(m_tasks.indexOfId(id)).status != statusId) {
-      return;  // moveTask declined after all
-    }
-  }
-
   // Neighbours are taken from the destination column with the moved card
   // removed, so dropping a card one place down means what it looks like.
   const QVector<::Task> ordered = columnTasks(statusId, id);
@@ -2407,17 +2698,31 @@ void AppController::moveTaskTo(const QString& id, const QString& statusId, const
   const double beforeRank = hasBefore ? ordered.at(at - 1).rank : 0.0;
   const double afterRank = hasAfter ? ordered.at(at).rank : 0.0;
 
+  double rank = 0.0;
   if(hasBefore && hasAfter && heap::board::needsRebalance(beforeRank, afterRank)) {
     rebalanceColumn(statusId);
     const QVector<::Task> spread = columnTasks(statusId, id);
     const double lo = at > 0 ? spread.at(at - 1).rank : 0.0;
     const double hi = at < spread.size() ? spread.at(at).rank : 0.0;
-    ::Task t = m_tasks.items().at(m_tasks.indexOfId(id));
-    t.rank = heap::board::between(lo, hi, at > 0, at < spread.size());
-    m_tasks.upsert(t);
+    rank = heap::board::between(lo, hi, at > 0, at < spread.size());
+  } else {
+    rank = heap::board::between(beforeRank, afterRank, hasBefore, hasAfter);
+  }
+
+  // The status change carries the recurrence spawn, the focus block and the
+  // tracker push with it, so it goes through moveTask rather than being
+  // duplicated here. The nested scope records nothing of its own. The rank
+  // rides along: set afterwards, it re-sorted the whole destination column
+  // and rebound every card in it while the dropped card was still moving
+  // (APP-203).
+  if(fromStatus != statusId) {
+    moveTaskRanked(id, statusId, rank);
+    if(m_tasks.items().at(m_tasks.indexOfId(id)).status != statusId) {
+      return;  // moveTask declined after all
+    }
   } else {
     ::Task t = m_tasks.items().at(m_tasks.indexOfId(id));
-    t.rank = heap::board::between(beforeRank, afterRank, hasBefore, hasAfter);
+    t.rank = rank;
     m_tasks.upsert(t);
   }
   scheduleSave();
@@ -4031,6 +4336,7 @@ bool AppController::refuseSubscriptionEdit(const QString& id, const QString& mas
 }
 
 void AppController::applyCalendarSubscriptions() {
+  const heap::frame::Span span("applyCalendarSubscriptions");
   const QVariantList list = calendarSubscriptionSettings();
   QVector<QPair<QString, QString>> toLoad;
   for(const QVariant& v : list) {
@@ -5132,7 +5438,8 @@ void AppController::scheduleTask(const QString& taskId, double startHour, const 
   t.scheduledHasTime = true;  // the deadline keeps its own flag (schema v10)
   m_tasks.upsert(t);
 
-  emit toast(tr_("event.scheduled").arg(t.id, eventHourLabel(hours.start)));
+  // Undoable from the toast, like every other drop in the calendars (APP-249).
+  emit undoableToast(tr_("event.scheduled").arg(t.id, eventHourLabel(hours.start)), 5);
   scheduleSave();
 }
 
@@ -5142,6 +5449,112 @@ void AppController::scheduleTaskAtNextFreeSlot(const QString& taskId, const QDat
   // used to search for an hour and then book ninety minutes over a meeting.
   const double hours = taskBlockMinutes(taskId) / 60.0;
   scheduleTask(taskId, nextFreeSlot(day, hours), day);
+}
+
+bool AppController::rescheduleTask(const QString& taskId, const QString& field, const QDateTime& when, bool hasTime) {
+  const bool due = field == QStringLiteral("due");
+  if(!due && field != QStringLiteral("scheduled")) {
+    return false;
+  }
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return false;
+  }
+  Task t = m_tasks.items().at(row);
+  // Minutes, not seconds: a view hands over a JS Date, and a stray second
+  // would make "the same time" compare unequal.
+  QDateTime next;
+  bool nextHasTime = false;
+  if(when.isValid() && when.date().isValid()) {
+    nextHasTime = hasTime;
+    next = QDateTime(when.date(), hasTime ? QTime(when.time().hour(), when.time().minute()) : QTime(0, 0));
+  }
+  QDateTime& slot = due ? t.dueAt : t.scheduledAt;
+  bool& slotHasTime = due ? t.dueHasTime : t.scheduledHasTime;
+  if(slot == next && slotHasTime == nextHasTime) {
+    return false;
+  }
+  const UndoScope scope(this, tr_(due ? "undo.deadline" : "undo.schedule").arg(t.id));
+  const QDateTime was = slot;
+  slot = next;
+  slotHasTime = nextHasTime;
+  m_tasks.upsert(t);
+  if(!due && nextHasTime) {
+    moveLinkedFocusBlocks(t.id, was, next);
+  }
+
+  QString what;
+  if(!next.isValid()) {
+    what = tr_(due ? "reschedule.dueCleared" : "reschedule.scheduledCleared").arg(t.id);
+  } else {
+    const QString at =
+        nextHasTime ? dateTimeLabel(next, QStringLiteral("weekdayDay")) : dateLabel(next.date(), QStringLiteral("weekdayDay"));
+    what = tr_(due ? "reschedule.due" : "reschedule.scheduled").arg(t.id, at);
+  }
+  // A tracker's deadline changed here is a local value from now on; the toast
+  // says so rather than letting it look like it went upstream.
+  if(due && !t.externalProvider.isEmpty()) {
+    what += QStringLiteral(" · ") + tr_("reschedule.localOnly");
+  }
+  emit undoableToast(what, 5);
+  scheduleSave();
+  return true;
+}
+
+bool AppController::clearTaskDate(const QString& taskId, const QString& field) {
+  return rescheduleTask(taskId, field, QDateTime(), false);
+}
+
+bool AppController::resizeTaskBlock(const QString& taskId, const QDate& date, double startHour, double endHour) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0 || !date.isValid()) {
+    return false;
+  }
+  Task t = m_tasks.items().at(row);
+  const heap::cal::HourRange hours = heap::cal::clampHours(startHour, endHour, snapStepHours());
+  const QDateTime at(date, heap::cal::hourToTime(hours.start));
+  const int minutes = static_cast<int>(std::lround((hours.end - hours.start) * 60.0));
+  if(t.scheduledAt == at && t.scheduledHasTime && t.estimateMinutes == minutes) {
+    return false;
+  }
+  const UndoScope scope(this, tr_("undo.schedule").arg(t.id));
+  const QDateTime was = t.scheduledAt;
+  t.scheduledAt = at;
+  t.scheduledHasTime = true;
+  t.estimateMinutes = minutes;
+  m_tasks.upsert(t);
+  moveLinkedFocusBlocks(t.id, was, at);
+  emit undoableToast(tr_("reschedule.block").arg(t.id, dateTimeLabel(at, QStringLiteral("weekdayDay")), eventHourLabel(hours.end)), 5);
+  scheduleSave();
+  return true;
+}
+
+void AppController::moveLinkedFocusBlocks(const QString& taskId, const QDateTime& was, const QDateTime& now) {
+  if(!was.isValid() || !now.isValid()) {
+    return;
+  }
+  // Only the block the old schedule was read from, and only a one-off: a
+  // series is moved through its own scope question, not from a task's date.
+  QVector<CalEvent> moved;
+  for(const CalEvent& e : m_events.items()) {
+    if(e.type != QStringLiteral("focus") || e.taskId != taskId || !e.rrule.isEmpty() || e.allDay) {
+      continue;
+    }
+    if(QDateTime(e.date, heap::cal::hourToTime(e.start)) != was) {
+      continue;
+    }
+    CalEvent m = e;
+    const double length = e.end - e.start;
+    const double start = now.time().hour() + (now.time().minute() / 60.0);
+    m.date = now.date();
+    m.start = start;
+    m.end = qMin(24.0, start + length);
+    m.endDate = QDate();
+    moved.append(m);
+  }
+  for(const CalEvent& m : moved) {
+    m_events.upsert(m);
+  }
 }
 
 void AppController::followFocusBlock(const CalEvent& before, const CalEvent* after) {
@@ -7358,6 +7771,7 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
                                                             bool complete,
                                                             QStringList* goneCandidates) {
   using heap::integrations::StatusMap;
+  const heap::frame::Span span("mergeExternalTasks");
   MergeStats stats;
   // Whatever this pull changes on a card is the tracker's doing (APP-165).
   const QScopedValueRollback<bool> fromTracker(m_historySync, true);
@@ -7367,6 +7781,9 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
   // up in a sync profile.
   const QHash<QString, QString> statusOverrides = statusOverridesFor(providerId);
   QStringList seenStatuses;
+  // While heap does not write this tracker, a column the user picked here is
+  // theirs and no pull moves it (APP-243).
+  const bool localOwnsColumn = !trackerWriteEnabled(providerId);
 
   // Auto-sync fires wherever the user happens to be, and the integration
   // config is global — so without this, a timer tick while another profile is
@@ -7524,10 +7941,14 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
       return column == QStringLiteral("done");
     };
     using heap::integrations::StatusPull;
-    const StatusPull statusPull =
-        isNewRow ? StatusPull::TakeRemote
-                 : heap::integrations::mergeStatusOnPull(
-                       t.status, t.externalMeta.unsyncedStatus, t.externalMeta.status, ext.status, mapped, t.externalMeta.column);
+    const StatusPull statusPull = isNewRow ? StatusPull::TakeRemote
+                                           : heap::integrations::mergeStatusOnPull(t.status,
+                                                                                   t.externalMeta.unsyncedStatus,
+                                                                                   t.externalMeta.status,
+                                                                                   ext.status,
+                                                                                   mapped,
+                                                                                   t.externalMeta.column,
+                                                                                   localOwnsColumn);
     if(statusPull == StatusPull::TakeRemote) {
       t.status = mapped;
       if(!t.externalMeta.unsyncedStatus.isEmpty() && t.externalMeta.status != ext.status) {
@@ -8118,6 +8539,18 @@ void AppController::applyIntegrationSettings() {
         [this, providerId](const QString& externalId, const QString& project, bool ok, const QString& error, const QString& remoteStatus) {
           onTaskPushed(providerId, externalId, project, ok, error, remoteStatus);
         });
+    connect(provider,
+            &heap::integrations::IntegrationProvider::issueChecked,
+            this,
+            [this, providerId](const QString& externalId,
+                               const QString& project,
+                               bool ok,
+                               int httpStatus,
+                               const QString& error,
+                               const QString& remoteStatus,
+                               int filterMatch) {
+              onIssueChecked(providerId, externalId, project, ok, httpStatus, error, remoteStatus, filterMatch);
+            });
     connect(provider,
             &heap::integrations::IntegrationProvider::connectionTested,
             this,
@@ -8898,6 +9331,8 @@ QVariantList AppController::integrationCatalog() const {
     }
     m.insert(QStringLiteral("loginFields"), loginFields);
     m.insert(QStringLiteral("directory"), d.kind == heap::integrations::ProviderKind::Directory);
+    // Whether the card offers "change the status in …" (APP-243).
+    m.insert(QStringLiteral("writesStatus"), heap::integrations::writesStatus(d));
     out.append(m);
   }
   return out;
@@ -9198,6 +9633,11 @@ void AppController::queueTrackerPush(const QString& taskId, const QString& statu
 }
 
 void AppController::flushQueuedPushes(const QString& providerId) {
+  // With the tracker's switch off a queued move stays on the card as "not
+  // sent", for the user to send or drop (APP-243). Never on its own.
+  if(!trackerWriteEnabled(providerId)) {
+    return;
+  }
   QStringList ids;
   for(const Task& t : m_tasks.items()) {
     // A move held by a status conflict waits for the user, not for a sync.
@@ -9286,6 +9726,13 @@ void AppController::resolveTrackerConflictFields(const QString& taskId, const QS
     const UndoScope scope(this, tr_("task.editUndone").arg(taskId));
     for(const QString& f : pending) {
       send = applyConflictChoice(t, f, useTracker) || send;
+    }
+    if(send && !trackerWriteEnabled(t.externalProvider)) {
+      // Nothing is written to this tracker: keeping mine keeps it here only,
+      // and there is no unsent move left to show (APP-243).
+      t.externalMeta.unsyncedStatus.clear();
+      t.externalMeta.pushQueued = false;
+      send = false;
     }
     m_tasks.upsert(t);
     scheduleSave();
@@ -9993,6 +10440,7 @@ void AppController::saveStateNow() {
   if(m_loading || m_saveBlocked) {
     return;
   }
+  const heap::frame::Span span("saveStateNow");
 
   // Push live model state back into the active profile.
   snapshotActiveProfile();
@@ -10011,6 +10459,7 @@ void AppController::saveStateNow() {
   s["crumbUser"] = m_crumbUser;
   s["welcomeSeen"] = m_welcomeSeen;
   s["demoActive"] = m_demoActive;
+  s["trackerWriteNotice"] = m_trackerWriteNoticeDone;
   icsUidDomain();  // mints the id on the first save
   s["installId"] = m_installId;
 
@@ -10428,6 +10877,9 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
     m_welcomeSeen = s.contains("welcomeSeen") ? s["welcomeSeen"].toBool() : true;
     m_demoActive = s.contains("demoActive") ? s["demoActive"].toBool() : false;
     emit onboardingChanged();
+    // Absent in every state.json written before writes became opt-in, which
+    // is exactly who the one-time notice is for (APP-243).
+    m_trackerWriteNoticeDone = s.value("trackerWriteNotice").toBool();
     if(!viewOnly) {
       m_installId = s.value("installId").toString();
     }
@@ -11713,6 +12165,15 @@ void AppController::seedShortcutCatalog() {
   add("cal.prevDay", "Alt+Left");
   add("cal.nextDay", "Alt+Right");
   add("cal.newEvent", "Ctrl+Alt+E");
+  // Moving the task under the keyboard (or the pointer) in Week, Month and
+  // Timeline: the keys for what a drag does there (APP-249). Ctrl+arrows are
+  // the board's own card moves; these are live only in those three views.
+  add("cal.taskEarlier", "Ctrl+Left");
+  add("cal.taskLater", "Ctrl+Right");
+  add("cal.taskEarlierWeek", "Ctrl+Shift+Left");
+  add("cal.taskLaterWeek", "Ctrl+Shift+Right");
+  add("cal.taskTimeEarlier", "Ctrl+Up");
+  add("cal.taskTimeLater", "Ctrl+Down");
   // Focus mode (APP-160); live only once Settings → Safety net turns it on.
   add("focus.immersion", "Ctrl+Shift+F");
   // The event log (APP-187): the toasts of this session, to read again.
@@ -12155,11 +12616,28 @@ bool AppController::canTransitionStatus(const QString& taskId, const QString& ne
       return false;
     }
   }
+  // Only a tracker heap writes to has a say in where its cards go. With the
+  // switch off (the default) a move is a local one, and neither the workflow
+  // nor the filter below can refuse it (APP-243).
+  const bool writes =
+      !t.externalProvider.isEmpty() && !t.externalId.isEmpty() && newStatus != t.status && trackerWriteEnabled(t.externalProvider);
+  // Outside the filter or gone: the tracker is read-only for this card. The
+  // drop is refused rather than sent, so heap never changes the status of an
+  // issue that is not the user's any more (APP-204).
+  if(writes && (t.externalMeta.outOfScope || t.externalMeta.goneUpstream)) {
+    const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(t.externalProvider);
+    const QString label = d ? d->displayName : t.externalProvider;
+    const QString message = t.externalMeta.goneUpstream ? tr_("int.readOnlyGone").arg(externalKeyOf(t), label)
+                                                        : tr_("int.readOnlyOutOfScope").arg(externalKeyOf(t), label);
+    emit trackerReadOnlyMove(taskId, message, t.externalUrl);
+    playSound_(static_cast<int>(heap::platform::SoundCue::Refuse));
+    return false;
+  }
   // A tracker whose workflow decides the moves (Jira) said, on the last pull,
   // which statuses this issue can go to. A column none of them maps to would
   // only be refused after the round trip and leave the card "unsynced" —
   // say so on the drop instead (INT-8).
-  if(!t.externalProvider.isEmpty() && !t.externalId.isEmpty() && newStatus != t.status) {
+  if(writes) {
     const auto known = m_trackerTransitions.constFind(t.externalProvider + QChar('\n') + t.externalId);
     if(known != m_trackerTransitions.constEnd()) {
       using heap::integrations::StatusMap;
@@ -12568,6 +13046,15 @@ void AppController::runAutomation() {
 }
 
 void AppController::runAutomationAt(const QDateTime& now) {
+  const heap::frame::Span span("runAutomation");
+  // Reminders sent during this tick reach reminders.json once, at its end.
+  ++m_reminderBatchDepth;
+  const auto flushReminders = qScopeGuard([this]() {
+    if(--m_reminderBatchDepth == 0 && m_reminderSavePending) {
+      m_reminderSavePending = false;
+      saveSentReminders();
+    }
+  });
   // The minute tick is also what notices that the date moved on — after
   // midnight, a sleep or a time-zone change.
   refreshToday(now.date());
@@ -12684,41 +13171,61 @@ void AppController::runAutomationAt(const QDateTime& now) {
   // more when it has passed.
   if(notif.value("deadlineReminders", true).toBool() && !quiet) {
     const int leadHours = qMax(1, notif.value("deadlineLeadHours", 24).toInt());
+
     // Each with the profile it is in: the reminder's buttons act there (PRES-2).
-    QVector<std::pair<QString, Task>> candidates;
-    for(const Task& t : m_tasks.items()) {
-      candidates.append({m_activeProfileId, t});
-    }
-    for(const Profile& p : m_profiles) {
-      if(p.id != m_activeProfileId) {
-        for(const Task& t : p.tasks) {
-          candidates.append({p.id, t});
-        }
+    // Only the ones due are kept, and only what the reminder says: copying
+    // every task of every profile each minute was most of the tick (APP-203).
+    struct DueTask {
+      QString profileId;
+      QString id;
+      QString title;
+      QString priority;
+      heap::cal::DeadlineCall call;
+    };
+
+    QVector<DueTask> dueTasks;
+    // A reminder is due from `leadHours` before the deadline to a day after
+    // it. Most deadlines are days away, and the calendar date says so without
+    // the time-zone arithmetic a QDateTime difference costs, every minute,
+    // for every task.
+    const qint64 lastDueDay = leadHours / 24 + 2;
+    const auto consider = [&](const QString& profileId, const Task& t) {
+      if(t.archived || !t.dueAt.isValid() || t.status == QLatin1String("done")) {
+        return;
       }
-    }
-    for(const auto& [profileId, t] : candidates) {
-      if(t.archived) {
-        continue;
-      }
-      if(!t.dueAt.isValid()) {
-        continue;
-      }
-      if(t.status == QStringLiteral("done")) {
-        continue;
+      const qint64 days = today.daysTo(t.dueAt.date());
+      if(days < -2 || days > lastDueDay) {
+        return;
       }
       // A task due at a parsed clock time fires then; a bare due date keeps the
       // old end-of-day horizon.
       const QDateTime deadlineAt = t.dueHasTime ? t.dueAt : QDateTime(t.dueAt.date(), QTime(23, 59));
-      const heap::cal::DeadlineCall call = heap::cal::deadlineReminder(t.id, deadlineAt, now, leadHours);
-      if(!call.due || reminderSent(call.key)) {
-        continue;
+      heap::cal::DeadlineCall call = heap::cal::deadlineReminder(t.id, deadlineAt, now, leadHours);
+      if(call.due && !reminderSent(call.key)) {
+        dueTasks.append({profileId, t.id, t.title, t.priority, std::move(call)});
+      }
+    };
+    for(const Task& t : m_tasks.items()) {
+      consider(m_activeProfileId, t);
+    }
+    for(const Profile& p : m_profiles) {
+      if(p.id != m_activeProfileId) {
+        for(const Task& t : p.tasks) {
+          consider(p.id, t);
+        }
+      }
+    }
+    for(const DueTask& t : dueTasks) {
+      const heap::cal::DeadlineCall& call = t.call;
+      if(reminderSent(call.key)) {
+        continue;  // the same id in two profiles is one reminder
       }
       markReminderSent(call.key, now);
       const QString when = call.overdue
                                ? (call.hours < 1 ? tr_("notify.deadlineWhen.overdue") : tr_("notify.deadlineWhen.overdueH").arg(call.hours))
                            : (call.hours <= 1) ? tr_("notify.deadlineWhen.h1")
                                                : tr_("notify.deadlineWhen.hN").arg(call.hours);
-      notifyTaskAt(heap::notify::taskRef(profileId, t.id),
+      notifyTaskAt(heap::notify::taskRef(t.profileId, t.id),
                    call.overdue ? tr_("notify.overdueTitle").arg(when) : tr_("notify.deadlineTitle").arg(when),
                    QStringLiteral("%1 (%2)").arg(t.title, t.priority),
                    QStringLiteral("deadline"),
@@ -12895,6 +13402,10 @@ void AppController::markReminderSent(const QString& key, const QDateTime& at) {
   const QDateTime horizon = at.addDays(-3);
   for(auto it = m_sentReminders.begin(); it != m_sentReminders.end();) {
     it = it.value() < horizon ? m_sentReminders.erase(it) : std::next(it);
+  }
+  if(m_reminderBatchDepth > 0) {
+    m_reminderSavePending = true;
+    return;
   }
   saveSentReminders();
 }

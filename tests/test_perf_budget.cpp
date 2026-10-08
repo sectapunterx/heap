@@ -20,6 +20,7 @@
 #include "TaskFilterProxy.h"
 
 #include "chrono/ChronoParser.h"
+#include "diag/FrameLog.h"
 #include "diag/PerfLog.h"
 #include "markdown/MdDocument.h"
 
@@ -31,6 +32,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLocale>
+#include <QQuickWindow>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 
@@ -356,6 +358,97 @@ TEST_F(PerfLogTest, BeginIfIdleKeepsAFreshHotkeyStartButReplacesAStaleOne) {
 TEST_F(PerfLogTest, ProcessClockRunsFromMarkProcessStart) {
   heap::perf::markProcessStart();
   EXPECT_GE(heap::perf::sinceProcessStart(), 0);
+}
+
+// ── The opt-in frame log (diag/FrameLog.h, APP-203) ──
+
+namespace {
+
+QString readAll(const QString& path) {
+  QFile f(path);
+  return f.open(QIODevice::ReadOnly) ? QString::fromUtf8(f.readAll()) : QString();
+}
+
+// Keeps the GUI thread busy, the way a long rebuild or save would.
+void blockFor(int ms) {
+  QElapsedTimer t;
+  t.start();
+  while(t.elapsed() < ms) {}
+}
+
+void spinEventLoop(int ms) {
+  QElapsedTimer t;
+  t.start();
+  while(t.elapsed() < ms) {
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+  }
+}
+
+}  // namespace
+
+TEST(FrameLogTest, OffWithoutTheVariableAndASpanCostsNothing) {
+  if(!qEnvironmentVariableIsEmpty("HEAP_FRAME_LOG")) {
+    GTEST_SKIP() << "HEAP_FRAME_LOG is set in this environment";
+  }
+  heap::frame::installFromEnvironment();
+  EXPECT_FALSE(heap::frame::enabled());
+  const heap::frame::Span span("nothing");  // must not touch a log that is not there
+}
+
+TEST(FrameLogTest, AStallNamesTheWorkThatCausedItAndTheSummaryCountsIt) {
+  QTemporaryDir dir;
+  ASSERT_TRUE(dir.isValid());
+  const QString path = dir.filePath(QStringLiteral("frames.log"));
+  heap::frame::installForTests(path);
+  ASSERT_TRUE(heap::frame::enabled());
+
+  QQuickWindow window;
+  window.resize(120, 80);
+  window.show();
+  spinEventLoop(50);
+  {
+    const heap::frame::Span span("rebuild");
+    blockFor(45);
+  }
+  qWarning("frame-note: after the rebuild");
+  spinEventLoop(50);
+  heap::frame::shutdown();
+  EXPECT_FALSE(heap::frame::enabled());
+
+  const QString log = readAll(path);
+  EXPECT_TRUE(log.contains(QStringLiteral("window\t"))) << qPrintable(log);
+  EXPECT_TRUE(log.contains(QStringLiteral("span\t"))) << qPrintable(log);
+  EXPECT_TRUE(log.contains(QStringLiteral("\trebuild\t"))) << qPrintable(log);
+  // The watchdog saw the event loop blocked, and says by what.
+  bool stallNamesSpan = false;
+  for(const QString& line : log.split(QChar('\n'))) {
+    if(line.startsWith(QLatin1String("stall\t")) && line.contains(QLatin1String("rebuild"))) {
+      stallNamesSpan = true;
+    }
+  }
+  EXPECT_TRUE(stallNamesSpan) << qPrintable(log);
+  EXPECT_TRUE(log.contains(QStringLiteral("note\t"))) << qPrintable(log);
+  EXPECT_TRUE(log.contains(QStringLiteral("after the rebuild"))) << qPrintable(log);
+  EXPECT_TRUE(log.contains(QStringLiteral("summary\t"))) << qPrintable(log);
+  EXPECT_FALSE(log.contains(QStringLiteral("stalls=0\t"))) << qPrintable(log);
+
+  // Closed: nothing more is written.
+  const qsizetype before = log.size();
+  {
+    const heap::frame::Span span("after close");
+    blockFor(5);
+  }
+  EXPECT_EQ(readAll(path).size(), before);
+}
+
+TEST(FrameLogTest, ShortWorkIsNotLogged) {
+  QTemporaryDir dir;
+  ASSERT_TRUE(dir.isValid());
+  const QString path = dir.filePath(QStringLiteral("frames.log"));
+  heap::frame::installForTests(path);
+  { const heap::frame::Span span("tiny"); }
+  heap::frame::shutdown();
+  EXPECT_FALSE(readAll(path).contains(QStringLiteral("tiny")));
 }
 
 int main(int argc, char** argv) {

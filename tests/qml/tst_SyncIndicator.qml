@@ -16,6 +16,19 @@ TestCase {
 
     Item { id: host; anchors.fill: parent }
 
+    // These states are the ones a tracker heap writes to shows; with the
+    // switch off (the default since APP-243) an unsent move reads "not sent",
+    // which tst_TrackerWrites covers.
+    property string savedSettings: ""
+    function init() {
+        savedSettings = AppController.appSettingsJson;
+        AppController.appSettingsJson = "{}";
+        AppController.setTrackerWriteEnabled("github", true);
+    }
+    function cleanup() {
+        AppController.appSettingsJson = savedSettings;
+    }
+
     Component {
         id: cardComp
         TaskCard { width: 360 }

@@ -254,6 +254,7 @@ qt_add_library(heap_core STATIC
     src/integrations/IntegrationI18n.cpp
     src/diag/IssueReport.cpp
     src/diag/PerfLog.cpp
+    src/diag/FrameLog.cpp
     # ── audit-int: end ──
     # ── audit-perf: begin ──
     # ── audit-perf: end ──
@@ -332,6 +333,7 @@ qt_add_qml_module(heap_core
         # ── audit-time: begin ──
         qml/SeriesScopeDialog.qml
         qml/SyncConflictDialog.qml
+        qml/TrackerPushConfirmDialog.qml
         qml/IntegrationHealthCard.qml
         qml/IntegrationsInfoCard.qml
         qml/CalendarSubscriptionsCard.qml
@@ -390,6 +392,7 @@ qt_add_qml_module(heap_core
         qml/PersonPicker.qml
         qml/TweaksPanel.qml
         qml/Toast.qml
+        qml/ToastTiming.js
         qml/AppMenu.qml
         qml/AppMenuItem.qml
         qml/AppMenuSeparator.qml
@@ -428,9 +431,13 @@ qt_add_qml_module(heap_core
         qml/MdEditorPane.qml
         qml/DocsPagesPane.qml
         qml/UnscheduledRail.qml
+        qml/ChangeTick.qml
         qml/Overlap.js
+        qml/Reschedule.js
+        qml/RescheduleDrag.qml
         qml/Segments.js
         qml/Search.js
+        qml/SettingsIndex.js
         qml/PopupStack.js
     SOURCES
         src/AppController.h

@@ -10,9 +10,11 @@
 #include "AppController.h"
 #include "Models.h"
 #include "StateSerializer.h"
+#include "TaskFilterProxy.h"
 
 #include <QApplication>
 #include <QDir>
+#include <QSignalSpy>
 #include <QStandardPaths>
 #include <QStringList>
 #include <QTemporaryDir>
@@ -135,6 +137,48 @@ TEST_F(BoardOrderTest, MovingToAnotherColumnCarriesThePosition) {
 
   EXPECT_EQ(order(QStringLiteral("prog")), (QStringList{QStringLiteral("P0"), QStringLiteral("M"), QStringLiteral("P1")}));
   EXPECT_EQ(app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("M"))).status, QStringLiteral("prog"));
+}
+
+// The column a card is dropped into is a sorted proxy. The rank used to be
+// set after the status, so the card entered the column at its old rank and
+// the proxy then re-sorted the whole column: a layoutChanged that rebound
+// every card in it while the dropped one was still settling (APP-203). The
+// card now arrives in its place, as one inserted row.
+TEST_F(BoardOrderTest, ACardDroppedIntoAnotherColumnArrivesInPlaceWithoutResortingIt) {
+  app_->tasks()->reset({makeTask(QStringLiteral("P0"), QStringLiteral("prog"), heap::state::kRankStep),
+                        makeTask(QStringLiteral("P1"), QStringLiteral("prog"), 2 * heap::state::kRankStep),
+                        makeTask(QStringLiteral("P2"), QStringLiteral("prog"), 3 * heap::state::kRankStep),
+                        // Ranked last of everything: in the old order it entered below P2.
+                        makeTask(QStringLiteral("M"), QStringLiteral("todo"), 9 * heap::state::kRankStep)});
+  TaskFilterProxy dest;
+  dest.setSourceModel(app_->tasks());
+  dest.setStatus(QStringLiteral("prog"));
+  ASSERT_EQ(dest.ids(), (QStringList{QStringLiteral("P0"), QStringLiteral("P1"), QStringLiteral("P2")}));
+  QSignalSpy resorted(&dest, &QAbstractItemModel::layoutChanged);
+  QSignalSpy inserted(&dest, &QAbstractItemModel::rowsInserted);
+
+  app_->moveTaskTo(QStringLiteral("M"), QStringLiteral("prog"), QStringLiteral("P1"));
+
+  EXPECT_EQ(dest.ids(), (QStringList{QStringLiteral("P0"), QStringLiteral("M"), QStringLiteral("P1"), QStringLiteral("P2")}));
+  EXPECT_EQ(resorted.count(), 0) << "the destination column was re-sorted after the card arrived";
+  ASSERT_EQ(inserted.count(), 1);
+  EXPECT_EQ(inserted.at(0).at(1).toInt(), 1) << "the card did not arrive where it was dropped";
+}
+
+// Undo puts the card back in its old column at its old place: status and rank
+// travel in one change, and undo restores both.
+TEST_F(BoardOrderTest, UndoingACrossColumnDropRestoresStatusAndRank) {
+  app_->tasks()->reset({makeTask(QStringLiteral("P0"), QStringLiteral("prog"), heap::state::kRankStep),
+                        makeTask(QStringLiteral("P1"), QStringLiteral("prog"), 2 * heap::state::kRankStep),
+                        makeTask(QStringLiteral("M"), QStringLiteral("todo"), 5 * heap::state::kRankStep)});
+  const double before = rankOf(QStringLiteral("M"));
+
+  app_->moveTaskTo(QStringLiteral("M"), QStringLiteral("prog"), QStringLiteral("P1"));
+  ASSERT_NE(rankOf(QStringLiteral("M")), before);
+  app_->undo();
+
+  EXPECT_EQ(app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("M"))).status, QStringLiteral("todo"));
+  EXPECT_EQ(rankOf(QStringLiteral("M")), before);
 }
 
 TEST_F(BoardOrderTest, AnUnknownColumnIsANoop) {
