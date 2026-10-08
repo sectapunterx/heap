@@ -434,6 +434,7 @@ qt_add_qml_module(heap_core
         qml/RescheduleDrag.qml
         qml/Segments.js
         qml/Search.js
+        qml/SettingsIndex.js
         qml/PopupStack.js
     SOURCES
         src/AppController.h

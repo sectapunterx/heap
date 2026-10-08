@@ -47,6 +47,11 @@ Item {
     // derived row they would land in the control slot.
     property bool clickable: false
     signal clicked()
+    // Settings search (APP-207): 1 — the row matches and is marked, -1 —
+    // a search is on and the row does not match, so it steps back; 0 — no
+    // search. SettingsView writes it.
+    property int searchMark: 0
+    opacity: searchMark < 0 ? 0.45 : 1
 
     default property alias content: slot.data
     onControlChanged: if (row.control) row.control.parent = row
@@ -70,6 +75,23 @@ Item {
     Layout.fillWidth: true
     implicitWidth: grid.implicitWidth
     implicitHeight: Math.max(grid.implicitHeight, minContent) + 2 * vpad
+
+    // The search mark: a tint under the row and a bar at its left edge.
+    Rectangle {
+        objectName: "settings-row-match"
+        visible: row.searchMark > 0
+        // Out to the group's frame, so the bar sits on its edge, clear of
+        // the label.
+        x: -(Theme.inset - 1)
+        width: parent.width + 2 * (Theme.inset - 1)
+        height: parent.height
+        color: Theme.accentSoft
+        Rectangle {
+            width: 2
+            height: parent.height
+            color: Theme.accent
+        }
+    }
 
     Rectangle {
         visible: row.separator

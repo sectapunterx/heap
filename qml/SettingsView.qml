@@ -7,6 +7,7 @@ import QtQuick.Controls
 import QtQuick.Controls.Basic
 import QtQuick.Controls.impl
 import TodoCpp
+import "SettingsIndex.js" as Idx
 
 Item {
     id: root
@@ -16,79 +17,15 @@ Item {
     //   unimplemented: section is a stub. In Release builds these are hidden
     //                  completely. In Debug they obey the dev toggle in the
     //                  nav footer.
-    readonly property var allSections: [
-        {
-            id: "profile",
-            icon: "qrc:/brand/icons/heap-13-profile.svg",
-            title: I18n.t("settings.section.profile.title"),
-            sub: I18n.t("settings.section.profile.sub")
-        },
-        {
-            id: "appearance",
-            icon: "qrc:/brand/icons/heap-14-appearance.svg",
-            title: I18n.t("settings.section.appearance.title"),
-            sub: I18n.t("settings.section.appearance.sub")
-        },
-        {
-            id: "language",
-            icon: "qrc:/brand/icons/heap-15-language.svg",
-            title: I18n.t("settings.section.language.title"),
-            sub: I18n.t("settings.section.language.sub")
-        },
-        {
-            id: "notifications",
-            icon: "qrc:/brand/icons/heap-16-notifications.svg",
-            title: I18n.t("settings.section.notifications.title"),
-            sub: I18n.t("settings.section.notifications.sub")
-        },
-        // Gentle, opt-in heads-ups (APP-172). Empty for now: the tickets
-        // that bring each one add its SettingsRow here, off by default.
-        {
-            id: "safety",
-            icon: "qrc:/brand/icons/heap-11-tweaks.svg",
-            title: I18n.t("settings.section.safety.title"),
-            sub: I18n.t("settings.section.safety.sub")
-        },
-        {
-            id: "calendar",
-            icon: "qrc:/brand/icons/heap-17-calendar.svg",
-            title: I18n.t("settings.section.calendar.title"),
-            sub: I18n.t("settings.section.calendar.sub")
-        },
-        {
-            id: "tasks",
-            icon: "qrc:/brand/icons/heap-01-board.svg",
-            title: I18n.t("settings.section.tasks.title"),
-            sub: I18n.t("settings.section.tasks.sub")
-        },
-        {
-            id: "shortcuts",
-            icon: "qrc:/brand/icons/heap-10-hotkeys.svg",
-            title: I18n.t("settings.section.shortcuts.title"),
-            sub: I18n.t("settings.section.shortcuts.sub")
-        },
-        {
-            id: "cpp",
-            icon: "qrc:/brand/icons/heap-18-code.svg",
-            title: I18n.t("settings.section.cpp.title"),
-            sub: I18n.t("settings.section.cpp.sub"),
-          unimplemented: true },
-        {
-            id: "integrations",
-            icon: "qrc:/brand/icons/heap-19-integrations.svg",
-            title: I18n.t("settings.section.integrations.title"),
-            sub: I18n.t("settings.section.integrations.sub")
-        },
-        {id: "git", icon: "qrc:/brand/icons/heap-07-code-review.svg", title: I18n.t("settings.section.git.title"), sub: I18n.t("settings.section.git.sub")},
-        {id: "data", icon: "qrc:/brand/icons/heap-20-data.svg", title: I18n.t("settings.section.data.title"), sub: I18n.t("settings.section.data.sub")},
-        {id: "help", icon: "qrc:/brand/icons/heap-21-help.svg", title: I18n.t("settings.section.help.title"), sub: I18n.t("settings.section.help.sub")},
-        {
-            id: "about",
-            icon: "qrc:/brand/icons/heap-22-about.svg",
-            title: I18n.t("settings.section.about.title"),
-            sub: I18n.t("settings.section.about.sub")
-        }
-    ]
+    readonly property var allSections: Idx.SECTIONS.map((s) => ({
+        id: s.id,
+        icon: s.icon,
+        title: I18n.t("settings.section." + s.id + ".title"),
+        sub: I18n.t("settings.section." + s.id + ".sub"),
+        titleEn: I18n.dict.en["settings.section." + s.id + ".title"] || "",
+        subEn: I18n.dict.en["settings.section." + s.id + ".sub"] || "",
+        unimplemented: !!s.unimplemented
+    }))
 
     readonly property bool _debugBuild: !!AppController.debugBuild
     // Persisted toggle: only meaningful in Debug builds. Defaults to true so
@@ -149,6 +86,20 @@ Item {
         "mattermost": "heap-35-mattermost"
     })
     property string searchText: ""
+    // Every setting a search can find (APP-207), shared with the Tweaks
+    // panel: qml/SettingsIndex.js.
+    readonly property var searchIndex: Idx.build(I18n, I18n.lang, AppController.integrationCatalog())
+    readonly property var searchMatches: Idx.search(searchIndex, searchText)
+    // section id → how many of its settings the search found.
+    readonly property var searchCounts: Idx.counts(searchMatches)
+    readonly property bool searching: Idx.norm(searchText).length > 0
+    // Searching and no section left in the nav.
+    readonly property bool searchEmpty: {
+        if (!searching) return false;
+        for (let i = 0; i < sections.length; i++)
+            if (_sectionMatches(sections[i])) return false;
+        return true;
+    }
 
     // ── Settings state — single source of truth, persisted via JSON blob ──
     property var settings: ({})
@@ -399,6 +350,16 @@ Item {
                             // moves into the list. Both were dead.
                             onAccepted: root._openFirstMatch()
                             Keys.onDownPressed: root._focusNav(0)
+                            // Esc clears the search; on an empty box it
+                            // goes on to whatever Esc does around it.
+                            Keys.onEscapePressed: (event) => {
+                                if (text.length > 0) {
+                                    root.searchText = "";
+                                    event.accepted = true;
+                                } else {
+                                    event.accepted = false;
+                                }
+                            }
                         }
                     }
                 }
@@ -432,14 +393,19 @@ Item {
                             model: root.sections
                             // One tab stop for the list (SHELL-11, see the delegate). Bound here:
                             // Qt 6.9's qmllint does not resolve root inside the delegate.
-                            onItemAdded: (idx, item) => item.activeFocusOnTab
-                                = Qt.binding(() => item.activeFocus || idx === root._navTabIndex)
+                            onItemAdded: (idx, item) => {
+                                item.activeFocusOnTab = Qt.binding(() => item.activeFocus || idx === root._navTabIndex);
+                                item.searchCount = Qt.binding(() => root.searching ? (root.searchCounts[item.modelData.id] || 0) : 0);
+                            }
                             delegate: Rectangle {
                                 id: navRow
                                 required property var modelData
                                 required property int index
                                 objectName: "settings-nav-" + modelData.id
                                 visible: root._sectionMatches(modelData)
+                                // How many of its settings the search found
+                                // (APP-207); navRep binds it.
+                                property int searchCount: 0
                                 // A list box: Tab lands on it, ↑/↓ move and open,
                                 // Enter / Space open. One tab stop for the whole
                                 // list (the open section's row): every row used
@@ -491,6 +457,17 @@ Item {
                                         font.weight: root.activeSection === modelData.id ? Theme.fwTitle : Theme.fwBody
                                         elide: Text.ElideRight
                                     }
+                                    // How many of the section's settings the
+                                    // search found (APP-207).
+                                    Text {
+                                        objectName: "settings-nav-count-" + navRow.modelData.id
+                                        visible: navRow.searchCount > 0
+                                        text: String(navRow.searchCount)
+                                        color: Theme.textDim
+                                        font.family: Theme.fontUi
+                                        font.features: Theme.tabularNums
+                                        font.pixelSize: Theme.fsXs
+                                    }
                                 }
                                 MouseArea {
                                     id: navMA
@@ -500,6 +477,16 @@ Item {
                                     onClicked: root.activeSection = modelData.id
                                 }
                             }
+                        }
+                        // A search that leaves no section (APP-207).
+                        EmptyState {
+                            objectName: "settings-search-empty"
+                            visible: root.searchEmpty
+                            Layout.fillWidth: true
+                            Layout.topMargin: Theme.sp2xl
+                            compact: true
+                            title: I18n.t("settings.search.empty")
+                            line: I18n.t("settings.search.emptyLine")
                         }
                     }
                 }
@@ -706,6 +693,7 @@ Item {
                         Loader {
                             id: sectionLoader
                             anchors.fill: parent
+                            onLoaded: Qt.callLater(root._applySearchMarks)
                             sourceComponent: {
                                 if (root.activeSection === "profile")       return sectionProfile;
                                 if (root.activeSection === "appearance")    return sectionAppearance;
@@ -747,20 +735,174 @@ Item {
     }
 
     // ── Settings search + keyboard nav ─────────────────────────────────
+    // A section stays in the nav when its own title or subtitle matches, in
+    // either language, or when any of its settings does (APP-207).
     function _sectionMatches(sec) {
-        const q = root.searchText.toLowerCase().trim();
+        const q = Idx.norm(root.searchText);
         if (q.length === 0) return true;
-        return sec.title.toLowerCase().indexOf(q) >= 0 || sec.sub.toLowerCase().indexOf(q) >= 0;
+        return Idx.textMatches(q, sec.title, sec.titleEn) || Idx.textMatches(q, sec.sub, sec.subEn)
+            || (root.searchCounts[sec.id] || 0) > 0;
     }
+    // Enter in the search box: a section the query names opens at its top;
+    // otherwise the first section left in the nav opens, and its first
+    // matching setting scrolls into view with focus on it.
     function _openFirstMatch() {
-        for (let i = 0; i < sections.length; i++) {
-            if (_sectionMatches(sections[i])) {
+        const q = Idx.norm(root.searchText);
+        for (let i = 0; q.length > 0 && i < sections.length; i++) {
+            if (Idx.textMatches(q, sections[i].title, sections[i].titleEn)) {
                 activeSection = sections[i].id;
                 return true;
             }
         }
+        for (let i = 0; i < sections.length; i++) {
+            if (!_sectionMatches(sections[i])) continue;
+            const id = sections[i].id;
+            for (let m = 0; m < searchMatches.length; m++) {
+                if (searchMatches[m].section === id && revealItem(searchMatches[m]))
+                    return true;
+            }
+            activeSection = id;
+            return true;
+        }
         return false;
     }
+
+    // Open `item`'s section (an entry of searchIndex, or {section, key}),
+    // then scroll to that setting and focus it once the page is built.
+    function revealItem(item) {
+        if (!item || !openSection(item.section)) return false;
+        _reveal = { entry: _indexEntry(item), lastY: -1, steady: 0, ticks: 0 };
+        revealSettle.restart();
+        return true;
+    }
+    // The page a section opens on is laid out over the next frames: its
+    // Layouts polish, text wraps, and contentHeight grows with them. A
+    // scroll worked out before that lands short of the setting (on another
+    // platform's fonts, by a lot). So the target is measured each frame and
+    // the scroll redone until its position has stopped moving.
+    property var _reveal: null
+    Timer {
+        id: revealSettle
+        interval: 16
+        repeat: true
+        onTriggered: root._revealStep()
+    }
+    function _revealStep() {
+        const r = _reveal;
+        if (!r) { revealSettle.stop(); return; }
+        r.ticks++;
+        const target = _revealTarget(r.entry);
+        if (!target) {
+            if (r.ticks > 120) { _reveal = null; revealSettle.stop(); }
+            return;
+        }
+        const y = _scrollYFor(target);
+        if (y !== r.lastY) {
+            r.lastY = y;
+            r.steady = 0;
+            _scrollToItem(target);
+        } else {
+            r.steady++;
+        }
+        // A few ticks with nothing moving (and not before the first frames
+        // had a chance to polish), or stop waiting after two seconds.
+        if ((r.ticks >= 10 && r.steady >= 3) || r.ticks > 120) {
+            _reveal = null;
+            revealSettle.stop();
+            _revealNow(r.entry);
+        }
+    }
+    // The full index entry for a {section, key} or {section, id} pair.
+    function _indexEntry(item) {
+        for (let i = 0; i < searchIndex.length; i++) {
+            const e = searchIndex[i];
+            if (e.section !== item.section) continue;
+            if ((item.id && e.id === item.id) || (!item.id && item.key && e.key === item.key))
+                return e;
+        }
+        return item;
+    }
+    // The page item that shows `entry`: a SettingsRow by its label, a
+    // SettingsGroup by its title, a card by its objectName or title text.
+    function _findSettingItem(entry) {
+        if (entry.objectName && entry.objectName.length > 0)
+            return _findChildByName(bodyCol, entry.objectName);
+        const text = entry.title || (entry.key ? I18n.t(entry.key) : "");
+        if (!text) return null;
+        let textHit = null;
+        const walk = (it) => {
+            const kids = it ? it.children : [];
+            for (let i = 0; i < kids.length; i++) {
+                const k = kids[i];
+                if (!k) continue;
+                if (_isRow(k) && k.label === text) return k;
+                if (_isGroup(k) && k.title === text) return k;
+                if (!textHit && k.text === text && k.visible) textHit = k;
+                const sub = walk(k);
+                if (sub) return sub;
+            }
+            return null;
+        };
+        return walk(bodyCol) || textHit;
+    }
+    function _isRow(it) { return it.hasLabel !== undefined && it.stackBelow !== undefined; }
+    function _isGroup(it) { return it.framed !== undefined && it.danger !== undefined && it.rows !== undefined; }
+
+    function _revealTarget(entry) {
+        let target = _findSettingItem(entry);
+        // A row shown only in some state (the chime minutes under a sound
+        // switch that is off): its group, where the switch that shows it is.
+        while (target && !target.visible && target !== bodyCol) target = target.parent;
+        return target && target !== bodyCol ? target : null;
+    }
+    // Focus the setting once the scroll to it has settled.
+    function _revealNow(entry) {
+        const target = _revealTarget(entry);
+        if (!target) return;
+        // The setting's own control when it takes focus (a switch row), else
+        // the first focusable thing in it (a text field, a combo).
+        // A row with nothing to focus (About → Version) is only scrolled to.
+        let f = target.activeFocusOnTab ? target : target.nextItemInFocusChain(true);
+        if (f && _isRow(target) && f !== target && !_isInside(f, target)) f = null;
+        if (f) f.forceActiveFocus(Qt.TabFocusReason);
+        _applySearchMarks();
+    }
+    function _isInside(item, ancestor) {
+        for (let p = item; p; p = p.parent)
+            if (p === ancestor) return true;
+        return false;
+    }
+
+    // Highlight the matching rows of the open section and dim the others
+    // while a search is on. Written from here, not bound: the rows come and
+    // go with the section Loader.
+    function _applySearchMarks() {
+        const q = Idx.norm(root.searchText);
+        const titles = {};
+        let any = false;
+        for (let i = 0; i < searchMatches.length; i++) {
+            if (searchMatches[i].section !== activeSection) continue;
+            titles[searchMatches[i].title] = true;
+            any = true;
+        }
+        const visit = (it, inMatchedGroup) => {
+            const kids = it ? it.children : [];
+            for (let i = 0; i < kids.length; i++) {
+                const k = kids[i];
+                if (!k) continue;
+                let grp = inMatchedGroup;
+                if (_isGroup(k)) grp = any && titles[k.title] === true;
+                if (_isRow(k)) {
+                    const hit = any && (titles[k.label] === true
+                                        || Idx.textMatches(q, k.label, "") || Idx.textMatches(q, k.hint, ""));
+                    k.searchMark = !any ? 0 : (hit ? 1 : (grp ? 0 : -1));
+                }
+                visit(k, grp);
+            }
+        };
+        visit(bodyCol, false);
+    }
+    onSearchTextChanged: Qt.callLater(root._applySearchMarks)
     // The nav row Tab lands on: the open section's, or the first one the
     // search leaves when it hides that.
     readonly property int _navTabIndex: {
@@ -822,10 +964,15 @@ Item {
     // (scrollToAnchor / findChildByName). Reuses bodyScroll + scrollAnim.
     function _scrollToAnchor(objectName) {
         const target = _findChildByName(bodyCol, objectName);
-        if (!target) return;
+        if (target) _scrollToItem(target);
+    }
+    function _scrollYFor(target) {
         const p = target.mapToItem(bodyCol, 0, 0);
         const maxY = Math.max(0, bodyScroll.contentHeight - bodyScroll.height);
-        const newY = Math.max(0, Math.min(bodyCol.y + p.y - Theme.spMd, maxY));
+        return Math.max(0, Math.min(Math.round(bodyCol.y + p.y - Theme.spMd), maxY));
+    }
+    function _scrollToItem(target) {
+        const newY = _scrollYFor(target);
         scrollAnim.from = bodyScroll.contentY;
         scrollAnim.to = newY;
         scrollAnim.restart();

@@ -1584,6 +1584,14 @@ ApplicationWindow {
     // What a palette command does. Ids are the shortcut catalog's, so the
     // palette offers exactly what the keys do; "settings:<section>" opens a
     // Settings section, and a few have no key of their own.
+    // Settings, opened on one setting: scrolled to and focused (APP-210).
+    function openSettingsItem(item) {
+        AppController.currentView = "settings";
+        Qt.callLater(function () {
+            const v = win.activeViewItem();
+            if (v && v.revealItem) v.revealItem(item);
+        });
+    }
     function runCommand(id) {
         if (id.indexOf("settings:") === 0) {
             const section = id.slice(9);
@@ -2355,6 +2363,8 @@ ApplicationWindow {
     TweaksPanel  {
         id: tweaks
         onHeightChanged: if (opened && parent) win._placePopover(tweaks, parent)
+        // A setting found by the panel's search (APP-210).
+        onOpenSettingsItem: (item) => win.openSettingsItem(item)
     }
     HotkeysPanel {
         id: hotkeys

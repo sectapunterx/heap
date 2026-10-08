@@ -619,6 +619,12 @@ target_compile_definitions(heap_i18n_keys_tests PRIVATE
 target_link_libraries(heap_i18n_keys_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
 add_test(NAME heap_i18n_keys_tests COMMAND heap_i18n_keys_tests)
 
+# ─── Settings search index covers every settings row (APP-207) ───
+add_executable(heap_settings_index_tests test_settings_index.cpp)
+target_compile_definitions(heap_settings_index_tests PRIVATE HEAP_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../qml")
+target_link_libraries(heap_settings_index_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
+add_test(NAME heap_settings_index_tests COMMAND heap_settings_index_tests)
+
 # ─── Integrations (tracker-sync StatusMap) tests ───
 # Pure status/priority translation for the post-release tracker sync. No QObject,
 # no network — Qt6::Core only.
