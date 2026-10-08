@@ -397,7 +397,7 @@ ApplicationWindow {
         if (!AppController.welcomeSeen)
             Qt.callLater(welcome.open);
         else
-            Qt.callLater(weeklyRecap.showIfDue);
+            Qt.callLater(win._maybeShowRecap);
     }
 
     // Close-to-tray: on platforms that have a tray icon (Windows/macOS via the
@@ -1070,6 +1070,10 @@ ApplicationWindow {
                     showArchived: win.showArchived
                     showSort: AppController.currentView === "board"
                     sortMode: win.boardSortMode
+                    // The weekly recap from the board (APP-211).
+                    showRecap: AppController.currentView === "board"
+                    recapUnseen: weeklyRecap.unseen
+                    onRecapRequested: win.runCommand("recap.open")
                     onSortModeRequested: (mode) => win.boardSortMode = mode
                     onTogglePriority: (p) => {
                         const next = Object.assign({}, win.prioritiesFilter);
@@ -2129,6 +2133,19 @@ ApplicationWindow {
         onTaskActivated: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
         onStandupDraftRequested: standupDraft.showNow()
     }
+    // The recap opens by itself only where it can be seen (APP-211): the
+    // window on screen and in front, nothing open over it. A week that
+    // turns while heap sits in the tray, minimised, behind other windows or
+    // under the task editor waits for the next of these: the day turning
+    // (midnight, resume from sleep), the window coming back to the front, an
+    // overlay closing.
+    function _maybeShowRecap() {
+        if (!AppController.welcomeSeen) return;
+        const onScreen = win.visible && win.visibility !== Window.Minimized && win.visibility !== Window.Hidden;
+        weeklyRecap.showIfDue(onScreen, win.active && !win._captureActive, win._overlayOpen);
+    }
+    onActiveChanged: if (win.active) Qt.callLater(win._maybeShowRecap)
+    on_OverlayOpenChanged: if (!win._overlayOpen) Qt.callLater(win._maybeShowRecap)
     // The standup draft (APP-170): text to edit and copy, sent nowhere.
     StandupDraftDialog { id: standupDraft }
     // The day's summary (APP-190): closed, carrying over, timers. Read-only.
@@ -2139,7 +2156,7 @@ ApplicationWindow {
     Connections {
         target: AppController
         function onTodayChanged() {
-            if (AppController.welcomeSeen && !win._overlayOpen) weeklyRecap.showIfDue();
+            win._maybeShowRecap();
         }
     }
 

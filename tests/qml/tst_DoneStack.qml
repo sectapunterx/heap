@@ -1,5 +1,6 @@
 // Closing a task on the board (APP-176): one card moved into Done folds into
-// a bar and lays itself on the stack over the Done column. A bulk move and
+// a bar and flies into the Done column's counter, which ticks up as it lands
+// (APP-205: there is no stack of bars over Done any more). A bulk move and
 // "Reduce motion" just move. The board's public functions are driven
 // directly, as in tst_BoardKeys.
 import QtQuick
@@ -70,30 +71,69 @@ TestCase {
         compare(Theme.motion, on ? 1 : 0);
     }
 
-    function test_closing_one_card_lays_it_on_the_stack() {
+    // Every item under `it` named `name`.
+    function findAll(it, name) {
+        const out = [];
+        (function walk(x) {
+            if (!x) return;
+            if (x.objectName === name) out.push(x);
+            const kids = x.children || [];
+            for (let i = 0; i < kids.length; i++) walk(kids[i]);
+        })(it);
+        return out;
+    }
+
+    // The Done column's count pill.
+    function doneCount(b) {
+        const st = AppController.statuses;
+        let idx = -1;
+        for (let i = 0; i < st.length; i++) if (st[i].id === "done") idx = i;
+        const pills = findAll(b, "column-count");
+        compare(pills.length, st.length);
+        // Pills come in column order, left to right.
+        pills.sort((a, c) => a.mapToItem(null, 0, 0).x - c.mapToItem(null, 0, 0).x);
+        return pills[idx];
+    }
+    function countText(pill) {
+        for (let i = 0; i < pill.children.length; i++)
+            if (pill.children[i].text !== undefined) return String(pill.children[i].text);
+        return "";
+    }
+
+    function test_closing_one_card_flies_into_the_done_counter() {
         const from = beforeDone();
         if (!from) skip("no column before Done in this profile");
         motionOn(true);
         const ids = seed(1, from);
         const b = makeBoard();
+        const pill = doneCount(b);
+        compare(countText(pill), "0");
         b.cursorTaskId = ids[0];
         b.cursorVisible = true;
         b.moveCursorCard(1, 0);
         compare(AppController.taskById(ids[0]).status, "done");
-        verify(b.stackRunning, "closing one card did not play the stack");
+        verify(b.stackRunning, "closing one card did not play the done moment");
         const flyer = findChild(b, "stack-flyer");
         verify(flyer.visible);
-        tryVerify(function () { return !b.stackRunning; }, 3000, "the stack never landed");
+        // The counter waits for the card...
+        compare(countText(pill), "0", "the count ticked before the card landed");
+        // ...which flies to it.
+        const target = pill.mapToItem(b, 0, 0);
+        fuzzyCompare(flyer.toX, target.x, 0.5);
+        fuzzyCompare(flyer.toW, pill.width, 0.5);
+        tryVerify(function () { return !b.stackRunning; }, 3000, "the card never landed");
         compare(flyer.visible, false);
-        // Every column has the slot; only Done fills it.
-        let shown = 0;
-        (function walk(it) {
-            if (!it) return;
-            if (it.objectName === "done-stack" && it.visible) shown++;
-            const kids = it.children || [];
-            for (let i = 0; i < kids.length; i++) walk(kids[i]);
-        })(b);
-        compare(shown, 1, "no stack over Done");
+        compare(countText(pill), "1", "the count did not tick on landing");
+    }
+
+    // APP-205: no bars over Done, whatever it holds.
+    function test_done_has_no_stack_bars() {
+        const from = beforeDone();
+        if (!from) skip("no column before Done in this profile");
+        const ids = seed(7, "done");
+        const b = makeBoard();
+        compare(findAll(b, "done-stack").length, 0);
+        compare(countText(doneCount(b)), "7");
     }
 
     function test_reduced_motion_just_moves() {
@@ -106,7 +146,8 @@ TestCase {
         b.cursorVisible = true;
         b.moveCursorCard(1, 0);
         compare(AppController.taskById(ids[0]).status, "done");
-        compare(b.stackRunning, false, "the stack played with reduced motion");
+        compare(b.stackRunning, false, "the done moment played with reduced motion");
+        compare(countText(doneCount(b)), "1", "the count waited with reduced motion");
     }
 
     function test_a_bulk_move_just_moves() {

@@ -12,11 +12,13 @@ import TodoCpp
 //     APP-12  Login rate limit
 //     APP-14  CSV export
 //
-// It opens by itself once a week, on the first launch (or the first midnight)
-// of a new week, when last week moved anything; settings.notifications
-// .weeklyRecap = false turns that off. Which week was shown is kept in
-// settings.notifications.recapSeenWeek, so a restart does not show it again.
-// A task in the list opens in the editor.
+// It opens by itself once a week, when last week moved anything;
+// settings.notifications.weeklyRecap = false turns that off. Which week was
+// seen is kept in settings.notifications.recapSeenWeek, so a restart does not
+// show it again. "Seen" means the dialog was on screen and closed (APP-211):
+// heap runs for weeks, and a recap opened at midnight in a window hidden in
+// the tray used to mark the week seen with nobody looking. Until then the
+// board's recap button carries a dot. A task in the list opens in the editor.
 Dialog {
     id: root
     objectName: "weekly-recap"
@@ -54,39 +56,82 @@ Dialog {
         try { return JSON.parse(AppController.appSettingsJson || "{}") || {}; } catch (e) { return {}; }
     }
 
-    // Whether the recap should open by itself on `today`: switched on, not yet
-    // shown this week, and last week moved something.
-    function isDue(today, recap: var) {
-        const n = root._settings().notifications || {};
-        if (n.weeklyRecap === false) return false;
-        if (n.recapSeenWeek === root.weekKey(today)) return false;
+    // The week whose recap was last seen, and whether the recap opens by
+    // itself at all. Bound to the settings, so the board's dot follows.
+    readonly property var _notif: root._settings().notifications || ({})
+    readonly property string seenWeek: root._notif.recapSeenWeek || ""
+    readonly property bool autoShow: root._notif.weeklyRecap !== false
+    // Whether last week moved anything. Read again when the day turns or the
+    // profile changes (the log is per profile).
+    readonly property bool hasContent: (AppController.today, AppController.activeProfileId,
+                                        root._hasGroups(AppController.weeklyRecap()))
+    // This week's recap has something in it and was not seen yet: the dot on
+    // the board's button. Nothing to read is nothing to flag, and with the
+    // recap switched off there is no dot either.
+    readonly property bool unseen: root.autoShow
+        && (AppController.today, root.isUnseen(new Date(), root.seenWeek, root.hasContent))
+
+    function _hasGroups(recap: var): bool {
         return !!recap && (recap["groups"] || []).length > 0;
     }
 
+    // Pure rules (APP-211), testable without a clock: callers pass `now`.
+    //
+    // The recap of the week `now` falls in has something in it and nobody
+    // has seen it.
+    function isUnseen(now, seenWeek: string, hasContent: bool): bool {
+        return hasContent && seenWeek !== root.weekKey(now);
+    }
+    // Whether to open the recap by itself right now: it is unseen and the
+    // person can actually see it — the window is on screen and in front, and
+    // nothing else is open over it. Otherwise it waits for the next chance
+    // (the window coming back, an overlay closing, the day turning).
+    function shouldShowRecap(now, seenWeek: string, visible: bool, active: bool,
+                             overlayOpen: bool, hasContent: bool): bool {
+        return root.isUnseen(now, seenWeek, hasContent) && visible && active && !overlayOpen;
+    }
+
+    // Whether the recap is due on `today` at all, wherever the window is:
+    // switched on, not yet seen this week, and last week moved something.
+    function isDue(today, recap: var): bool {
+        return root.autoShow && root.isUnseen(today, root.seenWeek, root._hasGroups(recap));
+    }
+
     function _markSeen(today) {
+        const key = root.weekKey(today);
         const s = root._settings();
         const n = Object.assign({}, s.notifications || {});
-        n.recapSeenWeek = root.weekKey(today);
+        if (n.recapSeenWeek === key) return;
+        n.recapSeenWeek = key;
         s.notifications = n;
         AppController.appSettingsJson = JSON.stringify(s);
     }
 
-    // Opens the recap if it is due. Called at startup and when the day turns.
-    function showIfDue() {
-        const today = new Date();
+    // Opens the recap if it is due and can be seen. Called at startup, when
+    // the day turns, when the window comes to the front and when an overlay
+    // closes. Nothing is marked until the dialog is closed.
+    function showIfDue(visible: bool, active: bool, overlayOpen: bool): bool {
+        if (root.opened || !root.autoShow) return false;
+        const now = new Date();
+        // The cheap checks first: this runs on every activation.
+        if (!root.shouldShowRecap(now, root.seenWeek, visible, active, overlayOpen, true)) return false;
         const r = AppController.weeklyRecap();
-        if (!root.isDue(today, r)) return false;
+        if (!root.shouldShowRecap(now, root.seenWeek, visible, active, overlayOpen, root._hasGroups(r))) return false;
         root.recap = r;
-        root._markSeen(today);
         root.open();
         return true;
     }
 
-    // From the palette: last week's recap whether it is due or not.
+    // From the palette, the hotkey and the board's button: last week's recap
+    // whether it is due or not, empty or not.
     function showNow() {
         root.recap = AppController.weeklyRecap();
         root.open();
     }
+
+    // Closed = seen: the week the shown recap belongs to (its weekEnd is the
+    // Monday of the week it was shown in).
+    onAboutToHide: root._markSeen(root.recap.weekEnd ? new Date(root.recap.weekEnd + "T00:00:00") : new Date())
 
     function _range() {
         if (!root.recap.weekStart) return "";
