@@ -17,7 +17,7 @@ export const trackers = ['GitHub', 'GitLab', 'Jira', 'Trello', 'Gitea', 'Forgejo
 
 const ru = {
   htmlTitle: 'Рабочий день разработчика в одном окне — lowkey',
-  description: 'Calm by design. Задачи из трекеров, встречи и заметки в одном окне. С клавиатуры и офлайн.',
+  description: 'Quiet by default. Задачи из трекеров, встречи и заметки в одном тихом окне. С клавиатуры и офлайн.',
   selfName: 'Русский',
   skip: 'К содержимому',
   brandLabel: 'Наверх',
@@ -215,7 +215,7 @@ const ru = {
 
 const en: typeof ru = {
   htmlTitle: 'A developer’s workday in one window — lowkey',
-  description: 'Calm by design. Tracker tasks, meetings and notes in one window. Keyboard-first and offline.',
+  description: 'Quiet by default. Tracker tasks, meetings and notes in one quiet window. Keyboard-first and offline.',
   selfName: 'English',
   skip: 'Skip to content',
   brandLabel: 'Back to top',
@@ -408,7 +408,7 @@ const en: typeof ru = {
   },
   notFound: { title: 'Page not found', h: 'This page is not here.', p: 'It may have moved when the site was rebuilt.', home: 'Home' },
   dock: { label: 'Where you are on the page', next: 'Go to the next section' },
-  sections: ['Start', 'Calm', 'Try it', 'A day', 'Git', 'Keyboard', 'Style', 'How it’s built', 'Your data', 'FAQ', 'Download'],
+  sections: ['Start', 'Quiet', 'Try it', 'A day', 'Git', 'Keyboard', 'Style', 'How it’s built', 'Your data', 'FAQ', 'Download'],
 };
 
 export const copy = { ru, en };
