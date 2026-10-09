@@ -31,8 +31,6 @@ TestCase {
         tc.win.height = 939;
         AppController.resetAllShortcuts();
         wait(1200);   // splash
-        const w = popup("WelcomePopup");
-        if (w && w.opened) w.close();
         tc.win.requestActivate();
         AppController.currentView = "board";
         tryVerify(function () { return tc.win.activeViewItem() !== null; }, 3000);
@@ -140,15 +138,6 @@ TestCase {
         verify(!s.activeFocus);
     }
 
-    // The tour going away leaves the keyboard in the view, not on the window.
-    function test_closing_the_tour_focuses_the_view() {
-        const w = popup("WelcomePopup");
-        w.open();
-        tryCompare(w, "opened", true);
-        w.close();
-        tryCompare(w, "opened", false);
-        tryVerify(focusIsInView, 2000, "focus after the tour: " + typeName(tc.win.activeFocusItem));
-    }
 
     // SHELL-3: the day keys wait while a text field or a dialog has the
     // keyboard, and work from the view.

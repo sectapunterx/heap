@@ -33,8 +33,6 @@ TestCase {
         AppController.resetAllShortcuts();
         tryVerify(function () { return !tc.win.findChild || true; });
         wait(1200);   // splash
-        const w = popup("WelcomePopup");
-        if (w && w.opened) w.close();
         tc.win.requestActivate();
         AppController.currentView = "board";
         tryVerify(function () { return tc.win.activeViewItem() !== null; }, 3000);
@@ -411,11 +409,11 @@ TestCase {
         keyClick(Qt.Key_Escape);
         tryCompare(te, "opened", false);
 
-        const welcome = popup("WelcomePopup");
+        const welcome = popup("KeyCheatSheet");
         welcome.open();
         tryCompare(welcome, "opened", true);
         keyClick(Qt.Key_K, Qt.ControlModifier);
-        compare(popup("CommandPalette").opened, false, "Ctrl+K opened the palette over the tour");
+        compare(popup("CommandPalette").opened, false, "Ctrl+K opened the palette over the cheat sheet");
         welcome.close();
         tryCompare(welcome, "opened", false);
 

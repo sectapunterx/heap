@@ -514,14 +514,13 @@ ApplicationWindow {
     // and simply drew on top of each other (deleting a multi-selection put the
     // undo toast right over the selection bar). They stack instead.
     readonly property int _selectionBarSpace: AppController.selectionCount > 0 ? 68 : 0
-    readonly property int _resumePillSpace: welcome.paused ? 52 : 0
 
     // True while anything modal-ish is up. A single-letter shortcut has to
     // stand down then: Qt only protects a focused text field, so a picker's
     // type-ahead or a read-only Text would otherwise swallow the keystroke or
     // let the shortcut fire over the dialog (HEAP-117).
     readonly property bool _overlayOpen: taskEditor.opened || AppController.immersion
-        || personEditor.opened || profileEditor.opened || welcome.opened
+        || personEditor.opened || profileEditor.opened
         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened || eventCapture.opened
         || hotkeys.opened || cheatSheet.opened || closeAsk.opened || goToDatePopup.opened
         || weeklyRecap.opened || standupDraft.opened || timeMachine.opened || eventLog.opened || endOfDay.opened
@@ -654,10 +653,10 @@ ApplicationWindow {
                                              || _focusOnControl
     // Global shortcuts (switch view, new task, palette, undo…) stand down
     // behind a modal: Ctrl+3 used to switch the view under an open task
-    // editor, Ctrl+K opened the palette over the welcome tour. The side-rail
+    // editor, Ctrl+K opened the palette over a dialog. The side-rail
     // popovers are not modal and keep them.
     readonly property bool _modalOpen: taskEditor.opened || AppController.immersion
-        || personEditor.opened || profileEditor.opened || welcome.opened
+        || personEditor.opened || profileEditor.opened
         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened || eventCapture.opened || cheatSheet.opened
         || closeAsk.opened || goToDatePopup.opened || eventLog.opened
         || (_focusInPopup && !_focusInPopover) || _dimmerShown
@@ -1271,6 +1270,7 @@ ApplicationWindow {
                         sortMode: win.boardSortMode
                         onTaskClicked: (id) => win.showTask(AppController.taskById(id))
                         onCreateInStatus: (s) => quickCapture.openIn(s)
+                        onResetFilterRequested: win.resetTaskFilter()
                     }
                 }
                 Component {
@@ -1279,7 +1279,9 @@ ApplicationWindow {
                 }
                 Component {
                     id: listComp
-                    TaskListView {}
+                    TaskListView {
+                        onResetFilterRequested: win.resetTaskFilter()
+                    }
                 }
                 // The Calendar lens (APP-264): Day / Week / Month as one zoom,
                 // with the "Without a date" tray. The zoom follows the view id,
@@ -1365,32 +1367,6 @@ ApplicationWindow {
     }
     PersonEditor  { id: personEditor }
     ProfileEditor { id: profileEditor }
-    WelcomePopup {
-        id: welcome
-        // Per-step "open →" actions route here so the tour stays decoupled from
-        // the popups/editors Main owns. Each _doAction() has paused the tour,
-        // so the target surface is visible when we open it.
-        onOpenAction: (id) => {
-            if (id === "task-new")            quickCapture.open();
-            else if (id === "quick-capture")  quickCapture.open();
-            else if (id === "palette")        cmdPalette.open();
-            else if (id === "hotkeys")        win.openCheatSheet();
-            // "Bring your stuff" (APP-169): the same pickers as the palette's.
-            else if (id === "vault-import")   importVaultDialog.open();
-            else if (id === "profile-import") importJsonDialog.open();
-            else if (id === "integrations")   win.runCommand("settings:integrations");
-        }
-        // "Learn more →" — jump to Settings and scroll the Help doc to the anchor.
-        onOpenHelp: (anchor) => {
-            AppController.currentView = "settings";
-            Qt.callLater(() => {
-                const v = win.activeViewItem();
-                if (v && v.openHelp)
-                    v.openHelp(anchor);
-            });
-        }
-    }
-
     // After a "delete all data" reset the controller rebuilds a fresh install;
     // back to Today, which is the first-run screen again (APP-271).
     Connections {
@@ -1398,74 +1374,39 @@ ApplicationWindow {
         function onFirstRunReset() {
             AppController.openSection("today");
         }
-        // Settings → Help "Replay" re-opens the guide from the top without
-        // touching any persisted onboarding flags.
+        // "С чего начать" (welcome.replay): the guide, not a tour (DG-131).
         function onWelcomeReplayRequested() {
-            welcome.step = 0;
-            Qt.callLater(welcome.open);
+            win.openGuide();
         }
     }
-
-    // Floating "continue tour" affordance, shown only while the welcome guide is
-    // paused — i.e. the user tapped a step's "open →" / "Learn more →" and jumped
-    // to a surface. Clicking the pill brings the tour back at the same step; the
-    // ✕ gives up on it (marks it seen). This is what keeps an action from closing
-    // the guide irreversibly.
-    Rectangle {
-        id: resumeGuidePill
-        visible: welcome.paused
-        enabled: visible
-        z: 9000
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 24 + win._selectionBarSpace
-        radius: 20
-        height: 40
-        width: pillRow.implicitWidth + 28
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-
-        // Click anywhere on the pill → resume the tour.
-        ClickArea {
-            objectName: "resume-guide"
-            label: I18n.t("welcome.resume")
-            showTip: false
-            onActivated: welcome.open()
-        }
-        RowLayout {
-            id: pillRow
-            anchors.centerIn: parent
-            spacing: Theme.spXl
-            Text {
-                text: I18n.t("welcome.resume")
-                color: Theme.text
-                font.pixelSize: Theme.fsMd
-                font.weight: Theme.fwTitle
-            }
-            Rectangle { width: 1; height: 18; color: Theme.border }
-            // Give up on the tour. Nested (declared last) so it wins the click
-            // over the pill; sized to 22px because the glyph's own bounds were a
-            // ~10px target sitting right next to a much larger "resume" action.
-            Rectangle {
-                Layout.preferredWidth: 22
-                Layout.preferredHeight: 22
-                radius: Theme.radiusSm
-                color: giveUpMA.hovered ? Theme.panel3 : "transparent"
-                Icon {
-                    anchors.centerIn: parent
-                    name: "close"
-                    color: giveUpMA.hovered ? Theme.text : Theme.textMuted
-                }
-                ClickArea {
-                    id: giveUpMA
-                    objectName: "resume-guide-give-up"
-                    label: I18n.t("welcome.giveUp")
-                    onActivated: welcome._finish()
-                }
-            }
-        }
+    // A Tasks filter that found nothing: "сбросить фильтр · Esc" (DG-160)
+    // clears the query and the priority filter.
+    function resetTaskFilter() {
+        win.searchText = "";
+        win.prioritiesFilter = ({});
     }
+    readonly property bool _taskFilterEmpty: {
+        const v = AppController.currentSection === "tasks" ? win.activeViewItem() : null;
+        return !!v && v.nothingFound === true;
+    }
+    Shortcut {
+        sequence: "Escape"
+        context: Qt.ApplicationShortcut
+        enabled: win._taskFilterEmpty && !win._viewKeysBlocked && !win._focusOnControl && !AppController.immersion
+                 && AppController.selectionCount === 0
+        onActivated: win.resetTaskFilter()
+    }
+    // The guide ("С чего начать") in its reader over Settings. The welcome
+    // tour is gone (DG-131): empty states and the first-run hero teach.
+    function openGuide() {
+        AppController.currentView = "settings";
+        Qt.callLater(() => {
+            const v = win.activeViewItem();
+            if (v && v.openHelp)
+                v.openHelp("");
+        });
+    }
+
     QuickCapturePopup {
         id: quickCapture
         // One toast for what was made (APP-266): "Created ID · when · column",
@@ -1803,7 +1744,7 @@ ApplicationWindow {
         case "palette.commands":     cmdPalette.openWith(">"); break;
         case "search.focus":         win._focusSearch(); break;
         case "event.new":            eventCapture.openAt(null); break;
-        case "welcome.replay":       AppController.replayWelcome(); break;
+        case "welcome.replay":       win.openGuide(); break;
         case "recap.open":           weeklyRecap.showNow(); break;
         case "focus.immersion":      win.toggleImmersion(); break;
         case "standup.draft":        standupDraft.showNow(); break;
@@ -3179,7 +3120,7 @@ ApplicationWindow {
         width: mainColumn.width
         areaWidth: mainColumn.width
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 24 + win._selectionBarSpace + win._resumePillSpace
+        anchors.bottomMargin: 24 + win._selectionBarSpace
         z: 100
     }
 

@@ -24,8 +24,6 @@ TestCase {
         tc.win.height = 939;
         AppController.resetAllShortcuts();
         wait(1200);   // splash
-        const w = popup("WelcomePopup");
-        if (w && w.opened) w.close();
         tc.win.requestActivate();
         AppController.currentView = "board";
         tryVerify(function () { return tc.win.activeViewItem() !== null; }, 3000);

@@ -146,15 +146,4 @@ TestCase {
         compare(sv.activeSection, "notifications");
     }
 
-    // The paused-tour pill and its ✕ were bare MouseAreas (design audit
-    // DES-19): now each is a named ClickArea, a Tab stop while the pill shows.
-    function test_resume_guide_pill_is_named() {
-        const resume = byName("resume-guide");
-        const giveUp = byName("resume-guide-give-up");
-        verify(resume !== null && giveUp !== null);
-        compare(resume.Accessible.name, I18n.t("welcome.resume"));
-        compare(giveUp.Accessible.name, I18n.t("welcome.giveUp"));
-        compare(giveUp._tipText, I18n.t("welcome.giveUp"));
-        compare(resume.activeFocusOnTab, resume.parent.visible);
-    }
 }

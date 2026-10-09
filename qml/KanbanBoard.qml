@@ -22,6 +22,8 @@ Item {
     property string hoveredTaskId: ""
     signal taskClicked(string id)
     signal createInStatus(string statusId)
+    // "сбросить фильтр · Esc" under a filter that found nothing (DG-160).
+    signal resetFilterRequested()
 
     // Anchor for shift-click range selection. Reset when the selection
     // disappears so the next shift-click starts a fresh range.
@@ -1950,6 +1952,13 @@ Item {
         today: AppController.today
     }
     readonly property bool _nothingFound: root._filtering && root._boardTotal > 0 && boardFilter.count === 0
+    readonly property bool nothingFound: root._nothingFound
+    // The filter as words for "Ничего под «…»" (DG-160).
+    readonly property string filterLabel: {
+        const parts = root.searchText.trim().split(/\s+/).filter(x => x.length > 0);
+        for (const p of root.activePriorities) parts.push(String(p).toUpperCase());
+        return parts.join(" · ");
+    }
     property int _allRows: AppController.tasks.rowCount()
     Connections {
         target: AppController.tasks
@@ -1968,8 +1977,9 @@ Item {
         color: Theme.panel
         border.color: Theme.borderStrong
         border.width: 1
-        visible: root._boardTotal === 0 || root._nothingFound
+        visible: root._boardTotal === 0 && !root._nothingFound
     }
+    // A filter that found nothing: one plain line, no card (X-Err-Empty).
     EmptyState {
         id: boardEmptyCol
         objectName: "board-empty-state"
@@ -1977,10 +1987,12 @@ Item {
         width: Math.min(parent.width - 96, 360)
         visible: root._boardTotal === 0 || root._nothingFound
         icon: root._nothingFound ? "" : root._allRows > 0 ? "heap-05-archive" : "heap-01-board"
-        title: root._nothingFound ? I18n.t("view.empty.noMatch.title")
+        title: root._nothingFound ? I18n.t("view.empty.noMatchFor").arg(root.filterLabel)
              : root._allRows > 0 ? I18n.t("board.empty.archivedTitle") : I18n.t("board.empty.title")
         // The keys as bound now, not as they shipped (design audit DES-15).
-        line: root._nothingFound ? I18n.t("view.empty.noMatch.hint")
+        lineLink: root._nothingFound
+        onLineActivated: root.resetFilterRequested()
+        line: root._nothingFound ? I18n.t("view.empty.resetFilter")
             : root._allRows > 0
               ? I18n.t("board.empty.archivedHint").arg(AppController.shortcutFor("view.archive")).arg(AppController.shortcutFor("task.new"))
               : I18n.t("board.empty.hint").arg(AppController.shortcutFor("task.new")).arg(AppController.shortcutFor("quick-capture"))

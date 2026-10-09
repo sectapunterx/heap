@@ -655,16 +655,5 @@ Rectangle {
                 }
             }
         }
-        // Nothing matches: say so, and the way back, in one line.
-        Text {
-            objectName: "view-header-nothing"
-            visible: root.searchShown && root.resultCount === 0 && root.searchText.length > 0
-            text: I18n.t("query.nothing")
-            color: Theme.textDim
-            font.family: Theme.fontUi
-            font.pixelSize: Theme.fsSm
-            font.underline: resetCA.hovered
-            ClickArea { id: resetCA; label: parent.text; onActivated: root.clearQuery() }
-        }
     }
 }

@@ -46,7 +46,6 @@ TestCase {
             { tag: "VaultImportDialog", qml: "VaultImportDialog { }" },
             { tag: "QuickCapturePopup", qml: "QuickCapturePopup { }" },
             { tag: "QuickCaptureNotesPopup", qml: "QuickCaptureNotesPopup { }" },
-            { tag: "WelcomePopup", qml: "WelcomePopup { }" },
             { tag: "TaskEditor", qml: "TaskEditor { }", fn: "task" },
             { tag: "EventCapture", qml: "EventCapture { }" },
         ];
@@ -73,7 +72,6 @@ TestCase {
     function test_a_press_inside_keeps_the_dialog_open_data() {
         return [
             { tag: "TaskEditor", qml: "TaskEditor { }", fn: "task" },
-            { tag: "WelcomePopup", qml: "WelcomePopup { }" },
             { tag: "QuickCaptureNotesPopup", qml: "QuickCaptureNotesPopup { }" },
         ];
     }

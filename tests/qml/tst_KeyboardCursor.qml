@@ -27,8 +27,6 @@ TestCase {
         tc.win.height = 939;
         AppController.resetAllShortcuts();
         wait(1200);   // splash
-        const w = popup("WelcomePopup");
-        if (w && w.opened) w.close();
         tc.win.requestActivate();
         tc.prevDate = AppController.selectedDate;
     }
