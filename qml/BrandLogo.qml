@@ -31,6 +31,7 @@ Item {
     readonly property real markAspect: 342 / 380
     readonly property real wordmarkAspect: 3.39
 
+    readonly property int _px: Math.max(8, Math.round((height > 0 ? height : implicitHeight) / 0.95))
     readonly property color _ink: theme === "light" ? "#0c0e11" : theme === "mono" ? monoColor : "#e9edf2"
     readonly property color _bar: theme === "light" ? "#5a4fb3" : theme === "mono" ? monoColor : "#b1a7f0"
 
@@ -83,9 +84,10 @@ Item {
         font.family: Brand.fontSans
         font.weight: Font.Medium
         // The x-height fills the logo's height the way the production
-        // wordmark does: cap height ≈ 0.7 em.
-        font.pixelSize: Math.max(8, Math.round(root.height / 0.95))
-        font.letterSpacing: -font.pixelSize * 0.035
+        // wordmark does: cap height ≈ 0.7 em. Tracking −3.5 % of that size;
+        // read from root, not from `font`, which is being set here.
+        font.pixelSize: root._px
+        font.letterSpacing: -root._px * 0.035
 
         TextMetrics {
             id: low

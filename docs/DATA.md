@@ -1,6 +1,6 @@
 # Data, backups & moving your work
 
-heap. stores everything locally — there is no account and no server. This page
+lowkey (heap until 0.8.0) stores everything locally — there is no account and no server. This page
 covers where your data lives, how backups work, and how to move a profile
 between machines today.
 
@@ -11,12 +11,19 @@ location (`QStandardPaths::AppDataLocation`):
 
 | OS | Typical path |
 |----|--------------|
-| Windows | `%APPDATA%\heap\heap\state.json` |
-| macOS | `~/Library/Application Support/heap/heap/state.json` |
-| Linux | `~/.local/share/heap/heap/state.json` |
+| Windows | `%APPDATA%\lowkey\lowkey\state.json` |
+| macOS | `~/Library/Application Support/lowkey/lowkey/state.json` |
+| Linux | `~/.local/share/lowkey/lowkey/state.json` |
 
 (The folder is named twice — organisation, then application.) **Settings →
 About** shows the exact folder of the running copy.
+
+**Coming from heap 0.7.** The first start of lowkey copies the whole `heap\heap`
+folder (state, backups, snapshots, attachments) into `lowkey\lowkey` and works
+from there. The old folder is left as it was, with a `MOVED-TO-LOWKEY.txt` in
+it; delete it once you no longer need to go back to heap 0.7. While heap 0.7 is
+still running, lowkey asks you to close it first and copies nothing. A folder
+given with `--data-dir` or `HEAP_DATA_DIR` is used as it is, never moved.
 
 `state.json` holds every profile (tasks, people, statuses, docs, notes), the
 global events, and your settings blob. It is human-readable — safe to inspect,

@@ -1,8 +1,11 @@
 <p align="center">
-  <img src="design/brand-export/surfaces/heap-og-card-outlined.svg" width="100%" alt="heap. — Work, in one place.">
+  <img src="design/brand-export/lowkey/lowkey-wordmark-on-dark.svg" width="320" alt="lowkey">
 </p>
 
-<h3 align="center">Tickets, calendar and notes for engineers — one native, keyboard-first window.</h3>
+<h3 align="center">Quiet by default.</h3>
+
+<p align="center">A developer’s workday in one window — tickets, calendar and notes, native and keyboard-first.<br>
+<sub>Formerly <b>heap</b>. Same app, same data — it moves over on the first start.</sub></p>
 
 <p align="center">
   <a href="https://sectapunterx.github.io/heap/"><b>Website</b></a> ·
@@ -20,7 +23,7 @@
 </div>
 
 <p align="center">
-  <img src="docs/assets/img/screens/board-kanban.png" width="100%" alt="heap. board: kanban columns, today's calendar, people to ping">
+  <img src="docs/assets/img/screens/board-kanban.png" width="100%" alt="lowkey board: kanban columns, today's calendar, people to ping">
 </p>
 
 Your tickets from GitHub, Jira, GitLab and nine more trackers, your meetings and focus time, your notes — side by side
@@ -31,7 +34,7 @@ on your own disk.
 
 ### Type it the way you'd say it
 
-Press `Ctrl+Shift+Space` from anywhere and write one line. heap. works out what it is and where it belongs — in
+Press `Ctrl+Shift+Space` from anywhere and write one line. lowkey works out what it is and where it belongs — in
 English or Russian.
 
 <p align="center">
@@ -46,11 +49,11 @@ English or Russian.
 | `review PRs every weekday 10:00` | a task that repeats every weekday at 10:00 |
 | `ping @viktor about the release` | a reminder in your People to ping list |
 
-Full syntax: [First day in heap.](docs/TUTORIAL.md#quick-capture-syntax)
+Full syntax: [First day in lowkey](docs/TUTORIAL.md#quick-capture-syntax)
 
 ### A board that knows your branch
 
-heap. watches your working copy. Check out a branch with the ticket in its name — `feature/app-101-login-rate-limit`
+lowkey watches your working copy. Check out a branch with the ticket in its name — `feature/app-101-login-rate-limit`
 — and the top bar says you're working on `APP-101`, with its pull request and CI checks one click away. The card
 carries the PR state too. Need a branch? Create one from the task's menu. No manual linking.
 
@@ -96,7 +99,7 @@ moves the card, `Ctrl+1`…`8` switch views. Every shortcut is rebindable from o
 - **Recurring tasks** and **automation**: auto-archive, stuck-task warnings, deadline and standup reminders, quiet hours
 - **Undo and redo** for every change
 - **Profiles** — separate workspaces per project or job, with JSON import / export
-- **Themes** — heap. ink in the brand's colours by default, more dark and light presets, your own themes, contrast modes, density
+- **Themes** — lowkey in the brand's colours by default, more dark and light presets, your own themes, contrast modes, density
 - **Weekly report**, one keystroke away (`Ctrl+Shift+W`)
 - A sample board and a replayable **guided tour** on first run
 
@@ -111,9 +114,9 @@ moves the card, `Ctrl+1`…`8` switch views. Every shortcut is rebindable from o
 Grab the latest build from [**Releases**](https://github.com/sectapunterx/heap/releases/latest):
 
 - **Windows** — installer or portable zip. Or with [Scoop](https://scoop.sh):
-  `scoop bucket add heap https://github.com/sectapunterx/heap` then `scoop install heap`
+  `scoop bucket add heap https://github.com/sectapunterx/heap` then `scoop install heap` (the bucket keeps the old name until the repository is renamed)
 - **macOS** — `.dmg`
-- **Linux** — AppImage, runs on any distro: `chmod +x heap-*.AppImage && ./heap-*.AppImage`
+- **Linux** — AppImage, runs on any distro: `chmod +x lowkey-*.AppImage && ./lowkey-*.AppImage`
 
 Prefer to build it yourself? See [docs/BUILDING.md](docs/BUILDING.md).
 
@@ -129,48 +132,48 @@ Prefer to build it yourself? See [docs/BUILDING.md](docs/BUILDING.md).
 
 ## Command line
 
-Note a task or check the current one without leaving the terminal. With heap open on the same data
+Note a task or check the current one without leaving the terminal. With lowkey open on the same data
 directory, commands go to the window — a change shows up there at once and can be undone there; with it
-closed, heap reads and saves `state.json` itself. Nothing here talks to the network.
+closed, lowkey reads and saves `state.json` itself. Nothing here talks to the network.
 
 ```sh
-heap add "fix login tomorrow 14:00 p1 #backend // check the refresh token"   # read like quick capture
-heap now                      # the task with a running timer, else the one your git branch names
-heap list --status prog       # also --profile <name>, --json
-heap today                    # in progress, or scheduled or due today
-heap done APP-12
-heap open APP-12              # show it in the window (starts heap if it is closed)
-heap help
+lowkey add "fix login tomorrow 14:00 p1 #backend // check the refresh token"   # read like quick capture
+lowkey now                    # the task with a running timer, else the one your git branch names
+lowkey list --status prog     # also --profile <name>, --json
+lowkey today                  # in progress, or scheduled or due today
+lowkey done APP-12
+lowkey open APP-12            # show it in the window (starts lowkey if it is closed)
+lowkey help
 ```
 
-`heap now` prints nothing and exits 0 when there is no current task, so it fits a shell prompt.
+`lowkey now` prints nothing and exits 0 when there is no current task, so it fits a shell prompt.
 `--format` takes `{id} {title} {status} {priority} {profile} {source} {elapsed}`:
 
 ```toml
 # starship.toml
-[custom.heap]
-command = "heap now --format '{id} {title}'"
+[custom.lowkey]
+command = "lowkey now --format '{id} {title}'"
 when = true
 format = "[$output]($style) "
 ```
 
 ```sh
 # bash / zsh
-PS1='$(heap now --format "[{id}] ")'"$PS1"
+PS1='$(lowkey now --format "[{id}] ")'"$PS1"
 ```
 
 Exit codes: `0` ok, `1` usage, `2` no such task, profile or column, `3` data error. `--data-dir` and
 `HEAP_DATA_DIR` work as for the app.
 
-**Windows:** in cmd and PowerShell use `heap-cli` (it sits next to `heap.exe`): heap.exe is a windowed
-program, so those shells neither wait for it nor see its output. `heap-cli` answers `now`, `list` and
-`today` itself, fast enough for a prompt, and passes the rest to heap.exe. Add the install folder to
-`PATH`, and `Set-Alias heap heap-cli` in your PowerShell profile if you like the short name. In git-bash
-plain `heap` works too.
+**Windows:** in cmd and PowerShell use `lowkey-cli` (it sits next to `lowkey.exe`): lowkey.exe is a
+windowed program, so those shells neither wait for it nor see its output. `lowkey-cli` answers `now`,
+`list` and `today` itself, fast enough for a prompt, and passes the rest to lowkey.exe. Add the install
+folder to `PATH`, and `Set-Alias lowkey lowkey-cli` in your PowerShell profile if you like the short name.
+In git-bash plain `lowkey` works too.
 
 ## Documentation
 
-- [**First day in heap.**](docs/TUTORIAL.md) — a ten-minute walkthrough
+- [**First day in lowkey**](docs/TUTORIAL.md) — a ten-minute walkthrough
 - [**Keyboard reference**](docs/HOTKEYS.md) — every shortcut
 - [**Tracker integrations**](docs/INTEGRATIONS.md) — connecting GitHub, Jira and the rest
 - [**Data & backups**](docs/DATA.md) — where your data lives, moving between machines

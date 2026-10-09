@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 project(heap VERSION 0.7.2 LANGUAGES C CXX)
 
 # Windows resource compiler (windres on mingw / rc.exe on MSVC). Required so
-# design/brand-export/icon/heap-icon.rc is actually compiled into heap.exe —
+# design/brand-export/lowkey/lowkey-icon.rc is actually compiled into lowkey.exe —
 # without this, CMake silently skips .rc inputs and the PE icon resource is
 # missing, leaving Explorer/taskbar with the default Qt icon in release.
 if (WIN32)
@@ -799,7 +799,8 @@ if(APPLE)
         endif()
     endif()
     if(EXISTS "${_heap_icns}")
-        set(MACOSX_BUNDLE_ICON_FILE "heap.icns")
+        get_filename_component(_heap_icns_name "${_heap_icns}" NAME)
+        set(MACOSX_BUNDLE_ICON_FILE "${_heap_icns_name}")
         target_sources(heap PRIVATE "${_heap_icns}")
         set_source_files_properties("${_heap_icns}" PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
     endif()

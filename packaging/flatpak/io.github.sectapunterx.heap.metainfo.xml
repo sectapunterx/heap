@@ -8,11 +8,11 @@
   <id>io.github.sectapunterx.heap</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
-  <name>heap.</name>
-  <summary>Native kanban, calendar and docs for engineers</summary>
+  <name>lowkey</name>
+  <summary>A developer's workday in one window</summary>
   <description>
     <p>
-      heap. keeps tasks, calendar, notes and docs in one place. It is a native
+      Tickets, calendar, notes and docs in one place — lowkey (formerly heap). It is a native
       desktop app built with Qt 6 / QML / C++20 — a single binary with a
       per-profile JSON workspace, no accounts and no cloud required.
     </p>
