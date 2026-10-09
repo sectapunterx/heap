@@ -1071,7 +1071,16 @@ ApplicationWindow {
                 section: AppController.currentSection
                 view: AppController.currentView
                 onLensSelected: (id) => win.openLens(id)
-                searchText: win.searchText
+                // The header writes its own query as chips are added and
+                // removed, so a binding would break on the first one: follow
+                // the window's query instead (a saved view, a link, a reset).
+                Component.onCompleted: topBar.searchText = win.searchText
+                Connections {
+                    target: win
+                    function onSearchTextChanged() {
+                        if (topBar.searchText !== win.searchText) topBar.searchText = win.searchText;
+                    }
+                }
                 // Typing reaches the views once the keys pause, not per key: a
                 // keystroke that swaps most rows on a 3k-task board rebinds every
                 // visible card (~100 ms), and a quick "priority:p0" used to pay
@@ -1085,10 +1094,16 @@ ApplicationWindow {
                 }
                 onLeaveRequested: win.focusActiveView()
                 onSeenBeforeActivated: (hit) => win.openSeenBefore(hit)
+                resultCount: section === "tasks" ? filterBar._fc.total : -1
+                onSaveViewRequested: savedViewsHost.openSave()
             }
 
                 FilterBar {
+                    id: filterBar
                     Layout.fillWidth: true
+                    // The conditions and the count moved to the query row
+                    // under the Tasks header (APP-261).
+                    slim: AppController.currentSection === "tasks"
                     // Archive brings its own header and its own counter, and the
                     // fall-through label used to caption it "Docs".
                     visible: AppController.currentView !== "docs"

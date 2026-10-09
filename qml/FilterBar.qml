@@ -11,7 +11,10 @@ Rectangle {
     color: Theme.panel
     // One row when both groups fit; otherwise sort / archived / counts drop
     // to a second row instead of running off the right edge.
-    readonly property bool _wrapped: filtersRow.implicitWidth + 24 + actionsRow.implicitWidth > width - 32
+    readonly property bool _wrapped: !root.slim && filtersRow.implicitWidth + 24 + actionsRow.implicitWidth > width - 32
+    // Under the Tasks header (APP-261) the conditions, the view name and the
+    // count live in the query row; what stays is the view's own tools.
+    property bool slim: false
     implicitHeight: _wrapped ? 44 + 34 : 44
     height: implicitHeight
     property var priorities: ({})  // map P0..P3 -> bool
@@ -62,6 +65,7 @@ Rectangle {
 
     RowLayout {
         id: filtersRow
+        visible: !root.slim
         x: 16
         y: (44 - height) / 2
         width: Math.min(implicitWidth, root.width - 32)
@@ -174,7 +178,7 @@ Rectangle {
         // ── Saved view ──
         BarChip {
             objectName: "save-view"
-            visible: root.savedViewName.length === 0
+            visible: root.savedViewName.length === 0 && !root.slim
             glyph: "☆"
             text: I18n.t("filter.saveView")
             tip: I18n.t("filter.saveViewTip")
@@ -348,6 +352,7 @@ Rectangle {
         // own filters in the sidebar.
         Text {
             objectName: "filter-count"
+            visible: !root.slim
             text: I18n.tasks(root.totalCount)
             color: Theme.textDim
             font.family: Theme.fontUi

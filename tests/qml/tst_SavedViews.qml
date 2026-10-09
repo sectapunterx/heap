@@ -131,7 +131,7 @@ TestCase {
 
     function test_save_from_the_filter_bar_with_enter() {
         tc.win.searchText = "svprobe priority:P0";
-        clickLaidOut("save-view");
+        clickLaidOut("query-save-view");
         const dlg = tc.host.nameDialog;
         tryCompare(dlg, "opened", true);
         const field = find(dlg.contentItem, function (it) { return it.objectName === "saved-view-name-field"; });

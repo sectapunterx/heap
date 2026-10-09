@@ -13,7 +13,6 @@ Rectangle {
     id: root
     objectName: "view-header"
     color: Theme.bg
-    implicitHeight: Theme.px(56)
 
     // The current section and view, handed in by Main.
     property string section: "tasks"
@@ -37,13 +36,89 @@ Rectangle {
     // The task search belongs to the views that list tasks.
     property bool searchShown: section === "tasks"
 
-    property alias searchText: searchField.text
+    // The whole query: the conditions shown as chips, then what is still
+    // being typed (APP-261). Set from outside (a saved view, a link) it is
+    // split again into chips and the rest.
+    property string searchText: ""
+    // Clauses ("status:blocked", "due:week"), space-separated; drawn as chips.
+    property string _committed: ""
+    property bool _sync: false
+    onSearchTextChanged: if (!root._sync) root._split(root.searchText)
+    // The count under the query ("14 tasks"), from Main.
+    property int resultCount: -1
+    signal saveViewRequested()
     // Parse-only, so this costs nothing per keystroke — it never touches the
     // task list, unlike the filtering itself.
-    readonly property bool searchIsQuery: AppController.searchIsQuery(searchField.text)
+    readonly property bool searchIsQuery: AppController.searchIsQuery(root.searchText)
     // Clauses that mean nothing ("stauts:x", an unknown column, "due:banana"):
     // shown on the badge, so a typo does not read as an empty board.
-    readonly property var searchProblems: AppController.searchProblems(searchField.text)
+    readonly property var searchProblems: AppController.searchProblems(root.searchText)
+
+    function _tokens(t) { return String(t || "").match(/"[^"]*"|\S+/g) || []; }
+    function _isClause(tok) { return /^-?[a-z]+:\S+$/i.test(tok); }
+    function _split(t) {
+        const toks = root._tokens(t);
+        // An OR query stays as typed: its parts belong together.
+        const chips = toks.indexOf("OR") >= 0 ? [] : toks.filter(root._isClause);
+        const rest = toks.indexOf("OR") >= 0 ? toks : toks.filter(x => !root._isClause(x));
+        root._sync = true;
+        root._committed = chips.join(" ");
+        searchField.text = rest.join(" ");
+        root._sync = false;
+    }
+    function _compose() {
+        root._sync = true;
+        root.searchText = [root._committed, searchField.text].filter(x => x.length > 0).join(" ");
+        root._sync = false;
+    }
+    // A finished "key:value " moves out of the field into a chip.
+    function _onTyped() {
+        if (root._sync) return;
+        const m = /^(.*?)(-?[a-z]+:\S+)\s$/i.exec(searchField.text);
+        if (m && searchField.text.indexOf(" OR ") < 0) {
+            root._sync = true;
+            root._committed = [root._committed, m[2]].filter(x => x.length > 0).join(" ");
+            searchField.text = m[1].trim();
+            root._sync = false;
+        }
+        root._compose();
+    }
+    function removeCondition(i) {
+        const list = root._tokens(root._committed);
+        list.splice(i, 1);
+        root._committed = list.join(" ");
+        root._compose();
+    }
+    function clearQuery() {
+        root._committed = "";
+        searchField.text = "";
+        root._compose();
+    }
+    readonly property var conditions: root._tokens(root._committed).map(root._chip)
+    // A clause as a chip: a word for the field, a word for the value.
+    function _chip(raw) {
+        const neg = raw.startsWith("-");
+        const body = neg ? raw.slice(1) : raw;
+        const at = body.indexOf(":");
+        const k = body.slice(0, at).toLowerCase();
+        const v = body.slice(at + 1);
+        const keys = { status: "status", priority: "priority", tag: "label", due: "due", deadline: "due",
+                       is: "is", mention: "mention" };
+        const key = I18n.t("query.key." + (keys[k] || "other"));
+        let value = v;
+        if (k === "is") value = I18n.t("query.is." + v.toLowerCase());
+        else if (k === "priority") value = v.toUpperCase().split(",").join(", ");
+        else if (k === "status") {
+            const sts = AppController.statuses;
+            value = v.split(",").map(id => { const st = sts.find(x => x.id === id.toLowerCase()); return st ? st.name : id; }).join(", ");
+        } else if (k === "due" || k === "deadline") {
+            const words = ["today", "tomorrow", "week", "overdue", "none"];
+            value = words.indexOf(v.toLowerCase()) >= 0 ? I18n.t("query.due." + v.toLowerCase()) : v;
+        }
+        if (value.indexOf("query.") === 0) value = v;
+        const bad = root.searchProblems.indexOf(raw) >= 0;
+        return { key: (neg ? I18n.t("query.not") + " " : "") + key, value: value + (bad ? " · " + I18n.t("query.unknown") : ""), raw: raw, bad: bad };
+    }
     // The "seen this before" hint under the search was clicked (APP-159).
     signal seenBeforeActivated(var hit)
     // Esc on an empty search box, or Return in it: give the keyboard back.
@@ -53,6 +128,10 @@ Rectangle {
         searchField.forceActiveFocus();
         searchField.selectAll();
     }
+    function focusEnd() {
+        searchField.forceActiveFocus();
+        searchField.cursorPosition = searchField.text.length;
+    }
     // Type to search (APP-117): the first letter typed on the board starts a
     // fresh search with it, and the rest follow into the field.
     function typeAhead(text) {
@@ -60,11 +139,18 @@ Rectangle {
         searchField.forceActiveFocus();
         searchField.cursorPosition = searchField.text.length;
     }
+    implicitHeight: headRow.implicitHeight + (root.searchShown ? queryRow.implicitHeight + Theme.spMd : 0) + 2 * Theme.spLg
 
-    RowLayout {
+    ColumnLayout {
         anchors.fill: parent
         anchors.leftMargin: Theme.sp2xl
         anchors.rightMargin: Theme.sp2xl
+        anchors.topMargin: Theme.spLg
+        anchors.bottomMargin: Theme.spLg
+        spacing: Theme.spMd
+    RowLayout {
+        id: headRow
+        Layout.fillWidth: true
         spacing: Theme.spXl
 
         Text {
@@ -309,19 +395,66 @@ Rectangle {
             }
         }
 
-        // Search: 280px when there is room, down to 160 when there is not.
+        // "14 tasks" under the query.
+        Text {
+            objectName: "view-header-count"
+            visible: root.searchShown && root.resultCount >= 0
+            text: I18n.count(Math.max(0, root.resultCount), "query.n.tasks")
+            color: Theme.textDim
+            font.family: Theme.fontUi
+            font.features: Theme.tabularNums
+            font.pixelSize: Theme.fsSm
+        }
+    }
+
+        // The query (APP-261): conditions as chips (× drops one), then the
+        // field in the same language as quick capture; "Save as view".
         Rectangle {
-            id: searchBox
+            id: queryRow
+            objectName: "view-header-query"
             visible: root.searchShown
             Layout.fillWidth: true
-            Layout.preferredWidth: 280
-            Layout.maximumWidth: 280
-            Layout.minimumWidth: 160
-            Layout.preferredHeight: 28
-            radius: Theme.radiusMd
-            color: Theme.panel2
-            border.color: searchField.activeFocus ? Theme.accent : Theme.border
-            border.width: searchField.activeFocus ? 2 : 1
+            implicitHeight: Math.max(Theme.chipH + 2 * Theme.spSm, queryFlow.implicitHeight + 2 * Theme.spSm)
+            radius: Theme.radiusLg
+            color: Style.chipFill ? Theme.panel : "transparent"
+            border.color: searchField.activeFocus ? Theme.focusRing : Theme.border
+            border.width: 1
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spLg
+                spacing: Theme.spMd
+                Text {
+                    text: "⌕"
+                    color: root.searchIsQuery ? Theme.accentStrong : Theme.textDim
+                    font.pixelSize: Theme.fsSm
+                }
+                Flow {
+                    id: queryFlow
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignVCenter
+                    spacing: Theme.spSm
+                    Repeater {
+                        model: root.conditions
+                        delegate: PropertyChip {
+                            id: qc
+                            required property var modelData
+                            required property int index
+                            objectName: "query-chip-" + qc.index
+                            small: true
+                            removable: true
+                            key: qc.modelData.key
+                            value: qc.modelData.value
+                            valueColor: qc.modelData.bad ? Theme.warning : Theme.text
+                            onRemoved: root.removeCondition(qc.index)
+                        }
+                    }
+                    Item {
+                        width: Math.max(Theme.px(200), queryFlow.width - x)
+                        height: Theme.chipHSmall
+                        Rectangle {
+                            id: searchBox
+                            anchors.fill: parent
+                            color: "transparent"
             Behavior on border.color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             RowLayout {
                 anchors.fill: parent
@@ -351,10 +484,18 @@ Rectangle {
                     // Esc clears what was typed, and a second Esc (or Return)
                     // hands the keyboard back to the view, so the board cursor
                     // can walk what the search left. It used to do neither.
+                    onTextChanged: root._onTyped()
                     Keys.onEscapePressed: (event) => {
                         if (searchField.text.length > 0) searchField.clear();
                         else root.leaveRequested();
                         event.accepted = true;
+                    }
+                    // Backspace on an empty field takes the last condition back.
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Backspace && searchField.text.length === 0 && root.conditions.length > 0) {
+                            root.removeCondition(root.conditions.length - 1);
+                            event.accepted = true;
+                        }
                     }
                     Keys.onReturnPressed: root.leaveRequested()
                     Keys.onEnterPressed: root.leaveRequested()
@@ -436,6 +577,29 @@ Rectangle {
                 }
             }
         }
-
+                    }
+                }
+                Text {
+                    objectName: "query-save-view"
+                    visible: root.conditions.length > 0 || searchField.text.length > 0
+                    text: I18n.t("query.saveView")
+                    color: saveCA.hovered ? Theme.text : Theme.textMuted
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
+                    ClickArea { id: saveCA; label: parent.text; onActivated: root.saveViewRequested() }
+                }
+            }
+        }
+        // Nothing matches: say so, and the way back, in one line.
+        Text {
+            objectName: "view-header-nothing"
+            visible: root.searchShown && root.resultCount === 0 && root.searchText.length > 0
+            text: I18n.t("query.nothing")
+            color: Theme.textDim
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsSm
+            font.underline: resetCA.hovered
+            ClickArea { id: resetCA; label: parent.text; onActivated: root.clearQuery() }
+        }
     }
 }
