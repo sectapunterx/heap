@@ -11,7 +11,8 @@ Popup {
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     padding: 0
-    width: 560
+    // X-Oth-Capture: 600 px, hints only, no buttons (DG-130).
+    width: Theme.px(600)
     // Standalone: hosted by CaptureWindow, a small window of its own that the
     // global hotkey brings up without the main window. The popup sits at the
     // top of that window so the mention dropdown has room below it.
@@ -493,14 +494,56 @@ Popup {
                 font.weight: Theme.fwTitle
             }
             Item { Layout.fillWidth: true }
-            Text {
+            // "в Example ▾": the profile the task goes to; the menu opens
+            // another one (the task lands in the profile the app is in).
+            Item {
                 objectName: "qc-profile"
-                text: I18n.t("capture.inProfile").arg(AppController.profileById(AppController.activeProfileId).name || "")
-                color: Theme.textDim
-                font.family: Theme.fontUi
-                font.pixelSize: Theme.fsSm
-                elide: Text.ElideRight
-                Layout.maximumWidth: Theme.px(200)
+                implicitWidth: profRow.implicitWidth
+                implicitHeight: profRow.implicitHeight
+                Layout.maximumWidth: Theme.px(220)
+                Row {
+                    id: profRow
+                    spacing: Theme.spXs
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: I18n.t("capture.inProfile").arg(AppController.profileById(AppController.activeProfileId).name || "")
+                        color: profCA.hovered ? Theme.text : Theme.textMuted
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsSm
+                        elide: Text.ElideRight
+                        width: Math.min(implicitWidth, Theme.px(200))
+                    }
+                    Icon {
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: "chevron-down"
+                        size: Theme.iconSize - 4
+                        color: profCA.hovered ? Theme.text : Theme.textMuted
+                    }
+                }
+                ClickArea {
+                    id: profCA
+                    label: I18n.t("capture.inProfile").arg(AppController.profileById(AppController.activeProfileId).name || "")
+                    enabled: AppController.profiles.length > 1
+                    onActivated: profileMenu.popup(profRow, 0, profRow.height + Theme.spXs)
+                }
+                AppMenu {
+                    id: profileMenu
+                    Instantiator {
+                        model: AppController.profiles
+                        delegate: AppMenuItem {
+                            id: profItem
+                            required property var modelData
+                            text: profItem.modelData.name
+                            marked: profItem.modelData.id === AppController.activeProfileId
+                            onTriggered: {
+                                AppController.activeProfileId = profItem.modelData.id;
+                                Qt.callLater(() => inputField.forceActiveFocus());
+                            }
+                        }
+                        onObjectAdded: (idx, obj) => profileMenu.insertItem(idx, obj)
+                        onObjectRemoved: (idx, obj) => profileMenu.removeItem(obj)
+                    }
+                }
             }
         }
 
@@ -518,7 +561,18 @@ Popup {
                 placeholderText: I18n.t("quick.fieldPh")
                 font.pixelSize: Theme.fsLg
                 wrapMode: TextEdit.Wrap
-                background: FieldFrame { control: inputField }
+                // A line under the text, not a box (X-Oth-Capture).
+                leftPadding: Theme.sp2xs
+                rightPadding: Theme.sp2xs
+                topPadding: Theme.spXs
+                bottomPadding: Theme.spMd
+                background: Item {
+                    Rectangle {
+                        anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+                        height: 1
+                        color: inputField.activeFocus ? Theme.borderStrong : Theme.border
+                    }
+                }
                 color: Theme.text
                 placeholderTextColor: Theme.textDim
                 selectByMouse: true
@@ -689,6 +743,19 @@ Popup {
                     value: "#" + modelData
                 }
             }
+            // A meeting in the calendar only on purpose (APP-266): a chip
+            // that says "нет" until clicked (DG-130; the sheet has no switch).
+            PropertyChip {
+                id: meetingBox
+                objectName: "qc-meeting"
+                property bool checked: false
+                visible: !!(root._preview && root._preview.start && root._preview.hasTime)
+                small: true
+                key: I18n.t("capture.meetingKey")
+                value: meetingBox.checked ? I18n.t("capture.meetingYes") : I18n.t("capture.meetingNo")
+                valueColor: meetingBox.checked ? Theme.text : Theme.textMuted
+                onClicked: meetingBox.checked = !meetingBox.checked
+            }
             PropertyChip {
                 id: columnChip
                 objectName: "qc-column"
@@ -712,15 +779,6 @@ Popup {
                     }
                 }
             }
-        }
-
-        // A meeting in the calendar only on purpose (APP-266).
-        AppSwitch {
-            id: meetingBox
-            objectName: "qc-meeting"
-            Layout.leftMargin: Theme.inset
-            visible: !!(root._preview && root._preview.start && root._preview.hasTime)
-            text: I18n.t("capture.alsoMeeting")
         }
 
         // A key another task holds stays in the title; offer that task.
@@ -790,22 +848,12 @@ Popup {
             Text {
                 objectName: "qc-keys-hint"
                 Layout.fillWidth: true
-                text: I18n.t("quick.keysHint")
+                text: I18n.t("capture.hints")
                 color: Theme.textDim
                 font.family: Theme.fontUi
                 font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsXs
                 wrapMode: Text.Wrap
-            }
-            PillButton {
-                text: I18n.t("common.cancel")
-                onClicked: root.close()
-            }
-            PillButton {
-                text: I18n.t("editor.btn.create")
-                primary: true
-                enabled: root._title.length > 0
-                onClicked: root._submit()
             }
         }
     }
