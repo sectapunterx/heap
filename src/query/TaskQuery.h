@@ -28,6 +28,8 @@ namespace heap::query {
 //   due:week   due:<7d        this week, relative/absolute comparisons,
 //   due:friday due:none       anything the date parser reads, or no date
 //   is:open  is:done  is:archived  is:overdue  is:recurring
+//   sprint:current  sprint:none  sprint:14   a Jira sprint (APP-255): the
+//                             active one, none, or a part of its name
 //   -clause   -#tag  -word    negation
 //   a OR b    a | b           either side (clauses on each side are ANDed;
 //                             a side's words are one of its clauses)

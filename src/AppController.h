@@ -1317,7 +1317,15 @@ class AppController : public QObject {
   // sorted. For the hint under the field.
   Q_INVOKABLE QStringList searchFields() const;
   Q_INVOKABLE QString eventHourLabel(double hour) const;
+  // The Jira sprint in progress when a card is in one (APP-255), else the ISO
+  // week ("wk 41").
   Q_INVOKABLE QString sprintLabel() const;
+  // Jira sprints ending in [from, to] (APP-255), read-only facts from the last
+  // pull: [{name, state, start, end, endDay (days after `from`), tasks}], by
+  // end date. For the sprint marker on the week, the month and the list.
+  Q_INVOKABLE QVariantList sprintMarkers(const QDate& from, const QDate& to) const;
+  // The active sprint ({name, start, end, daysLeft}), empty when none.
+  Q_INVOKABLE QVariantMap currentSprint() const;
   Q_INVOKABLE QString humanDate(const QDate& date) const;
   // Displayed dates in the UI language (APP-188): the pattern of a named
   // style ("dayMonth", "weekdayDay", "longWeekday"… see text/LocaleFormat.h)
@@ -2430,6 +2438,9 @@ class AppController : public QObject {
   // What a pull under the card's current settings is scoped to. See
   // heap::integrations::scopeFingerprint.
   QString scopeFingerprintFor(const QString& providerId) const;
+  // Integration setting "reviewMovable" (APP-242, off by default): merge /
+  // pull request cards may be moved between columns, locally only.
+  bool reviewCardsMovable(const QString& providerId) const;
   // provider + newline + issue key → the statuses the issue's workflow can move
   // to, as of the last pull. Only trackers that report transitions (Jira)
   // fill it; an issue without an entry is not second-guessed.

@@ -82,7 +82,25 @@ class RestIssueProvider : public IntegrationProvider {
     int attempt = 0;  // retries of the current page
     QVector<ExternalTask> tasks;
     bool active = false;
+    // The merge / pull request lists walked after the issues (APP-242).
+    bool review = false;
+    QStringList reviewQueue;  // full URLs still to walk
+    int reviewPage = 0;       // pages of the current list
+    QString issuesTruncated;  // why the issue walk stopped early, if it did
+    QString reviewError;      // the first review list that failed
+    QVector<ExternalTask> reviewTasks;
   };
+
+  // The roles whose merge / pull requests this pull also brings (APP-242);
+  // empty when the provider has none or they are switched off.
+  QStringList reviewRoles() const;
+  // After the issue walk: queue the review lists and walk them.
+  void startReviews(const QStringList& roles);
+  void queueReviews(const QStringList& roles, const QString& me);
+  // Walk the next queued review list, or finish the pull.
+  void nextReview();
+  // Emit issues and review items together.
+  void finishAll();
 
   // Fetch m_pull.url, retrying it on 429/5xx, and hand the body to onPage().
   void fetchPage();

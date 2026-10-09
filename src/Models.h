@@ -83,6 +83,11 @@ struct ExternalMeta {
   // The move in unsyncedStatus was never sent — the tracker was disconnected
   // or unreachable — so it goes out after the next successful pull.
   bool pushQueued = false;
+  // Read-only facts the tracker gave beyond an issue's fields, as it gave
+  // them (ExternalTask::details): a merge / pull request's branches, merge
+  // status and the issues it closes (APP-242), a Jira sprint (APP-255).
+  // Replaced on every pull, never edited here, never sent anywhere.
+  QJsonObject details;
 
   bool operator==(const ExternalMeta&) const = default;
 };
@@ -229,6 +234,11 @@ struct CalEvent {
 // pulled across projects is ambiguous on its own, so it is qualified with the
 // repo it came from ("web#42"). Empty for locally-created tasks.
 QString externalKeyOf(const Task& t);
+
+// A merge request or pull request mirrored from a forge (APP-242): read-only,
+// never written back, its column the request's stage unless the user lets
+// such cards move.
+bool isReviewItem(const Task& t);
 
 // Everything the ticket UI needs about a task's tracker link, as one map:
 // provider, key, url, assignee, author, type, project, milestone, comment count

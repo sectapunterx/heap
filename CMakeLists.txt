@@ -254,6 +254,7 @@ qt_add_library(heap_core STATIC
     # ── audit-ux: end ──
     # ── audit-int: begin ──
     src/integrations/TrackerMerge.cpp
+    src/integrations/Sprints.cpp
     src/integrations/SyncHealth.cpp
     src/history/TaskHistory.cpp
     src/integrations/AutoSync.h
@@ -354,6 +355,7 @@ qt_add_qml_module(heap_core
         qml/IntegrationHealthCard.qml
         qml/IntegrationsInfoCard.qml
         qml/CalendarSubscriptionsCard.qml
+        qml/SprintMarker.qml
         qml/AutoSyncCard.qml
         qml/WeeklyRecapDialog.qml
         qml/EventLogDialog.qml

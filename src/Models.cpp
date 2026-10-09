@@ -8,9 +8,22 @@
 
 #include <algorithm>
 
+bool isReviewItem(const Task& t) {
+  const QString kind = t.externalMeta.details.value(QStringLiteral("kind")).toString();
+  return !t.externalId.isEmpty() && (kind == QLatin1String("mr") || kind == QLatin1String("pr"));
+}
+
 QString externalKeyOf(const Task& t) {
   if(t.externalId.isEmpty()) {
     return {};
+  }
+  // A GitLab merge request is "!17", qualified like an issue number when it
+  // came from a pull across projects ("web!17").
+  if(t.externalId.startsWith(QChar('!'))) {
+    if(t.externalMeta.crossProject && !t.externalMeta.project.isEmpty()) {
+      return t.externalMeta.project.section(QChar('/'), -1) + t.externalId;
+    }
+    return t.externalId;
   }
   // Jira hands us the human key already ("PROJ-123"); the issue-number trackers
   // hand us a bare number, which reads as "#123" everywhere they render it.
@@ -59,6 +72,10 @@ QVariantMap ticketToVariant(const Task& t) {
       // the other side of a status conflict (APP-163).
       {QStringLiteral("remoteStatus"), t.externalMeta.status},
       {QStringLiteral("remoteColumn"), t.externalMeta.column},
+      // A merge / pull request's facts (APP-242) and a Jira sprint (APP-255),
+      // as the tracker gave them; "review" says the card is such a request.
+      {QStringLiteral("details"), t.externalMeta.details.toVariantMap()},
+      {QStringLiteral("review"), isReviewItem(t)},
   };
 }
 

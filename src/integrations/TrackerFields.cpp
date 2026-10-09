@@ -159,6 +159,31 @@ QString sanitizeProject(const QString& raw) {
   return p;
 }
 
+QStringList closingReferences(const QString& body) {
+  static const QRegularExpression kVerb(
+      QStringLiteral(R"((?:^|[^\w])(?:close[sd]?|closing|fix(?:e[sd])?|fixing|resolve[sd]?|resolving|implement(?:s|ed)?)\s*:?\s+)"),
+      QRegularExpression::CaseInsensitiveOption);
+  static const QRegularExpression kRef(QStringLiteral(R"(\s*(?:,|and)?\s*([A-Za-z0-9_.\-/]*#\d+))"));
+  QStringList out;
+  auto it = kVerb.globalMatch(body);
+  while(it.hasNext()) {
+    const QRegularExpressionMatch verb = it.next();
+    qsizetype at = verb.capturedEnd();
+    for(;;) {
+      const QRegularExpressionMatch ref =
+          kRef.match(body, at, QRegularExpression::NormalMatch, QRegularExpression::AnchorAtOffsetMatchOption);
+      if(!ref.hasMatch()) {
+        break;
+      }
+      if(!out.contains(ref.captured(1))) {
+        out.append(ref.captured(1));
+      }
+      at = ref.capturedEnd();
+    }
+  }
+  return out;
+}
+
 QString joinObjectField(const QJsonValue& array, const QString& key) {
   QStringList names;
   for(const auto& v : array.toArray()) {

@@ -40,6 +40,10 @@ const QHash<QString, Entry>& table() {
        {"The status in %1 no longer changes by itself. To turn it on: Settings → Integrations → %1",
         "Статус в %1 больше не меняется сам. Включить: Настройки → Интеграции → %1"}},
       // APP-204: a card outside the filter is read-only for the tracker.
+      // APP-242: a merge / pull request card stays in the column of its stage.
+      {QStringLiteral("int.reviewFixed"),
+       {"%1 is a %2 merge request: its column follows its stage there. To move such cards yourself: Settings → Integrations → %2",
+        "%1 — merge request в %2: колонка повторяет его стадию. Двигать такие карточки самому: Настройки → Интеграции → %2"}},
       {QStringLiteral("int.readOnlyOutOfScope"),
        {"%1 is no longer in your %2 filter — not changing its status in the tracker",
         "%1 больше не в вашем фильтре %2 — статус в трекере не меняю"}},
