@@ -24,9 +24,27 @@ Rectangle {
     signal noteActivated(string id)
     // After "+": the view puts the cursor in the new note.
     signal noteCreated(string id)
+    // Knowledge (APP-269): Docs live in the same list — the reference links
+    // pinned at the top, the doc pages and the snippets below the notes.
+    signal refActivated(string url)
+    signal pageActivated(string id)
+    signal snippetActivated(string title, string code)
 
-    color: Theme.panel
-    implicitWidth: 240
+    // The Docs catalogue, read as it is stored: nothing is moved or copied,
+    // so nothing of it can be lost on the way to Knowledge.
+    function _docs() {
+        const raw = AppController.docsState || "";
+        if (!raw.length) return ({ sections: [], snippets: [] });
+        try { return JSON.parse(raw) || ({}); } catch (e) { return ({}); }
+    }
+    // "RFC 9110" → tag "RFC", number "9110"; a ref without a number is its tag.
+    function _splitRef(ref) {
+        const m = /^(\S+)\s+(.+)$/.exec(String(ref || "").trim());
+        return m ? { tag: m[1], rest: m[2] } : { tag: String(ref || ""), rest: "" };
+    }
+
+    color: Theme.bg
+    implicitWidth: 260
 
     function _data(idx, name) {
         const m = AppController.notes;
@@ -75,9 +93,45 @@ Rectangle {
         pinned.sort(byTitle);
         loose.sort(byTitle);
 
+        // Docs: the reference links, the pages, the snippets (APP-269).
+        const q = needle.toLowerCase();
+        const has = (s) => q.length === 0 || String(s || "").toLowerCase().indexOf(q) >= 0;
+        const docs = root._docs();
+        const refs = [];
+        for (const sec of docs.sections || []) {
+            for (const it of sec.items || []) {
+                if (!it || !(it.url || "").length) continue;
+                if (!has(it.title) && !has(it.ref) && !has(it.desc) && !has(it.url)) continue;
+                const r = root._splitRef(it.ref);
+                refs.push({ kind: "ref", tag: r.tag, title: String(it.title || it.ref || it.url) + (r.rest.length ? " · " + r.rest : ""), url: String(it.url) });
+            }
+        }
+        const noteTitles = ({});
+        for (const n of pinned.concat(loose)) noteTitles[n.title.toLowerCase()] = true;
+        for (const f in byFolder) for (const n of byFolder[f]) noteTitles[n.title.toLowerCase()] = true;
+        const pages = [];
+        const dp = AppController.docPages;
+        if (dp) {
+            const rpId = dp.roleOf("id"), rpTitle = dp.roleOf("title");
+            for (let i = 0; i < dp.rowCount(); i++) {
+                const idx = dp.index(i, 0);
+                const t = String(dp.data(idx, rpTitle) || "");
+                if (!has(t)) continue;
+                // A page named like a note says where it is from.
+                const shown = noteTitles[t.toLowerCase()] ? t + " " + I18n.t("knowledge.fromDocs") : t;
+                pages.push({ kind: "page", id: String(dp.data(idx, rpId)), title: shown });
+            }
+        }
+        const snippets = [];
+        for (const sn of docs.snippets || []) {
+            if (!sn || (!has(sn.title) && !has(sn.code))) continue;
+            snippets.push({ kind: "snippet", tag: String(sn.lang || "txt"), title: String(sn.title || ""), code: String(sn.code || "") });
+        }
+
         const rows = [];
-        if (pinned.length > 0) {
+        if (pinned.length > 0 || refs.length > 0) {
             rows.push({ kind: "header", label: I18n.t("notes.pinned") });
+            for (const r of refs) rows.push(r);
             for (const n of pinned) rows.push({ kind: "note", note: n, inPinnedSection: true });
         }
         const folders = Object.keys(byFolder).sort();
@@ -89,6 +143,14 @@ Rectangle {
         if (loose.length > 0) {
             if (rows.length > 0) rows.push({ kind: "header", label: I18n.t("notes.other") });
             for (const n of loose) rows.push({ kind: "note", note: n });
+        }
+        if (pages.length > 0) {
+            rows.push({ kind: "header", label: I18n.t("knowledge.pages") });
+            for (const p of pages) rows.push(p);
+        }
+        if (snippets.length > 0) {
+            rows.push({ kind: "header", label: I18n.t("knowledge.snippets") });
+            for (const sn of snippets) rows.push(sn);
         }
         return rows;
     }
@@ -186,6 +248,17 @@ Rectangle {
     }
 
     Connections {
+        target: AppController
+        function onDocsStateChanged() { root.scheduleRebuild() }
+    }
+    Connections {
+        target: AppController.docPages
+        function onRowsInserted() { root.scheduleRebuild() }
+        function onRowsRemoved()  { root.scheduleRebuild() }
+        function onDataChanged()  { root.scheduleRebuild() }
+        function onModelReset()   { root.scheduleRebuild() }
+    }
+    Connections {
         target: AppController.notes
         function onRowsInserted() { root.scheduleRebuild() }
         function onRowsRemoved()  { root.scheduleRebuild() }
@@ -207,10 +280,10 @@ Rectangle {
             Layout.fillWidth: true
             spacing: Theme.spSm
             Text {
-                text: I18n.t("notes.all")
-                color: Theme.textDim
-                font.pixelSize: Theme.fsSm
-                font.weight: Theme.fwTitle
+                text: I18n.t("sidebar.knowledge")
+                color: Theme.text
+                font.pixelSize: Theme.fsLg
+                font.weight: Theme.fwHeading
                 Layout.fillWidth: true
             }
             Rectangle {
@@ -289,7 +362,8 @@ Rectangle {
             delegate: Loader {
                 required property var modelData
                 width: list.width
-                sourceComponent: modelData.kind === "header" ? headerRow : noteRow
+                sourceComponent: modelData.kind === "header" ? headerRow
+                               : modelData.kind === "note" ? noteRow : docRow
                 onLoaded: item.rowData = modelData
             }
 
@@ -334,6 +408,59 @@ Rectangle {
                 }
             }
 
+            // A reference link, a doc page or a snippet: a small tag and a title.
+            Component {
+                id: docRow
+                Rectangle {
+                    id: drow
+                    property var rowData: ({})
+                    objectName: "knowledge-" + (drow.rowData.kind || "") + "-row"
+                    height: Theme.px(30)
+                    radius: Theme.radiusMd
+                    color: drowCA.hovered ? Theme.panel2 : "transparent"
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spMd
+                        spacing: Theme.spMd
+                        Rectangle {
+                            visible: (drow.rowData.tag || "").length > 0
+                            implicitWidth: tagTxt.implicitWidth + 2 * Theme.spXs
+                            implicitHeight: tagTxt.implicitHeight + Theme.sp2xs
+                            radius: Theme.radiusSm
+                            color: "transparent"
+                            border.color: Theme.border
+                            border.width: 1
+                            Text {
+                                id: tagTxt
+                                anchors.centerIn: parent
+                                text: String(drow.rowData.tag || "").substring(0, 4)
+                                color: Theme.textDim
+                                font.family: Theme.fontMono
+                                font.pixelSize: Theme.fsXs
+                            }
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: drow.rowData.title || ""
+                            color: Theme.text
+                            font.pixelSize: Theme.fsSm
+                            elide: Text.ElideRight
+                        }
+                    }
+                    ClickArea {
+                        id: drowCA
+                        label: drow.rowData.title || ""
+                        role: Accessible.Link
+                        onActivated: {
+                            const r = drow.rowData;
+                            if (r.kind === "ref") root.refActivated(r.url);
+                            else if (r.kind === "page") root.pageActivated(r.id);
+                            else if (r.kind === "snippet") root.snippetActivated(r.title, r.code);
+                        }
+                    }
+                }
+            }
+
             Component {
                 id: noteRow
                 Rectangle {
@@ -341,11 +468,10 @@ Rectangle {
                     property var rowData: ({})
                     readonly property var note: rowData.note || ({})
                     objectName: "note-row-" + (row.note.id || "")
-                    height: 40
+                    height: Theme.px(30)
                     radius: Theme.radiusMd
                     readonly property bool current: row.note.id === AppController.activeNoteId
-                    color: row.current ? Theme.withAlpha(Theme.accent, 0.14)
-                         : rowMA.containsMouse ? Theme.panel2 : "transparent"
+                    color: rowMA.containsMouse ? Theme.panel2 : "transparent"
                     Accessible.role: Accessible.ListItem
                     Accessible.name: row.note.title || ""
                     readonly property alias menu: rowMenu
@@ -360,29 +486,28 @@ Rectangle {
                         z: 10
                     }
 
-                    Rectangle {
-                        visible: row.current
-                        anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
-                        anchors.margins: Theme.spSm
-                        width: 2; radius: 1
-                        color: Theme.accent
-                    }
 
                     ColumnLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: Theme.spXl; anchors.rightMargin: Theme.spMd
+                        anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spMd
                         anchors.topMargin: Theme.spXs; anchors.bottomMargin: Theme.spXs
                         spacing: 0
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: Theme.spXs
                             Text {
+                                id: noteTitleTxt
                                 text: row.note.title || ""
                                 color: Theme.text
                                 font.pixelSize: Theme.fsSm
-                                font.weight: row.current ? Theme.fwTitle : Theme.fwBody
+                                font.weight: row.current ? Theme.fwHeading : Theme.fwBody
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
+                                CursorBar {
+                                    shown: row.current
+                                    anchors.left: parent.left
+                                    anchors.top: parent.bottom
+                                }
                             }
                             // A pin is only worth drawing where it is not
                             // already implied by the section it is under.
@@ -401,7 +526,8 @@ Rectangle {
                             font.pixelSize: Theme.fsXs
                             elide: Text.ElideRight
                             Layout.fillWidth: true
-                            visible: (row.note.excerpt || "").length > 0
+                            // One line per note in Knowledge (sheet H2-Knowledge).
+                            visible: false
                         }
                     }
 

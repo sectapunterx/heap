@@ -19,6 +19,8 @@ Item {
     property string text: ""
     property string placeholder: ""
     property bool readOnly: false
+    // How [[targets]] read (APP-269): AppController.wikiTargets(text).
+    property var wikiTargets: ({})
     // The edited source, as each edit is taken in.
     signal edited(string text)
     // Esc with no block open: the caller goes back.
@@ -163,6 +165,7 @@ Item {
         imageBaseDir: AppController.dataDir + "/attachments"
         palette: Theme.mdPalette
         ticketTitles: AppController.taskTitles
+        wikiTargets: root.wikiTargets
     }
 
     MdView {

@@ -619,6 +619,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.section.tasks.desc",
        {"Board, list or calendar, on the lens you left.", "Доска, список или календарь — на том виде, где вы остановились."}},
       {"shortcut.section.knowledge.label", {"Go to Knowledge", "Перейти в «Знания»"}},
+      {"notes.wiki.missing", {"no such note", "нет такой"}},
       {"shortcut.section.knowledge.desc", {"Notes and links.", "Заметки и ссылки."}},
       {"shell.notice.keys",
        {"lowkey has a new sidebar: Ctrl+1 Today, Ctrl+2 Tasks, Ctrl+3 Knowledge, Ctrl+, Settings. Blocked and In review are in My views.",
@@ -2044,6 +2045,159 @@ QVariantList AppController::notesMentioningTask(const QString& id) const {
   });
   for(const Note* n : hits) {
     out.append(QVariantMap{{"id", n->id}, {"title", n->title}, {"updated", n->updated}});
+  }
+  return out;
+}
+
+namespace {
+// [[target]] or [[target|label]], the target trimmed; first occurrence order.
+QStringList wikiTargetsOf(const QString& markdown) {
+  static const QRegularExpression rx(QStringLiteral("\\[\\[([^\\]\\|\\n]+)(?:\\|[^\\]\\n]*)?\\]\\]"));
+  QStringList out;
+  auto it = rx.globalMatch(markdown);
+  while(it.hasNext()) {
+    const QString t = it.next().captured(1).trimmed();
+    if(!t.isEmpty() && !out.contains(t)) {
+      out << t;
+    }
+  }
+  return out;
+}
+
+// The stage of a column as one glyph, the shape StatusRing draws.
+QString stageGlyph(const QString& category) {
+  if(category == QStringLiteral("done")) {
+    return QStringLiteral("\u25CF");  // ●
+  }
+  if(category == QStringLiteral("review")) {
+    return QStringLiteral("\u25D5");  // ◕
+  }
+  if(category == QStringLiteral("half") || category == QStringLiteral("prog")) {
+    return QStringLiteral("\u25D1");  // ◑
+  }
+  if(category == QStringLiteral("blocked")) {
+    return QStringLiteral("\u25CC");  // ◌
+  }
+  return QStringLiteral("\u25CB");  // ○
+}
+}  // namespace
+
+QVariantList AppController::noteTaskRefs(const QString& markdown) const {
+  QVariantList out;
+  static const QRegularExpression key(QStringLiteral("(?<![\\w-])([A-Z][A-Z0-9]*-\\d+)(?![\\w-])"));
+  QStringList seen;
+  auto it = key.globalMatch(markdown);
+  while(it.hasNext()) {
+    const QString id = it.next().captured(1);
+    if(seen.contains(id)) {
+      continue;
+    }
+    seen << id;
+    const auto statusNameOf = [this](const QString& st) {
+      const int si = statusIndexOf(st);
+      return si < 0 ? st : m_statuses[si].toMap().value(QStringLiteral("name")).toString();
+    };
+    const int row = m_tasks.indexOfId(id);
+    if(row >= 0) {
+      const Task& t = m_tasks.items().at(row);
+      out.append(QVariantMap{{"id", t.id},
+                             {"title", t.title},
+                             {"status", t.status},
+                             {"statusName", statusNameOf(t.status)},
+                             {"category", statusCategory(t.status)},
+                             {"profileName", QString()}});
+      continue;
+    }
+    for(const Profile& p : m_profiles) {
+      if(p.id == m_activeProfileId) {
+        continue;
+      }
+      const auto hit = std::ranges::find_if(p.tasks, [&](const Task& t) {
+        return t.id == id;
+      });
+      if(hit != p.tasks.end()) {
+        QString name = hit->status, cat = heap::board::defaultCategoryFor(hit->status);
+        for(const QVariant& v : p.statuses) {
+          const QVariantMap m = v.toMap();
+          if(m.value(QStringLiteral("id")).toString() == hit->status) {
+            name = m.value(QStringLiteral("name")).toString();
+            const QString c = m.value(QStringLiteral("category")).toString();
+            if(heap::board::isColumnCategory(c)) {
+              cat = c;
+            }
+          }
+        }
+        out.append(QVariantMap{{"id", hit->id},
+                               {"title", hit->title},
+                               {"status", hit->status},
+                               {"statusName", name},
+                               {"category", cat},
+                               {"profileName", p.name}});
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+QVariantMap AppController::wikiTargets(const QString& markdown) const {
+  QVariantMap out;
+  const QStringList targets = wikiTargetsOf(markdown);
+  if(targets.isEmpty()) {
+    return out;
+  }
+  QHash<QString, QVariantMap> tasks;
+  for(const QVariant& v : noteTaskRefs(targets.join(QChar(' ')))) {
+    const QVariantMap m = v.toMap();
+    tasks.insert(m.value(QStringLiteral("id")).toString(), m);
+  }
+  for(const QString& t : targets) {
+    if(tasks.contains(t)) {
+      const QVariantMap m = tasks.value(t);
+      const QString profile = m.value(QStringLiteral("profileName")).toString();
+      QString tip =
+          m.value(QStringLiteral("title")).toString() + QStringLiteral(" \u00B7 ") + m.value(QStringLiteral("statusName")).toString();
+      if(!profile.isEmpty()) {
+        tip += QStringLiteral(" \u00B7 ") + profile;
+      }
+      out.insert(t,
+                 QVariantMap{{"kind", QStringLiteral("task")},
+                             {"label", stageGlyph(m.value(QStringLiteral("category")).toString()) + QChar(' ') + t},
+                             {"tip", tip}});
+      continue;
+    }
+    if(resolveNoteLink(t).value(QStringLiteral("kind")).toString() == QStringLiteral("missing")) {
+      out.insert(t,
+                 QVariantMap{{"kind", QStringLiteral("missing")}, {"label", t + QStringLiteral(" \u00B7 ") + tr_("notes.wiki.missing")}});
+    }
+  }
+  return out;
+}
+
+QVariantList AppController::tasksLinkingToNote(const QString& noteId) const {
+  QVariantList out;
+  const int row = m_notes.indexOfId(noteId);
+  if(row < 0) {
+    return out;
+  }
+  const QString title = m_notes.items().at(row).title.trimmed();
+  if(title.isEmpty()) {
+    return out;
+  }
+  const auto links = [&](const QString& text) {
+    for(const QString& t : wikiTargetsOf(text)) {
+      // [[Note]] or [[Note#Heading]]
+      const QString name = t.section(QChar('#'), 0, 0).trimmed();
+      if(name.compare(title, Qt::CaseInsensitive) == 0) {
+        return true;
+      }
+    }
+    return false;
+  };
+  for(const Task& t : m_tasks.items()) {
+    if(links(t.desc) || links(t.local.notes)) {
+      out.append(QVariantMap{{"id", t.id}, {"title", t.title}});
+    }
   }
   return out;
 }

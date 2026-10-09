@@ -535,6 +535,7 @@ heap_add_appcontroller_test(heap_profile_io_tests test_profile_io.cpp)
 # Cover AppController welcomeSeen / demoActive persistence and startFresh()
 # (HEAP-51). Same headless boot as the other AppController suites.
 heap_add_appcontroller_test(heap_onboarding_tests test_onboarding.cpp)
+heap_add_appcontroller_test(heap_knowledge_tests test_knowledge.cpp)
 
 # ─── Sample data (seed content) tests ───
 # Cover SampleData seed invariants (HEAP-56): events spread across the week and

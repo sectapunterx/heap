@@ -748,6 +748,19 @@ class AppController : public QObject {
   // Notes that name the task (its id as a word), newest first:
   // [{id, title, updated}] — the task document's "Mentioned in" (APP-265).
   Q_INVOKABLE QVariantList notesMentioningTask(const QString& id) const;
+  // Knowledge (APP-269). The tasks a note names — a [[KEY]] or the bare key —
+  // with their column now, in the order written: [{ id, title, status,
+  // statusName, category, profileName }]; a task of another profile carries
+  // that profile's name, of the active one an empty one.
+  Q_INVOKABLE QVariantList noteTaskRefs(const QString& markdown) const;
+  // How each [[target]] of a note reads in the rendered view: a task key →
+  // { kind: "task", label: "<stage glyph> KEY", tip }, a name nothing answers
+  // to → { kind: "missing", label: "name · no such note" }. Notes and headings
+  // that exist are left out (drawn as links).
+  Q_INVOKABLE QVariantMap wikiTargets(const QString& markdown) const;
+  // Tasks whose description or own notepad links the note by its title,
+  // [[Title]]: [{ id, title }]. Backlinks from notes are backlinksToNote().
+  Q_INVOKABLE QVariantList tasksLinkingToNote(const QString& noteId) const;
   Q_INVOKABLE void startTaskTimer(const QString& id);
   Q_INVOKABLE void stopTaskTimer(const QString& id);
   Q_INVOKABLE int elapsedSecondsFor(const QString& id) const;

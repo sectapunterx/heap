@@ -1045,7 +1045,9 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 // The tasks and knowledge sections; Today and Settings carry
                 // their own titles.
-                visible: section === "tasks" || section === "knowledge"
+                // Knowledge is one screen with its own header (APP-269); the
+                // full Docs catalogue keeps this one, to come back.
+                visible: section === "tasks" || view === "docs"
                 section: AppController.currentSection
                 view: AppController.currentView
                 onLensSelected: (id) => win.openLens(id)
@@ -1176,6 +1178,16 @@ ApplicationWindow {
                             if (AppController.currentView === "archive") return archiveComp;
                             if (AppController.currentView === "settings") return settingsComp;
                             return null;
+                        }
+                    }
+
+                    // A doc page in the Knowledge list opens in Docs (APP-269).
+                    Connections {
+                        target: notesLoader.item as NotesView
+                        ignoreUnknownSignals: true
+                        function onDocPageRequested(id) {
+                            AppController.currentView = "docs";
+                            docsBridge.requestedAnchor = "page:" + id;
                         }
                     }
 
