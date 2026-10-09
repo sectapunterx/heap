@@ -1217,6 +1217,7 @@ AppController::AppController(QObject* parent) :
           entry["prUrl"] = pr.value("url");
           entry["prMove"] = pr.value("move");
           entry["prMoveReason"] = pr.value("moveReason");
+          entry["prChecks"] = pr.value("checks");
           m_tasks.setGitInfoForId(taskIdForBranchMatch(mr.taskId), entry);
         });
     applyGitSettingsFromMap(settingsMap().value("git").toMap());
@@ -7495,6 +7496,9 @@ QVariantMap AppController::taskById(const QString& id) const {
     tags.append(QVariantMap{{"id", tag.id}, {"color", tag.color}});
   }
   m["localTags"] = tags;
+  // The document's meta column (DG-061): history and the PR, if one is known.
+  m["statusChangedAt"] = t.statusChangedAt;
+  m.insert(m_tasks.gitFactsFor(t.id));
   return m;
 }
 
@@ -15280,6 +15284,7 @@ void AppController::onGitRepoState(const QString& repo, const QVariantMap& state
   entry["prUrl"] = pr.value("url");
   entry["prMove"] = pr.value("move");
   entry["prMoveReason"] = pr.value("moveReason");
+  entry["prChecks"] = pr.value("checks");
   m_tasks.setGitInfoForId(taskIdForBranchMatch(mr.taskId), entry);
 }
 

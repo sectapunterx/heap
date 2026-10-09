@@ -18,6 +18,13 @@ Item {
     property bool small: false
     // Placeholder chip ("+ property"): a dashed outline, no key.
     property bool add: false
+    // A status stage ("prog", "blocked"…): its ring before the value, in the
+    // bold style only (H2-Task "Статус ◑ В работе"); quiet keeps the word.
+    property string ring: ""
+    // A signal tint (H2-Command: "статус Заблокировано" on red): a tinted
+    // fill, no outline. Transparent = the plain chip.
+    property color tone: "transparent"
+    readonly property bool _toned: root.tone.a > 0
 
     signal clicked()
     signal removed()
@@ -29,8 +36,9 @@ Item {
         anchors.fill: parent
         radius: Theme.radiusMd
         visible: !root.add
-        color: area.hovered ? Theme.surfaceCardHover : Theme.chipBg
-        border.width: 1
+        color: root._toned ? Theme.withAlpha(root.tone, area.hovered ? 0.24 : 0.16)
+             : area.hovered ? Theme.surfaceCardHover : Theme.chipBg
+        border.width: root._toned ? 0 : 1
         border.color: Theme.chipBorder
     }
     // "+ property": a dashed outline
@@ -71,19 +79,26 @@ Item {
             visible: root.key.length > 0
             anchors.verticalCenter: parent.verticalCenter
             text: root.key
-            color: Theme.textDim
+            color: root._toned ? Qt.tint(Theme.textMuted, Theme.withAlpha(root.tone, 0.45)) : Theme.textDim
             font.family: Theme.fontUi
             font.pixelSize: root.small ? Theme.fsXs : Theme.fsSm
+        }
+        StatusRing {
+            visible: root.ring.length > 0 && Style.fills
+            anchors.verticalCenter: parent.verticalCenter
+            category: root.ring
+            size: root.small ? Theme.iconSize - 2 : Theme.iconSize - 1
         }
         Text {
             id: valueText
             anchors.verticalCenter: parent.verticalCenter
             width: Math.min(implicitWidth, Theme.chipMaxW - 2 * Theme.spMd
                             - (root.key.length ? keyMetrics.advanceWidth + Theme.spXs : 0)
+                            - (root.ring.length > 0 && Style.fills ? Theme.iconSize + Theme.spXs : 0)
                             - (root.removable ? Theme.iconSize + Theme.spXs : 0))
             elide: Text.ElideRight
             text: root.add ? "+ " + root.value : root.value
-            color: root.add ? Theme.textDim : root.valueColor
+            color: root.add ? Theme.textDim : root._toned ? Qt.tint(Theme.text, Theme.withAlpha(root.tone, 0.3)) : root.valueColor
             font.family: Theme.fontUi
             font.pixelSize: root.small ? Theme.fsXs : Theme.fsSm
             font.weight: root.add ? Theme.fwBody : Theme.fwTitle
@@ -99,12 +114,11 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             width: Theme.iconSize
             height: Theme.iconSize
-            Text {
+            Icon {
                 anchors.centerIn: parent
-                text: "×"
+                name: "close"
+                size: Theme.iconSize - 4
                 color: removeArea.hovered ? Theme.text : Theme.textDim
-                font.family: Theme.fontUi
-                font.pixelSize: Theme.fsSm
             }
             ClickArea {
                 id: removeArea

@@ -1246,13 +1246,16 @@ ApplicationWindow {
                     Component.onCompleted: win.activateCurrentView()
                     // The task document (APP-265): a panel over the right
                     // of the view, or the whole width.
+                    // Full, it replaces the whole content area, the Tasks
+                    // header and the query row included (DG-060).
                     TaskDocument {
                         id: taskDoc
+                        parent: taskDoc.full ? mainColumn : viewArea
                         anchors.right: parent.right
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
                         width: taskDoc.full ? parent.width
-                             : Math.min(parent.width, Math.max(Theme.px(560), parent.width * 0.58))
+                             : Math.min(parent.width, Math.max(Theme.px(560), parent.width * 0.68))
                         z: 60
                         onClosed: Qt.callLater(win.focusActiveView)
                         onInternalLinkActivated: (kind, target) => win.followMdLink(kind, target)

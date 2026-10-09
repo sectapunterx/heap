@@ -24,6 +24,10 @@ Item {
     // How [[targets]] read (APP-269): AppController.wikiTargets(text).
     property var wikiTargets: ({})
     property bool headingRules: true
+    // Drawn under the last block, inside the scroll (the task document's
+    // plan and hint, DG-062): the item gets `width` set to the text column.
+    property Component tail: null
+    readonly property Item tailItem: view.footerItem ? (view.footerItem as MdTailHost).loaded : null
     // The edited source, as each edit is taken in.
     signal edited(string text)
     // Esc with no block open: the caller goes back.
@@ -185,10 +189,21 @@ Item {
         onInternalLinkActivated: (kind, target) => root.internalLinkActivated(kind, target)
 
         // Room to click below the last block: a new block there.
-        footer: Item {
+        footer: MdTailHost {
+            id: tailHost
             width: view.width
-            height: Theme.px(160)
+            height: tailLoader.y + tailLoader.height + Theme.px(160)
+            loaded: tailLoader.item as Item
+            Loader {
+                id: tailLoader
+                x: view.sideMargin
+                y: placeholderText.visible ? placeholderText.y + placeholderText.height + Theme.spLg : Theme.spSm
+                width: view.width - 2 * view.sideMargin
+                active: root.tail !== null
+                sourceComponent: root.tail
+            }
             Text {
+                id: placeholderText
                 objectName: "md-block-placeholder"
                 visible: src.text.trim().length === 0 && !root.editing
                 x: view.sideMargin
@@ -200,9 +215,24 @@ Item {
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsMd
             }
-            TapHandler {
-                enabled: !root.readOnly
-                onTapped: root.appendBlock()
+            // A click above the tail (the placeholder) or below it: a new
+            // block. The tail's own rows take their clicks.
+            Item {
+                width: parent.width
+                height: tailLoader.y
+                TapHandler {
+                    enabled: !root.readOnly
+                    onTapped: root.appendBlock()
+                }
+            }
+            Item {
+                y: tailLoader.y + tailLoader.height
+                width: parent.width
+                height: parent.height - y
+                TapHandler {
+                    enabled: !root.readOnly
+                    onTapped: root.appendBlock()
+                }
             }
         }
 
@@ -346,5 +376,9 @@ Item {
         AppMenuItem { objectName: "md-slash-table"; text: I18n.t("md.slash.table"); onTriggered: slashMenu.put("| | |\n|---|---|\n| | |\n", 0) }
         AppMenuItem { objectName: "md-slash-quote"; text: I18n.t("md.slash.quote"); onTriggered: slashMenu.put("> ") }
         AppMenuItem { objectName: "md-slash-slash"; text: I18n.t("md.slash.literal"); onTriggered: slashMenu.put("/") }
+    }
+
+    component MdTailHost: Item {
+        property Item loaded: null
     }
 }

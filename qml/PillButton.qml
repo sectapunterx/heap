@@ -13,12 +13,19 @@ Button {
     // A catalogue shortcut that does what this pill does. A third click with
     // the mouse suggests the key once (APP-166).
     property string shortcutId: ""
+    // A key drawn after the label, in mono and muted ("Готово d", "Пауза t").
+    property string keyHint: ""
+    // Smaller padding and type (the meta column's "Пауза t").
+    property bool small: false
+    // The one filled button of a screen: neutral fill, dark label
+    // (H2-Task "Готово d"). Never the accent (DG-005).
+    property bool solid: false
     // A Button's clicked() is the same for Space and the mouse; a pill only
     // takes focus from Tab, so the pointer over it means it was clicked.
     onClicked: if (root.shortcutId.length > 0 && root.hovered && !root.visualFocus) AppController.noteMouseAction(root.shortcutId)
 
-    padding: Theme.spMd
-    leftPadding: Theme.spXl
+    padding: root.small ? Theme.spXs : Theme.spMd
+    leftPadding: root.small ? Theme.spLg : Theme.spXl
 
     // Reachable with Tab and named for screen readers; the focus ring below
     // is the only sign of where the keyboard is.
@@ -27,7 +34,7 @@ Button {
     focusPolicy: Qt.TabFocus
     Accessible.role: Accessible.Button
     Accessible.name: root.text
-    rightPadding: Theme.spXl
+    rightPadding: root.small ? Theme.spLg : Theme.spXl
 
     // Every hand-rolled button in the app switches the cursor; this one is a
     // Controls Button, which doesn't, so pills were the only clickable things
@@ -44,11 +51,13 @@ Button {
         radius: Theme.radiusMd
         // Outlined, never filled (DG-005, X/N-Dlg-Small): the primary
         // action has the brighter line, a selected one the segment's look.
-        color: selected ? Theme.segmentSelected
+        color: root.solid ? (root.hovered ? Theme.textMuted : Theme.text)
+              : root.selected ? Theme.segmentSelected
               : root.hovered ? Theme.withAlpha(Theme.text, 0.05) : "transparent"
-        border.color: danger  ? Theme.withAlpha(Theme.danger, root.hovered ? 0.7 : 0.45)
-                   : primary ? (root.hovered ? Theme.textDim : Theme.buttonLinePrimary)
-                   : selected ? (Style.fills ? "transparent" : Theme.segmentSelectedLine)
+        border.color: root.solid ? "transparent"
+                   : root.danger  ? Theme.withAlpha(Theme.danger, root.hovered ? 0.7 : 0.45)
+                   : root.primary ? (root.hovered ? Theme.textDim : Theme.buttonLinePrimary)
+                   : root.selected ? (Style.fills ? "transparent" : Theme.segmentSelectedLine)
                    : (root.hovered ? Theme.buttonLinePrimary : Theme.buttonLine)
         border.width: 1
         // The cursor sits outside the pill, on the surface around it: a
@@ -60,12 +69,16 @@ Button {
         }
     }
     contentItem: Text {
-        text: root.text
+        text: root.keyHint.length === 0 ? root.text
+            : root.text + "&nbsp;&nbsp;<font face=\"" + Theme.fontMono + "\" color=\""
+              + (root.solid ? Theme.withAlpha(Theme.bg, 0.6) : Theme.textMuted) + "\">" + root.keyHint + "</font>"
+        textFormat: root.keyHint.length === 0 ? Text.PlainText : Text.StyledText
         font.family: Theme.fontUi
-        font.pixelSize: Theme.fsMd
-        font.weight: selected ? Theme.segmentSelectedWeight : Theme.fwBody
-        color: danger ? Theme.danger
-             : primary || selected || root.hovered ? Theme.buttonTextPrimary : Theme.buttonText
+        font.pixelSize: root.small ? Theme.fsSm : Theme.fsMd
+        font.weight: root.solid ? Theme.fwHeading : root.selected ? Theme.segmentSelectedWeight : Theme.fwBody
+        color: root.solid ? Theme.bg
+             : root.danger ? Theme.danger
+             : root.primary || root.selected || root.hovered ? Theme.buttonTextPrimary : Theme.buttonText
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
     }
