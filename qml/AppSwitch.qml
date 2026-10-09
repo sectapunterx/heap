@@ -18,16 +18,16 @@ Switch {
         x: sw.leftPadding
         y: (sw.height - height) / 2
         radius: height / 2
-        color: sw.checked ? Theme.accent : Theme.panel3
-        border.color: sw.visualFocus ? Theme.focusRing : sw.checked ? Theme.accent : Theme.fieldBorder
+        // Neutral, never lavender (DG-005, X/N-Set-StyleKeys).
+        color: sw.checked ? Theme.switchOn : "transparent"
+        border.color: sw.visualFocus ? Theme.focusRing : sw.checked ? Theme.switchOn : Theme.switchOffLine
         border.width: sw.visualFocus ? 2 : 1
         Rectangle {
             width: 16; height: 16; radius: 8
             x: sw.checked ? parent.width - width - 2 : 2
             y: 2
-            color: Theme.knob
-            border.color: Theme.fieldBorder
-            border.width: 1
+            color: sw.checked ? Theme.switchKnobOn : Theme.switchKnobOff
+            border.width: 0
             Behavior on x { NumberAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
         }
     }

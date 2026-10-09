@@ -518,15 +518,14 @@ Item {
                                 implicitWidth: 36; implicitHeight: 20; radius: 10
                                 x: devSwitch.leftPadding
                                 y: (devSwitch.height - height) / 2
-                                color: devSwitch.checked ? Theme.accent : Theme.panel3
-                                border.color: devSwitch.checked ? Theme.accent : Theme.fieldBorder
+                                color: devSwitch.checked ? Theme.switchOn : "transparent"
+                                border.color: devSwitch.checked ? Theme.switchOn : Theme.switchOffLine
                                 border.width: 1
                                 FocusRing { target: devSwitch; radius: 13 }
                                 Rectangle {
                                     width: 14; height: 14; radius: 7
-                                    color: Theme.knob
-                                    border.color: Theme.fieldBorder
-                                    border.width: 1
+                                    color: devSwitch.checked ? Theme.switchKnobOn : Theme.switchKnobOff
+                                    border.width: 0
                                     y: 3
                                     x: devSwitch.checked ? 36 - width - 3 : 3
                                 }
@@ -1216,18 +1215,17 @@ Item {
         Rectangle {
             id: switchTrack
             Layout.preferredWidth: 36; Layout.preferredHeight: 20; radius: 10
-            color: switchRow.checked ? Theme.accent : Theme.panel3
+            color: switchRow.checked ? Theme.switchOn : "transparent"
             // The OFF track had no edge on panel3 in the light themes, and
             // the knob was 1.2-2.3:1 on the accent track (DES-20).
-            border.color: switchRow.checked ? Theme.accent : Theme.fieldBorder
+            border.color: switchRow.checked ? Theme.switchOn : Theme.switchOffLine
             border.width: 1
             FocusRing { target: switchRow; radius: 13 }
             Rectangle {
                 id: switchKnob
                 width: 14; height: 14; radius: 7
-                color: Theme.knob
-                border.color: Theme.fieldBorder
-                border.width: 1
+                color: switchRow.checked ? Theme.switchKnobOn : Theme.switchKnobOff
+                border.width: 0
                 anchors.verticalCenter: parent.verticalCenter
                 // Slides by transform, not by x: only transform and opacity
                 // animate (APP-175).
@@ -1262,8 +1260,9 @@ Item {
             Layout.fillWidth: segRow.stacked
             Layout.preferredHeight: Theme.px(30)
             radius: Theme.radiusMd
-            color: Theme.panel2
-            border.color: Theme.border; border.width: 1
+            // The bold sheet sets the options on a track; the quiet one has none.
+            color: Theme.segmentTrack
+            border.width: 0
             activeFocusOnTab: true
             Accessible.role: Accessible.RadioButton
             Accessible.name: segRow.label
@@ -1289,15 +1288,19 @@ Item {
                         Layout.preferredWidth: Math.max(Theme.px(64), segTxt.implicitWidth + 2 * Theme.spXl)
                         implicitWidth: Layout.preferredWidth
                         radius: Theme.radiusSm
-                        color: segOpt.sel ? Theme.accent
-                             : segMA.containsMouse ? Theme.panel3 : "transparent"
+                        // Neutral fill and bold (bold style) or a thin
+                        // outline (quiet), never lavender (DG-005).
+                        color: segOpt.sel ? Theme.segmentSelected
+                             : segMA.containsMouse ? Theme.withAlpha(Theme.text, 0.05) : "transparent"
+                        border.width: segOpt.sel && !Style.fills ? 1 : 0
+                        border.color: Theme.segmentSelectedLine
                         Text {
                             id: segTxt
                             anchors.centerIn: parent
                             text: segOpt.l
-                            color: segOpt.sel ? Theme.textOnAccent : Theme.text
+                            color: segOpt.sel ? Theme.segmentSelectedText : Theme.segmentText
                             font.pixelSize: Theme.fsSm
-                            font.weight: Theme.fwTitle
+                            font.weight: segOpt.sel ? Theme.segmentSelectedWeight : Theme.fwBody
                         }
                         MouseArea {
                             id: segMA
@@ -3322,14 +3325,16 @@ Item {
                         radius: Theme.radiusMd
                         Layout.preferredHeight: 30
                         Layout.preferredWidth: addT.implicitWidth + 2 * Theme.spXl
-                        color: addMA.hovered ? Theme.accentHover : Theme.accent
+                        color: addMA.hovered ? Theme.withAlpha(Theme.text, 0.05) : "transparent"
+                        border.width: 1
+                        border.color: addMA.hovered ? Theme.textDim : Theme.buttonLinePrimary
                         opacity: addMA.enabled ? 1 : 0.45
                         Text {
                             id: addT
                             anchors.centerIn: parent
                             text: "+ " + I18n.t("common.add")
-                            color: Theme.textOnAccent
-                            font.weight: Theme.fwTitle
+                            color: Theme.buttonTextPrimary
+                            font.weight: Theme.fwBody
                         }
                         ClickArea {
                             id: addMA

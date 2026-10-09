@@ -42,14 +42,14 @@ Button {
 
     background: Rectangle {
         radius: Theme.radiusMd
-        color: primary ? Theme.accent
-              : danger  ? Theme.withAlpha(Theme.danger, 0.12)
-              : selected ? Theme.accentSoft
-              : root.hovered ? Theme.panel3 : Theme.panel2
-        border.color: primary ? "transparent"
-                   : danger  ? Theme.withAlpha(Theme.danger, 0.4)
-                   : selected ? Theme.withAlpha(Theme.accent, 0.5)
-                   : (root.hovered ? Theme.borderStrong : Theme.border)
+        // Outlined, never filled (DG-005, X/N-Dlg-Small): the primary
+        // action has the brighter line, a selected one the segment's look.
+        color: selected ? Theme.segmentSelected
+              : root.hovered ? Theme.withAlpha(Theme.text, 0.05) : "transparent"
+        border.color: danger  ? Theme.withAlpha(Theme.danger, root.hovered ? 0.7 : 0.45)
+                   : primary ? (root.hovered ? Theme.textDim : Theme.buttonLinePrimary)
+                   : selected ? (Style.fills ? "transparent" : Theme.segmentSelectedLine)
+                   : (root.hovered ? Theme.buttonLinePrimary : Theme.buttonLine)
         border.width: 1
         // The cursor sits outside the pill, on the surface around it: a
         // border on a primary button's accent fill was 1.1–1.4:1 and could
@@ -63,8 +63,9 @@ Button {
         text: root.text
         font.family: Theme.fontUi
         font.pixelSize: Theme.fsMd
-        font.weight: Theme.fwTitle
-        color: primary ? Theme.textOnAccent : danger ? Theme.danger : selected ? Theme.accentStrong : Theme.text
+        font.weight: selected ? Theme.segmentSelectedWeight : Theme.fwBody
+        color: danger ? Theme.danger
+             : primary || selected || root.hovered ? Theme.buttonTextPrimary : Theme.buttonText
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
     }

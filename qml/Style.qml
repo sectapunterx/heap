@@ -88,6 +88,23 @@ QtObject {
     }
     readonly property bool quiet: name === "quiet"
 
+    // How the quiet sheets differ beyond the switches (DG-004). These follow
+    // the "chip fill" switch, so "custom" still means a set of the seven
+    // switches the Appearance page shows; screens read these, not `quiet`.
+    //   fills        filled surfaces: the selected segment, cards, the
+    //                side cards' ground (bold); quiet keeps outlines only
+    //   sideCards    the side cards (Today's right column, the document's
+    //                meta cards); quiet draws them as plain text blocks
+    //   textOptions  a choice as lowercase words with the chosen one marked,
+    //                instead of a segmented control
+    //   textLinks    secondary actions as underlined text, not buttons
+    //   plainRows    lists as plain rows with an icon, not card timelines
+    readonly property bool fills: chipFill
+    readonly property bool sideCards: chipFill
+    readonly property bool textOptions: !chipFill
+    readonly property bool textLinks: !chipFill
+    readonly property bool plainRows: !chipFill
+
     function _write(appearancePatch, removeKeys) {
         const s = Object.assign({}, _settings);
         const a = Object.assign({}, s.appearance || {}, appearancePatch);
