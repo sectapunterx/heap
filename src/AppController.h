@@ -1586,6 +1586,13 @@ class AppController : public QObject {
 
   // ---- Backups ----
   Q_INVOKABLE QVariantList listBackups() const;
+
+  // Where the backup copies are, and how many are kept (Settings → Data).
+  Q_INVOKABLE QString backupFolder() const {
+    return backupDirPath();
+  }
+
+  Q_INVOKABLE int backupRetention() const;
   Q_INVOKABLE bool restoreFromBackup(const QString& fileName);
 
   // ---- Time machine (APP-162, src/storage/Snapshots.h) ----
@@ -1614,6 +1621,8 @@ class AppController : public QObject {
   // Writes the current state into history right now under `tag`. Returns the
   // file name, "" on failure.
   QString takeSnapshotNow(const QString& tag);
+  void snapshotBeforeChange(const QString& tag);
+  bool gitLinksBranches() const;
   QString historyDirPath() const;
 
   // ---- Shortcuts (rebindable keyboard catalog) ----

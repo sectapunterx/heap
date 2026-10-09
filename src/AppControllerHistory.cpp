@@ -149,6 +149,17 @@ QVariantList AppController::listSnapshots() const {
   return out;
 }
 
+// A copy before an import or an update replaces what is there (Settings →
+// Safety net "Snapshot before import and update", on unless switched off).
+void AppController::snapshotBeforeChange(const QString& tag) {
+  if(!settingsMap().value(QStringLiteral("data")).toMap().value(QStringLiteral("snapshotBeforeImport"), true).toBool()) {
+    return;
+  }
+  if(QFile::exists(stateFilePath())) {
+    takeSnapshotNow(tag);
+  }
+}
+
 QString AppController::takeSnapshotNow(const QString& tag) {
   // What is on disk has to be what is on screen: a pending edit goes first.
   if(!m_saveBlocked && !m_loading) {

@@ -7597,7 +7597,12 @@ QString AppController::eventHourLabel(double hour) const {
 }
 
 bool AppController::twelveHourClock() const {
-  return settingsMap().value("calendar").toMap().value("timeFormat").toString() == QLatin1String("12h");
+  const QString f = settingsMap().value("calendar").toMap().value("timeFormat").toString();
+  // "system" (Settings → Language, DG-100): the clock the system's locale uses.
+  if(f == QLatin1String("system")) {
+    return QLocale::system().timeFormat(QLocale::ShortFormat).contains(QLatin1Char('a'), Qt::CaseInsensitive);
+  }
+  return f == QLatin1String("12h");
 }
 
 QString AppController::datePattern(const QString& style, const QString& lang) const {
@@ -8798,6 +8803,14 @@ QString AppController::stateFilePath() const {
   return dir + "/state.json";
 }
 
+int AppController::backupRetention() const {
+  return kBackupRetentionCount;
+}
+
+bool AppController::gitLinksBranches() const {
+  return settingsMap().value("git").toMap().value("linkBranches", true).toBool();
+}
+
 QString AppController::backupDirPath() const {
   const QString dir = heap::paths::dataDir() + "/backups";
   QDir().mkpath(dir);
@@ -8957,6 +8970,7 @@ void AppController::installUpdate() {
   if(m_updatePhase != QLatin1String("ready") || m_updatePackage.isEmpty()) {
     return;
   }
+  snapshotBeforeChange(QStringLiteral("update"));
   // The package was checked when it arrived; check it again now, so a file
   // touched on disk since then is not what gets installed.
   if(heap::update::sha256OfFile(m_updatePackage) != m_updateSha256) {
@@ -9648,6 +9662,9 @@ QVariantList AppController::statusMappingFor(const QString& providerId) const {
     // The UI shows a guess differently from a decision: a guess is what the
     // built-in table came up with and may be wrong, a decision is the user's.
     row.insert(QStringLiteral("overridden"), overrides.contains(status));
+    // Not in the built-in table: the column is only the fallback (Settings
+    // says "not recognised — the default picked", DG-093).
+    row.insert(QStringLiteral("known"), !StatusMap::defaultColumn(status).isEmpty());
     out.append(row);
   }
   return out;
@@ -13341,6 +13358,7 @@ QString AppController::importProfileFromJson(const QString& jsonText, bool activ
   if(jsonText.trimmed().isEmpty()) {
     return tr_("import.emptyJson");
   }
+  snapshotBeforeChange(QStringLiteral("import"));
   const QJsonDocument doc = QJsonDocument::fromJson(jsonText.toUtf8());
   if(doc.isNull() || !doc.isObject()) {
     return tr_("import.invalidJson");
@@ -15150,7 +15168,7 @@ void AppController::refreshFocusedTaskId() {
   }
   const heap::git::BranchTaskMatcher m(collectPrefixes());
   const auto mr = m.extract(m_focusedBranch);
-  const QString newId = mr.matched ? taskIdForBranchMatch(mr.taskId) : QString();
+  const QString newId = mr.matched && gitLinksBranches() ? taskIdForBranchMatch(mr.taskId) : QString();
   if(newId == m_focusedTaskId) {
     return;
   }
@@ -15163,7 +15181,9 @@ void AppController::onGitBranchChanged(const QString& repo, const QString& branc
   // The watcher reports the key it found in the branch name. A tracker-mirrored
   // task is stored under its provider-prefixed id (jira-LUX-1 for LUX-1), so
   // resolve it the way the banner refresh and the git badges do (PLAT-14).
-  const QString taskId = taskIdForBranchMatch(matchedId);
+  // Settings → Git "link a branch to its task" off (DG-099): the branch is
+  // shown, no task is picked from its name.
+  const QString taskId = gitLinksBranches() ? taskIdForBranchMatch(matchedId) : QString();
   m_focusedRepo = repo;
   m_focusedBranch = branch;
   m_focusedTaskId = taskId;
