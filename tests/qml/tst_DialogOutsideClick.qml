@@ -42,7 +42,6 @@ TestCase {
             { tag: "ProfileEditor", qml: "ProfileEditor { }" },
             { tag: "PersonEditor", qml: "PersonEditor { }" },
             { tag: "PersonPicker", qml: "PersonPicker { }" },
-            { tag: "DocsEditor", qml: "DocsEditor { }" },
             { tag: "LinkConfirmDialog", qml: "LinkConfirmDialog { }" },
             { tag: "VaultImportDialog", qml: "VaultImportDialog { }" },
             { tag: "QuickCapturePopup", qml: "QuickCapturePopup { }" },

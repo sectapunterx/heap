@@ -430,8 +430,6 @@ qt_add_qml_module(heap_core
         qml/CalendarNav.qml
         qml/UndatedTray.qml
         qml/MonthView.qml
-        qml/DocsView.qml
-        qml/DocsEditor.qml
         qml/MiniWeek.qml
         qml/DayCalendar.qml
         qml/DatePickerPopup.qml
@@ -480,7 +478,7 @@ qt_add_qml_module(heap_core
         qml/Attendees.js
         qml/NotesListPane.qml
         qml/MdEditorPane.qml
-        qml/DocsPagesPane.qml
+        qml/PlusGlyph.qml
         qml/UnscheduledRail.qml
         qml/ChangeTick.qml
         qml/Overlap.js

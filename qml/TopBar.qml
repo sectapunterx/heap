@@ -25,9 +25,6 @@ Rectangle {
         ? [{ id: "board", label: I18n.t("lens.board"), keys: "g b" },
            { id: "list", label: I18n.t("lens.list"), keys: "g l" },
            { id: "calendar", label: I18n.t("lens.calendar"), keys: "g c" }]
-        : section === "knowledge" && view === "docs"
-        ? [{ id: "notes", label: I18n.t("lens.notes"), keys: "" },
-           { id: "docs", label: I18n.t("lens.links"), keys: "" }]
         : []
     readonly property string lens: view === "timeline" ? "list"
                                  : (view === "day" || view === "week" || view === "month") ? "calendar"

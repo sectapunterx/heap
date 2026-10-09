@@ -28,6 +28,13 @@ inline bool isKnown(const QString& name) {
   return all().contains(name);
 }
 
+// The 0.7 Docs catalogue is part of the Knowledge screen since 0.8.1
+// (DG-070): "docs" is still accepted (a saved view, --view docs, Ctrl+4)
+// and lands there.
+inline QString canonical(const QString& name) {
+  return name == QStringLiteral("docs") ? QStringLiteral("notes") : name;
+}
+
 // heap 2 (APP-258): the sidebar has four places, and each view belongs to
 // one. Board, timeline, the calendars and the archive are lenses of Tasks;
 // notes and docs are Knowledge.

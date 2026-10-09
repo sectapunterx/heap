@@ -141,48 +141,6 @@ TestCase {
 
     // ── DocsView ────────────────────────────────────────────────────────
 
-    function test_docs_search_clear_runs_on_return() {
-        const dv = make('import TodoCpp; DocsView { anchors.fill: parent }');
-        dv.searchText = "zzz";
-        const ca = findChild(dv, "docs-search-clear");
-        tryVerify(() => ca.visible, 1000);
-        onTabPathAndNamed(ca, "search clear button");
-        ca.forceActiveFocus(Qt.TabFocusReason);
-        keyClick(Qt.Key_Return);
-        compare(dv.searchText, "");
-    }
-
-    function test_docs_controls_are_on_the_tab_path() {
-        const dv = make('import TodoCpp; DocsView { anchors.fill: parent }');
-        dv.tab = "references";
-        onTabPathAndNamed(findChild(dv, "docs-new-section"), "new section button");
-        compare(findChild(dv, "docs-new-section").Accessible.name, I18n.t("docs.newSection"));
-        if (dv.snippets.length > 0) {
-            tryVerify(() => findChild(dv, "docs-snippet-copy") !== null, 1000);
-            onTabPathAndNamed(findChild(dv, "docs-snippet-copy"), "snippet copy button");
-            // ✎ / × stay on the Tab path while hidden (IconButton).
-            verify(findChild(dv, "docs-snippet-edit").activeFocusOnTab);
-            verify(findChild(dv, "docs-snippet-delete").activeFocusOnTab);
-        }
-        if (dv.sections.length > 0 && dv.sections[0].items.length > 0) {
-            tryVerify(() => findChild(dv, "docs-card-open") !== null, 1000);
-            onTabPathAndNamed(findChild(dv, "docs-card-open"), "doc card");
-        }
-    }
-
-    // Pages | References switch from the keyboard and say which is on.
-    function test_docs_tabs_switch_on_return() {
-        const dv = make('import TodoCpp; DocsView { anchors.fill: parent }');
-        dv.tab = "pages";
-        const ca = clickAreaIn(findChild(dv, "docs-tab-references"));
-        onTabPathAndNamed(ca, "References tab");
-        verify(!ca.checked);
-        ca.forceActiveFocus(Qt.TabFocusReason);
-        keyClick(Qt.Key_Return);
-        compare(dv.tab, "references");
-        verify(ca.checked);
-    }
-
     // ── MdView ──────────────────────────────────────────────────────────
 
     function test_markdown_task_box_is_a_named_checkbox() {

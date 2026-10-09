@@ -21,6 +21,7 @@ Item {
     property bool readOnly: false
     // How [[targets]] read (APP-269): AppController.wikiTargets(text).
     property var wikiTargets: ({})
+    property bool headingRules: true
     // The edited source, as each edit is taken in.
     signal edited(string text)
     // Esc with no block open: the caller goes back.
@@ -172,6 +173,7 @@ Item {
         id: view
         objectName: "md-block-view"
         anchors.fill: parent
+        headingRules: root.headingRules
         document: doc
         editorDocument: src.textDocument
         clickToEdit: !root.readOnly

@@ -315,32 +315,101 @@ QVector<Person> people(Lang lang) {
 }
 
 QVector<Note> notes(Lang lang) {
-  Note n;
-  n.id = QStringLiteral("note-welcome");
-  n.created = QDateTime::currentDateTime();
-  n.updated = n.created;
+  // The notes of the Knowledge sheet (H2-Knowledge, DG-074): the open one
+  // first, so the example opens on it. Each says only what the app does now.
+  const QDateTime now = QDateTime::currentDateTime();
+  auto mk = [&now](const char* id, const QString& title, const QString& body, int minutesAgo) {
+    Note n;
+    n.id = QString::fromLatin1(id);
+    n.title = title;
+    n.body = body;
+    // Made and last edited at the same moment: the list shows the newest first.
+    n.created = now.addSecs(-60LL * minutesAgo);
+    n.updated = n.created;
+    return n;
+  };
   if(lang == Lang::Ru) {
-    n.title = QStringLiteral("С чего начать");
-    n.body = QStringLiteral(
-        "# С чего начать\n\n"
-        "Заметки — это markdown: **жирный**, *курсив*, `код`, списки и таблицы.\n\n"
-        "- [ ] Открыть задачу APP-101 на доске\n"
-        "- [ ] Перетащить задачу в календарь справа\n"
-        "- [x] Прочитать эту заметку\n\n"
-        "Ссылка на задачу: [[APP-101]].\n\n"
-        "> Нажмите «Начать с чистого листа» на баннере, чтобы убрать демо-данные.\n");
-  } else {
-    n.title = QStringLiteral("Getting started");
-    n.body = QStringLiteral(
-        "# Getting started\n\n"
-        "Notes are markdown: **bold**, *italic*, `code`, lists and tables.\n\n"
-        "- [ ] Open APP-101 on the board\n"
-        "- [ ] Drag a task onto the calendar on the right\n"
-        "- [x] Read this note\n\n"
-        "Link to a task: [[APP-101]].\n\n"
-        "> Press \"Start fresh\" on the banner to clear the demo data.\n");
+    return {
+        mk("note-rate-limit",
+           QStringLiteral("Дизайн rate-limit"),
+           QStringLiteral("# Дизайн rate-limit\n\n"
+                          "Лимитер считает попытки по ключу `login:<email>`. Баг в [[APP-101]] — ключ не нормализован.\n\n"
+                          "## Что отвечаем клиенту\n\n"
+                          "429 с заголовком `Retry-After`, как в "
+                          "[RFC 6585](https://www.rfc-editor.org/rfc/rfc6585 \"429 Too Many Requests\"). "
+                          "Тело — без подсказки, существует ли аккаунт.\n\n"
+                          "## Открытые вопросы\n\n"
+                          "- Окно 15 мин или скользящее? Спросить Олега.\n"
+                          "- Нужна ли капча после 5 попыток — см. [[APP-108]]\n"),
+           5),
+        mk("note-retro-41",
+           QStringLiteral("Ретро спринта 41"),
+           QStringLiteral("# Ретро спринта 41\n\n"
+                          "## Что получилось\n\n"
+                          "- Экспорт CSV ушёл на ревью вовремя.\n\n"
+                          "## Что мешало\n\n"
+                          "- Лимит попыток входа: разбираем в [[Дизайн rate-limit]].\n"),
+           60 * 26),
+        mk("note-release-checklist",
+           QStringLiteral("Чек-лист релиза"),
+           QStringLiteral("# Чек-лист релиза\n\n"
+                          "- [ ] Все задачи релиза в колонке «Готово»\n"
+                          "- [ ] Changelog обновлён\n"
+                          "- [ ] Тег поставлен, сборка зелёная\n"),
+           60 * 50),
+        mk("note-welcome",
+           QStringLiteral("С чего начать"),
+           QStringLiteral("# С чего начать\n\n"
+                          "Заметки — это markdown: **жирный**, *курсив*, `код`, списки и таблицы.\n\n"
+                          "- [ ] Открыть задачу APP-101 на доске\n"
+                          "- [ ] Наберите / в пустой строке — чек-лист, код, ссылка на задачу\n"
+                          "- [x] Прочитать эту заметку\n\n"
+                          "Ссылка на задачу: [[APP-101]].\n\n"
+                          "> Пример живёт в своём профиле: переключите профиль вверху боковой панели, чтобы начать своё.\n"),
+           60 * 72),
+    };
   }
-  return {n};
+  return {
+      mk("note-rate-limit",
+         QStringLiteral("Rate-limit design"),
+         QStringLiteral("# Rate-limit design\n\n"
+                        "The limiter counts attempts by the key `login:<email>`. The bug in [[APP-101]]: the key is not "
+                        "normalised.\n\n"
+                        "## What the client gets\n\n"
+                        "429 with a `Retry-After` header, as in "
+                        "[RFC 6585](https://www.rfc-editor.org/rfc/rfc6585 \"429 Too Many Requests\"). "
+                        "The body does not hint whether the account exists.\n\n"
+                        "## Open questions\n\n"
+                        "- A 15 min window or a sliding one? Ask Oleg.\n"
+                        "- Captcha after 5 attempts? See [[APP-108]]\n"),
+         5),
+      mk("note-retro-41",
+         QStringLiteral("Sprint 41 retro"),
+         QStringLiteral("# Sprint 41 retro\n\n"
+                        "## What went well\n\n"
+                        "- CSV export reached review on time.\n\n"
+                        "## What got in the way\n\n"
+                        "- The login attempt limit: worked out in [[Rate-limit design]].\n"),
+         60 * 26),
+      mk("note-release-checklist",
+         QStringLiteral("Release checklist"),
+         QStringLiteral("# Release checklist\n\n"
+                        "- [ ] Every task of the release is in Done\n"
+                        "- [ ] Changelog updated\n"
+                        "- [ ] Tag pushed, build green\n"),
+         60 * 50),
+      mk("note-welcome",
+         QStringLiteral("Getting started"),
+         QStringLiteral("# Getting started\n\n"
+                        "Notes are markdown: **bold**, *italic*, `code`, lists and tables.\n\n"
+                        "- [ ] Open APP-101 on the board\n"
+                        "- [ ] Type / on an empty line: a checklist, code, a link to a task\n"
+                        "- [x] Read this note\n\n"
+                        "Link to a task: [[APP-101]].\n\n"
+                        "> The example lives in its own profile: switch profiles at the top of the sidebar to start "
+                        "your own.\n"),
+         60 * 72),
+  };
 }
 
 }  // namespace SampleData

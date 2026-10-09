@@ -28,9 +28,11 @@ Popup {
     // Dimmed backdrop so the underlying app stays visible behind the popup.
     Overlay.modal: ModalScrim {}
 
-    signal navigateToDoc(string sectionId)
-    signal navigateToSnippets()
-    signal navigateToContacts()
+    // Catalogue entries are found in the Knowledge list (DG-070): the text
+    // to search it for.
+    signal navigateToDoc(string text)
+    signal navigateToSnippets(string text)
+    signal navigateToContacts(string text)
     signal openTask(string taskId)
     signal openPerson(string personId)
     // A note hit carries the line its section starts on, so opening it lands
@@ -310,14 +312,14 @@ Popup {
                     AppController.currentView = "board";
                 root.openTask(entry.taskId);
             } else if (entry.kind === "doc") {
-                AppController.currentView = "docs";
-                root.navigateToDoc(entry.sectionId);
+                AppController.currentView = "notes";
+                root.navigateToDoc(entry.title || entry.label);
             } else if (entry.kind === "snippet") {
-                AppController.currentView = "docs";
-                root.navigateToSnippets();
+                AppController.currentView = "notes";
+                root.navigateToSnippets(entry.label);
             } else if (entry.kind === "contact") {
-                AppController.currentView = "docs";
-                root.navigateToContacts();
+                AppController.currentView = "notes";
+                root.navigateToContacts(entry.label);
             } else if (entry.kind === "person") {
                 root.openPerson(entry.personId);
             } else if (entry.kind === "note") {
@@ -327,7 +329,7 @@ Popup {
                 root.navigateToNoteLine(entry.line !== undefined ? entry.line : 0);
             } else if (entry.kind === "docPage") {
                 AppController.activeDocPageId = entry.pageId;
-                AppController.currentView = "docs";
+                AppController.currentView = "notes";
                 root.navigateToDocPage(entry.pageId);
             } else if (entry.kind === "dailyNote") {
                 AppController.currentView = "notes";

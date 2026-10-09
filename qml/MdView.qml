@@ -80,6 +80,9 @@ ListView {
     readonly property int indentStep: 22
     readonly property int quoteStep: 14
     readonly property int sideMargin: 24
+    // The rule under the top two heading levels. Knowledge draws the note
+    // as a plain document without them (sheet H2-Knowledge, DG-071).
+    property bool headingRules: true
 
     function _handleLink(link, line) {
         if (link.startsWith("heap://")) {
@@ -319,7 +322,7 @@ ListView {
                 // A rule under the top two levels, the way a document separates
                 // its major sections.
                 Rectangle {
-                    visible: rowItem.model.level <= 2
+                    visible: view.headingRules && rowItem.model.level <= 2
                     Layout.fillWidth: true
                     Layout.topMargin: Theme.sp2xs
                     height: 1
