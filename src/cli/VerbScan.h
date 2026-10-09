@@ -12,7 +12,8 @@
 // line), so it is plain C++ over any character type.
 namespace heap::cli {
 
-inline constexpr std::array<std::string_view, 7> kVerbs = {"add", "now", "list", "today", "done", "open", "help"};
+inline constexpr std::array<std::string_view, 11> kVerbs = {
+    "add", "now", "list", "today", "done", "open", "sched", "due", "est", "someday", "help"};
 
 namespace detail {
 

@@ -14,6 +14,7 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDeadlineTimer>
+#include <QDir>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
@@ -43,7 +44,7 @@ Response headless(const Request& request) {
   // reaches outside the data dir (see AppController::setHeadless). The log
   // goes to lowkey.log only: the quiet handler installed first drops the echo.
   heap::logging::installFileLogger();
-  qInfo("command line: %s", request.verb == Verb::Add ? "add" : "done");
+  qInfo("command line: %s", qPrintable(verbName(request.verb)));
   AppController::setHeadless(true);
   const Response r = applyHeadless(request, QDateTime::currentDateTime());
   heap::logging::closeFileLogger();
@@ -58,9 +59,10 @@ Response launchOnTask(const Request& request, bool dataDirSet) {
   if(!s) {
     return {kExitData, QString(), QStringLiteral("lowkey: %1\n").arg(error)};
   }
-  const TaskRef ref = findTask(*s, request.taskId, findProfile(*s, QString()));
+  QString why;
+  const TaskRef ref = resolveTaskArg(*s, request.taskId, request.branch, &why);
   if(!ref.found()) {
-    return {kExitNotFound, QString(), QStringLiteral("lowkey: no task '%1'\n").arg(request.taskId)};
+    return {kExitNotFound, QString(), QStringLiteral("lowkey: %1\n").arg(why)};
   }
   const QString id = s->profiles.at(ref.profile).tasks.at(ref.task).id;
   QStringList args;
@@ -93,7 +95,7 @@ Response launchOnTask(const Request& request, bool dataDirSet) {
   Response r;
   r.out = request.json
               ? QString::fromUtf8(QJsonDocument(QJsonObject{{QStringLiteral("id"), id}}).toJson(QJsonDocument::Compact)) + QChar('\n')
-              : QStringLiteral("Opening %1\n").arg(id);
+              : cliText(QStringLiteral("opening"), s->language).arg(id) + QChar('\n');
   return r;
 }
 
@@ -118,7 +120,7 @@ int run(int argc, char** argv) {
   if(!parsed.ok) {
     return usage(parsed.error);
   }
-  const Request& request = parsed.request;
+  Request request = parsed.request;
   heap::paths::setDataDir(parsed.dataDirSet ? parsed.dataDir : qEnvironmentVariable("HEAP_DATA_DIR"));
   // The first lowkey command after an upgrade may come before the window ever
   // opened: it moves heap 0.7's data over the same way (APP-280).
@@ -136,6 +138,12 @@ int run(int argc, char** argv) {
 
   if(const std::optional<int> answered = runQuery(request)) {
     return *answered;
+  }
+
+  // "." is the task of the branch checked out here (APP-254): read where the
+  // command runs, as for `now`.
+  if(request.taskId == QLatin1String(".")) {
+    request.branch = branchAt(QDir::currentPath());
   }
 
 #ifdef Q_OS_WIN

@@ -6,6 +6,7 @@
 #include "git/BranchTaskResolve.h"
 #include "local/Effective.h"
 #include "platform/Brand.h"
+#include "text/LocaleFormat.h"
 
 #include <QCommandLineOption>
 #include <QCommandLineParser>
@@ -14,9 +15,12 @@
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QLocale>
+#include <QRegularExpression>
 #include <QVariantMap>
 
 #include <algorithm>
+#include <cmath>
 
 namespace heap::cli {
 
@@ -34,17 +38,12 @@ constexpr VerbName kVerbNames[] = {
     {"today", Verb::Today},
     {"done", Verb::Done},
     {"open", Verb::Open},
+    {"sched", Verb::Sched},
+    {"due", Verb::Due},
+    {"est", Verb::Est},
+    {"someday", Verb::Someday},
     {"help", Verb::Help},
 };
-
-QString verbName(Verb v) {
-  for(const VerbName& n : kVerbNames) {
-    if(n.verb == v) {
-      return QString::fromLatin1(n.name);
-    }
-  }
-  return v == Verb::Version ? QStringLiteral("version") : QStringLiteral("help");
-}
 
 std::optional<Verb> verbFromName(const QString& name) {
   for(const VerbName& n : kVerbNames) {
@@ -66,6 +65,15 @@ ParsedArgs fail(const QString& error) {
 
 }  // namespace
 
+QString verbName(Verb v) {
+  for(const VerbName& n : kVerbNames) {
+    if(n.verb == v) {
+      return QString::fromLatin1(n.name);
+    }
+  }
+  return v == Verb::Version ? QStringLiteral("version") : QStringLiteral("help");
+}
+
 QString helpText() {
   return QStringLiteral(
              "lowkey - a developer's workday in one window: tickets, planning and notes.\n"
@@ -86,10 +94,19 @@ QString helpText() {
              "                                          {source} {elapsed}\n"
              "  list [--profile <p>] [--status <s>] [--json]\n"
              "                                          tasks in board order (archived left out)\n"
-             "  today [--profile <p>] [--json]          in progress, or scheduled or due today\n"
+             "  today [--profile <p>] [--json]          overdue first, then today\n"
              "  done <ID>                               move a task to Done\n"
              "  open <ID>                               show the task in the window\n"
+             "  sched <ID> <when>                       plan it for a day: \"tomorrow 14:00\",\n"
+             "                                          \"fri\", \"2026-10-12\"; \"none\" takes it off\n"
+             "  due <ID> <date>                         its deadline (a tracker card's: your own\n"
+             "                                          date, the tracker keeps its own); \"none\"\n"
+             "  est <ID> <time>                         estimate: 2h, 90m, 1h30m; \"none\" clears\n"
+             "  someday <ID> [off]                      park it as someday (or take it back)\n"
              "  help                                    this text\n"
+             "\n"
+             "<ID> is a task id or tracker key; \".\" is the task the git branch of the\n"
+             "current directory names.\n"
              "\n"
              "Options:\n"
              "  --data-dir <dir>   use the profile kept in <dir> (also HEAP_DATA_DIR)\n"
@@ -231,6 +248,40 @@ ParsedArgs parseArgs(const QStringList& args) {
       }
       r.taskId = positional.constFirst().trimmed();
       break;
+    case Verb::Sched:
+    case Verb::Due:
+    case Verb::Est:
+    case Verb::Someday: {
+      if(refuse(status)) {
+        return notFor(QStringLiteral("status"));
+      }
+      if(refuse(format)) {
+        return notFor(QStringLiteral("format"));
+      }
+      if(refuse(profile)) {
+        return notFor(QStringLiteral("profile"));
+      }
+      const char* example = r.verb == Verb::Sched ? "sched APP-12 tomorrow 14:00"
+                            : r.verb == Verb::Due ? "due APP-12 fri"
+                            : r.verb == Verb::Est ? "est APP-12 2h"
+                                                  : "someday APP-12";
+      if(positional.isEmpty() || positional.constFirst().trimmed().isEmpty()) {
+        return fail(QStringLiteral("%1 needs a task id, e.g. lowkey %2").arg(name, QLatin1String(example)));
+      }
+      r.taskId = positional.takeFirst().trimmed();
+      r.value = positional.join(QChar(' ')).trimmed();
+      if(r.verb == Verb::Someday) {
+        if(!r.value.isEmpty() && r.value.compare(QLatin1String("off"), Qt::CaseInsensitive) != 0) {
+          return fail(QStringLiteral("unexpected argument '%1'").arg(r.value));
+        }
+        r.value = r.value.toLower();
+      } else if(r.value.isEmpty()) {
+        return fail(QStringLiteral("%1 needs a value after the id, e.g. lowkey %2").arg(name, QLatin1String(example)));
+      } else if(r.verb == Verb::Est && parseEstimate(r.value) < 0) {
+        return fail(QStringLiteral("'%1' is not an estimate; e.g. 2h, 90m, 1h30m or none").arg(r.value));
+      }
+      break;
+    }
     case Verb::Help:
     case Verb::Version:
       break;
@@ -252,6 +303,7 @@ QByteArray encodeRequest(const Request& r) {
   };
   put("text", r.text);
   put("id", r.taskId);
+  put("value", r.value);
   put("profile", r.profile);
   put("status", r.status);
   put("format", r.format);
@@ -280,6 +332,7 @@ std::optional<Request> decodeRequest(const QByteArray& line) {
   r.verb = *verb;
   r.text = o.value(QStringLiteral("text")).toString();
   r.taskId = o.value(QStringLiteral("id")).toString();
+  r.value = o.value(QStringLiteral("value")).toString();
   r.profile = o.value(QStringLiteral("profile")).toString();
   r.status = o.value(QStringLiteral("status")).toString();
   r.format = o.value(QStringLiteral("format")).toString();
@@ -311,10 +364,14 @@ std::optional<Response> decodeResponse(const QByteArray& line) {
 
 // ── Snapshot ───────────────────────────────────────────────────────────────
 
-Snapshot snapshotFromProfiles(const QVector<Profile>& profiles, const QString& activeProfileId, const QString& idPrefix) {
+Snapshot snapshotFromProfiles(const QVector<Profile>& profiles,
+                              const QString& activeProfileId,
+                              const QString& idPrefix,
+                              const QString& language) {
   Snapshot s;
   s.activeProfileId = activeProfileId;
   s.idPrefix = idPrefix;
+  s.language = language == QLatin1String("ru") ? language : QStringLiteral("en");
   s.profiles.reserve(profiles.size());
   for(const Profile& p : profiles) {
     s.profiles.append({p.id, p.name, p.tasks, p.statuses});
@@ -358,6 +415,8 @@ std::optional<Snapshot> snapshotFromState(QJsonObject root, QString* error) {
                              .value(QStringLiteral("idPrefix"))
                              .toString(QStringLiteral("TASK"));
   s.idPrefix = prefix.trimmed().toUpper();
+  const QString language = root.value(QStringLiteral("settings")).toObject().value(QStringLiteral("language")).toString();
+  s.language = language == QLatin1String("ru") ? language : QStringLiteral("en");
   return s;
 }
 
@@ -468,6 +527,37 @@ NowResult resolveNow(const Snapshot& s, const QString& branch) {
       }
     }
   }
+  return {};
+}
+
+TaskRef resolveTaskArg(const Snapshot& s, const QString& arg, const QString& branch, QString* error) {
+  const auto why = [error](const QString& text) {
+    if(error != nullptr) {
+      *error = text;
+    }
+  };
+  const int active = findProfile(s, QString());
+  if(arg.trimmed() != QLatin1String(".")) {
+    const TaskRef hit = findTask(s, arg, active);
+    if(!hit.found()) {
+      why(QStringLiteral("no task '%1'").arg(arg.trimmed()));
+    }
+    return hit;
+  }
+  if(branch.isEmpty()) {
+    why(QStringLiteral("'.' is the task of the current git branch, and this directory is not on one"));
+    return {};
+  }
+  if(active >= 0) {
+    const ProfileData& p = s.profiles.at(active);
+    const QString id = heap::git::taskIdForBranch(branch, s.idPrefix, p.tasks);
+    for(qsizetype ti = 0; ti < p.tasks.size() && !id.isEmpty(); ++ti) {
+      if(p.tasks.at(ti).id == id) {
+        return {active, static_cast<int>(ti)};
+      }
+    }
+  }
+  why(QStringLiteral("branch '%1' names no task").arg(branch));
   return {};
 }
 
@@ -590,12 +680,37 @@ QVector<int> listTasks(const ProfileData& p, const QString& statusId) {
   return rows;
 }
 
-QVector<int> todayTasks(const ProfileData& p, const QDate& today) {
+namespace {
+
+bool isOverdue(const Task& t, const QDate& today) {
+  const QDateTime due = heap::local::effectiveDueAt(t);
+  return due.isValid() && due.date() < today;
+}
+
+}  // namespace
+
+QVector<int> overdueTasks(const ProfileData& p, const QDate& today) {
   const QString done = doneStatus(p.statuses);
   QVector<int> rows;
   for(qsizetype i = 0; i < p.tasks.size(); ++i) {
     const Task& t = p.tasks.at(i);
     if(t.archived || t.status == done || t.status == QLatin1String("done")) {
+      continue;
+    }
+    if(isOverdue(t, today)) {
+      rows << static_cast<int>(i);
+    }
+  }
+  sortBoardOrder(p, rows);
+  return rows;
+}
+
+QVector<int> todayTasks(const ProfileData& p, const QDate& today) {
+  const QString done = doneStatus(p.statuses);
+  QVector<int> rows;
+  for(qsizetype i = 0; i < p.tasks.size(); ++i) {
+    const Task& t = p.tasks.at(i);
+    if(t.archived || t.status == done || t.status == QLatin1String("done") || isOverdue(t, today)) {
       continue;
     }
     const bool doing = isDoingStatus(p.statuses, t.status);
@@ -751,14 +866,40 @@ Response answer(const Snapshot& s, const Request& r, const QDateTime& now) {
       }
     }
     const QVector<int> rows = r.verb == Verb::List ? listTasks(p, statusId) : todayTasks(p, now.date());
+    const QVector<int> overdue = r.verb == Verb::Today ? overdueTasks(p, now.date()) : QVector<int>();
     if(r.json) {
+      // Still one array, overdue first; `today` marks which is which.
       QJsonArray arr;
+      for(const int row : overdue) {
+        QJsonObject o = taskJson(p, p.tasks.at(row), now);
+        o.insert(QStringLiteral("overdue"), true);
+        arr.append(o);
+      }
       for(const int row : rows) {
-        arr.append(taskJson(p, p.tasks.at(row), now));
+        QJsonObject o = taskJson(p, p.tasks.at(row), now);
+        if(r.verb == Verb::Today) {
+          o.insert(QStringLiteral("overdue"), false);
+        }
+        arr.append(o);
       }
       resp.out = jsonText(QJsonDocument(arr));
-    } else {
+    } else if(overdue.isEmpty()) {
       resp.out = taskLines(p, rows);
+    } else {
+      // Two groups, each under its heading; the columns line up across both.
+      QVector<int> all = overdue;
+      all += rows;
+      const QStringList lines = taskLines(p, all).split(QChar('\n'), Qt::SkipEmptyParts);
+      resp.out = cliText(QStringLiteral("overdue"), s.language) + QChar('\n');
+      for(qsizetype i = 0; i < overdue.size(); ++i) {
+        resp.out += lines.at(i) + QChar('\n');
+      }
+      if(!rows.isEmpty()) {
+        resp.out += QChar('\n') + cliText(QStringLiteral("today"), s.language) + QChar('\n');
+        for(qsizetype i = overdue.size(); i < lines.size(); ++i) {
+          resp.out += lines.at(i) + QChar('\n');
+        }
+      }
     }
     return resp;
   }
@@ -766,6 +907,86 @@ Response answer(const Snapshot& s, const Request& r, const QDateTime& now) {
   resp.exitCode = kExitUsage;
   resp.err = QStringLiteral("lowkey: '%1' changes data and cannot be answered from a snapshot\n").arg(verbName(r.verb));
   return resp;
+}
+
+// ── Text ───────────────────────────────────────────────────────────────────
+
+QString cliText(const QString& key, const QString& language) {
+  struct Pair {
+    const char* en;
+    const char* ru;
+  };
+
+  static const QHash<QString, Pair> kTable = {
+      {QStringLiteral("overdue"), {"Overdue", "Просрочено"}},
+      {QStringLiteral("today"), {"Today", "Сегодня"}},
+      {QStringLiteral("added"), {"Added %1: %2", "Добавлено %1: %2"}},
+      {QStringLiteral("done"), {"Done %1: %2", "Готово %1: %2"}},
+      {QStringLiteral("alreadyDone"), {"Already done %1: %2", "Уже готово %1: %2"}},
+      {QStringLiteral("opened"), {"Opened %1", "Открыто %1"}},
+      {QStringLiteral("opening"), {"Opening %1", "Открываю %1"}},
+      {QStringLiteral("sched"), {"%1: when → %2", "%1: когда → %2"}},
+      {QStringLiteral("schedCleared"), {"%1: no longer planned for a day", "%1: больше не запланировано на день"}},
+      {QStringLiteral("due"), {"%1: deadline → %2", "%1: срок → %2"}},
+      {QStringLiteral("dueCleared"), {"%1: deadline removed", "%1: срок снят"}},
+      {QStringLiteral("dueMine"), {"your date; the tracker keeps its own", "ваш срок; в трекере остаётся свой"}},
+      {QStringLiteral("est"), {"%1: estimate %2", "%1: оценка %2"}},
+      {QStringLiteral("estCleared"), {"%1: estimate removed", "%1: оценка снята"}},
+      {QStringLiteral("someday"), {"%1: someday", "%1: когда-нибудь"}},
+      {QStringLiteral("somedayOff"), {"%1: no longer someday", "%1: больше не «когда-нибудь»"}},
+      {QStringLiteral("unchanged"), {"%1: already so", "%1: уже так"}},
+  };
+  const auto it = kTable.constFind(key);
+  if(it == kTable.constEnd()) {
+    return key;
+  }
+  return QString::fromUtf8(language == QLatin1String("ru") ? it->ru : it->en);
+}
+
+QString humanDate(const QDateTime& dt, bool hasTime, const QString& language, const QDate& today) {
+  if(!dt.isValid()) {
+    return {};
+  }
+  const QString style = dt.date().year() != today.year() ? QStringLiteral("weekdayDayYear") : QStringLiteral("weekdayDay");
+  return hasTime ? heap::text::formatDateTime(dt, style, language, /*twelveHour=*/false)
+                 : heap::text::formatDate(dt.date(), style, language);
+}
+
+QString humanMinutes(int minutes, const QString& language) {
+  const bool ru = language == QLatin1String("ru");
+  const QString h = ru ? QStringLiteral("ч") : QStringLiteral("h");
+  const QString m = ru ? QStringLiteral("м") : QStringLiteral("m");
+  if(minutes < 60) {
+    return QString::number(minutes) + m;
+  }
+  if(minutes % 60 == 0) {
+    return QString::number(minutes / 60) + h;
+  }
+  return QString::number(minutes / 60) + h + QChar(' ') + QString::number(minutes % 60) + m;
+}
+
+int parseEstimate(const QString& text) {
+  QString t = text.trimmed().toLower();
+  if(t == QLatin1String("none") || t == QLatin1String("0") || t == QLatin1String("off")) {
+    return 0;
+  }
+  if(t.startsWith(QChar('~'))) {
+    t.remove(0, 1);
+  }
+  t.remove(QChar(' '));
+  static const QRegularExpression kHours(QStringLiteral(R"(^(\d+(?:[.,]\d+)?)(?:h|ч|час|часа|часов)(?:(\d+)(?:m|м|мин|min))?$)"));
+  static const QRegularExpression kMinutes(QStringLiteral(R"(^(\d+)(?:m|м|мин|min)$)"));
+  if(const QRegularExpressionMatch m = kHours.match(t); m.hasMatch()) {
+    QString hours = m.captured(1);
+    hours.replace(QChar(','), QChar('.'));
+    const int minutes = static_cast<int>(std::lround(hours.toDouble() * 60.0)) + (m.hasCaptured(2) ? m.captured(2).toInt() : 0);
+    return minutes > 0 && minutes <= 24 * 60 * 7 ? minutes : -1;
+  }
+  if(const QRegularExpressionMatch m = kMinutes.match(t); m.hasMatch()) {
+    const int minutes = m.captured(1).toInt();
+    return minutes > 0 && minutes <= 24 * 60 * 7 ? minutes : -1;
+  }
+  return -1;
 }
 
 QString branchAt(const QString& dir) {
