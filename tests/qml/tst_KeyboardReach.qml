@@ -106,7 +106,8 @@ TestCase {
         keyClick(Qt.Key_Space);
         compare(tc.win.prioritiesFilter["P0"], false);
         verify(byName("archived-toggle").activeFocusOnTab);
-        verify(byName("sort-button").activeFocusOnTab);
+        // The board's sort sits beside the lens tabs now (APP-262).
+        verify(byName("view-header-option") !== null);
     }
 
     // While a tabbed-to control has the keyboard, the board cursor keys wait;

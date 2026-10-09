@@ -167,7 +167,8 @@ TestCase {
     function test_the_board_scrolls_to_a_cursor_past_the_right_edge() {
         const sts = AppController.statuses;
         verify(sts.length >= 4);
-        const last = addTask(sts[sts.length - 1].id, "far right");
+        // Done is folded (APP-262): the last open column.
+        const last = addTask(sts[sts.length - 2].id, "far right");
         const first = addTask(sts[0].id, "far left");
         const narrow = make('import QtQuick; Item { width: 640; height: 600 }');
         const b = makeBoard(narrow);
@@ -179,7 +180,7 @@ TestCase {
         b.cursorTaskId = last;
         tryVerify(() => hs.contentX > 0, 1000, "the board did not scroll to the cursor");
         // The cursor's column is wholly on screen.
-        const col = findColumn(b, sts[sts.length - 1].id);
+        const col = findColumn(b, sts[sts.length - 2].id);
         verify(col !== null);
         verify(col.x >= hs.contentX && col.x + col.width <= hs.contentX + hs.width + 1,
                "the column is still cut: " + col.x + "+" + col.width + " vs " + hs.contentX + "+" + hs.width);

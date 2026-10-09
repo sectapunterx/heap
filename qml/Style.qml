@@ -24,7 +24,11 @@ QtObject {
             keyHints: true,         // key hints on screen (the bar, the selected card)
             chipFill: true,         // filled, coloured chips; quiet keeps the outline only
             factsLine: true,        // the grey facts line under the date on Today
-            todayExtras: "open"     // "People to ping" / "No date" on Today: open | collapsed | hidden
+            todayExtras: "open",    // "People to ping" / "No date" on Today: open | collapsed | hidden
+            // Board cards (APP-281 A1): "detailed" adds the description's
+            // first line, any priority, the branch / PR mark and the
+            // checklist; "compact" is the title, the key and the date.
+            cardDensity: "detailed"
         },
         "quiet": {
             urgency: false,
@@ -32,10 +36,11 @@ QtObject {
             keyHints: false,
             chipFill: false,
             factsLine: true,
-            todayExtras: "collapsed"
+            todayExtras: "collapsed",
+            cardDensity: "compact"
         }
     })
-    readonly property var flagKeys: ["urgency", "counters", "keyHints", "chipFill", "factsLine", "todayExtras"]
+    readonly property var flagKeys: ["urgency", "counters", "keyHints", "chipFill", "factsLine", "todayExtras", "cardDensity"]
     readonly property string defaultStyle: "bold"
 
     readonly property var _settings: {
@@ -66,10 +71,13 @@ QtObject {
         return v === "collapsed" || v === "hidden" ? v : "open";
     }
 
+    readonly property string cardDensity: _flag("cardDensity") === "compact" ? "compact" : "detailed"
+    readonly property bool detailedCards: cardDensity === "detailed"
+
     // "bold" | "quiet" when the flags are exactly one of the sets, else "custom".
     readonly property string name: {
         const now = { urgency: urgency, counters: counters, keyHints: keyHints, chipFill: chipFill,
-                      factsLine: factsLine, todayExtras: todayExtras };
+                      factsLine: factsLine, todayExtras: todayExtras, cardDensity: cardDensity };
         for (const n of ["bold", "quiet"]) {
             let same = true;
             for (const k of flagKeys)

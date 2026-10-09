@@ -21,6 +21,11 @@ TestCase {
         TaskCard { width: 300 }
     }
 
+    // These cases are about the compact card (the quiet style's); the
+    // detailed one keeps its first description line at rest (APP-281 A1).
+    function init() { Style.setFlag("cardDensity", "compact"); }
+    function cleanup() { Style.apply("bold"); }
+
     function dayFromToday(n) {
         const t = AppController.today;
         return new Date(t.getFullYear(), t.getMonth(), t.getDate() + n);
@@ -88,9 +93,18 @@ TestCase {
         for (let i = 0; i < p.length; i++) {
             const card = make({ priority: p[i] });
             const pri = findChild(card, "tc-priority");
-            verify(pri.visible);
-            if (i < 2) verify(Qt.colorEqual(pri.color, Theme.priorityColor(p[i])), p[i] + " " + pri.color);
-            else verify(Qt.colorEqual(pri.color, Theme.textDim), p[i] + " is not dim: " + pri.color);
+            // heap 2 (APP-262): a compact card names P0 and P1 only, in the
+            // signal colours; the detailed one (APP-281 A1) adds P2/P3, dim.
+            if (i < 2) {
+                verify(pri.visible);
+                verify(Qt.colorEqual(pri.color, Theme.priorityInk(p[i])), p[i] + " " + pri.color);
+            } else {
+                verify(!pri.visible, p[i] + " shows on a compact card");
+                Style.setFlag("cardDensity", "detailed");
+                verify(pri.visible, p[i] + " is missing on a detailed card");
+                verify(Qt.colorEqual(pri.color, Theme.textDim), p[i] + " is not dim: " + pri.color);
+                Style.setFlag("cardDensity", "compact");
+            }
             card.destroy();
         }
     }
@@ -103,7 +117,8 @@ TestCase {
         verify(findChild(card, "tc-title").visible);
         verify(findChild(card, "tc-meta").visible);
         verify(findChild(card, "tc-key").visible);
-        compare(findChild(card, "tc-title").maximumLineCount, 2);
+        // Three lines at most (APP-262).
+        compare(findChild(card, "tc-title").maximumLineCount, 3);
         compare(findChild(card, "tc-alerts").visible, false, "an alerts row with nothing to say");
         card.destroy();
     }

@@ -245,6 +245,8 @@ qt_add_library(heap_core STATIC
     src/safety/ErrorSignature.cpp
     src/safety/Standup.cpp
     src/views/SavedViewMatch.cpp
+    src/views/TaskListGroups.cpp
+    src/AppControllerTaskList.cpp
     # ── audit-tasks: end ──
     # ── audit-time: begin ──
     # ── audit-time: end ──
@@ -381,6 +383,7 @@ qt_add_qml_module(heap_core
         qml/ActionButton.qml
         qml/EmptyState.qml
         qml/Motion.js
+        qml/TaskDates.js
         qml/IntegrationActivity.qml
         qml/PopupSurface.qml
         qml/ModalSurface.qml
@@ -410,6 +413,7 @@ qt_add_qml_module(heap_core
         qml/FilterBar.qml
         qml/KanbanBoard.qml
         qml/TaskCard.qml
+        qml/TaskListView.qml
         qml/SelectionBar.qml
         qml/ArchiveView.qml
         qml/TimelineView.qml

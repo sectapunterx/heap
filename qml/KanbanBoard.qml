@@ -79,7 +79,39 @@ Item {
         for (let i = 0; i < ids.length; i++) out[ids[i]] = true;
         root.collapsed = out;
     }
+    // Done is folded into a narrow column with "Show" unless the user opened
+    // it (APP-262); which done-stage columns are open is remembered.
+    property var doneShown: ({})
+    function _loadDoneShown() {
+        let s = {};
+        try { s = JSON.parse(AppController.appSettingsJson || "{}") || {}; } catch (e) { s = {}; }
+        const ids = Array.isArray(s.boardDoneShown) ? s.boardDoneShown : [];
+        const out = {};
+        for (let i = 0; i < ids.length; i++) out[ids[i]] = true;
+        root.doneShown = out;
+    }
+    function isDoneColumn(statusId) {
+        return AppController.statuses.length >= 0 && AppController.statusCategory(statusId) === "done";
+    }
+    // The task a drag carries, or "" (a file from a file manager).
+    function dragTaskId(src) {
+        return src && src.taskId ? String(src.taskId) : "";
+    }
+    function isFolded(statusId) {
+        if (root.isDoneColumn(statusId)) return !root.doneShown[statusId];
+        return !!root.collapsed[statusId];
+    }
     function toggleCollapsed(statusId) {
+        if (root.isDoneColumn(statusId)) {
+            const shown = Object.assign({}, root.doneShown);
+            if (shown[statusId]) delete shown[statusId]; else shown[statusId] = true;
+            root.doneShown = shown;
+            let st = {};
+            try { st = JSON.parse(AppController.appSettingsJson || "{}") || {}; } catch (e) { st = {}; }
+            st.boardDoneShown = Object.keys(shown);
+            AppController.appSettingsJson = JSON.stringify(st);
+            return;
+        }
         const next = Object.assign({}, root.collapsed);
         if (next[statusId]) delete next[statusId]; else next[statusId] = true;
         root.collapsed = next;
@@ -110,8 +142,28 @@ Item {
     // One source of truth for the column width. focusColumn() scrolls by
     // index × width, so a literal here and a different literal in the delegate
     // silently put the wrong column on screen.
-    readonly property int columnWidth: 280
+    //
+    // heap 2 (APP-262): columns share the width like `flex: 1 1 150px` — at
+    // least 150, growing to fill the board — with 16 px between them, so six
+    // columns and a folded Done fit a 1440 px window. Past that the board
+    // scrolls sideways.
+    readonly property int minColumnWidth: Theme.px(150)
+    readonly property int maxColumnWidth: Theme.px(360)
     readonly property int foldedWidth: 44
+    readonly property int doneFoldedWidth: Theme.px(88)
+    readonly property int columnGap: Theme.sp2xl
+    readonly property int columnWidth: {
+        const sts = AppController.statuses;
+        let open = 0, fixed = 0;
+        for (let i = 0; i < sts.length; i++) {
+            if (!root.isFolded(sts[i].id)) open++;
+            else fixed += root.isDoneColumn(sts[i].id) ? root.doneFoldedWidth : root.foldedWidth;
+        }
+        const gaps = sts.length * root.columnGap;   // the "+" tile after the last column too
+        const avail = hscroll.width - fixed - gaps - addColTile.width;
+        if (open === 0) return root.minColumnWidth;
+        return Math.max(root.minColumnWidth, Math.min(root.maxColumnWidth, Math.floor(avail / open)));
+    }
 
     // ── Column focus (sidebar Blocked / Code Review buttons) ──────────
     // Scroll the target status column into view and briefly highlight it.
@@ -128,9 +180,9 @@ Item {
         let idx = -1;
         for (let i = 0; i < st.length; ++i) { if (st[i].id === statusId) { idx = i; break; } }
         if (idx < 0) return;
-        const colW = root.columnWidth + rowL.spacing;
+        const it = colRepeater.itemAt(idx);
         const maxX = Math.max(0, hscroll.contentWidth - hscroll.width);
-        colScrollAnim.to = Math.max(0, Math.min(idx * colW, maxX));
+        colScrollAnim.to = Math.max(0, Math.min(it ? it.x : 0, maxX));
         colScrollAnim.restart();
         root._focusPulseStatus = statusId;
         focusPulseTimer.restart();
@@ -141,6 +193,7 @@ Item {
     Component.onCompleted: {
         root._syncColumns();
         root._loadCollapsed();
+        root._loadDoneShown();
         if (AppController.focusedStatus && AppController.focusedStatus.length > 0)
             Qt.callLater(function() { root.focusColumn(AppController.focusedStatus); });
     }
@@ -548,7 +601,7 @@ Item {
     // the board can say so instead of letting one hide under the panel.
     readonly property int hiddenColumnsRight: {
         const edge = hscroll.contentX + hscroll.width;
-        const _deps = [rowL.implicitWidth, colRepeater.count, root.collapsed];
+        const _deps = [rowL.implicitWidth, colRepeater.count, root.collapsed, root.doneShown, root.columnWidth];
         let n = 0;
         for (let c = 0; c < colRepeater.count; c++) {
             const it = colRepeater.itemAt(c);
@@ -633,7 +686,7 @@ Item {
         Row {
             id: rowL
             height: hscroll.height
-            spacing: Theme.spXl
+            spacing: root.columnGap
 
             Repeater {
                 id: colRepeater
@@ -645,6 +698,9 @@ Item {
                     item["filtering"] = Qt.binding(() => root._filtering);
                     item["nothingFound"] = Qt.binding(() => root._nothingFound);
                     item["boardEmpty"] = Qt.binding(() => root._boardTotal === 0);
+                    item["board"] = root;
+                    item["isDone"] = Qt.binding(() => root.isDoneColumn(item["statusId"]));
+                    item["folded"] = Qt.binding(() => root.isFolded(item["statusId"]));
                 }
                 // A column's way to the stack: its drops and its cards' menus
                 // ask the board through this, not by the board's id.
@@ -659,7 +715,13 @@ Item {
                     readonly property string statusId: sid
                     readonly property string statusName: sname
                     readonly property color statusColor: scolor
-                    readonly property bool folded: !!root.collapsed[col.statusId]
+                    // Set by colRepeater (Qt 6.9's qmllint does not resolve
+                    // root inside the column): the board, whether this is a
+                    // done-stage column, and whether it is folded (APP-262).
+                    property var board: null
+                    property bool isDone: false
+                    readonly property string category: (AppController.statuses, AppController.statusCategory(col.statusId))
+                    property bool folded: false
                     readonly property alias taskList: bodyFlick
                     readonly property alias taskFilter: colFilter
                     property bool dragOver: false
@@ -707,32 +769,97 @@ Item {
                     Connections {
                         target: col.bus
                         function onRequested(card: Item, title: string, toStatus: string) {
-                            if (toStatus !== col.statusId || col.folded) return;
+                            // A folded Done (the default, APP-262) still
+                            // takes the card, onto its folded header.
+                            if (toStatus !== col.statusId || (col.folded && !col.isDone)) return;
                             col.heldCount = col.visibleCount;
                             const left = col.mapToItem(null, 0, 0);
                             // Onto the counter: a bar as wide as the pill,
                             // through its middle.
-                            const pill = cntPill.mapToItem(null, 0, (cntPill.height - 4) / 2);
+                            const target = col.folded ? doneHead : cntPill;
+                            const pill = target.mapToItem(null, 0, (target.height - 4) / 2);
                             col.bus.launchRequested(card, title, col.statusId, left.x, left.x + col.width, pill.x, pill.y,
-                                                    cntPill.width, col.statusColor);
+                                                    target.width, col.statusColor);
                         }
                     }
 
-                    width: col.folded ? root.foldedWidth : root.columnWidth
+                    width: col.folded ? (col.isDone ? Theme.px(88) : root.foldedWidth) : root.columnWidth
                     height: rowL.height
                     radius: Theme.radius
+                    // No frame and no fill (APP-262): a drop target is marked
+                    // by an outline, a shape rather than a colour change.
                     color: Theme.surfaceColumn
-                    border.color: (dragOver || focusPulse) ? Theme.accent : "transparent"
-                    border.width: focusPulse ? 2 : 1
+                    border.color: (dragOver || focusPulse) ? Theme.focusRing : "transparent"
+                    border.width: (dragOver || focusPulse) ? 2 : 1
                     clip: true
                     Behavior on border.color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
 
                     // Folded: the name runs down the strip, with the count; a
                     // click (or Z on the board) opens it again.
                     Item {
+                        objectName: "column-done-folded"
+                        anchors.fill: parent
+                        visible: col.folded && col.isDone
+                        Column {
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.leftMargin: Theme.spMd
+                            anchors.rightMargin: Theme.spMd
+                            anchors.top: parent.top
+                            anchors.topMargin: (Theme.px(38) - doneHead.height) / 2
+                            spacing: Theme.spMd
+                            Row {
+                                id: doneHead
+                                spacing: Theme.spXs
+                                StatusRing {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: Style.chipFill
+                                    category: "done"
+                                }
+                                Text {
+                                    objectName: "column-done-folded-name"
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: Math.min(implicitWidth, col.width - 2 * Theme.spMd - doneCount.implicitWidth - Theme.iconSize - Theme.spSm)
+                                    elide: Text.ElideRight
+                                    // Quiet: "Done · 2"; bold: ring, name, count.
+                                    text: col.statusName + (Style.chipFill ? "" : " · " + col.shownCount)
+                                    color: Style.chipFill ? Theme.text : Theme.textMuted
+                                    font.family: Theme.fontUi
+                                    font.pixelSize: Theme.fsMd
+                                    font.weight: Style.chipFill ? Theme.fwTitle : Theme.fwBody
+                                }
+                                Text {
+                                    id: doneCount
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: Style.chipFill
+                                    text: col.shownCount
+                                    color: Theme.textDim
+                                    font.family: Theme.fontUi
+                                    font.features: Theme.tabularNums
+                                    font.pixelSize: Theme.fsMd
+                                }
+                            }
+                            Text {
+                                objectName: "column-done-show"
+                                text: col.dragOver ? I18n.t("kanban.done.drop") : I18n.t("kanban.done.show")
+                                color: col.dragOver ? Theme.text : Theme.textMuted
+                                font.family: Theme.fontUi
+                                font.pixelSize: Theme.fsSm
+                                font.underline: !col.dragOver
+                                ClickArea {
+                                    objectName: "column-done-show-area"
+                                    enabled: col.folded && col.isDone
+                                    label: I18n.t("kanban.done.show") + " " + col.statusName
+                                    showTip: false
+                                    onActivated: col.board.toggleCollapsed(col.statusId)
+                                }
+                            }
+                        }
+                    }
+                    Item {
                         objectName: "column-folded"
                         anchors.fill: parent
-                        visible: col.folded
+                        visible: col.folded && !col.isDone
                         Column {
                             anchors.horizontalCenter: parent.horizontalCenter
                             anchors.top: parent.top
@@ -776,14 +903,26 @@ Item {
                             shortcutId: "board.collapseColumn"
                             onActivated: root.toggleCollapsed(col.statusId)
                         }
-                        DropArea {
-                            anchors.fill: parent
-                            onDropped: (drop) => {
-                                const src = drop.source;
-                                if (!src || !src.taskId) return;
-                                AppController.moveTaskTo(src.taskId, col.statusId, "");
-                                drop.accept(Qt.MoveAction);
-                            }
+                    }
+                    // A folded column is still a drop target; the outline
+                    // says so while a card is over it (X-Oth-Select-Drag).
+                    DropArea {
+                        anchors.fill: parent
+                        enabled: col.folded
+                        onEntered: (drag) => {
+                            if (drag.hasUrls && !col.board.dragTaskId(drag.source)) { drag.accepted = false; return; }
+                            col.dragOver = true;
+                        }
+                        onExited: col.dragOver = false
+                        onDropped: (drop) => {
+                            col.dragOver = false;
+                            const id = col.board.dragTaskId(drop.source);
+                            if (!id) return;
+                            if (AppController.isTaskSelected(id) && AppController.selectionCount > 1)
+                                AppController.moveSelectedTasksToStatus(col.statusId);
+                            else
+                                AppController.moveTaskTo(id, col.statusId, "");
+                            drop.accept(Qt.MoveAction);
                         }
                     }
 
@@ -810,39 +949,31 @@ Item {
                             Rectangle {
                                 anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
                                 height: 1; color: Theme.border
+                                visible: Style.chipFill
                             }
                             RowLayout {
+                                id: headRow
                                 anchors.fill: parent
-                                anchors.leftMargin: Theme.spXl; anchors.rightMargin: Theme.spMd
                                 spacing: Theme.spMd
-                                // The swatch itself stays 10px, but it opens the
-                                // colour picker, so the thing you click is a
-                                // 20px box around it — a 10x10 target was barely
-                                // hittable and gave no hint it was a button.
-                                Item {
+                                // The column's stage as a shape (APP-259), not
+                                // its colour; the colour is in the menu.
+                                StatusRing {
                                     id: colorSwatch
-                                    Layout.preferredWidth: 20
-                                    Layout.preferredHeight: 20
-                                    Rectangle {
-                                        anchors.fill: parent
-                                        radius: Theme.radiusSm
-                                        color: swatchMA.hovered ? Theme.panel3 : "transparent"
-                                    }
-                                    Rectangle {
-                                        anchors.centerIn: parent
-                                        width: 8; height: 8; radius: 4
-                                        color: col.statusColor
-                                    }
-                                    ClickArea {
-                                        id: swatchMA
-                                        objectName: "column-color"
-                                        label: I18n.t("kanban.changeColor")
-                                        onActivated: colorPopup.openFor(col.statusId, col.statusColor, colorSwatch)
-                                    }
+                                    objectName: "column-stage"
+                                    category: col.category
                                 }
                                 Item {
-                                    Layout.fillWidth: true
+                                    // As wide as the name, shrinking only when
+                                    // the column has no room for it (then the
+                                    // count still follows it).
+                                    Layout.preferredWidth: Math.max(0, Math.min(nameMetrics.advanceWidth + 1,
+                                        headRow.width - colorSwatch.width - cntPill.implicitWidth - 3 * headRow.spacing))
                                     Layout.preferredHeight: 22
+                                    TextMetrics {
+                                        id: nameMetrics
+                                        font: colName.font
+                                        text: col.statusName
+                                    }
                                     Text {
                                         id: colName
                                         objectName: "column-name"
@@ -898,21 +1029,22 @@ Item {
                                         Keys.onEscapePressed: { text = col.statusName; col.renaming = false }
                                     }
                                 }
+                                // The count, a plain number (APP-262); over the
+                                // WIP limit it says so in words and, in the
+                                // bold style only, in red.
                                 Rectangle {
                                     id: cntPill
                                     objectName: "column-count"
                                     radius: Theme.radiusPill
-                                    color: col.overWip ? Theme.withAlpha(Theme.danger, 0.18) : Theme.panel3
-                                    border.color: col.overWip ? Theme.danger : "transparent"
-                                    border.width: 1
-                                    implicitWidth: cntT.implicitWidth + 14
+                                    color: "transparent"
+                                    implicitWidth: cntT.implicitWidth
                                     implicitHeight: 18
                                     Text {
                                         id: cntT; anchors.centerIn: parent
                                         text: col.wipLimit > 0
                                             ? col.shownCount + "/" + col.wipLimit
                                             : col.shownCount
-                                        color: col.overWip ? Theme.danger : Theme.textDim
+                                        color: col.overWip ? Theme.signalUrgent : Theme.textDim
                                         font.family: Theme.fontUi
                                         font.features: Theme.tabularNums
                                         font.pixelSize: Theme.fsSm
@@ -935,22 +1067,33 @@ Item {
                                         NumberAnimation { target: cntPill; property: "scale"; to: 1; duration: Theme.durPop; easing.type: Theme.easeExit }
                                     }
                                 }
-
-                                Rectangle {
-                                    width: 22; height: 22; radius: Theme.radiusSm
-                                    color: addMA.hovered || addMA.keyboardFocused ? Theme.panel3 : "transparent"
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "+"
-                                        color: addMA.hovered || addMA.keyboardFocused ? Theme.text : Theme.textDim
-                                        font.pixelSize: Theme.fsLg
-                                    }
-                                    ClickArea {
-                                        id: addMA
-                                        objectName: "column-add"
-                                        label: I18n.t("kanban.addTask")
-                                        onActivated: root.createInStatus(col.statusId)
-                                    }
+                                Item { Layout.fillWidth: true }
+                            }
+                            // "+" at the header's end, laid over it like the
+                            // other tools: shown on hover or the keyboard, and
+                            // at rest it takes no room from the name (APP-262:
+                            // the header is the ring, the name, the count).
+                            Rectangle {
+                                id: colAdd
+                                readonly property bool shown: col.headerRevealed || addMA.keyboardFocused
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 22; height: 22
+                                z: 3
+                                radius: Theme.radiusSm
+                                opacity: shown ? 1 : 0
+                                color: addMA.hovered || addMA.keyboardFocused ? Theme.panel3 : Theme.bg
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "+"
+                                    color: addMA.hovered || addMA.keyboardFocused ? Theme.text : Theme.textDim
+                                    font.pixelSize: Theme.fsLg
+                                }
+                                ClickArea {
+                                    id: addMA
+                                    objectName: "column-add"
+                                    label: I18n.t("kanban.addTask")
+                                    onActivated: col.board.createInStatus(col.statusId)
                                 }
                             }
                             // Move-left / Move-right / Delete / Fold, laid over the
@@ -966,7 +1109,7 @@ Item {
                                 objectName: "column-hover-icons"
                                 anchors.verticalCenter: parent.verticalCenter
                                 anchors.right: parent.right
-                                anchors.rightMargin: Theme.spMd + 22 + Theme.spMd + cntPill.width + Theme.spMd
+                                anchors.rightMargin: 22 + Theme.spMd
                                 width: hoverIcons.implicitWidth + Theme.spSm
                                 height: hoverIcons.implicitHeight
                                 color: Theme.bg
@@ -1056,7 +1199,7 @@ Item {
                                 objectName: "column-list"
                                 readonly property StackBus bus: col.bus
                                 anchors.fill: parent
-                                anchors.margins: Theme.spMd
+                                anchors.topMargin: Theme.spMd
                                 clip: true
                                 spacing: Theme.spMd
                                 // A couple of cards past each edge. Every card
@@ -1378,34 +1521,22 @@ Item {
 
             // "+ Add column" tile at the end of the row
             Rectangle {
-                width: 200
-                height: rowL.height
-                radius: Theme.radius
+                id: addColTile
+                width: Theme.chipH
+                height: Theme.chipH
+                y: (Theme.px(38) - height) / 2
+                radius: Theme.radiusMd
                 color: addColMA.hovered || addColMA.keyboardFocused ? Theme.panel2 : "transparent"
-                border.color: Theme.border
-                border.width: 1
-
-                Column {
+                Text {
                     anchors.centerIn: parent
-                    spacing: Theme.spSm
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: "+"
-                        color: addColMA.hovered || addColMA.keyboardFocused ? Theme.text : Theme.textDim
-                        font.pixelSize: Theme.fsXl
-                    }
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: I18n.t("kanban.newColumn")
-                        color: addColMA.hovered || addColMA.keyboardFocused ? Theme.text : Theme.textDim
-                        font.pixelSize: Theme.fsMd
-                    }
+                    text: "+"
+                    color: addColMA.hovered || addColMA.keyboardFocused ? Theme.text : Theme.textDim
+                    font.pixelSize: Theme.fsLg
                 }
                 ClickArea {
                     id: addColMA
                     objectName: "board-add-column"
                     label: I18n.t("kanban.newColumn")
-                    showTip: false
                     onActivated: addColumnPopup.open()
                 }
             }
@@ -1653,28 +1784,44 @@ Item {
     // Columns off to the right (APP-200): at 1600px the fourth went under the
     // side panel with nothing to say it was there. Says how many; a click
     // scrolls one column over.
+    // heap 2 (APP-262): the last visible column fades out at the edge, so a
+    // cut column never reads as the end of the board.
+    Rectangle {
+        objectName: "board-edge-fade"
+        visible: root.hiddenColumnsRight > 0
+        anchors.right: parent.right
+        anchors.rightMargin: Theme.sp2xl
+        anchors.top: parent.top
+        anchors.topMargin: Theme.spXl
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: Theme.sp2xl
+        width: Theme.sp3xl * 2
+        z: 899
+        gradient: Gradient {
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0; color: Theme.withAlpha(Theme.bg, 0) }
+            GradientStop { position: 1; color: Theme.bg }
+        }
+    }
     Rectangle {
         id: hiddenCols
         objectName: "board-hidden-columns"
         visible: root.hiddenColumnsRight > 0
         anchors.right: parent.right
-        anchors.rightMargin: Theme.sp2xl + Theme.spMd
-        // Over the foot of the columns, just above the scrollbar it points
-        // along: a column's header and its "+" stay clear.
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: Theme.sp2xl + Theme.spLg
+        anchors.rightMargin: Theme.sp2xl
+        // On the line of the column headers.
+        anchors.top: parent.top
+        anchors.topMargin: Theme.spXl + (Theme.px(38) - height) / 2
         z: 900
-        radius: Theme.radiusPill
-        color: hiddenColsMA.hovered || hiddenColsMA.keyboardFocused ? Theme.panel3 : Theme.panel2
-        border.color: Theme.borderStrong
-        border.width: 1
-        implicitWidth: hiddenColsT.implicitWidth + 2 * Theme.spLg
+        radius: Theme.radiusMd
+        color: hiddenColsMA.hovered || hiddenColsMA.keyboardFocused ? Theme.panel3 : Theme.bg
+        implicitWidth: hiddenColsT.implicitWidth + 2 * Theme.spMd
         implicitHeight: hiddenColsT.implicitHeight + 2 * Theme.spXs
         Text {
             id: hiddenColsT
             objectName: "board-hidden-columns-text"
             anchors.centerIn: parent
-            text: I18n.t("kanban.hiddenColumns").arg(root.hiddenColumnsRight) + "  →"
+            text: I18n.t("kanban.hiddenColumns").arg(root.hiddenColumnsRight) + " ›"
             color: Theme.textMuted
             font.family: Theme.fontUi
             font.features: Theme.tabularNums
@@ -1684,7 +1831,7 @@ Item {
             id: hiddenColsMA
             label: hiddenColsT.text
             tip: I18n.t("kanban.hiddenColumns.tip")
-            onActivated: root._scrollOuter(-(root.columnWidth + Theme.spXl))
+            onActivated: root._scrollOuter(-(root.columnWidth + root.columnGap))
         }
     }
 

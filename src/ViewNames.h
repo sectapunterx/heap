@@ -11,6 +11,7 @@ namespace heap::views {
 inline const QStringList& all() {
   static const QStringList names = {QStringLiteral("today"),
                                     QStringLiteral("board"),
+                                    QStringLiteral("list"),
                                     QStringLiteral("timeline"),
                                     QStringLiteral("week"),
                                     QStringLiteral("month"),

@@ -84,8 +84,12 @@ QString text(const QString& key, bool ru);
 // ── Definitions ──
 
 inline const QStringList& taskViews() {
-  static const QStringList v = {
-      QStringLiteral("board"), QStringLiteral("timeline"), QStringLiteral("week"), QStringLiteral("month"), QStringLiteral("archive")};
+  static const QStringList v = {QStringLiteral("board"),
+                                QStringLiteral("list"),
+                                QStringLiteral("timeline"),
+                                QStringLiteral("week"),
+                                QStringLiteral("month"),
+                                QStringLiteral("archive")};
   return v;
 }
 

@@ -134,6 +134,12 @@ alongside each one.
 | Card menu (status, priority, archive, …) | `M` (or the `Menu` key) |
 | Archive the card (or the selection) | `E` |
 | Fold / unfold the cursor's column | `Z` |
+| Schedule into the next free slot of the selected day | `S` |
+| Priority P0 / P1 / P2 / P3 | `1` / `2` / `3` / `4` |
+
+The List lens of Tasks walks with the same keys (`J` / `K`, `Return`,
+`Space` or `V` to mark, `M`, `E`, `S`, `1`–`4`, `D`); `Z` folds the group the
+cursor is in. `Ctrl+\` shows or hides the day panel beside Board and List.
 
 While a card's menu is open its arrows and letters belong to the menu.
 

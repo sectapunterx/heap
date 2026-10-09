@@ -224,11 +224,34 @@ ApplicationWindow {
                                              || AppController.currentView === "month"
                                              || AppController.currentView === "settings"
     property bool _rightPanelInFoldedView: false
+    // Board and List (APP-281 A2): the day panel beside them is the user's
+    // call, Ctrl \, remembered (settings.dayPanel). Until it is made, the
+    // quiet style keeps it closed, and the bold one opens it only on a window
+    // wide enough to keep six board columns beside it (APP-262: they fit
+    // 1440 px without a panel).
+    readonly property bool _dayPanelView: AppController.currentView === "board" || AppController.currentView === "list"
+    // "on" | "off" | "" (not chosen yet).
+    property string _dayPanelWanted: {
+        const v = _settingsObject().dayPanel;
+        return v === true ? "on" : v === false ? "off" : "";
+    }
+    readonly property bool dayPanelShown: win._dayPanelWanted === "on" ? true
+        : win._dayPanelWanted === "off" ? false
+        : (!Style.quiet && win.width >= win._rightPanelMinWidth + win.rightPanelDefaultWidth)
     readonly property bool rightPanelShown: AppController.currentView === "today" ? false
+                                          : _dayPanelView ? dayPanelShown
                                           : _narrow ? _rightPanelOnNarrow
                                           : _panelFoldedView ? _rightPanelInFoldedView
                                           : _rightPanelWanted
     function toggleRightPanel() {
+        if (_dayPanelView) {
+            const open = !dayPanelShown;
+            _dayPanelWanted = open ? "on" : "off";
+            const ds = _settingsObject();
+            ds.dayPanel = open;
+            AppController.appSettingsJson = JSON.stringify(ds);
+            return;
+        }
         if (_narrow) {
             _rightPanelOnNarrow = !_rightPanelOnNarrow;
             return;
@@ -289,6 +312,34 @@ ApplicationWindow {
     // hidden, and so the filter bar and the board agree without either owning
     // the other.
     property string boardSortMode: "manual"
+    // The board's sort and the list's grouping, as the header shows them
+    // beside the lens tabs (APP-262/263).
+    readonly property var _sortOption: {
+        const ids = ["manual", "priority", "due", "updated", "title", "id"];
+        const base = win.boardSortMode.endsWith("-desc") ? win.boardSortMode.slice(0, -5) : win.boardSortMode;
+        return { label: I18n.t("filter.sortBy").replace(/:\s*$/, ""), current: base,
+                 value: I18n.t("filter.sort." + base),
+                 items: ids.map(id => ({ id: id, label: I18n.t("filter.sort." + id) })) };
+    }
+    property string listGroupBy: {
+        const g = _settingsObject().listGroupBy;
+        return ["date", "status", "priority", "profile"].indexOf(g) >= 0 ? g : "date";
+    }
+    function setListGroupBy(g) {
+        win.listGroupBy = g;
+        const s = _settingsObject();
+        s.listGroupBy = g;
+        AppController.appSettingsJson = JSON.stringify(s);
+    }
+    readonly property var _groupOption: {
+        const ids = ["date", "status", "priority", "profile"];
+        return { label: I18n.t("list.groupBy"), current: win.listGroupBy,
+                 value: I18n.t("list.groupBy." + win.listGroupBy),
+                 items: ids.map(id => ({ id: id, label: I18n.t("list.groupBy." + id) })) };
+    }
+    // The archive is a condition of the query on Board and List (heap 2,
+    // X-Oth-Archive-People): "is:archived" lets archived tasks through.
+    readonly property bool tasksShowArchived: win.showArchived || /(^|\s)is:archived(\s|$)/i.test(win.searchText)
 
     // Search, priority chips, sort and the archived / done toggles survive a
     // restart (TASKS-22): they lived only on the window, so every launch
@@ -1071,6 +1122,12 @@ ApplicationWindow {
                 section: AppController.currentSection
                 view: AppController.currentView
                 onLensSelected: (id) => win.openLens(id)
+                // Board: the sort; List: the grouping (APP-262/263).
+                option: view === "board" ? win._sortOption : view === "list" ? win._groupOption : null
+                onOptionPicked: (id) => {
+                    if (topBar.view === "board") win.boardSortMode = id;
+                    else win.setListGroupBy(id);
+                }
                 // The header writes its own query as chips are added and
                 // removed, so a binding would break on the first one: follow
                 // the window's query instead (a saved view, a link, a reset).
@@ -1105,8 +1162,15 @@ ApplicationWindow {
                     // under the Tasks header (APP-261).
                     slim: AppController.currentSection === "tasks"
                     // Archive brings its own header and its own counter, and the
-                    // fall-through label used to caption it "Docs".
+                    // fall-through label used to caption it "Docs". Board and
+                    // List (APP-262/263) show it only for an applied saved
+                    // view (its chip, update, save as new): their one setting
+                    // (sort, grouping) sits beside the lens tabs, the archive
+                    // is the query's "is:archived", saving is the header's.
+                    readonly property bool _lensView: AppController.currentView === "board"
+                                                      || AppController.currentView === "list"
                     visible: AppController.currentView !== "docs"
+                          && (!_lensView || !!savedViewsHost.activeView)
                           && AppController.currentView !== "today"
                           && AppController.currentView !== "notes"
                           && AppController.currentView !== "settings"
@@ -1120,16 +1184,19 @@ ApplicationWindow {
                     // counts used to include archived tasks and ignore the
                     // search and the priority chips.
                     readonly property var _fc: AppController.filteredCounts(win.searchText, win._activePriorities,
-                        win.showArchived, AppController.currentView === "timeline" && !win.showDoneTimeline, win._counts)
+                        win.tasksShowArchived, AppController.currentView === "timeline" && !win.showDoneTimeline, win._counts)
                     totalCount: _fc.total
                     activeCount: _fc.active
                     blockedCount: _fc.blocked
                     reviewCount: _fc.review
                     showArchived: win.showArchived
-                    showSort: AppController.currentView === "board"
+                    showSort: false
+                    showArchivedToggle: !_lensView
                     sortMode: win.boardSortMode
-                    // The weekly recap from the board (APP-211).
-                    showRecap: AppController.currentView === "board"
+                    // The weekly recap (APP-211) is in the palette
+                    // (recap.open); the heap 2 board has no bar for it
+                    // (APP-262, sheet H2-Board).
+                    showRecap: false
                     recapUnseen: weeklyRecap.unseen
                     onRecapRequested: win.runCommand("recap.open")
                     onSortModeRequested: (mode) => win.boardSortMode = mode
@@ -1192,6 +1259,7 @@ ApplicationWindow {
                         visible: !boardLoader.visible && !notesLoader.visible && !docsLoader.visible
                         sourceComponent: {
                             if (AppController.currentView === "today") return todayComp;
+                            if (AppController.currentView === "list") return listComp;
                             if (AppController.currentView === "timeline") return timelineComp;
                             if (AppController.currentView === "week") return weekComp;
                             if (AppController.currentView === "month") return monthComp;
@@ -1199,6 +1267,18 @@ ApplicationWindow {
                             if (AppController.currentView === "settings") return settingsComp;
                             return null;
                         }
+                    }
+
+                    // The list (APP-263) gets the window's query from here,
+                    // outside its Component, and hands its clicks back.
+                    Binding { when: win._listOn; target: viewLoader.item; property: "searchText"; value: win.searchText }
+                    Binding { when: win._listOn; target: viewLoader.item; property: "prioritiesFilter"; value: win.prioritiesFilter }
+                    Binding { when: win._listOn; target: viewLoader.item; property: "showArchived"; value: win.tasksShowArchived }
+                    Binding { when: win._listOn; target: viewLoader.item; property: "groupBy"; value: win.listGroupBy }
+                    Connections {
+                        target: viewLoader.item as TaskListView
+                        ignoreUnknownSignals: true
+                        function onTaskClicked(id) { win.showTask(AppController.taskById(id)); }
                     }
 
                     // Today's day hands its clicks up here, where the editors are.
@@ -1250,7 +1330,7 @@ ApplicationWindow {
                         searchText: win.searchText
                         prioritiesFilter: win.prioritiesFilter
                         scheduleMap: win._scheduleMap
-                        showArchived: win.showArchived
+                        showArchived: win.tasksShowArchived
                         sortMode: win.boardSortMode
                         onTaskClicked: (id) => win.showTask(AppController.taskById(id))
                         onCreateInStatus: (s) => quickCapture.openIn(s)
@@ -1259,6 +1339,10 @@ ApplicationWindow {
                 Component {
                     id: todayComp
                     TodayView {}
+                }
+                Component {
+                    id: listComp
+                    TaskListView {}
                 }
                 Component {
                     id: timelineComp
@@ -1743,7 +1827,7 @@ ApplicationWindow {
         }
     }
     function openLens(id) {
-        if (id === "list") AppController.currentView = "timeline";
+        if (id === "list") AppController.currentView = "list";
         else if (id === "calendar") AppController.currentView = win._calendarView;
         else AppController.currentView = id;
     }
@@ -1790,6 +1874,11 @@ ApplicationWindow {
         switch (id) {
         case "task.new":             quickCapture.open(); break;
         case "task.done":            win.markDone(); break;
+        case "task.schedule":        win.scheduleKeyTasks(); break;
+        case "task.priority.p0":     win.priorityKeyTasks("P0"); break;
+        case "task.priority.p1":     win.priorityKeyTasks("P1"); break;
+        case "task.priority.p2":     win.priorityKeyTasks("P2"); break;
+        case "task.priority.p3":     win.priorityKeyTasks("P3"); break;
         case "quick-capture":        quickCapture.open(); break;
         case "quick-capture-notes":  quickCaptureNotes.open(); break;
         case "panel.right":          win.toggleRightPanel(); break;
@@ -2196,6 +2285,7 @@ ApplicationWindow {
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && !win._viewKeysBlocked
             && (AppController.currentView === "board"
+                || AppController.currentView === "list"
                 || AppController.currentView === "timeline"
                 || AppController.currentView === "week"
                 || AppController.currentView === "archive")
@@ -2214,11 +2304,12 @@ ApplicationWindow {
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && !win._viewKeysBlocked
             && (AppController.selectionCount > 0
-                || (AppController.currentView === "board"
-                    && !!boardLoader.item && boardLoader.item["cursorVisible"] === true))
+                || ((AppController.currentView === "board" || AppController.currentView === "list")
+                    && !!win.activeViewItem() && win.activeViewItem()["cursorVisible"] === true))
         onActivated: {
             AppController.clearSelection();
-            if (boardLoader.item && boardLoader.item.clearCursor) boardLoader.item.clearCursor();
+            const v = win.activeViewItem();
+            if (v && v.clearCursor) v.clearCursor();
         }
     }
     // Esc on a tabbed-to control outside the view (filter chip, mini week, day
@@ -2433,12 +2524,19 @@ ApplicationWindow {
         onTyped: (text) => topBar.typeAhead(text)
     }
 
+    // The board's and the list's keys: not while typing, a popup or a
+    // card's menu is up (its arrows and letters belong to it).
+    readonly property bool _boardKeysOn: !win._viewKeysBlocked
+        && (AppController.currentView === "board" || AppController.currentView === "list")
+        && !(win.activeViewItem() && win.activeViewItem()["cardMenuOpen"] === true)
+    // The list's query comes from the window (APP-263); see the Bindings
+    // beside the view loaders.
+    readonly property bool _listOn: AppController.currentView === "list" && viewLoader.item !== null
     component BoardKey: Shortcut {
         context: Qt.ApplicationShortcut
         // Not while a card's menu is up: its arrows and letters belong to it.
-        enabled: sequences.length > 0 && !win._viewKeysBlocked
-            && AppController.currentView === "board"
-            && !(boardLoader.item && boardLoader.item.cardMenuOpen === true)
+        // The list (APP-263) walks with the same keys.
+        enabled: sequences.length > 0 && win._boardKeysOn
     }
 
     BoardKey {
@@ -2513,6 +2611,57 @@ ApplicationWindow {
         onActivated: { const b = win.activeViewItem(); if (b && b.toggleCursorColumn) b.toggleCursorColumn(); }
     }
 
+    // s: the task (or the selection) into the next free slot of the selected
+    // day, as the menu's "Schedule" does; 1–4: priority P0…P3 (keymap.md).
+    function scheduleKeyTasks() {
+        const ids = win._keyTaskIds();
+        for (let i = 0; i < ids.length; i++)
+            AppController.scheduleTaskAtNextFreeSlot(ids[i], AppController.selectedDate);
+    }
+    function priorityKeyTasks(p) {
+        if (AppController.selectionCount > 0) { AppController.setSelectedTasksPriority(p); return; }
+        const ids = win._keyTaskIds();
+        if (ids.length > 0) AppController.setTaskPriority(ids[0], p);
+    }
+    readonly property bool _taskKeysOn: win._boardKeysOn
+    Shortcut {
+        sequences: [win._kbd("task.schedule")]
+        context: Qt.ApplicationShortcut
+        enabled: win._taskKeysOn && win._kbd("task.schedule").length > 0
+        onActivated: win.scheduleKeyTasks()
+    }
+    Shortcut {
+        sequences: [win._kbd("task.priority.p0")]
+        context: Qt.ApplicationShortcut
+        enabled: win._taskKeysOn && win._kbd("task.priority.p0").length > 0
+        onActivated: win.priorityKeyTasks("P0")
+    }
+    Shortcut {
+        sequences: [win._kbd("task.priority.p1")]
+        context: Qt.ApplicationShortcut
+        enabled: win._taskKeysOn && win._kbd("task.priority.p1").length > 0
+        onActivated: win.priorityKeyTasks("P1")
+    }
+    Shortcut {
+        sequences: [win._kbd("task.priority.p2")]
+        context: Qt.ApplicationShortcut
+        enabled: win._taskKeysOn && win._kbd("task.priority.p2").length > 0
+        onActivated: win.priorityKeyTasks("P2")
+    }
+    Shortcut {
+        sequences: [win._kbd("task.priority.p3")]
+        context: Qt.ApplicationShortcut
+        enabled: win._taskKeysOn && win._kbd("task.priority.p3").length > 0
+        onActivated: win.priorityKeyTasks("P3")
+    }
+    // v marks the row on the list (H2-List's hint bar), as Space does.
+    Shortcut {
+        sequence: "V"
+        context: Qt.ApplicationShortcut
+        enabled: !win._viewKeysBlocked && AppController.currentView === "list"
+        onActivated: { const v = win.activeViewItem(); if (v && v.toggleCursorSelection) v.toggleCursorSelection(); }
+    }
+
     // Done (APP-268): a bare letter, held back while typing or a popup is up.
     Shortcut {
         sequence: win._kbd("task.done")
@@ -2525,6 +2674,7 @@ ApplicationWindow {
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && !win._viewKeysBlocked
             && (AppController.currentView === "board"
+                || AppController.currentView === "list"
                 || AppController.currentView === "archive"
                 || AppController.currentView === "timeline"
                 || AppController.currentView === "week")
