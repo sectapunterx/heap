@@ -660,8 +660,8 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.endOfDay.open.label", {"End of day", "Конец дня"}},
       {"shortcut.endOfDay.open.desc",
        {"Today's summary: closed, carrying over, timers running.", "Итог дня: закрыто, переходит на завтра, идущие таймеры."}},
-      {"shortcut.welcome.replay.label", {"Welcome tour", "Приветственный тур"}},
-      {"shortcut.welcome.replay.desc", {"Replay the first-run tour.", "Пройти тур первого запуска заново."}},
+      {"shortcut.welcome.replay.label", {"Getting started", "С чего начать"}},
+      {"shortcut.welcome.replay.desc", {"Open the guide.", "Открыть руководство."}},
       {"shortcut.task.new.label", {"New task", "Новая задача"}},
       {"shortcut.task.new.desc", {"Create a ticket in the active profile.", "Создать тикет в активном профиле."}},
       {"shortcut.task.done.label", {"Done", "Готово"}},
@@ -6261,7 +6261,7 @@ void AppController::scheduleTask(const QString& taskId, double startHour, const 
   e.type = "focus";
   e.start = hours.start;
   e.end = hours.end;
-  e.attendees = "🔒 deep work";
+  e.attendees = "deep work";
   e.date = day;
   e.taskId = t.id;
   e.profileId = m_activeProfileId;

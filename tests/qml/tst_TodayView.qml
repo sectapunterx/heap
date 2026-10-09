@@ -9,14 +9,20 @@ TestCase {
     name: "TodayView"
     when: windowShown
     visible: true
-    width: 1300
+    // Wider than the small layout (Theme.compactWindowWidth).
+    width: 1500
     height: 800
 
     Item { id: host; anchors.fill: parent }
     property var tasks: []
     property var events: []
     property date savedDate
-    function initTestCase() { tc.savedDate = AppController.selectedDate; }
+    function initTestCase() {
+        tc.savedDate = AppController.selectedDate;
+        // A fresh test profile is the first run (FirstRunHero); these tests
+        // look at the day itself.
+        AppController.markWelcomeSeen();
+    }
     function cleanup() {
         for (const id of tc.tasks) AppController.deleteTask(id);
         for (const id of tc.events) AppController.deleteEvent(id);
@@ -71,6 +77,69 @@ TestCase {
         AppController.selectedDate = tc.probeDay();
         const v = createTemporaryQmlObject('import TodoCpp; TodayView { anchors.fill: parent }', host);
         compare(findChild(v, "today-facts").text, I18n.t("today.nothing"));
+        // DG-010: no second "load" line under the facts.
+        compare(findChild(v, "today-load"), null);
+    }
+
+    function probeMeeting(day) {
+        const ev = AppController.newEventDraft(10, day);
+        ev.title = "today probe sync";
+        ev.type = "sync";
+        ev.end = 10.5;
+        ev.date = day;
+        ev.attendees = "Zoom";
+        AppController.saveEvent(ev);
+        tc.events.push(ev.id);
+    }
+
+    // DG-012: quiet draws plain rows with an icon and a lowercase caption,
+    // bold the cards with "Встреча"; the arrows are boxed only in bold.
+    function test_quiet_and_bold_draw_the_day_their_own_way() {
+        const saved = AppController.appSettingsJson;
+        try {
+            const day = tc.probeDay();
+            AppController.selectedDate = day;
+            tc.probeMeeting(day);
+            Style.apply("quiet");
+            const v = createTemporaryQmlObject('import TodoCpp; TodayView { width: 1300; height: 800 }', host);
+            verify(v.plain, "quiet is not plain");
+            const m = v.rows.filter(r => r.kind === "meeting")[0];
+            verify(!!m, "no meeting row");
+            compare(v._sub("meeting", m.block), [I18n.t("today.q.meeting"), I18n.fmtMinutes(30), "Zoom"].join(" · "));
+            compare(findChild(v, "today-prev").border.width, 0, "quiet arrows are boxed");
+            Style.apply("bold");
+            verify(!v.plain);
+            compare(v._sub("meeting", m.block), [I18n.t("event.kind.meeting"), "Zoom"].join(" · "));
+            compare(findChild(v, "today-prev").border.width, 1);
+        } finally {
+            AppController.appSettingsJson = saved;
+        }
+    }
+
+    // DG-014: bold shows one in-progress card; the rest are lines.
+    function test_one_card_for_what_is_in_progress() {
+        const saved = AppController.appSettingsJson;
+        try {
+            Style.apply("bold");
+            for (const n of ["a", "b"]) {
+                const d = AppController.newTaskDraft("prog");
+                d._isNew = true;
+                d.title = "in progress probe " + n;
+                AppController.saveTask(d);
+                tc.tasks.push(d.id);
+            }
+            const v = createTemporaryQmlObject('import TodoCpp; TodayView { width: 1300; height: 800 }', host);
+            verify(v.inProgress.length >= 2, "fewer than two in progress");
+            verify(findChild(v, "today-lead").visible);
+            compare(v.otherInProgress.length, v.inProgress.length - 1);
+        } finally {
+            AppController.appSettingsJson = saved;
+        }
+    }
+
+    function test_wrote_is_past_tense() {
+        if (I18n.lang === "ru") compare(I18n.t("today.wrote"), "Написал");
+        else compare(I18n.t("today.wrote"), "Wrote");
     }
 
     // The weekly recap is offered on the week's last working day only
