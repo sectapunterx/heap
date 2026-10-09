@@ -116,37 +116,6 @@ TestCase {
 
     // ── SCALE-3: Notes and Docs headers ─────────────────────────────────
 
-    function test_the_notes_header_keeps_its_buttons_in_the_view() {
-        withScale(1.5);
-        const v = make('import TodoCpp; NotesView { width: 760; height: 500 }');
-        const toggle = findChild(v, "notes-mode-toggle");
-        tryVerify(() => toggle.width > 0);
-        verify(rightIn(toggle, v) <= v.width, "the mode toggle runs past the view: " + rightIn(toggle, v));
-        const title = findChild(v, "notes-title-col");
-        verify(rightIn(title, v) <= toggle.mapToItem(v, 0, 0).x, "title over the buttons");
-    }
-
-    function test_the_docs_header_gives_way_and_keeps_tab_words() {
-        withScale(1.5);
-        const v = make('import TodoCpp; DocsView { width: 760; height: 600 }');
-        v.tab = "references";
-        const search = findChild(v, "docs-search-box");
-        tryVerify(() => search.width > 0);
-        verify(rightIn(search, v) <= v.width, "the search runs past the view");
-        for (const id of ["pages", "references"]) {
-            const tab = findChild(v, "docs-tab-" + id);
-            const label = I18n.t("docs.tab." + id);
-            let txt = null;
-            for (let i = 0; i < tab.children.length; i++)
-                if (tab.children[i].text === label) txt = tab.children[i];
-            verify(txt !== null);
-            verify(txt.implicitWidth <= tab.width - 2 * Theme.spSm, id + " tab text runs over its frame");
-        }
-        const subs = findAll(v, "docs-section-subtitle", []);
-        for (const s of subs) if (s.visible && s.width > 0)
-            verify(rightIn(s, v) <= v.width, "a section subtitle runs past the view");
-    }
-
     // ── SCALE-4: avatars grow with their initials ───────────────────────
 
     function test_people_avatars_hold_their_initials_at_150() {

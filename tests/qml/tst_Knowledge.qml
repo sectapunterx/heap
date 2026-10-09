@@ -19,7 +19,7 @@ TestCase {
     function initTestCase() {
         _docs = AppController.docsState;
         AppController.docsState = JSON.stringify({
-            sections: [{ id: "s", title: "Ref", items: [{ ref: "RFC 9110", title: "HTTP Semantics", url: "https://www.rfc-editor.org/rfc/rfc9110" }] }],
+            sections: [{ id: "s", title: "Ref", items: [{ ref: "RFC 9110", title: "HTTP Semantics", url: "https://www.rfc-editor.org/rfc/rfc9110", pinned: true }] }],
             snippets: [{ title: "Run the stand", lang: "sh", code: "make up" }],
             contacts: []
         });

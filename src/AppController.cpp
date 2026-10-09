@@ -1518,7 +1518,7 @@ QString AppController::tr_(const QString& key) const {
 void AppController::setCurrentView(const QString& requested) {
   // An unknown name (a --view typo, a stale binding) lands on the board rather
   // than on a blank content area that would then be saved and come back.
-  const QString v = heap::views::isKnown(requested) ? requested : QStringLiteral("today");
+  const QString v = heap::views::isKnown(requested) ? heap::views::canonical(requested) : QStringLiteral("today");
   if(v == m_currentView) {
     return;
   }
@@ -12215,13 +12215,13 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
       // A view this build does not have (a hand edit, an older --view typo
       // that got saved) would leave the content area blank on every launch.
       const QString v = s["currentView"].toString();
-      m_currentView = heap::views::isKnown(v) ? v : QStringLiteral("today");
+      m_currentView = heap::views::isKnown(v) ? heap::views::canonical(v) : QStringLiteral("today");
       emit currentViewChanged();
     }
     m_sectionViews.clear();
     const QJsonObject sv = s.value("sectionViews").toObject();
     for(auto it = sv.constBegin(); it != sv.constEnd(); ++it) {
-      const QString v = it.value().toString();
+      const QString v = heap::views::canonical(it.value().toString());
       if(heap::views::isKnown(v) && heap::views::sectionOf(v) == it.key()) {
         m_sectionViews.insert(it.key(), v);
       }
@@ -13152,6 +13152,7 @@ QVariantList AppController::commandPaletteEntries() const {
             QVariantMap m;
             m["kind"] = "doc";
             m["label"] = QString("%1 · %2").arg(it["ref"].toString(), it["title"].toString());
+            m["title"] = it["title"].toString();
             m["sub"] = QString("%1 · %2").arg(p.name, secTitle);
             m["body"] = cap(it["desc"].toString() + QChar(' ') + it["source"].toString());
             m["profileId"] = p.id;

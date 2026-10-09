@@ -45,13 +45,14 @@ ApplicationWindow {
     // setting the visibility earlier would show it.
     property bool _maximizeOnShow: false
 
-    // Builds the current view's loader on its first visit. Board, Notes and
-    // Docs are never unloaded again.
+    // Builds the current view's loader on its first visit. Board and Notes
+    // are never unloaded again. "docs" (the 0.7 catalogue, a saved
+    // currentView or Ctrl+4) is Knowledge now: one screen (DG-070).
     function activateCurrentView() {
         const v = AppController.currentView;
+        if (v === "docs") { AppController.currentView = "notes"; return; }
         if (v === "board") boardLoader.active = true;
         else if (v === "notes") notesLoader.active = true;
-        else if (v === "docs") docsLoader.active = true;
     }
 
     // Whichever view is on screen. Four loaders now hold them — three kept
@@ -60,7 +61,6 @@ ApplicationWindow {
         const v = AppController.currentView;
         if (v === "board") return boardLoader.item;
         if (v === "notes") return notesLoader.item;
-        if (v === "docs") return docsLoader.item;
         // The calendar lens wraps its grid (APP-264): the keys act on the grid.
         const it = viewLoader.item;
         if (it && it.objectName === "calendar-view") return it["calendarView"];
@@ -75,10 +75,9 @@ ApplicationWindow {
         else win.notice(I18n.t("notes.link.noTask").arg(key), "warning");
     }
 
-    // A profile that has never opened Docs has no docs blob yet, so the
-    // starter catalogue DocsView seeds on its first visit was unsearchable
-    // from Ctrl+K until then. Seeded here instead, the same content in the
-    // same language — DocsView reads it back as if it had written it.
+    // A profile with no docs blob gets the starter catalogue here, so its
+    // references are in Ctrl+K and in the Knowledge list (pinned ones at
+    // rest, the rest under search) from the first run.
     function seedStarterDocs() {
         if ((AppController.docsState || "").length > 0) return;
         AppController.docsState = JSON.stringify({
@@ -677,7 +676,7 @@ ApplicationWindow {
     // Whether `it` sits in one of the four view loaders (any view, shown or not).
     function _insideView(it) {
         for (let p = it; p; p = p.parent)
-            if (p === boardLoader || p === notesLoader || p === docsLoader || p === viewLoader) return true;
+            if (p === boardLoader || p === notesLoader || p === viewLoader) return true;
         return false;
     }
     // A modal (or dimming) popup is up somewhere — even one that did not take
@@ -816,8 +815,8 @@ ApplicationWindow {
             AppController.currentView = "notes";
         } else if (hit.kind === "docPage") {
             AppController.activeDocPageId = hit.id;
-            AppController.currentView = "docs";
-            docsBridge.requestedAnchor = "page:" + hit.id;
+            AppController.currentView = "notes";
+            notesBridge.requestedPage = hit.id;
         }
     }
 
@@ -1137,9 +1136,9 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 // The tasks and knowledge sections; Today and Settings carry
                 // their own titles.
-                // Knowledge is one screen with its own header (APP-269); the
-                // full Docs catalogue keeps this one, to come back.
-                visible: section === "tasks" || view === "docs"
+                // Knowledge is one screen with its own header (APP-269,
+                // DG-070): no lens tabs there.
+                visible: section === "tasks"
                 section: AppController.currentSection
                 view: AppController.currentView
                 onLensSelected: (id) => win.openLens(id)
@@ -1191,8 +1190,7 @@ ApplicationWindow {
                     // is the query's "is:archived", saving is the header's.
                     readonly property bool _lensView: AppController.currentView === "board"
                                                       || AppController.currentView === "list"
-                    visible: AppController.currentView !== "docs"
-                          && (!_lensView || !!savedViewsHost.activeView)
+                    visible: (!_lensView || !!savedViewsHost.activeView)
                           && AppController.currentView !== "today"
                           && AppController.currentView !== "notes"
                           && AppController.currentView !== "settings"
@@ -1244,17 +1242,16 @@ ApplicationWindow {
                     // A view wider than its column is cut at the column, not
                     // drawn under the right panel (SCALE-3).
                     clip: true
-                    // Board, Notes and Docs are kept alive once visited.
+                    // Board and Knowledge are kept alive once visited.
                     // Swapping a Loader's sourceComponent destroys the item,
-                    // and these three hold state the user notices losing: the
+                    // and these hold state the user notices losing: the
                     // board's scroll position and column focus, the note's
-                    // caret, scroll and editor undo history, the docs
-                    // section the user had scrolled to. Everything else is
-                    // cheap to rebuild and stays on the shared loader below.
+                    // caret, scroll and editor undo history. Everything else
+                    // is cheap to rebuild and stays on the shared loader below.
                     //
                     // They load lazily — `active` is flipped on first visit —
                     // so starting on the board does not build the notes
-                    // editor and the docs catalogue too.
+                    // editor too.
                     Loader {
                         id: boardLoader
                         anchors.fill: parent
@@ -1269,18 +1266,11 @@ ApplicationWindow {
                         active: false
                         sourceComponent: notesComp
                     }
-                    Loader {
-                        id: docsLoader
-                        anchors.fill: parent
-                        visible: AppController.currentView === "docs"
-                        active: false
-                        sourceComponent: docsComp
-                    }
 
                     Loader {
                         id: viewLoader
                         anchors.fill: parent
-                        visible: !boardLoader.visible && !notesLoader.visible && !docsLoader.visible
+                        visible: !boardLoader.visible && !notesLoader.visible
                         sourceComponent: {
                             if (AppController.currentView === "today") return todayComp;
                             if (AppController.currentView === "list") return listComp;
@@ -1302,15 +1292,6 @@ ApplicationWindow {
                         target: viewLoader.item as TaskListView
                         ignoreUnknownSignals: true
                         function onTaskClicked(id) { win.showTask(AppController.taskById(id)); }
-                    }
-                    // A doc page in the Knowledge list opens in Docs (APP-269).
-                    Connections {
-                        target: notesLoader.item as NotesView
-                        ignoreUnknownSignals: true
-                        function onDocPageRequested(id) {
-                            AppController.currentView = "docs";
-                            docsBridge.requestedAnchor = "page:" + id;
-                        }
                     }
 
                     // Today's day hands its clicks up here, where the editors are.
@@ -1428,24 +1409,6 @@ ApplicationWindow {
                     }
                 }
                 Component {
-                    id: docsComp
-                    DocsView {
-                        id: docsView
-                        onLinkRequested: (kind, target) => win.followMdLink(kind, target)
-                        Connections {
-                            target: docsBridge
-                            function onRequestedAnchorChanged() {
-                                if (docsBridge.requestedAnchor.length > 0) {
-                                    Qt.callLater(function () {
-                                        docsView.scrollToAnchor(docsBridge.requestedAnchor);
-                                        docsBridge.requestedAnchor = "";
-                                    });
-                                }
-                            }
-                        }
-                    }
-                }
-                Component {
                     id: notesComp
                     NotesView {
                         // A palette hit in a note asks for the line its
@@ -1453,6 +1416,11 @@ ApplicationWindow {
                         // same line be requested twice.
                         jumpToLine: notesBridge.requestedLine
                         onJumpConsumed: notesBridge.requestedLine = -1
+                        // A doc page or a catalogue entry found in Ctrl+K (DG-070).
+                        requestedPage: notesBridge.requestedPage
+                        onPageConsumed: notesBridge.requestedPage = ""
+                        requestedFilter: notesBridge.requestedFilter
+                        onFilterConsumed: notesBridge.requestedFilter = ""
                         onTaskRequested: (id) => win.openTaskById(id)
                         onPersonRequested: (id) => personEditor.showFor(AppController.personById(id))
                     }
@@ -2086,25 +2054,22 @@ ApplicationWindow {
         onCreateRequested: (text) => quickCapture.openWithText(text)
         onOpenTask: (taskId) => win.showTask(AppController.taskById(taskId))
         onOpenPerson: (personId) => personEditor.showFor(AppController.personById(personId))
-        onNavigateToDoc: (sectionId) => docsBridge.requestedAnchor = "sec-" + sectionId
-        onNavigateToSnippets: docsBridge.requestedAnchor = "sec-snippets"
-        onNavigateToContacts: docsBridge.requestedAnchor = "sec-contacts"
+        // The catalogue is listed in Knowledge (DG-070): an entry opens
+        // the list searched for it.
+        onNavigateToDoc: (text) => notesBridge.requestedFilter = text
+        onNavigateToSnippets: (text) => notesBridge.requestedFilter = text
+        onNavigateToContacts: (text) => notesBridge.requestedFilter = text
         onNavigateToNoteLine: (line) => notesBridge.requestedLine = line
-        onNavigateToDocPage: (pageId) => docsBridge.requestedAnchor = "page:" + pageId
+        onNavigateToDocPage: (pageId) => notesBridge.requestedPage = pageId
     }
 
-    // Anchor bridge — DocsView listens for changes and scrolls to the
-    // anchorId set here (set, then cleared after one tick).
-    QtObject {
-        id: docsBridge
-        property string requestedAnchor: ""
-    }
-
-    // The same idea for notes: a search hit sets the line it wants, NotesView
-    // watches and puts the caret there.
+    // A search hit sets the line it wants, NotesView watches and puts the
+    // caret there; a doc page or a catalogue entry the same way (DG-070).
     QtObject {
         id: notesBridge
         property int requestedLine: -1
+        property string requestedPage: ""
+        property string requestedFilter: ""
     }
 
     // ── Rebindable application shortcuts ──────────────────────────────
@@ -2545,7 +2510,7 @@ ApplicationWindow {
         sequence: _kbd("view.docs")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: AppController.currentView = "docs"
+        onActivated: AppController.currentView = "notes"
     }
     Shortcut {
         sequence: _kbd("view.notes")

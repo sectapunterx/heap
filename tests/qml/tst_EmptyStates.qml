@@ -158,19 +158,6 @@ TestCase {
         verifyState(findChild(p, "notes-empty"), "notes");
     }
 
-    function test_docs() {
-        const dv = make('import TodoCpp; DocsView { anchors.fill: parent }');
-        dv.sections = [];
-        dv.snippets = [];
-        dv.contacts = [];
-        const s = findChild(dv, "docs-empty");
-        verifyState(s, "docs");
-        compare(s.title, I18n.t("docs.empty"));
-        dv.searchText = tc.nothing;
-        tryVerify(() => !s.visible);
-        verify(findChild(dv, "docs-no-matches").visible, "a docs search that finds nothing says so");
-    }
-
     function test_docs_page_pane() {
         const p = make('import TodoCpp; MdEditorPane { width: 600; height: 400; pageId: ""; emptyText: "pick" }');
         verifyState(findChild(p, "md-editor-empty"), "doc page");

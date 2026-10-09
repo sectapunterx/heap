@@ -304,22 +304,4 @@ TestCase {
         box.popup.close();
     }
 
-    // ── PERO-2: "+ Add" in a section files the entry in that section ──
-    function test_the_doc_form_shows_the_section_it_was_opened_from() {
-        const ed = make('import TodoCpp; DocsEditor { }');
-        ed.sections = [{ id: "s-a", title: "Web", items: [] }, { id: "s-b", title: "Team links", items: [] }];
-        const combo = findChild(ed, "docs-editor-section");
-        verify(combo !== null);
-        ed.kind = "doc";
-        ed.isNew = true;
-        ed.sectionId = "s-b";
-        ed.draft = ({ ref: "", title: "", _sectionId: "s-b" });
-        compare(combo.currentIndex, 1, "the form opened on another section");
-        compare(combo.displayText, "Team links");
-        // A second "+ Add", from the other section.
-        ed.sectionId = "s-a";
-        ed.draft = ({ ref: "", title: "", _sectionId: "s-a" });
-        compare(combo.currentIndex, 0);
-        compare(ed.draft._sectionId, "s-a");
-    }
 }

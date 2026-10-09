@@ -83,11 +83,44 @@ TestCase {
         verify(/^due \d{4}-\d{2}-\d{2}$/.test(ed.text), ed.text);
     }
 
-    function test_the_header_names_the_open_note() {
-        const id = note("Header probe");
+    // DG-071: the line above the note says what it is and how fresh; there
+    // is no toolbar.
+    function test_the_meta_line_says_note_and_when() {
+        const id = note("Meta probe");
         AppController.activeNoteId = id;
         const nv = makeNotes();
-        tryCompare(findChild(nv, "notes-title"), "text", "Header probe");
+        const meta = findChild(nv, "notes-meta");
+        verify(meta !== null);
+        const edited = I18n.t("know.edited").arg(I18n.t("know.ago.now"));
+        tryCompare(meta, "text", Style.quiet ? edited : I18n.t("know.kind.note") + " · " + edited);
+        compare(findChild(nv, "notes-mode-toggle"), null, "no Source button");
+        compare(findChild(nv, "notes-attach"), null, "no attach button");
+    }
+
+    function test_ago_reads_minutes_hours_and_days() {
+        const nv = makeNotes();
+        const now = new Date(2026, 9, 9, 12, 0, 0);
+        compare(nv.agoText(new Date(2026, 9, 9, 11, 59, 40), now), I18n.t("know.ago.now"));
+        compare(nv.agoText(new Date(2026, 9, 9, 11, 55, 0), now), I18n.t("know.ago.min").arg(5));
+        compare(nv.agoText(new Date(2026, 9, 9, 9, 0, 0), now), I18n.t("know.ago.hours").arg(3));
+        compare(nv.agoText(new Date(2026, 9, 8, 9, 0, 0), now), I18n.t("know.ago.yesterday"));
+        compare(nv.agoText(null, now), "");
+    }
+
+    // DG-070: a page of the former Docs catalogue opens in the document.
+    function test_a_doc_page_opens_in_the_document() {
+        const id = AppController.newDocPage("Page probe");
+        tc.pages.push(id);
+        const nv = makeNotes(1200);
+        nv.openPage(id);
+        const page = findChild(nv, "knowledge-page");
+        verify(page.visible);
+        compare(page.pageId, id);
+        verify(!findChild(nv, "notes-live").visible, "the note gives way to the page");
+        verify(!findChild(nv, "notes-links-pane").visible);
+        const n = note("Back probe");
+        AppController.activeNoteId = n;
+        compare(nv.pageId, "", "opening a note closes the page");
     }
 
     function test_the_list_is_reachable_when_narrow() {
@@ -100,21 +133,19 @@ TestCase {
         verify(list.visible, "and the toggle brings it back");
     }
 
-    function test_links_pane_shows_incoming_and_resolves_outgoing() {
-        const target = note("Link target probe", "# Link target probe\n");
-        const other = note("Link source probe", "see [[Link target probe]] and [[Nowhere probe]]");
+    // DG-072: the column beside the note — backlinks, external links.
+    function test_links_column_shows_backlinks_and_external_links() {
+        const target = note("Link target probe", "# Link target probe\n\n[RFC 6585](https://www.rfc-editor.org/rfc/rfc6585 \"429 Too Many Requests\")");
+        const other = note("Link source probe", "see [[Link target probe]]");
         AppController.activeNoteId = target;
-        const nv = makeNotes();
-        nv.showBacklinks = true;
-        compare(nv._incoming.length, 1);
+        const nv = makeNotes(1200);
+        verify(nv.showBacklinks, "shown when there is room");
+        tryVerify(function () { return nv._incoming.length === 1; });
         compare(nv._incoming[0].noteId, other);
-
-        AppController.activeNoteId = other;
-        tryVerify(function () { return nv._outgoing.length === 2; });
-        const byTarget = ({});
-        for (let i = 0; i < nv._outgoing.length; i++) byTarget[nv._outgoing[i].target] = nv._outgoing[i];
-        verify(byTarget["Link target probe"].resolved, "an existing note is not a broken link");
-        verify(!byTarget["Nowhere probe"].resolved);
+        tryVerify(function () { return nv._external.length === 1; });
+        compare(nv._external[0].label, "RFC 6585");
+        compare(nv._external[0].title, "429 Too Many Requests");
+        verify(findChild(nv, "incoming-" + other) !== null);
     }
 
     function test_doc_page_editor_has_the_markdown_keyboard() {

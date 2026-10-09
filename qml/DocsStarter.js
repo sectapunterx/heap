@@ -21,6 +21,7 @@ function sections(lang, accents) {
         "items": [
             {
                 "ref": "RFC 9110",
+                "pinned": true,
                 "title": "Семантика HTTP",
                 "desc": "Основа HTTP — методы, коды ответа, заголовки, условные и диапазонные запросы, кеширование.",
                 "url": "https://www.rfc-editor.org/rfc/rfc9110",
@@ -39,6 +40,7 @@ function sections(lang, accents) {
             },
             {
                 "ref": "RFC 6749",
+                "pinned": true,
                 "title": "Фреймворк авторизации OAuth 2.0",
                 "desc": "Типы грантов, токены, обновление, редиректы, вопросы безопасности.",
                 "url": "https://www.rfc-editor.org/rfc/rfc6749",
@@ -75,6 +77,7 @@ function sections(lang, accents) {
             },
             {
                 "ref": "OpenAPI 3.1",
+                "pinned": true,
                 "title": "Спецификация OpenAPI",
                 "desc": "Описание REST API без привязки к языку — пути, схемы, схемы безопасности.",
                 "url": "https://spec.openapis.org/oas/latest.html",
@@ -337,6 +340,7 @@ function sections(lang, accents) {
         "items": [
             {
                 "ref": "RFC 9110",
+                "pinned": true,
                 "title": "HTTP Semantics",
                 "desc": "Core HTTP — methods, status codes, headers, conditional & range requests, caching.",
                 "url": "https://www.rfc-editor.org/rfc/rfc9110",
@@ -355,6 +359,7 @@ function sections(lang, accents) {
             },
             {
                 "ref": "RFC 6749",
+                "pinned": true,
                 "title": "OAuth 2.0 Authorization Framework",
                 "desc": "Grant types, tokens, refresh flow, redirect handling, security considerations.",
                 "url": "https://www.rfc-editor.org/rfc/rfc6749",
@@ -391,6 +396,7 @@ function sections(lang, accents) {
             },
             {
                 "ref": "OpenAPI 3.1",
+                "pinned": true,
                 "title": "OpenAPI Specification",
                 "desc": "Language-agnostic REST API description — paths, schemas, security schemes.",
                 "url": "https://spec.openapis.org/oas/latest.html",
@@ -646,100 +652,22 @@ function sections(lang, accents) {
 ];
 }
 
+// One snippet, as on the Knowledge sheet (DG-073): a starter list of five
+// pushed the notes below the fold.
 function snippets(lang) {
-    return lang === "ru" ? [
+    const ru = lang === "ru";
+    return [
     {
-        "title": "Сборка с санитайзерами",
+        "title": ru ? "Поднять локальный стенд" : "Start the local stack",
         "lang": "sh",
         "tags": [
-            "build",
-            "sanitizers"
+            "dev",
+            "docker"
         ],
-        "code": "# AddressSanitizer\ncmake -B build -DCMAKE_CXX_FLAGS='-fsanitize=address -g'\ncmake --build build\n\n# ThreadSanitizer (data races)\ncmake -B build-tsan -DCMAKE_CXX_FLAGS='-fsanitize=thread -g'\n\n# UBSan + ASan combo\ncmake -B build -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -g'"
-    },
-    {
-        "title": "GDB · подключиться к работающему процессу",
-        "lang": "sh",
-        "tags": [
-            "debug",
-            "gdb"
-        ],
-        "code": "sudo gdb -p $(pgrep -f my-service)\n(gdb) info threads\n(gdb) thread apply all bt 30\n(gdb) bt full\n(gdb) p *this  # pretty-print"
-    },
-    {
-        "title": "curl · отладка HTTP-эндпоинта",
-        "lang": "sh",
-        "tags": [
-            "network",
-            "http"
-        ],
-        "code": "# Timing + headers for a request\ncurl -sS -D - -o /dev/null -w '\\ntime_total: %{time_total}s\\n' \\\n  https://api.example.com/v1/health\n\n# POST JSON with a bearer token\ncurl -sS -X POST https://api.example.com/v1/items \\\n  -H 'Authorization: Bearer $TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"name\":\"widget\"}'"
-    },
-    {
-        "title": "Коды ответа HTTP (справка)",
-        "lang": "cpp",
-        "tags": [
-            "reference",
-            "enum"
-        ],
-        "code": "enum class HttpStatus : int {\n  Ok           = 200,\n  Created      = 201,\n  NoContent    = 204,\n  BadRequest   = 400,\n  Unauthorized = 401,\n  Forbidden    = 403,\n  NotFound     = 404,\n  Conflict     = 409,\n  TooMany      = 429,\n  ServerError  = 500,\n};\n\nconstexpr auto kRequestTimeout =\n  std::chrono::seconds{10};"
-    },
-    {
-        "title": "Структурированное логирование",
-        "lang": "cpp",
-        "tags": [
-            "logging",
-            "observability"
-        ],
-        "code": "// Prefer structured key/value logs — machine-queryable.\nLOG_INFO(\"request.completed\",\n  {{\"method\", req.method}, {\"path\", req.path},\n   {\"status\", res.status}, {\"ms\", elapsed.count()}});\n\n// Warnings carry enough context to act on.\nLOG_WARN(\"cache.miss\", {{\"key\", key}, {\"shard\", shardId}});"
+        "code": ru ? "# Сборка и запуск всего стенда\ndocker compose up -d --build\n\n# Логи сервиса\ndocker compose logs -f api\n\n# Остановить и убрать тома\ndocker compose down -v"
+                   : "# Build and start the whole stack\ndocker compose up -d --build\n\n# Follow a service's logs\ndocker compose logs -f api\n\n# Stop and drop the volumes\ndocker compose down -v"
     }
-] : [
-    {
-        "title": "Build with sanitizers",
-        "lang": "sh",
-        "tags": [
-            "build",
-            "sanitizers"
-        ],
-        "code": "# AddressSanitizer\ncmake -B build -DCMAKE_CXX_FLAGS='-fsanitize=address -g'\ncmake --build build\n\n# ThreadSanitizer (data races)\ncmake -B build-tsan -DCMAKE_CXX_FLAGS='-fsanitize=thread -g'\n\n# UBSan + ASan combo\ncmake -B build -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -g'"
-    },
-    {
-        "title": "GDB · attach to a running process",
-        "lang": "sh",
-        "tags": [
-            "debug",
-            "gdb"
-        ],
-        "code": "sudo gdb -p $(pgrep -f my-service)\n(gdb) info threads\n(gdb) thread apply all bt 30\n(gdb) bt full\n(gdb) p *this  # pretty-print"
-    },
-    {
-        "title": "curl · debug an HTTP endpoint",
-        "lang": "sh",
-        "tags": [
-            "network",
-            "http"
-        ],
-        "code": "# Timing + headers for a request\ncurl -sS -D - -o /dev/null -w '\\ntime_total: %{time_total}s\\n' \\\n  https://api.example.com/v1/health\n\n# POST JSON with a bearer token\ncurl -sS -X POST https://api.example.com/v1/items \\\n  -H 'Authorization: Bearer $TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"name\":\"widget\"}'"
-    },
-    {
-        "title": "HTTP status codes (reference)",
-        "lang": "cpp",
-        "tags": [
-            "reference",
-            "enum"
-        ],
-        "code": "enum class HttpStatus : int {\n  Ok           = 200,\n  Created      = 201,\n  NoContent    = 204,\n  BadRequest   = 400,\n  Unauthorized = 401,\n  Forbidden    = 403,\n  NotFound     = 404,\n  Conflict     = 409,\n  TooMany      = 429,\n  ServerError  = 500,\n};\n\nconstexpr auto kRequestTimeout =\n  std::chrono::seconds{10};"
-    },
-    {
-        "title": "Structured logging",
-        "lang": "cpp",
-        "tags": [
-            "logging",
-            "observability"
-        ],
-        "code": "// Prefer structured key/value logs — machine-queryable.\nLOG_INFO(\"request.completed\",\n  {{\"method\", req.method}, {\"path\", req.path},\n   {\"status\", res.status}, {\"ms\", elapsed.count()}});\n\n// Warnings carry enough context to act on.\nLOG_WARN(\"cache.miss\", {{\"key\", key}, {\"shard\", shardId}});"
-    }
-];
+    ];
 }
 
 function contacts(lang) {

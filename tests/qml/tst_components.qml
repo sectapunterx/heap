@@ -38,7 +38,6 @@ TestCase {
     function test_daycalendar() { load("DayCalendar"); }
     function test_peoplelist()  { load("PeopleList"); }
     function test_archiveview() { load("ArchiveView"); }
-    function test_docsview()    { load("DocsView"); }
     function test_notesview()   { load("NotesView"); }
     function test_settingsview(){ load("SettingsView"); }
     function test_toast()       { load("Toast"); }
