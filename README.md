@@ -9,9 +9,9 @@
 
 <p align="center">
   <a href="https://sectapunterx.github.io/heap/"><b>Website</b></a> ·
-  <a href="https://sectapunterx.github.io/heap/demo/">Try it in the browser</a> ·
+  <a href="https://sectapunterx.github.io/heap/#try">Try it in the browser</a> ·
   <a href="https://github.com/sectapunterx/heap/releases/latest"><b>Download</b></a> ·
-  <a href="https://sectapunterx.github.io/heap/docs/">Docs</a>
+  <a href="#documentation">Docs</a>
 </p>
 
 <div align="center">
@@ -61,8 +61,9 @@ carries the PR state too. Need a branch? Create one from the task's menu. No man
 
 Sign in through the browser or paste a token, and issues from **GitHub, GitLab, Jira, Trello, Gitea, Forgejo,
 Redmine, Todoist, Asana, ClickUp, Sentry and Bitbucket** land as cards, with their statuses mapped onto your columns.
-Move a card to Done and the issue is closed upstream (GitHub, GitLab, Gitea, Forgejo). Tokens live in the OS
-keychain. Mattermost brings in the people you work with. [More →](docs/INTEGRATIONS.md)
+Move a card to Done and the issue is closed upstream (GitHub, GitLab, Gitea, Forgejo). Tokens never go into
+`state.json`: the Windows build keeps them in the system credential store, the macOS and Linux builds in a
+`secrets.json` only your user can read. Mattermost brings in the people you work with. [More →](docs/INTEGRATIONS.md)
 
 <p align="center">
   <img src="docs/assets/img/readme/integrations.png" width="80%" alt="Tracker integrations in Settings">
@@ -177,8 +178,6 @@ In git-bash plain `lowkey` works too.
 - [**Keyboard reference**](docs/HOTKEYS.md) — every shortcut
 - [**Tracker integrations**](docs/INTEGRATIONS.md) — connecting GitHub, Jira and the rest
 - [**Data & backups**](docs/DATA.md) — where your data lives, moving between machines
-
-Also on the website, with search: [sectapunterx.github.io/heap/docs](https://sectapunterx.github.io/heap/docs/).
 
 ## Contributing
 

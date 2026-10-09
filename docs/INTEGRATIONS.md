@@ -6,7 +6,9 @@ is **descriptor-driven**: every tracker is one `ProviderDescriptor` in
 executed by the generic `RestIssueProvider`. Adding a REST tracker is a registry
 entry — no networking or UI code. Jira and Trello are the two bespoke exceptions.
 
-Access tokens live in the **OS keychain** (QtKeychain), never in `state.json`.
+Access tokens never go into `state.json`. Builds with QtKeychain (the Windows
+release) keep them in the **OS keychain**; the macOS and Linux release builds
+keep them in a `secrets.json` that only your user can read (see below).
 See [`docs/DATA.md`](DATA.md) for what does get persisted.
 
 ## The rule: every external write is opt-in
@@ -280,7 +282,7 @@ to push back.
 leave the OAuth provider disabled (both are System Console settings), so the
 primary path is the same credentials you use in the Mattermost app. The password
 is sent once to `POST /api/v4/users/login` and never stored — only the session
-token it returns, which lives in the keychain like any other. heap refuses to
+token it returns, which is stored like any other token. heap refuses to
 send it at all unless the server URL is `https` (or loopback). A personal access
 token works too, where your admin allows them.
 
@@ -339,7 +341,8 @@ The OS keychain, service `heap.integrations`, key `<provider>/<field>`
 Manager caps a blob at 2560 bytes) are split across `<key>#0`, `<key>#1`, … .
 A run that must not touch your real data — `--data-dir` / `HEAP_DATA_DIR`, or
 the test suites — never opens the keychain: it keeps a `secrets.json` next to its
-own `state.json` instead. Builds without QtKeychain always use that file.
+own `state.json` instead. Builds without QtKeychain always use that file — today
+that is the macOS and Linux release builds; the file is readable only by your user.
 
 ## What a pulled issue brings with it
 

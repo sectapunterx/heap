@@ -70,7 +70,7 @@ The site's own keys: Ctrl K and `/` open the search, `g g` goes to the top, Shif
 |---|---|---|---|---|
 | 31 | Bold style by default, quiet on request | `qml/Style.qml` (default `bold`) | built (the styles) | ☐ |
 | 32 | Switch in Settings, no restart | mockup N-Set-StyleKeys; `Style.apply` is called nowhere yet | planned | ☐ |
-| 33 | Tagline "Quiet by default." next to "Bold style by default" | owner's tagline; reads as the product's attitude, not the style setting | — owner may want one of them reworded | — |
+| 33 | Tagline "Calm by design." (was "Quiet by default.", which contradicted the bold default style) | the product's attitude, not the style setting | — | — |
 
 ## Built like a tool, not a service
 
