@@ -5,15 +5,13 @@
 <h3 align="center">Quiet by default.</h3>
 
 <p align="center">A developer’s workday in one window — tickets, meetings and notes, from the keyboard.<br>
-<sub>Formerly <b>heap</b>. Same app, same data — it moves over on the first start.</sub></p>
+<sub>Formerly <b>heap</b>. Same app, same data.</sub></p>
 
 <p align="center">
-  <a href="https://github.com/sectapunterx/heap/releases/latest"><b>Download lowkey</b></a> ·
-  <a href="https://sectapunterx.github.io/heap/">Website</a> ·
-  <a href="https://sectapunterx.github.io/heap/#try">Try it in the browser</a>
+  <a href="https://github.com/sectapunterx/heap/releases/latest"><b>Download</b></a> ·
+  <a href="https://sectapunterx.github.io/heap/">Website — the tour</a> ·
+  <a href="#documentation">Docs</a>
 </p>
-
-<p align="center"><sub>No sign-up · Works offline · Windows, macOS, Linux · Free and open source</sub></p>
 
 <div align="center">
 
@@ -23,150 +21,113 @@
 
 </div>
 
-<p align="center">
-  <img src="docs/assets/img/screens/board-kanban.png" width="100%" alt="lowkey: tasks from your trackers and the day’s meetings in one window">
-</p>
+lowkey is a personal desktop app: your tickets from GitHub, GitLab, Jira and nine more trackers, your meetings, and
+your notes, in one window you drive from the keyboard. It keeps everything in a file on your disk, needs no
+account, and writes nothing to your trackers unless you switch that on. What it looks like and why it exists is on
+the [website](https://sectapunterx.github.io/heap/); this page is about getting it running and finding your way
+around.
 
-## Eight tabs just to know what to do next?
+## Install
 
-Tracker, calendar, mail, notes, chat — each with its own notifications and its own counters. By the time you have
-checked them all, the morning is gone.
+Download from [Releases](https://github.com/sectapunterx/heap/releases/latest):
 
-lowkey gathers the tasks from your trackers and the meetings from your calendar into one feed for the day. It
-shows what is on now and what is due today, and colour marks only what is urgent. Then it gets out of the way: it
-never plans your day for you, never moves a task on its own, and never writes to your tracker unless you tell it to.
+| System | File | Then |
+| --- | --- | --- |
+| Windows | `lowkey-*-windows-setup.exe` | Run it. Or take `lowkey-*-windows-portable.zip` and start `lowkey.exe` from any folder. |
+| macOS | `lowkey-*-macos.dmg` | Open it and drag lowkey into Applications. |
+| Linux | `lowkey-*-linux-x86_64.AppImage` | `chmod +x lowkey-*.AppImage && ./lowkey-*.AppImage` — nothing else to install. |
 
-**Works with** GitHub, GitLab, Jira, Trello, Gitea, Forgejo, Redmine, Todoist, Asana, ClickUp, Sentry and
-Bitbucket — plus Mattermost for the people you work with and any calendar that gives you an `.ics` link.
+Updates: lowkey checks for a new version on start and installs it only when you click **Update**. The check is
+off-switchable in Settings → About.
 
-## What a day with lowkey looks like
+### Coming from heap 0.7
 
-### Open it and know what’s next
+Install 0.8 over it, or let 0.7’s own update check find it. On the first start your data is copied from the
+`heap` folder to the `lowkey` one; the old folder stays untouched, with a `MOVED-TO-LOWKEY.txt` note inside.
+Your shortcuts carry over — the first time you press one whose key changed, a toast says where it went now.
 
-**Today** is the first thing you see: meetings and tasks on one timeline, the free windows between them, and a
-plain fact about the load — *meetings 2 h, tasks 3 h, free 1 h 30 min*. Overdue work and deadlines sit beside it,
-and so does the list of people you promised to answer.
+## The first ten minutes
 
-### Write a task the way you’d say it
+1. **Write a task.** The app opens on Today with an input line. Type `fix login tomorrow 15:00 p1 #auth` and
+   press Enter. From anywhere else: `Ctrl+Shift+Space`.
+2. **Connect a tracker.** Settings → Trackers → pick yours → sign in through the browser, or paste a token.
+   Issues come in read-only. Moving a card changes the issue upstream only after you tick *Change the status in
+   …* for that tracker.
+3. **Add a repository.** Settings → Git Watcher. From then on the task named in your branch (`APP-112-…`) shows at the top
+   of the window.
+4. **Bring your notes.** Profile menu at the top of the sidebar → *Import notes folder…* — an Obsidian vault or
+   any folder of `.md` files. You see what comes in before anything is copied.
+5. **Look around without risk.** On the very first start, the empty Today offers an example: a filled profile of
+   its own to try things on, kept apart from your data and easy to remove.
 
-`Ctrl+Shift+Space` from any app, even with lowkey minimized. One line, and the date, time, priority, labels and
-people are picked up on their own — in English or Russian. Every guess shows as a chip you can take back with one
-click.
+More: [First day in lowkey](docs/TUTORIAL.md).
 
-<p align="center">
-  <img src="docs/assets/img/readme/quick-capture.png" width="70%" alt="Quick capture reading a ticket id, priority, date, label and mention out of one line">
-</p>
+## Keys to learn first
 
-| You type | You get |
+| Key | Does |
 | --- | --- |
-| `APP-231 fix login race with @Masha !! tomorrow 15:00 #auth` | task `APP-231`, priority P1, planned for tomorrow at 15:00, labelled `auth`, linked to Masha |
-| `send the release notes by friday` | a task due Friday — the deadline, apart from the day you plan to do it |
-| `review PRs every weekday 10:00` | a task that repeats every weekday at 10:00 |
-| `1:1 with @anna thursday 12:00` | a task for Thursday at 12:00; tick *Also a meeting* and it is a 1:1 on the calendar with Anna |
+| `Ctrl+Shift+Space` | New task from any app |
+| `Ctrl+K` | Command line: find, filter, run |
+| `?` | Every key on one screen |
+| `Ctrl+1` `2` `3` | Today, Tasks, Knowledge (`Ctrl+,` Settings) |
+| `g b` `g l` `g c` | Board, List, Calendar |
+| `j` `k` / `h` `l` | Move the cursor |
+| `d` | Done (again: back) |
+| `/` | Filter the section you are in |
 
-Full syntax: [First day in lowkey](docs/TUTORIAL.md#quick-capture-syntax)
+Single letters never fire while you are typing, and they work in any keyboard layout. Every key can be changed:
+`?` → *Change shortcuts…*. Full list: [docs/HOTKEYS.md](docs/HOTKEYS.md).
 
-### Switch the branch — the task is already marked
+## Finding things
 
-Point lowkey at your repositories. Check out `APP-112-flaky-sync-test` and the task shows at the top of the
-window with its pull request state; the card on the board carries the branch. No bindings, no plugins, no copying
-ticket numbers.
+The line above Tasks takes plain words and conditions, the same way in Board, List and Calendar. A finished
+condition turns into a chip; save the lot as a view and it stays in the sidebar.
 
-### Every tracker, one board — and your own layer on top
+```
+status:blocked          due:week              scheduled:none        is:overdue
+priority:p0,p1          #label                branch:login          estimate:>2h
+has:notes               sprint:current        -status:done          bug OR crash
+```
 
-Board, List or Calendar: one set of tasks, one query line on top of all three. Type `status:blocked due:week` and
-it turns into chips you can remove one by one; save it as a view and it waits in the sidebar.
+All of it: [Quick-capture and search syntax](docs/TUTORIAL.md#quick-capture-syntax).
 
-Tracker cards are yours to work with. Keep your own due date and priority next to the tracker’s, a private
-notepad, a checklist that breaks the ticket into steps, your own labels, links to other tickets and pull requests,
-and a comment draft you copy over when it is ready. A sync never overwrites any of it. Merge requests where you
-are the reviewer or the assignee show up on their own, read-only.
+## Your data
 
-### Plan the day by hand, with the facts in front of you
+| | Windows | macOS | Linux |
+| --- | --- | --- | --- |
+| Data | `%APPDATA%\lowkey\lowkey\` | `~/Library/Application Support/lowkey/lowkey/` | `~/.local/share/lowkey/lowkey/` |
 
-The calendar zooms from a day to a week to a month. Each day says how full it is — *6 h of 8* — and the next free
-window counts both your meetings and your task blocks, so “schedule at the next free slot” never lands on top of
-something. Unfinished work moves on when you say so: to tomorrow, to a free window, to someday, or off the
-calendar. lowkey shows; you decide.
+- `state.json` — everything: tasks, meetings, notes, settings.
+- `backups/` — scheduled copies (daily, last 20 kept); `history/` — the time machine’s snapshots.
+- `logs/lowkey.log` — attach it to a bug report.
+- Tracker tokens are not in `state.json`: the Windows build keeps them in the system credential store, macOS and
+  Linux in a `secrets.json` only your user can read.
 
-### Notes that link to your work
+Two machines: profile menu → *Export to JSON…*, then import it on the other one — importing only adds. Details:
+[docs/DATA.md](docs/DATA.md).
 
-Notes and docs live in one Knowledge section. `[[APP-101]]` in a note shows the task’s current status, and the
-task lists the notes that mention it; `[[Wiki-links]]` keep their backlinks. Bring your Obsidian vault in, take it back out as plain
-Markdown files.
+## From the terminal
 
-<p align="center">
-  <img src="docs/assets/img/readme/notes.png" width="100%" alt="A note linking to tasks and other notes">
-</p>
+```sh
+lowkey today            # overdue first, then today
+lowkey add "review PR tomorrow 11:00 #api"
+lowkey now              # the current task — fits a shell prompt
+```
 
-### Never reach for the mouse
-
-Keys as in Vim: `j` and `k` through any list, `d` for done, `g` to go, `y` to copy. They follow the physical key,
-so they work in any keyboard layout, and single letters never fire while you are typing. `Ctrl+K` is a command
-line that finds, filters and runs in one place. Press `?` and every key is on one screen — and any of them can be
-rebound.
-
-### Bold by default, quiet when you want it
-
-The bold style puts fills, counters, the colour of what is urgent and key hints on screen. Quiet takes all of that
-away: outlines instead of fills, colour only where it means something. Switch in Settings, no restart.
-
-### Right next to your repo, too
-
-`lowkey today` in the terminal shows the overdue and the day’s tasks; `lowkey sched . tomorrow 14:00` plans the
-task your branch names; `lowkey now` fits into your shell prompt. [Command line →](docs/CLI.md)
-
-## Yours, and only yours
-
-- **A file on your disk.** Tasks, meetings and notes live in one file. Scheduled backups and a time machine with
-  hourly and daily snapshots: deleted something by accident — bring it back. [Where it lives →](docs/DATA.md)
-- **No account, no telemetry.** Download, open, work. No analytics, no crash reports.
-- **Read-only trackers by default.** Writing a status back is a switch you turn on per tracker. Titles,
-  descriptions and comments are never written.
-- **Nothing in the background.** It runs while its window or tray icon is open, and starts at login only if you
-  ask it to.
-- **Native.** A desktop app, not a website in a window.
-- **Free and open source** under MIT. No paid tier, no trial.
-
-## Questions
-
-**Does it work offline?** Completely. The network is used only for the update check and for the trackers and
-calendars you connect yourself.
-
-**Can my team share a board?** No — it is a personal workspace. Shared work stays in your team’s tracker; lowkey
-pulls it in and, by default, writes nothing back.
-
-**Can I use it on two machines?** Export a profile and import it on the other one — importing only adds, never
-overwrites. Or copy the data file while the app is closed.
-
-**I use heap 0.7. What happens to my data?** heap is now called lowkey. On the first start your data is copied to
-the new folder once, and the old folder is left untouched. The update check in 0.7 finds the new version by
-itself.
-
-**Which languages?** English and Russian, switchable in Settings.
-
-## Get lowkey
-
-Free, for Windows, macOS and Linux — [**download the latest release**](https://github.com/sectapunterx/heap/releases/latest).
-
-- **Windows** — installer, or a portable zip that runs from any folder
-- **macOS** — `.dmg`: open it and drag lowkey into Applications
-- **Linux** — one AppImage for any distro: `chmod +x lowkey-*.AppImage && ./lowkey-*.AppImage`
-
-Then press `Ctrl+Shift+Space` and write your first task.
+On Windows use `lowkey-cli` in cmd and PowerShell. Everything else: [docs/CLI.md](docs/CLI.md).
 
 ## Documentation
 
-- [**First day in lowkey**](docs/TUTORIAL.md) — a ten-minute walkthrough
-- [**Keyboard reference**](docs/HOTKEYS.md) — every key, and how to change it
-- [**Tracker integrations**](docs/INTEGRATIONS.md) — connecting GitHub, Jira and the rest
-- [**Data & backups**](docs/DATA.md) — where your data lives, moving between machines
-- [**Command line**](docs/CLI.md) — lowkey from the terminal
+- [First day in lowkey](docs/TUTORIAL.md) — a ten-minute walkthrough, capture and search syntax
+- [Keyboard](docs/HOTKEYS.md) — every key and how to change it
+- [Trackers](docs/INTEGRATIONS.md) — connecting each one, what is read and what may be written
+- [Data & backups](docs/DATA.md) — files, backups, moving between machines
+- [Command line](docs/CLI.md)
 
 ## Contributing
 
-Issues and pull requests are welcome. Building from source, tests and the code map are in
-[CONTRIBUTING.md](CONTRIBUTING.md).
+Bug reports and pull requests are welcome — include `logs/lowkey.log` with a bug. Building from source and the
+code map are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
