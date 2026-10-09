@@ -43,9 +43,9 @@ English or Russian.
 
 | You type | You get |
 | --- | --- |
-| `APP-231 fix login race with @Masha !! tomorrow 15:00 #auth` | task `APP-231`, priority P1, due tomorrow at 15:00, labelled `auth`, linked to Masha |
-| `1:1 with @anna thursday 12:00` | a 1:1 on Thursday's calendar with Anna as an attendee |
-| `focus refactor parser 10:00` | a focus block on today's calendar |
+| `APP-231 fix login race with @Masha !! tomorrow 15:00 #auth` | task `APP-231`, priority P1, planned for tomorrow at 15:00, labelled `auth`, linked to Masha |
+| `send the release notes by friday` | a task due Friday — the deadline, apart from the day you plan to do it |
+| `1:1 with @anna thursday 12:00` | a task for Thursday at 12:00; tick *Also a meeting* and it is a 1:1 on the calendar with Anna |
 | `review PRs every weekday 10:00` | a task that repeats every weekday at 10:00 |
 | `ping @viktor about the release` | a reminder in your People to ping list |
 
@@ -61,7 +61,8 @@ carries the PR state too. Need a branch? Create one from the task's menu. No man
 
 Sign in through the browser or paste a token, and issues from **GitHub, GitLab, Jira, Trello, Gitea, Forgejo,
 Redmine, Todoist, Asana, ClickUp, Sentry and Bitbucket** land as cards, with their statuses mapped onto your columns.
-Move a card to Done and the issue is closed upstream (GitHub, GitLab, Gitea, Forgejo). Tokens never go into
+Nothing is written back unless you turn it on for that tracker; then moving a card between columns changes the issue's status upstream
+(GitHub, GitLab, Gitea, Forgejo, Jira). Titles, descriptions and comments are never written. Tokens never go into
 `state.json`: the Windows build keeps them in the system credential store, the macOS and Linux builds in a
 `secrets.json` only your user can read. Mattermost brings in the people you work with. [More →](docs/INTEGRATIONS.md)
 
@@ -92,7 +93,7 @@ works with the same files. Long-form docs, snippets and contact cards live next 
 ### Never reach for the mouse
 
 `Ctrl+K` searches tasks, notes, docs and snippets at once. `J` `K` `H` `L` walk the board, `Shift` with the same keys
-moves the card, `Ctrl+1`…`8` switch views. Every shortcut is rebindable from one panel (`Ctrl+/`).
+moves the card, `Ctrl+1` `2` `3` switch between Today, Tasks and Knowledge. Every shortcut is rebindable from one panel (`Ctrl+/`).
 
 ## Also in the box
 
@@ -127,7 +128,7 @@ Prefer to build it yourself? See [docs/BUILDING.md](docs/BUILDING.md).
 | --- | --- |
 | `Ctrl+Shift+Space` | Quick-capture from anywhere |
 | `Ctrl+K` | Command palette and search |
-| `Ctrl+1` … `8` | Board, Timeline, Week, Month, Archive, Docs, Notes, Settings |
+| `Ctrl+1` / `2` / `3` | Today, Tasks, Knowledge (`Ctrl+,` — Settings) |
 | `J` / `K` / `H` / `L` | Move around the board |
 | `Ctrl+/` | Every shortcut, rebindable |
 
