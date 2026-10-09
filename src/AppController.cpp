@@ -8208,6 +8208,7 @@ Profile AppController::buildExampleProfile(QVector<CalEvent>* events) const {
   p.createdAt = QDateTime::currentDateTime();
   const SampleData::Lang seedLang = (m_language == "ru") ? SampleData::Lang::Ru : SampleData::Lang::En;
   p.tasks = SampleData::tasks(seedLang);
+  SampleData::addExampleLabels(p.tasks);
   p.people = SampleData::people(seedLang);
   // The ids every later launch would give them anyway: an example saved with
   // "p1" was renamed on each start, and the file never matched what it held.

@@ -43,6 +43,27 @@ QVector<QVariantMap> statuses(Lang lang) {
   };
 }
 
+void addExampleLabels(QVector<Task>& tasks) {
+  static const QHash<QString, QString> kLabels = {
+      {QStringLiteral("APP-101"), QStringLiteral("auth")},
+      {QStringLiteral("APP-102"), QStringLiteral("api")},
+      {QStringLiteral("APP-103"), QStringLiteral("ui")},
+      {QStringLiteral("APP-104"), QStringLiteral("ui")},
+      {QStringLiteral("APP-105"), QStringLiteral("payments")},
+      {QStringLiteral("APP-106"), QStringLiteral("api")},
+      {QStringLiteral("APP-107"), QStringLiteral("perf")},
+      {QStringLiteral("APP-108"), QStringLiteral("auth")},
+      {QStringLiteral("APP-109"), QStringLiteral("infra")},
+      {QStringLiteral("APP-110"), QStringLiteral("ui")},
+  };
+  for(Task& t : tasks) {
+    const auto it = kLabels.constFind(t.id);
+    if(it != kLabels.constEnd() && t.labels.isEmpty()) {
+      t.labels.append(Label{it.value(), QString()});
+    }
+  }
+}
+
 QVector<Task> tasks(Lang lang) {
   const QDate today = QDate::currentDate();
   auto d = [&](int n) {

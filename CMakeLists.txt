@@ -436,6 +436,7 @@ qt_add_qml_module(heap_core
         qml/ToastTiming.js
         qml/AppMenu.qml
         qml/AppMenuItem.qml
+        qml/AppMenuHeader.qml
         qml/AppMenuSeparator.qml
         qml/AppComboBox.qml
         qml/TextEditMenu.qml

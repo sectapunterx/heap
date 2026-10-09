@@ -376,6 +376,10 @@ QtObject {
     readonly property color segmentText:         Style.fills ? textMuted : textDim
     readonly property color segmentSelectedText: text
     readonly property int   segmentSelectedWeight: Style.fills ? fwHeading : fwBody
+    // The Tasks page's margins (H2-Board / Q-Board): 22 / 28 px bold, the
+    // quiet page sits further in, 40 / 48 px. Header, board and list share them.
+    readonly property int   pagePadX:   Style.fills ? px(28) : px(48)
+    readonly property int   pagePadTop: Style.fills ? px(22) : px(40)
     readonly property color switchOn:      Presets.mix(String(borderStrong), String(textDim), 0.15)
     readonly property color switchOffLine: Presets.mix(String(border), String(borderStrong), 0.6)
     readonly property color switchKnobOn:  text

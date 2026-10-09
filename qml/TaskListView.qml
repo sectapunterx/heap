@@ -22,6 +22,9 @@ Item {
     // date | status | priority | profile
     property string groupBy: "date"
     signal taskClicked(string id)
+    // The default "не готово" is not a search (DG-020).
+    readonly property bool _searching: root.searchText.replace(/(^|\s)is:open(?=\s|$)/gi, " ").trim().length > 0
+                                       || root.activePriorities.length > 0
 
     readonly property var activePriorities: {
         const out = [];
@@ -223,8 +226,10 @@ Item {
             objectName: "task-list"
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.leftMargin: Theme.sp2xl
-            Layout.rightMargin: Theme.sp2xl
+            Layout.leftMargin: Theme.pagePadX - Theme.spMd
+            Layout.rightMargin: Theme.pagePadX - Theme.spMd
+            // Quiet rows keep to a reading width (Q-List: 900 px, DG-032).
+            Layout.maximumWidth: Style.fills ? -1 : Theme.px(900)
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             model: root._rows
@@ -267,7 +272,9 @@ Item {
                         SectionHeader {
                             objectName: "list-group-" + (row.isGroup ? row.modelData.groupId : "")
                             title: row.isGroup ? root.groupTitle(row.modelData) : ""
-                            titleColor: row.isGroup && row.modelData.key === "today" ? Theme.signalNow
+                            // Quiet group titles are plain (Q-List).
+                            titleColor: !Style.fills ? Theme.textMuted
+                                      : row.isGroup && row.modelData.key === "today" ? Theme.signalNow
                                       : row.isGroup && row.modelData.key === "overdue" ? Theme.signalUrgent
                                       : Theme.text
                             note: !row.isGroup ? ""
@@ -458,9 +465,9 @@ Item {
             Layout.bottomMargin: Theme.sp3xl
             Layout.preferredWidth: Math.min(root.width - 96, 360)
             visible: root.taskCount === 0
-            title: root.searchText.trim().length > 0 || root.activePriorities.length > 0
+            title: root._searching
                    ? I18n.t("view.empty.noMatch.title") : I18n.t("list.empty")
-            line: root.searchText.trim().length > 0 || root.activePriorities.length > 0
+            line: root._searching
                   ? I18n.t("view.empty.noMatch.hint") : ""
         }
 
@@ -538,10 +545,10 @@ Item {
     function rowDateText(r) {
         const d = root.rowDate(r);
         if (!d) return "";
-        const main = TaskDates.rowText(d.date, d.timed, AppController.today);
+        const main = TaskDates.rowText(d.date, d.timed, AppController.today, !Style.fills);
         const hasDue = r.due && r.due.getTime && !isNaN(r.due.getTime());
         if (d.date === r.when && hasDue && TaskDates.daysFrom(r.due, r.when) !== 0)
-            return main + " · " + I18n.t("list.due").arg(TaskDates.rowText(r.due, !!r.dueHasTime, AppController.today));
+            return main + " · " + I18n.t("list.due").arg(TaskDates.rowText(r.due, !!r.dueHasTime, AppController.today, !Style.fills));
         return main;
     }
 }

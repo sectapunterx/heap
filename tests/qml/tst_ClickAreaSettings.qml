@@ -156,14 +156,13 @@ TestCase {
     }
 
     // ── Top bar ────────────────────────────────────────────────────────
+    // The field's key hint is gone (H2-Board has none, DG-020); "изменить
+    // фильтр" is the quiet way in, and Ctrl F / "/" focus the field.
     function test_topbar_shortcut_hint_focuses_search() {
         const bar = createTemporaryQmlObject('import TodoCpp; TopBar { width: 900 }', host);
         waitForRendering(bar);
-        const kbd = find(bar, "topbar-search-kbd");
-        verify(kbd !== null);
-        verify(String(kbd.Accessible.name).length > 0);
-        verify(!kbd.activeFocusOnTab, "the hint duplicates the search field's Tab stop");
-        kbd.activated();
+        verify(find(bar, "topbar-search-kbd") === null);
+        bar.focusSearch();
         tryVerify(function () { return find(bar, "topbar-search").activeFocus; }, 1000);
         const dismiss = find(bar, "topbar-git-dismiss");
         compare(dismiss.Accessible.name, I18n.t("topbar.git.dismiss"));
