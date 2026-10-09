@@ -554,6 +554,7 @@ FocusScope {
                 Layout.leftMargin: -Theme.px(24)
                 Layout.rightMargin: -Theme.px(24)
                 placeholder: I18n.t("taskdoc.bodyPh")
+                menuTitle: I18n.t("textmenu.title.taskBody")
                 onEdited: if (!root._loading) { root._dirtyBody = true; saveTimer.restart(); }
                 onEscaped: root.close()
                 onInternalLinkActivated: (kind, target) => root.internalLinkActivated(kind, target)

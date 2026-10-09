@@ -9,7 +9,7 @@ SmallDialog {
     id: root
     objectName: "saved-view-name-dialog"
 
-    // "save" | "rename"
+    // "save" | "rename" | "edit" (name and query of a saved view)
     property string mode: "save"
     // The Alt digit the view will get (0 = none, past 9).
     property int slot: 0
@@ -20,7 +20,8 @@ SmallDialog {
     // what the Query field says by then.
     signal named(string name)
 
-    title: root.mode === "rename" ? I18n.t("savedview.dialog.renameTitle") : I18n.t("savedview.dialog.saveTitle")
+    title: root.mode === "rename" ? I18n.t("savedview.dialog.renameTitle")
+         : root.mode === "edit" ? I18n.t("savedview.dialog.editTitle") : I18n.t("savedview.dialog.saveTitle")
     fact: root.slot > 0 && root.slot <= 9 ? I18n.t("savedview.dialog.fact").arg(root.slot) : I18n.t("savedview.dialog.factNoKey")
 
     function openFor(mode, name, query, slot) {
