@@ -330,6 +330,16 @@ Item {
         else if (root._listShown) notesList.takeFocus();
         else root.forceActiveFocus();
     }
+    // The cursor keys (APP-276): j / k (↑ ↓) walk the list of notes, Enter
+    // opens the note to write in. Only while the focus is not in the text,
+    // where a letter is a letter.
+    function moveCursor(dx, dy) {
+        if (dy === 0 || !root._listShown) return;
+        notesList.step(dy);
+        notesList.focusList();
+    }
+    function openCursor() { root._focusEditorAtEnd(); }
+
     // Ctrl+F in Notes filters the notes, not the task search in the top bar.
     function focusSearch() {
         if (!root._listShown) root._listPref = "shown";

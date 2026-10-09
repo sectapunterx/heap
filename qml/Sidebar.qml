@@ -74,6 +74,48 @@ Rectangle {
         return n > 999 ? "999+" : String(n);
     }
 
+    // F6 into the sidebar (APP-277): onto the section that is open, and ↑ / ↓
+    // from there walk its rows instead of a Tab per row.
+    function _stopIn(it) {
+        if (!it || !it.visible) return null;
+        if (it.activeFocusOnTab === true) return it;
+        const kids = it.children || [];
+        for (let i = 0; i < kids.length; i++) {
+            const r = root._stopIn(kids[i]);
+            if (r) return r;
+        }
+        return null;
+    }
+    function _find(it, name) {
+        if (!it) return null;
+        if (it.objectName === name) return it;
+        const kids = it.children || [];
+        for (let i = 0; i < kids.length; i++) {
+            const r = root._find(kids[i], name);
+            if (r) return r;
+        }
+        return null;
+    }
+    function takeFocus() {
+        const row = root._find(root, "sidebar-section-" + AppController.currentSection);
+        const stop = root._stopIn(row) || root._stopIn(root);
+        if (stop) stop.forceActiveFocus(Qt.TabFocusReason);
+    }
+    function _rove(forward) {
+        const f = root.Window.activeFocusItem;
+        if (!f) return;
+        let n = f;
+        for (let guard = 0; guard < 200; guard++) {
+            n = n.nextItemInFocusChain(forward);
+            if (!n || n === f) return;
+            let inside = false;
+            for (let p = n; p; p = p.parent) if (p === root) { inside = true; break; }
+            if (inside) { n.forceActiveFocus(Qt.TabFocusReason); return; }
+        }
+    }
+    Keys.onUpPressed: root._rove(false)
+    Keys.onDownPressed: root._rove(true)
+
     function focusSavedView(index) {
         if (index < 0 || index >= viewsList.count) return;
         viewsList.positionViewAtIndex(index, ListView.Contain);

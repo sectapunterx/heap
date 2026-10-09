@@ -545,24 +545,229 @@ Item {
     property string hoverTaskId: ""
     property var hoverTaskDay: null
     function _keyTask() {
+        // The keyboard cursor first (APP-276); on a meeting it is the meeting.
+        const it = root._cursorItem();
+        if (it) return it.kind === "task" ? { id: it.id, day: root.days[root.cursorDay].date } : null;
         if (root.keyTaskId) return { id: root.keyTaskId, day: root.keyTaskDay };
         if (root.hoverTaskId) return { id: root.hoverTaskId, day: root.hoverTaskDay };
         return null;
     }
     function moveKeyTaskByDays(days) {
+        const it = root._cursorItem();
+        if (it && it.kind === "event") return root._moveCursorEvent(days * 24);
         const k = root._keyTask();
         if (!k) return false;
         const t = AppController.taskById(k.id);
         if (!t || !t.id) return false;
         const r = Resched.shiftByDays(t.scheduledAt, t.scheduledHasTime, days, k.day, AppController.today);
-        return AppController.rescheduleTask(k.id, "scheduled", r.when, r.timed);
+        const ok = AppController.rescheduleTask(k.id, "scheduled", r.when, r.timed);
+        if (ok && it) root._follow(days);
+        return ok;
     }
     function moveKeyTaskByTime(steps) {
+        const it = root._cursorItem();
+        if (it && it.kind === "event") return root._moveCursorEvent(steps * Theme.snapMinutes / 60);
         const k = root._keyTask();
         if (!k) return false;
         const t = AppController.taskById(k.id);
         const r = t ? Resched.shiftByTime(t.scheduledAt, t.scheduledHasTime, steps, Theme.snapMinutes) : null;
         return r ? AppController.rescheduleTask(k.id, "scheduled", r.when, true) : false;
+    }
+
+    // ── The keyboard cursor (APP-276) ────────────────────────────────
+    // One cursor for tasks and meetings: j / k walk a day top to bottom (its
+    // deadlines, then the grid by time), h / l go to the day beside it and
+    // turn the week over at its edge. It holds on to what it is on by key,
+    // so a move, a sync or a filter leaves it there — or on the neighbour
+    // when the thing is gone. The day it is on is the selected date.
+    property bool cursorVisible: false
+    property string cursorKey: ""
+    property int cursorDay: -1
+    property int _cursorIdx: 0
+    readonly property string cursorTaskId: {
+        const it = root._cursorItem();
+        return it && it.kind === "task" ? it.id : "";
+    }
+    readonly property bool cardMenuOpen: false
+    function _evKey(e) {
+        return "event:" + e.id + (e.masterId ? "@" + Number(e.occurrenceDate || e.date) : "");
+    }
+    function _dayItems(d) {
+        if (d < 0 || d >= root.days.length) return [];
+        const day = root.days[d];
+        const out = [];
+        const chips = day.tasks.slice(0, 4);
+        for (let i = 0; i < chips.length; i++)
+            out.push({ kind: "task", id: chips[i].id, key: "task:" + chips[i].id, start: -1 });
+        const timed = [];
+        for (let i = 0; i < day.events.length; i++) {
+            const e = day.events[i];
+            timed.push({ kind: "event", id: e.id, key: root._evKey(e), start: e.start, end: e.end, ev: e });
+        }
+        for (let i = 0; i < day.blocks.length; i++) {
+            const b = day.blocks[i];
+            timed.push({ kind: "task", id: b.id, key: "task:" + b.id, start: b.start, end: b.end, block: b });
+        }
+        timed.sort((a, b) => a.start - b.start);
+        return out.concat(timed);
+    }
+    function _cursorIndex() {
+        const items = root._dayItems(root.cursorDay);
+        for (let i = 0; i < items.length; i++)
+            if (items[i].key === root.cursorKey) return i;
+        return -1;
+    }
+    function _cursorItem() {
+        if (!root.cursorVisible || root.cursorKey === "") return null;
+        const items = root._dayItems(root.cursorDay);
+        for (let i = 0; i < items.length; i++)
+            if (items[i].key === root.cursorKey) return items[i];
+        return null;
+    }
+    function clearCursor() {
+        root.cursorVisible = false;
+        root.cursorKey = "";
+    }
+    function _place(d, i) {
+        if (root.days.length === 0) return;
+        d = Math.max(0, Math.min(root.days.length - 1, d));
+        const items = root._dayItems(d);
+        root.cursorDay = d;
+        root.cursorVisible = true;
+        const date = root.days[d].date;
+        if (!root.isSameDay(date, AppController.selectedDate)) AppController.selectedDate = date;
+        if (items.length === 0) {
+            root.cursorKey = "";
+            root._cursorIdx = 0;
+            return;
+        }
+        const at = Math.max(0, Math.min(items.length - 1, i));
+        root.cursorKey = items[at].key;
+        root._cursorIdx = at;
+        root._revealItem(items[at]);
+        if (items[at].kind === "task") AppController.markTaskSeen(items[at].id);
+    }
+    function _revealItem(it) {
+        if (!it || it.start < 0) return;
+        const f = hourScroll.contentItem;
+        if (!f || f.height <= 0) return;
+        const top = (it.start - root.hoursStart) * root.hourH;
+        const bottom = (it.end - root.hoursStart) * root.hourH;
+        if (top < f.contentY) f.contentY = Math.max(0, top - root.hourH / 2);
+        else if (bottom > f.contentY + f.height)
+            f.contentY = Math.min(Math.max(0, f.contentHeight - f.height), Math.min(top, bottom - f.height + root.hourH / 2));
+    }
+    function _startDay() {
+        for (let i = 0; i < root.days.length; i++)
+            if (root.isSameDay(root.days[i].date, AppController.selectedDate)) return i;
+        return 0;
+    }
+    function moveCursor(dx, dy) {
+        if (root.days.length === 0) return;
+        if (!root.cursorVisible || root.cursorDay < 0 || root.cursorDay >= root.days.length) {
+            root._place(root._startDay(), 0);
+            return;
+        }
+        const at = Math.max(0, root._cursorIndex());
+        if (dx !== 0) {
+            const nd = root.cursorDay + dx;
+            if (nd < 0 || nd >= root.days.length) {
+                root.step(dx);
+                Qt.callLater(root._place, dx < 0 ? root.spanDays : 0, at);
+                return;
+            }
+            root._place(nd, at);
+            return;
+        }
+        if (root.cursorKey === "") return;
+        root._place(root.cursorDay, at + dy);
+    }
+    // The cursor goes with what it moved, into the next week if need be.
+    function _follow(days) {
+        const d = root.days[root.cursorDay] ? root.days[root.cursorDay].date : AppController.selectedDate;
+        const target = new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
+        AppController.selectedDate = target;
+        for (let i = 0; i < root.days.length; i++) {
+            if (root.isSameDay(root.days[i].date, target)) { root.cursorDay = i; return; }
+        }
+        Qt.callLater(root._reconcile);
+    }
+    function _reconcile() {
+        if (!root.cursorVisible || root.cursorKey === "" || root._cursorIndex() >= 0) return;
+        for (let d = 0; d < root.days.length; d++) {
+            const items = root._dayItems(d);
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].key === root.cursorKey) {
+                    root.cursorDay = d;
+                    root._cursorIdx = i;
+                    return;
+                }
+            }
+        }
+        root._place(root.cursorDay, root._cursorIdx);
+    }
+    onDaysChanged: if (root.cursorVisible) Qt.callLater(root._reconcile)
+    function _actionCardId() {
+        const it = root._cursorItem();
+        if (it) return it.kind === "task" ? it.id : "";
+        if (AppController.selectionCount === 1) return AppController.selectedTaskIds[0];
+        return root.hoverTaskId || "";
+    }
+    function openCursor() {
+        const it = root._cursorItem();
+        if (!it) { if (!root.cursorVisible) root.moveCursor(0, 0); return; }
+        if (it.kind === "task") root.taskClicked(it.id);
+        else root.eventClicked(it.id, it.ev.occ);
+    }
+    function toggleCursorSelection() {
+        const it = root._cursorItem();
+        if (!it) { if (!root.cursorVisible) root.moveCursor(0, 0); return; }
+        if (it.kind === "task") AppController.toggleTaskSelection(it.id);
+    }
+    function openCursorMenu() {
+        const id = root._actionCardId();
+        if (id) root.openTaskMenu(id);
+    }
+    function archiveCursor() {
+        if (AppController.selectionCount > 0) { AppController.setSelectedTasksArchived(true); return; }
+        const id = root._actionCardId();
+        if (id) AppController.setArchived(id, true);
+    }
+    // Shift J / K: a grid step later / earlier; Shift H / L: a day.
+    function moveCursorCard(dx, dy) { if (dy !== 0) root.moveKeyTaskByTime(dy); }
+    function moveSelectionOrCard(dx) {
+        if (AppController.selectionCount > 0 && !root._cursorItem()) {
+            const ids = AppController.selectedTaskIds;
+            for (let i = 0; i < ids.length; i++) {
+                const t = AppController.taskById(ids[i]);
+                if (!t || !t.id) continue;
+                const r = Resched.shiftByDays(t.scheduledAt, t.scheduledHasTime, dx, null, AppController.today);
+                AppController.rescheduleTask(t.id, "scheduled", r.when, r.timed);
+            }
+            return;
+        }
+        root.moveKeyTaskByDays(dx);
+    }
+    function _moveCursorEvent(deltaHours) {
+        const it = root._cursorItem();
+        if (!it || it.kind !== "event" || Math.abs(deltaHours) < 1e-9) return false;
+        root._commitMove(it.ev.occ, deltaHours, null);
+        if (Math.abs(deltaHours) >= 24) root._follow(Math.round(deltaHours / 24));
+        return true;
+    }
+    // Ctrl Shift J / K (APP-278): the block under the cursor a grid step
+    // longer or shorter — what stretching its lower edge does.
+    function resizeCursor(steps) {
+        const it = root._cursorItem();
+        if (!it || it.start < 0) return false;
+        const step = Theme.snapMinutes / 60;
+        const end = Math.min(24, it.end + steps * step);
+        if (end - it.start < step - 1e-9) return false;
+        if (it.kind === "task")
+            return AppController.resizeTaskBlock(it.id, root.days[root.cursorDay].date, it.start, end);
+        if (!it.ev.segFirst || !it.ev.segLast) return false;
+        root._commitResize(it.ev.occ, it.start, end, null);
+        return true;
     }
 
     // All-day events, packed into rows so bars stack instead of overlapping.
@@ -780,6 +985,13 @@ Item {
                         height: headerBand.height
                         readonly property bool isToday: root.isSameDay(modelData.date, AppController.today)
                         readonly property bool isWeekend: root.isWeekendDate(modelData.date)
+                        // The cursor on a day with nothing on it (APP-276).
+                        FocusRing {
+                            objectName: "week-cursor-day"
+                            anchors.margins: 1
+                            haloInside: true
+                            visible: root.cursorVisible && root.cursorKey === "" && root.cursorDay === headCol.index
+                        }
 
                         Rectangle {
                             anchors.fill: parent
@@ -961,6 +1173,11 @@ Item {
                                                 color: Theme.priorityColor(modelData.priority)
                                                 font.pixelSize: Theme.fsXs
                                             }
+                                        }
+                                        FocusRing {
+                                            objectName: "week-cursor"
+                                            visible: root.cursorVisible && root.cursorDay === headCol.index
+                                                     && root.cursorKey === "task:" + dueChip.modelData.id
                                         }
                                         // The keyboard's way in (design audit
                                         // DES-19). Under the MouseArea and deaf
@@ -1497,6 +1714,11 @@ Item {
                             // Opening from the keyboard (design audit DES-19).
                             // Under the drag areas and deaf to the pointer, so
                             // a press still starts a move or a resize.
+                            FocusRing {
+                                objectName: "week-cursor"
+                                visible: root.cursorVisible && root.cursorDay === weEv.modelData.dayIndex
+                                         && root.cursorKey === root._evKey(weEv.modelData)
+                            }
                             ClickArea {
                                 objectName: "week-event-open"
                                 label: weEv.modelData.title
@@ -1738,6 +1960,11 @@ Item {
                             }
                             // Opening from the keyboard; under the drag areas
                             // and deaf to the pointer, like an event's.
+                            FocusRing {
+                                objectName: "week-cursor"
+                                visible: root.cursorVisible && root.cursorDay === wkBlock.modelData.dayIndex
+                                         && root.cursorKey === "task:" + wkBlock.modelData.id
+                            }
                             ClickArea {
                                 id: wkBlockMA
                                 label: wkBlock.modelData.title || ""

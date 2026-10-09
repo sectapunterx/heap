@@ -631,6 +631,8 @@ ApplicationWindow {
     onActiveFocusItemChanged: {
         const it = win.activeFocusItem;
         if (!it) return;
+        // The region frame (APP-277) goes once the keyboard leaves the region.
+        if (win.regionShown.length > 0 && win._regionOf(it) !== win.regionShown) win.regionShown = "";
         if (win._focusInPopup) {
             win._focusWasInPopup = true;
             return;
@@ -1236,6 +1238,7 @@ ApplicationWindow {
                     onLeaveViewRequested: savedViewsHost.leave()
                 }
                 Item {
+                    id: viewArea
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     // A view wider than its column is cut at the column, not
@@ -1472,6 +1475,7 @@ ApplicationWindow {
 
         // Right column
         Rectangle {
+            id: rightPanel
             objectName: "right-panel"
             visible: win.rightPanelShown
             Layout.row: 0; Layout.column: 2
@@ -2013,6 +2017,8 @@ ApplicationWindow {
         // The Tweaks popover is gone (APP-270): its key opens Appearance.
         case "tweaks.open":          win.runCommand("settings:appearance"); break;
         case "hotkeys.open":         win.openCheatSheet(); break;
+        case "region.next":          win.focusRegion(1); break;
+        case "region.prev":          win.focusRegion(-1); break;
         case "hotkeys.edit":         rail.openHotkeys(rail.hotkeysAnchor); break;
         case "palette.commands":     cmdPalette.openWith(">"); break;
         case "search.focus":         win._focusSearch(); break;
@@ -2137,7 +2143,7 @@ ApplicationWindow {
         "board.selectColumnRight", "board.cardMenu", "board.archive", "board.collapseColumn", "task.done",
         "task.openExternal", "notes.new", "notes.next", "notes.prev", "notes.rename", "notes.toggleList",
         "savedView.1", "savedView.2", "savedView.3", "savedView.4", "savedView.5", "savedView.6",
-        "savedView.7", "savedView.8", "savedView.9"
+        "savedView.7", "savedView.8", "savedView.9", "region.next", "region.prev"
     ]
     readonly property var _dayViews: ["today", "board", "timeline", "week", "month", "archive"]
     // Shift V: j / k grow the selection from the cursor until Esc.
@@ -2179,15 +2185,22 @@ ApplicationWindow {
     // up; a Ctrl chord only behind a modal.
     function _keyLive(id) {
         if (hotkeys.isCapturing || win._captureActive) return false;
+        // F6 leaves a text field too: that is how one gets out of it.
+        if (id === "region.next" || id === "region.prev") return !win._modalOpen;
         const routed = KeyRules.isRouterSequence(AppController.shortcutFor(id));
         if (routed ? win._viewKeysBlocked : !win._globalKeysOn) return false;
         const base = KeyRules.baseId(id);
         const v = AppController.currentView;
         const b = win.activeViewItem();
+        // One cursor in every view that has one (APP-276): the board, the
+        // list, Today, the calendar, the notes.
         if (base.indexOf("board.") === 0)
-            return v === "board" && !(b && b.cardMenuOpen === true);
+            return win._cursorOn(b);
         if (base.indexOf("cursor.") === 0)
-            return v === "board" && !!b && typeof b.moveCursor === "function" && !win._typing;
+            return win._cursorOn(b) && !win._typing;
+        // s on an empty day of the calendar: go to a date (keymap.md).
+        if (base === "task.schedule" && win._keyTaskIds().length === 0)
+            return ["day", "week", "month"].indexOf(v) >= 0 && !!b && b.cursorVisible === true;
         if (base.indexOf("notes.") === 0) return v === "notes";
         if (base.indexOf("savedView.") === 0) return Number(base.slice(10)) <= AppController.savedViews.length;
         if (base.indexOf("task.") === 0 && base !== "task.new")
@@ -2207,10 +2220,11 @@ ApplicationWindow {
         case "selection.toggle": case "selection.range":
             return v === "board" || win._keyTaskIds().length > 0;
         case "selection.clearSel":
-            return AppController.selectionCount > 0 || win._rangeMode
-                || (v === "board" && win._boardCursorShown());
+            return AppController.selectionCount > 0 || win._rangeMode || win._boardCursorShown();
         case "selection.deleteSel":
-            return AppController.selectionCount > 0;
+            return AppController.selectionCount > 0 || win._cursorTaskId().length > 0;
+        case "cal.longer": case "cal.shorter":
+            return !win._viewKeysBlocked && !!b && typeof b.resizeCursor === "function";
         case "selection.selectAll":
             return ["board", "timeline", "week", "archive"].indexOf(v) >= 0;
         case "nav.back": return win._navBack.length > 0 && !win._typing;
@@ -2224,10 +2238,38 @@ ApplicationWindow {
     }
     // The board's keyboard cursor is drawn (there is something for Esc to
     // let go of), and letting go of it.
-    // The board's or the list's cursor (both lenses walk with the same keys).
+    // The cursor of the view on screen (APP-276: every view walks with the
+    // same keys).
     function _cursorView() {
-        const v = AppController.currentView === "list" ? win.activeViewItem() : boardLoader.item;
-        return v || null;
+        return win.activeViewItem() || null;
+    }
+    // A view with a keyboard cursor, and no menu of its own up.
+    function _cursorOn(b) {
+        return !!b && typeof b.moveCursor === "function" && b.cardMenuOpen !== true;
+    }
+    // The task under the cursor — never the one under the pointer (Del).
+    function _cursorTaskId() {
+        const v = win.activeViewItem();
+        return v && v.cursorVisible === true && typeof v.cursorTaskId === "string" ? v.cursorTaskId : "";
+    }
+    // Del: the selection, else the task under the cursor; one undo step.
+    function deleteKeyTasks() {
+        if (AppController.selectionCount === 0) {
+            const id = win._cursorTaskId();
+            if (!id) return;
+            AppController.setSelectedTaskIds([id]);
+        }
+        AppController.deleteSelectedTasks();
+    }
+    // s / Shift S (APP-278): the small field; on an empty day of the
+    // calendar, s goes to a date instead.
+    function openSchedule(field) {
+        const ids = win._keyTaskIds();
+        if (ids.length === 0) {
+            if (field === "scheduled") goToDatePopup.openAt(AppController.selectedDate, win.contentItem);
+            return;
+        }
+        schedulePopup.openFor(ids, field);
     }
     function _boardCursorShown() {
         const bi = win._cursorView();
@@ -2298,8 +2340,15 @@ ApplicationWindow {
         case "board.selectColumnLeft": call("selectColumnAndStep", -1); return;
         case "board.selectColumnRight": call("selectColumnAndStep", 1); return;
         case "board.cardMenu": call("openCursorMenu"); return;
-        case "board.archive": call("archiveCursor"); return;
+        case "board.archive":
+            if (b && typeof b.archiveCursor === "function") b.archiveCursor();
+            else win._eachKeyTask(function (t) { AppController.setArchived(t.id, true); });
+            return;
         case "board.collapseColumn": call("toggleCursorColumn"); return;
+        case "cal.longer": call("resizeCursor", 1); return;
+        case "cal.shorter": call("resizeCursor", -1); return;
+        case "region.next": win.focusRegion(1); return;
+        case "region.prev": win.focusRegion(-1); return;
         case "cursor.first": call("moveCursor", 0, -100000); return;
         case "cursor.last": call("moveCursor", 0, 100000); return;
         case "cursor.pageDown": call("moveCursor", 0, 8); return;
@@ -2325,14 +2374,8 @@ ApplicationWindow {
             if (ids.length > 0) win.openTask(ids[0]);
             return;
         }
-        case "task.due": {
-            const ids = win._keyTaskIds();
-            if (ids.length > 0) win.openTask(ids[0]);
-            return;
-        }
-        case "task.schedule":
-            win._eachKeyTask(function (t) { AppController.scheduleTaskAtNextFreeSlot(t.id, AppController.selectedDate); });
-            return;
+        case "task.due": win.openSchedule("due"); return;
+        case "task.schedule": win.openSchedule("scheduled"); return;
         case "task.priority0": case "task.priority1": case "task.priority2": case "task.priority3": {
             const p = "P" + base.slice(13);
             win._eachKeyTask(function (t) { AppController.setTaskPriority(t.id, p); });
@@ -2352,7 +2395,7 @@ ApplicationWindow {
             return;
         }
         case "selection.toggle":
-            if (AppController.currentView === "board") { call("toggleCursorSelection"); return; }
+            if (b && typeof b.toggleCursorSelection === "function") { call("toggleCursorSelection"); return; }
             win._eachKeyTask(function (t) { AppController.toggleTaskSelection(t.id); });
             return;
         case "selection.range":
@@ -2364,7 +2407,7 @@ ApplicationWindow {
             AppController.clearSelection();
             win._clearBoardCursor();
             return;
-        case "selection.deleteSel": AppController.deleteSelectedTasks(); return;
+        case "selection.deleteSel": win.deleteKeyTasks(); return;
         case "selection.selectAll": call("selectAllVisible"); return;
         case "cal.today": AppController.selectedDate = AppController.today; return;
         case "cal.prev": case "cal.next": {
@@ -2722,9 +2765,7 @@ ApplicationWindow {
         sequence: _kbd("selection.clearSel")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && !win._viewKeysBlocked
-            && (AppController.selectionCount > 0
-                || ((AppController.currentView === "board" || AppController.currentView === "list")
-                    && win._boardCursorShown()))
+            && (AppController.selectionCount > 0 || win._boardCursorShown())
         onActivated: {
             AppController.clearSelection();
             win._clearBoardCursor();
@@ -2743,8 +2784,8 @@ ApplicationWindow {
         sequence: _kbd("selection.deleteSel")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && !win._viewKeysBlocked
-            && AppController.selectionCount > 0
-        onActivated: AppController.deleteSelectedTasks()
+            && (AppController.selectionCount > 0 || win._cursorTaskId().length > 0)
+        onActivated: win.deleteKeyTasks()
     }
     // Open the selected (or hovered) mirrored issue in its tracker (HEAP-117).
     // This is the first bare letter in the catalog. Qt hands a focused text
@@ -2946,6 +2987,104 @@ ApplicationWindow {
         }
     }
 
+    // ── Regions (APP-277) ──────────────────────────────────────────────
+    // F6 / Shift F6 go round sidebar → content (onto the cursor) → the task
+    // document or the right panel → the header's filter line, instead of a
+    // long Tab through every control. The region it lands in is framed until
+    // the keyboard leaves it.
+    property string regionShown: ""
+    function _regionOf(it) {
+        for (let p = it; p; p = p.parent) {
+            if (p === rail) return "sidebar";
+            if (p === topBar) return "header";
+            if (p === taskDoc || p === rightPanel) return "panel";
+        }
+        return "content";
+    }
+    function _regions() {
+        const out = [];
+        if (rail.visible && rail.width > 0) out.push("sidebar");
+        out.push("content");
+        if (taskDoc.opened || win.rightPanelShown) out.push("panel");
+        if (topBar.visible) out.push("header");
+        return out;
+    }
+    function _regionItem(r) {
+        return r === "sidebar" ? rail : r === "header" ? topBar
+             : r === "panel" ? (taskDoc.opened ? taskDoc : rightPanel) : viewArea;
+    }
+    function _firstTabStop(it) {
+        const kids = it ? it.children : [];
+        for (let i = 0; i < kids.length; i++) {
+            const k = kids[i];
+            if (!k.visible || k.enabled === false) continue;
+            if (k.activeFocusOnTab === true) return k;
+            const r = win._firstTabStop(k);
+            if (r) return r;
+        }
+        return null;
+    }
+    function focusRegion(dir) {
+        const list = win._regions();
+        let i = list.indexOf(win._regionOf(win.activeFocusItem));
+        if (i < 0) i = list.indexOf("content");
+        const next = list[(i + dir + list.length) % list.length];
+        if (next === "content") win.focusActiveView();
+        else if (next === "sidebar") rail.takeFocus();
+        else if (next === "header") topBar.focusSearch();
+        else {
+            const stop = win._firstTabStop(win._regionItem(next));
+            if (stop) stop.forceActiveFocus(Qt.TabFocusReason);
+            else win._regionItem(next).forceActiveFocus(Qt.TabFocusReason);
+        }
+        win.regionShown = next;
+        const r = win._regionItem(next);
+        const pos = r.mapToItem(win.contentItem, 0, 0);
+        regionFrame.x = pos.x;
+        regionFrame.y = pos.y;
+        regionFrame.width = r.width;
+        regionFrame.height = r.height;
+    }
+    Rectangle {
+        id: regionFrame
+        objectName: "region-frame"
+        parent: win.contentItem
+        z: 900
+        visible: win.regionShown.length > 0
+        color: "transparent"
+        border.color: Theme.focusRing
+        border.width: 1
+    }
+    Shortcut {
+        sequences: [win._kbd("region.next")]
+        context: Qt.ApplicationShortcut
+        enabled: sequences.length > 0 && win._keyLive("region.next")
+        onActivated: win.focusRegion(1)
+    }
+    Shortcut {
+        sequences: [win._kbd("region.prev")]
+        context: Qt.ApplicationShortcut
+        enabled: sequences.length > 0 && win._keyLive("region.prev")
+        onActivated: win.focusRegion(-1)
+    }
+
+    // s / Shift S (APP-278): when, or the deadline, in one small field.
+    SchedulePopup {
+        id: schedulePopup
+        parent: win.contentItem
+        x: parent ? Math.round((parent.width - width) / 2) : 0
+        y: parent ? Math.round(parent.height / 4) : 0
+        onPickDateRequested: (current) => schedDatePicker.openAt(current, win.contentItem)
+        onClosed: Qt.callLater(win.returnFocusHome)
+    }
+    DatePickerPopup {
+        id: schedDatePicker
+        objectName: "schedule-date"
+        x: parent ? Math.round((parent.width - width) / 2) : 0
+        y: parent ? Math.round((parent.height - height) / 3) : 0
+        onPicked: (value) => schedulePopup.applyDate(value)
+    }
+
     // Jump straight to a day rather than paging to it. Anchored to the window
     // rather than to a view, because the view under it is swapped out.
     DatePickerPopup {
@@ -2971,9 +3110,8 @@ ApplicationWindow {
 
     // The board's and the list's keys: not while typing, a popup or a
     // card's menu is up (its arrows and letters belong to it).
-    readonly property bool _boardKeysOn: !win._viewKeysBlocked
-        && (AppController.currentView === "board" || AppController.currentView === "list")
-        && !(win.activeViewItem() && win.activeViewItem()["cardMenuOpen"] === true)
+    readonly property bool _boardKeysOn: !win._viewKeysBlocked && win._cursorOn(win.activeViewItem())
+    readonly property bool _boardOrList: AppController.currentView === "board" || AppController.currentView === "list"
     // The list's query comes from the window (APP-263); see the Bindings
     // beside the view loaders.
     readonly property bool _listOn: AppController.currentView === "list" && viewLoader.item !== null
@@ -3009,19 +3147,19 @@ ApplicationWindow {
         onActivated: { const b = win.activeViewItem(); if (b && b.toggleCursorSelection) b.toggleCursorSelection(); }
     }
     BoardKey {
-        sequences: [win._kbd("board.moveDown"), "Ctrl+Down"]
+        sequences: [win._kbd("board.moveDown")].concat(win._boardOrList ? ["Ctrl+Down"] : [])
         onActivated: { const b = win.activeViewItem(); if (b && b.moveCursorCard) b.moveCursorCard(0, 1); }
     }
     BoardKey {
-        sequences: [win._kbd("board.moveUp"), "Ctrl+Up"]
+        sequences: [win._kbd("board.moveUp")].concat(win._boardOrList ? ["Ctrl+Up"] : [])
         onActivated: { const b = win.activeViewItem(); if (b && b.moveCursorCard) b.moveCursorCard(0, -1); }
     }
     BoardKey {
-        sequences: [win._kbd("board.moveLeft"), "Ctrl+Left"]
+        sequences: [win._kbd("board.moveLeft")].concat(win._boardOrList ? ["Ctrl+Left"] : [])
         onActivated: { const b = win.activeViewItem(); if (b && b.moveSelectionOrCard) b.moveSelectionOrCard(-1); }
     }
     BoardKey {
-        sequences: [win._kbd("board.moveRight"), "Ctrl+Right"]
+        sequences: [win._kbd("board.moveRight")].concat(win._boardOrList ? ["Ctrl+Right"] : [])
         onActivated: { const b = win.activeViewItem(); if (b && b.moveSelectionOrCard) b.moveSelectionOrCard(1); }
     }
     // Selecting from the keyboard (APP-128).

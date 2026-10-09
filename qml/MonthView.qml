@@ -293,19 +293,164 @@ Item {
     property string hoverTaskId: ""
     property var hoverTaskDay: null
     function moveKeyTaskByDays(days) {
-        const id = root.keyTaskId || root.hoverTaskId;
+        const it = root._cursorItem();
+        if (it && it.kind === "event") return root._moveCursorEvent(days);
+        const id = it ? it.id : (root.keyTaskId || root.hoverTaskId);
         if (!id) return false;
         const t = AppController.taskById(id);
         if (!t || !t.id) return false;
-        const day = root.keyTaskId ? root.keyTaskDay : root.hoverTaskDay;
+        const day = it ? AppController.selectedDate : root.keyTaskId ? root.keyTaskDay : root.hoverTaskDay;
         const r = Resched.shiftByDays(t.scheduledAt, t.scheduledHasTime, days, day, AppController.today);
-        return AppController.rescheduleTask(id, "scheduled", r.when, r.timed);
+        const ok = AppController.rescheduleTask(id, "scheduled", r.when, r.timed);
+        if (ok && it) root._shiftDay(days);
+        return ok;
     }
     function moveKeyTaskByTime(steps) {
-        const id = root.keyTaskId || root.hoverTaskId;
+        const it = root._cursorItem();
+        if (it && it.kind === "event") return false;
+        const id = it ? it.id : (root.keyTaskId || root.hoverTaskId);
         const t = id ? AppController.taskById(id) : null;
         const r = t ? Resched.shiftByTime(t.scheduledAt, t.scheduledHasTime, steps, Theme.snapMinutes) : null;
         return r ? AppController.rescheduleTask(id, "scheduled", r.when, true) : false;
+    }
+
+    // ── The keyboard cursor (APP-276) ────────────────────────────────
+    // The day it is on is the selected date; j / k walk that day's tasks and
+    // meetings and go on to the week below / above past the last / first;
+    // h / l are the day beside it. Held by key, so a move or a sync leaves
+    // it on the same thing, or on its neighbour when that is gone.
+    property bool cursorVisible: false
+    property string cursorKey: ""
+    property int _cursorIdx: 0
+    readonly property bool cardMenuOpen: false
+    readonly property int _selCell: {
+        const c = root.cells;
+        for (let i = 0; i < c.length; i++)
+            if (root.isSameDay(c[i].date, AppController.selectedDate)) return i;
+        return -1;
+    }
+    function _cellItems(ci) {
+        if (ci < 0 || ci >= root.cells.length) return [];
+        const cell = root.cells[ci];
+        const out = [];
+        for (let i = 0; i < cell.tasks.length; i++)
+            out.push({ kind: "task", id: cell.tasks[i].id, key: "task:" + cell.tasks[i].id, index: i });
+        for (let i = 0; i < cell.events.length; i++) {
+            const e = cell.events[i];
+            out.push({ kind: "event", id: e.id, key: "event:" + e.id + (e.masterId ? "@" + Number(e.occurrenceDate || e.date) : ""),
+                       ev: e, index: i });
+        }
+        return out;
+    }
+    function _cursorIndex() {
+        const items = root._cellItems(root._selCell);
+        for (let i = 0; i < items.length; i++)
+            if (items[i].key === root.cursorKey) return i;
+        return -1;
+    }
+    function _cursorItem() {
+        if (!root.cursorVisible || root.cursorKey === "") return null;
+        const items = root._cellItems(root._selCell);
+        for (let i = 0; i < items.length; i++)
+            if (items[i].key === root.cursorKey) return items[i];
+        return null;
+    }
+    readonly property string cursorTaskId: {
+        const it = root._cursorItem();
+        return it && it.kind === "task" ? it.id : "";
+    }
+    function clearCursor() {
+        root.cursorVisible = false;
+        root.cursorKey = "";
+    }
+    function _placeIdx(i) {
+        root.cursorVisible = true;
+        const items = root._cellItems(root._selCell);
+        if (items.length === 0) {
+            root.cursorKey = "";
+            root._cursorIdx = 0;
+            return;
+        }
+        const at = Math.max(0, Math.min(items.length - 1, i));
+        root.cursorKey = items[at].key;
+        root._cursorIdx = at;
+        if (items[at].kind === "task") AppController.markTaskSeen(items[at].id);
+    }
+    function _shiftDay(n) {
+        const d = AppController.selectedDate;
+        AppController.selectedDate = new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+    }
+    function moveCursor(dx, dy) {
+        const items = root._cellItems(root._selCell);
+        if (!root.cursorVisible && dy !== 0 && items.length > 0) {
+            root._placeIdx(dy > 0 ? 0 : items.length - 1);
+            return;
+        }
+        root.cursorVisible = true;
+        if (dx !== 0) {
+            root._shiftDay(dx);
+            Qt.callLater(root._placeIdx, 0);
+            return;
+        }
+        if (dy === 0) { root._placeIdx(Math.max(0, root._cursorIndex())); return; }
+        const at = root._cursorIndex();
+        const next = at < 0 ? (dy > 0 ? 0 : items.length - 1) : at + dy;
+        if (Math.abs(dy) === 1 && (items.length === 0 || (at >= 0 && (next < 0 || next >= items.length)))) {
+            root._shiftDay(dy * 7);
+            Qt.callLater(root._placeIdx, dy > 0 ? 0 : 100000);
+            return;
+        }
+        root._placeIdx(next);
+    }
+    function _reconcile() {
+        if (!root.cursorVisible || root._cursorIndex() >= 0) return;
+        root._placeIdx(root._cursorIdx);
+    }
+    onCellsChanged: if (root.cursorVisible) Qt.callLater(root._reconcile)
+    Connections {
+        target: AppController
+        function onSelectedDateChanged() { if (root.cursorVisible) Qt.callLater(root._reconcile); }
+    }
+    function _actionCardId() {
+        const it = root._cursorItem();
+        if (it) return it.kind === "task" ? it.id : "";
+        if (AppController.selectionCount === 1) return AppController.selectedTaskIds[0];
+        return root.hoverTaskId || "";
+    }
+    function openCursor() {
+        const it = root._cursorItem();
+        if (!it) { root.enterSelectedDay(); return; }
+        if (it.kind === "task") root.taskClicked(it.id);
+        else root.eventClicked(it.id, it.ev);
+    }
+    function toggleCursorSelection() {
+        const it = root._cursorItem();
+        if (it && it.kind === "task") AppController.toggleTaskSelection(it.id);
+        else if (!root.cursorVisible) root.moveCursor(0, 1);
+    }
+    function openCursorMenu() {
+        const id = root._actionCardId();
+        if (id) root.openTaskMenu(id);
+    }
+    function archiveCursor() {
+        if (AppController.selectionCount > 0) { AppController.setSelectedTasksArchived(true); return; }
+        const id = root._actionCardId();
+        if (id) AppController.setArchived(id, true);
+    }
+    // Shift H / L a day, Shift J / K a week: the grid's own directions.
+    function moveSelectionOrCard(dx) { root.moveKeyTaskByDays(dx); }
+    function moveCursorCard(dx, dy) { if (dy !== 0) root.moveKeyTaskByDays(dy * 7); }
+    SeriesScopeDialog { id: scopeAsk }
+    function _moveCursorEvent(days) {
+        const it = root._cursorItem();
+        if (!it || it.kind !== "event" || days === 0) return false;
+        const occ = it.ev;
+        if (String(occ.masterId || "").length > 0)
+            scopeAsk.ask("move", (scope) => AppController.moveOccurrence(occ, days * 24, scope), null);
+        else
+            AppController.moveOccurrence(occ, days * 24, "this");
+        root._shiftDay(days);
+        return true;
     }
 
     Rectangle { anchors.fill: parent; color: Theme.bg }
@@ -464,14 +609,14 @@ Item {
             Keys.onPressed: (event) => {
                 if (event.modifiers !== Qt.NoModifier && event.modifiers !== Qt.KeypadModifier) return;
                 const k = event.key;
-                const by = k === Qt.Key_Left ? -1 : k === Qt.Key_Right ? 1
-                         : k === Qt.Key_Up ? -7 : k === Qt.Key_Down ? 7 : 0;
-                if (by !== 0) {
-                    const d = AppController.selectedDate;
-                    AppController.selectedDate = new Date(d.getFullYear(), d.getMonth(), d.getDate() + by);
+                // The arrows are h j k l here too (APP-276).
+                const dx = k === Qt.Key_Left ? -1 : k === Qt.Key_Right ? 1 : 0;
+                const dy = k === Qt.Key_Up ? -1 : k === Qt.Key_Down ? 1 : 0;
+                if (dx !== 0 || dy !== 0) {
+                    root.moveCursor(dx, dy);
                     event.accepted = true;
                 } else if (k === Qt.Key_Return || k === Qt.Key_Enter) {
-                    root.enterSelectedDay();
+                    root.openCursor();
                     event.accepted = true;
                 }
             }
@@ -514,7 +659,9 @@ Item {
                     FocusRing {
                         objectName: "month-cell-cursor"
                         anchors.margins: 0
-                        visible: dayCell._sel && grid.activeFocus
+                        visible: dayCell._sel && (grid.activeFocus || (root.cursorVisible && (root.cursorKey === ""
+                                 || root._cursorIdx >= dayCell._tasksShown && root._cursorIdx < dayCell.cell.tasks.length
+                                 || root._cursorIdx >= dayCell.cell.tasks.length + dayCell._eventsShown)))
                     }
                     // A busy day is clipped to its cell instead of drawing
                     // over the row below.
@@ -588,6 +735,10 @@ Item {
                             delegate: Rectangle {
                                 id: taskChip
                                 required property int index
+                                FocusRing {
+                                    objectName: "month-cursor"
+                                    visible: root.cursorVisible && dayCell._sel && root.cursorKey === "task:" + dayCell.cell.tasks[taskChip.index].id
+                                }
                                 Layout.fillWidth: true
                                 implicitHeight: 20
                                 radius: Theme.radiusXs
@@ -663,6 +814,11 @@ Item {
                             delegate: Rectangle {
                                 id: eventChip
                                 required property int index
+                                FocusRing {
+                                    objectName: "month-cursor"
+                                    visible: root.cursorVisible && dayCell._sel && root._cursorIdx === dayCell.cell.tasks.length + eventChip.index
+                                             && root.cursorKey.indexOf("event:" + dayCell.cell.events[eventChip.index].id) === 0
+                                }
                                 Layout.fillWidth: true
                                 implicitHeight: 20
                                 radius: Theme.radiusXs
