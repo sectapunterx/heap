@@ -537,7 +537,7 @@ ApplicationWindow {
     readonly property bool _overlayOpen: taskEditor.opened || eventEditor.opened
         || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
-        || tweaks.opened || hotkeys.opened || closeAsk.opened || goToDatePopup.opened
+        || hotkeys.opened || closeAsk.opened || goToDatePopup.opened
         || weeklyRecap.opened || standupDraft.opened || timeMachine.opened || eventLog.opened || endOfDay.opened
 
     // ── Keyboard scope ────────────────────────────────────────────────
@@ -641,7 +641,7 @@ ApplicationWindow {
     // app usable behind them.
     readonly property bool _focusInPopover: {
         for (let p = win.activeFocusItem; p; p = p.parent)
-            if (p === tweaks.contentItem || p === hotkeys.contentItem) return true;
+            if (p === hotkeys.contentItem) return true;
         return false;
     }
     // Focus on a control outside the view that was reached with Tab — a
@@ -989,7 +989,6 @@ ApplicationWindow {
                 exportIcsDialog.open();
             }
 
-            onOpenTweaks:  (anchor) => win._togglePopover(tweaks, anchor)
             onOpenHotkeys: (anchor) => win._togglePopover(hotkeys, anchor)
             activeSavedViewId: savedViewsHost.activeView ? savedViewsHost.activeId : ""
             savedViewModified: savedViewsHost.modified
@@ -1794,14 +1793,15 @@ ApplicationWindow {
         case "quick-capture-notes":  quickCaptureNotes.open(); break;
         case "panel.right":          win.toggleRightPanel(); break;
         case "rail.toggle":          win.toggleSideRail(); break;
-        case "theme.toggle":         AppController.theme = (AppController.theme === "dark" ? "light" : "dark"); break;
+        case "theme.toggle":         AppController.theme = (Theme.slot === "dark" ? "light" : "dark"); break;
         case "person.new":           personPicker.open_(); break;
         case "profile.new":          profileEditor.showCreate(); break;
         case "profile.next":         win._cycleProfile(1); break;
         case "profile.prev":         win._cycleProfile(-1); break;
         case "profile.exportMd":     AppController.copyActiveProfileMarkdownToClipboard(); break;
         case "profile.weeklyReport": AppController.copyWeeklyReportToClipboard(); break;
-        case "tweaks.open":          rail.openTweaks(rail.tweaksAnchor); break;
+        // The Tweaks popover is gone (APP-270): its key opens Appearance.
+        case "tweaks.open":          win.runCommand("settings:appearance"); break;
         case "hotkeys.open":         rail.openHotkeys(rail.hotkeysAnchor); break;
         case "search.focus":         win._focusSearch(); break;
         case "event.new":            eventEditor.showForDraft(AppController.newEventDraft(9, AppController.selectedDate)); break;
@@ -2007,7 +2007,7 @@ ApplicationWindow {
         sequence: _kbd("theme.toggle")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: AppController.theme = (AppController.theme === "dark" ? "light" : "dark")
+        onActivated: AppController.theme = (Theme.slot === "dark" ? "light" : "dark")
     }
     Shortcut {
         sequence: _kbd("person.new")
@@ -2137,7 +2137,7 @@ ApplicationWindow {
         sequence: _kbd("tweaks.open")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: rail.openTweaks(rail.tweaksAnchor)
+        onActivated: win.runCommand("settings:appearance")
     }
     // The event log (APP-187).
     Shortcut {
@@ -2554,16 +2554,9 @@ ApplicationWindow {
         }
     }
 
-    // Tweaks + Hotkeys popovers (opened from the side rail)
-    // Re-clamped whenever their height settles: on the first open the panel
-    // measures itself after it is placed, and the Tweaks panel hung 24px
-    // below a 720px window.
-    TweaksPanel  {
-        id: tweaks
-        onHeightChanged: if (opened && parent) win._placePopover(tweaks, parent)
-        // A setting found by the panel's search (APP-210).
-        onOpenSettingsItem: (item) => win.openSettingsItem(item)
-    }
+    // The Hotkeys popover (opened from the side rail). Re-clamped whenever
+    // its height settles: on the first open it measures itself after it is
+    // placed.
     HotkeysPanel {
         id: hotkeys
         onHeightChanged: if (opened && parent) win._placePopover(hotkeys, parent)

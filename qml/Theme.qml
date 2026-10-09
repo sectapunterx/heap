@@ -45,7 +45,10 @@ QtObject {
     // flips it); appearance.darkPreset / lightPreset say which theme sits in
     // each. Every colour below is a token of that theme — ThemePresets.js
     // lists them and holds the built-ins.
-    readonly property string slot: AppController.theme === "light" ? "light" : "dark"
+    // "system" (APP-270) follows the OS light / dark setting as it changes.
+    readonly property string slot: AppController.theme === "light" ? "light"
+        : AppController.theme === "system" ? (Application.styleHints.colorScheme === Qt.ColorScheme.Light ? "light" : "dark")
+        : "dark"
     readonly property var customThemes: Array.isArray(_appearance.customThemes) ? _appearance.customThemes : []
     readonly property string darkPresetId:  typeof _appearance.darkPreset === "string" && _appearance.darkPreset.length
                                             ? _appearance.darkPreset : Presets.DEFAULT_DARK
@@ -161,9 +164,18 @@ QtObject {
     // Cursor colour picks it, appearance.cursorColor holds the pick, and
     // none means the theme's accent. A pick too faint for a surface is
     // strengthened like the accent is. Only focus is drawn in it.
-    readonly property string cursorColorPick: typeof _appearance.cursorColor === "string"
-                                              && /^#[0-9a-fA-F]{6}$/.test(_appearance.cursorColor)
-                                              ? _appearance.cursorColor.toLowerCase() : ""
+    //
+    // The accent of heap 2 (APP-270): Lavender (the theme's own accent),
+    // Ink or Graphite are stored there by name and drawn per light / dark;
+    // a colour picked from the swatches is "custom".
+    readonly property bool _cursorHex: typeof _appearance.cursorColor === "string"
+                                       && /^#[0-9a-fA-F]{6}$/.test(_appearance.cursorColor)
+    readonly property string accentTone: _cursorHex ? "custom"
+        : (_appearance.cursorColor === "ink" || _appearance.cursorColor === "graphite" ? _appearance.cursorColor : "lavender")
+    readonly property string cursorColorPick: _cursorHex ? _appearance.cursorColor.toLowerCase()
+        : accentTone === "ink" ? (dark ? "#e6e8ec" : "#14181d")
+        : accentTone === "graphite" ? (dark ? "#8f949c" : "#5c626b")
+        : ""
     readonly property color focusRing: Presets.ensureContrast(cursorColorPick.length ? cursorColorPick : String(accent),
         [String(bg), String(panel), String(panel2), String(panel3)], 3.0)
     // The soft glow just outside the ring, so the cursor reads at a glance

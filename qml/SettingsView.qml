@@ -63,13 +63,13 @@ Item {
         if (list.length > 0) activeSection = list[0].id;
     }
 
-    property string activeSection: "profile"
+    property string activeSection: "appearance"
 
     // ── Page metrics (APP-172) ─────────────────────────────────────────
     // A reading column of `pageWidth` at most; Help's document keeps a
     // wider one for its table of contents. Groups sit further apart than
     // the rows inside them, so the eye finds a block first, then a row.
-    readonly property int pageWidth: activeSection === "help" ? 960 : 720
+    readonly property int pageWidth: 720
     readonly property int pageMargin: bodyScroll.width < 760 ? Theme.sp3xl : Theme.sp3xl * 2
     readonly property int pageTop: Theme.sp3xl + Theme.spXl
     readonly property int pageBottom: Theme.sp3xl * 2
@@ -289,36 +289,20 @@ Item {
             Layout.preferredWidth: Math.min(Theme.px(320), Math.max(Theme.px(240),
                 Math.ceil(_widestTitle) + 2 * Theme.sp2xl + 3 * Theme.spXl + 16 + Theme.spLg))
             Layout.fillHeight: true
-            color: Theme.panel
-            Rectangle {
-                anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom
-                width: 1; color: Theme.border
-            }
+            color: Theme.bg
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: Theme.sp2xl
                 spacing: Theme.spSm
 
+                // One page with its contents on the left (APP-270, sheet
+                // H2-Settings): the title, the search, the sections.
                 Text {
+                    objectName: "settings-title"
                     text: I18n.t("settings.title")
                     color: Theme.text
                     font.weight: Theme.fwHeading
-                    font.pixelSize: Theme.fsLg
-                }
-                Text {
-                    // The number of sections in the nav — it used to count
-                    // the settings blob's top-level keys, which grew with
-                    // every stored UI preference. The handle is dropped with
-                    // its separator when there is none.
-                    text: {
-                        const handle = root.settings.profile ? (root.settings.profile.handle || "") : "";
-                        const s = I18n.t("settings.groups").arg(root.sections.length).arg(handle);
-                        return handle ? s : s.replace(/\s*·\s*$/, "");
-                    }
-                    color: Theme.textDim
-                    font.family: Theme.fontUi
-                    font.features: Theme.tabularNums
-                    font.pixelSize: Theme.fsXs
+                    font.pixelSize: Theme.fsXl
                 }
 
                 Rectangle {
@@ -431,31 +415,27 @@ Item {
                                 Layout.preferredHeight: Theme.px(36)
                                 Layout.minimumHeight: Theme.px(36)
                                 radius: Theme.radiusMd
-                                color: root.activeSection === modelData.id
-                                       ? Theme.accentSoft
-                                       : (navMA.containsMouse ? Theme.panel2 : "transparent")
+                                // The section in view: its name bold with the
+                                // short lavender underline (heap 2), no fill.
+                                color: navMA.containsMouse ? Theme.panel2 : "transparent"
                                 RowLayout {
                                     anchors.fill: parent
-                                    anchors.leftMargin: Theme.spXl; anchors.rightMargin: Theme.spXl
+                                    anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spMd
                                     spacing: Theme.spXl
-                                    // One drawn icon set, the same as the side
-                                    // rail's; the unicode glyphs came from
-                                    // whatever font had them, in any size.
-                                    IconImage {
-                                        source: modelData.icon
-                                        Layout.preferredWidth: 18
-                                        Layout.preferredHeight: 18
-                                        sourceSize.width: 18
-                                        sourceSize.height: 18
-                                        color: root.activeSection === modelData.id ? Theme.accentStrong : Theme.textMuted
-                                    }
                                     Text {
+                                        id: navTitle
                                         Layout.fillWidth: true
                                         text: modelData.title
-                                        color: root.activeSection === modelData.id ? Theme.accentStrong : Theme.text
+                                        color: Theme.text
                                         font.pixelSize: Theme.fsMd
-                                        font.weight: root.activeSection === modelData.id ? Theme.fwTitle : Theme.fwBody
+                                        font.weight: root.activeSection === modelData.id ? Theme.fwHeading : Theme.fwBody
                                         elide: Text.ElideRight
+                                        CursorBar {
+                                            shown: root.activeSection === navRow.modelData.id
+                                            anchors.left: parent.left
+                                            anchors.top: parent.bottom
+                                            anchors.topMargin: Theme.sp2xs
+                                        }
                                     }
                                     // How many of the section's settings the
                                     // search found (APP-207).
@@ -598,11 +578,14 @@ Item {
                         const base = scrollAnim.running ? scrollAnim.to : bodyScroll.contentY;
                         const newY = Math.max(0, Math.min(maxY, base - dy * 3));
                         if (newY === base) return;
+                        root._navScroll = false;
                         scrollAnim.from = bodyScroll.contentY;
                         scrollAnim.to = newY;
                         scrollAnim.restart();
                     }
                 }
+                onMovementStarted: root._navScroll = false
+                onContentYChanged: if (!root._navScroll) root._spy()
 
                 ColumnLayout {
                     id: bodyCol
@@ -614,108 +597,95 @@ Item {
                     width: Math.max(0, Math.min(bodyScroll.width - 2 * root.pageMargin, root.pageWidth))
                     spacing: 0
 
-                    // ── Section heading ──
-                    RowLayout {
-                        objectName: "settings-page-heading"
-                        Layout.fillWidth: true
-                        spacing: Theme.spLg
-                        IconImage {
-                            source: root._activeMeta().icon || ""
-                            Layout.preferredWidth: 18
-                            Layout.preferredHeight: 18
-                            Layout.alignment: Qt.AlignVCenter
-                            sourceSize.width: 18
-                            sourceSize.height: 18
-                            color: Theme.textMuted
-                        }
-                        Text {
-                            Layout.fillWidth: true
-                            text: root._activeMeta().title || ""
-                            color: Theme.text
-                            font.pixelSize: Theme.fsXl
-                            font.weight: Theme.fwHeading
-                            elide: Text.ElideRight
-                        }
-                    }
-                    Text {
-                        Layout.fillWidth: true
-                        Layout.topMargin: Theme.spSm
-                        text: root._activeMeta().sub || ""
-                        color: Theme.textMuted
-                        font.pixelSize: Theme.fsMd
-                        wrapMode: Text.WordWrap
-                    }
-                    Item { Layout.preferredHeight: root.groupGap }
-
-                    // ── Unimplemented banner ──
-                    // Shows on top of stub sections so the user can tell
-                    // the controls below are read-only stubs.
-                    Rectangle {
-                        visible: root._isUnimplemented(root.activeSection)
-                        Layout.fillWidth: true
-                        Layout.bottomMargin: root.groupGap
-                        radius: Theme.radius
-                        color: Theme.withAlpha(Theme.warning, 0.12)
-                        border.color: Theme.warning
-                        border.width: 1
-                        implicitHeight: notImplCol.implicitHeight + 2 * Theme.spXl
-                        ColumnLayout {
-                            id: notImplCol
-                            anchors.fill: parent
-                            anchors.margins: Theme.spXl
-                            spacing: Theme.spXs
-                            Text {
-                                text: I18n.t("settings.notImpl.title")
-                                color: Theme.warning
-                                font.pixelSize: Theme.fsSm
-                                font.weight: Theme.fwTitle
-                            }
-                            Text {
-                                text: I18n.t("settings.notImpl.body")
-                                color: Theme.text
-                                font.pixelSize: Theme.fsSm
-                                wrapMode: Text.WordWrap
-                                Layout.fillWidth: true
-                            }
-                        }
-                    }
-
-                    // Each section gets its own loader-style block.
-                    // The wrapper Item disables every interactive widget
-                    // when the section is marked unimplemented — this
-                    // satisfies "в релизе отключены без возможности
-                    // включения".
-                    Item {
-                        Layout.fillWidth: true
-                        implicitHeight: sectionLoader.implicitHeight
-                        enabled: !root._isUnimplemented(root.activeSection)
-                        opacity: enabled ? 1.0 : 0.55
-                        Loader {
-                            id: sectionLoader
-                            anchors.fill: parent
-                            onLoaded: Qt.callLater(root._applySearchMarks)
-                            sourceComponent: {
-                                if (root.activeSection === "profile")       return sectionProfile;
-                                if (root.activeSection === "appearance")    return sectionAppearance;
-                                if (root.activeSection === "language")      return sectionLanguage;
-                                if (root.activeSection === "notifications") return sectionNotifications;
-                                if (root.activeSection === "safety")        return sectionSafety;
-                                if (root.activeSection === "calendar")      return sectionCalendar;
-                                if (root.activeSection === "tasks")         return sectionTasks;
-                                if (root.activeSection === "shortcuts")     return sectionShortcuts;
-                                if (root.activeSection === "cpp")           return sectionCpp;
-                                if (root.activeSection === "integrations")  return sectionIntegrations;
-                                if (root.activeSection === "git")           return sectionGit;
-                                if (root.activeSection === "data")          return sectionData;
-                                if (root.activeSection === "help")          return sectionHelp;
-                                if (root.activeSection === "about")         return sectionAbout;
-                                return null;
-                            }
-                        }
-                    }
+                    // Every section on one page (APP-270), in the order of
+                    // SettingsIndex.SECTIONS (tst_SettingsPage checks): its
+                    // heading, its line, its rows; the nav follows the scroll.
+                    // Declared one by one, not by a Repeater: a delegate is no
+                    // QObject child of the page, and the dialogs inside the
+                    // sections could not be found from it.
+                    PageBlock { sectionId: "appearance" }
+                    PageBlock { sectionId: "calendar" }
+                    PageBlock { sectionId: "tasks" }
+                    PageBlock { sectionId: "notifications" }
+                    PageBlock { sectionId: "safety" }
+                    PageBlock { sectionId: "shortcuts" }
+                    PageBlock { sectionId: "integrations" }
+                    PageBlock { sectionId: "git" }
+                    PageBlock { sectionId: "data" }
+                    PageBlock { sectionId: "language" }
+                    PageBlock { sectionId: "profile" }
+                    PageBlock { sectionId: "help" }
+                    PageBlock { sectionId: "about" }
                 }
             }
         }
+    }
+
+    // The page of a section, by id.
+    function _pageFor(id) {
+        if (id === "profile")       return sectionProfile;
+        if (id === "appearance")    return sectionAppearance;
+        if (id === "language")      return sectionLanguage;
+        if (id === "notifications") return sectionNotifications;
+        if (id === "safety")        return sectionSafety;
+        if (id === "calendar")      return sectionCalendar;
+        if (id === "tasks")         return sectionTasks;
+        if (id === "shortcuts")     return sectionShortcuts;
+        if (id === "integrations")  return sectionIntegrations;
+        if (id === "git")           return sectionGit;
+        if (id === "data")          return sectionData;
+        if (id === "help")          return sectionHelp;
+        if (id === "about")         return sectionAbout;
+        return null;
+    }
+    // The blocks of the page, in page order.
+    function _blocks() {
+        const out = [];
+        for (let i = 0; i < bodyCol.children.length; i++) {
+            const it = bodyCol.children[i];
+            if (it && it.sectionId !== undefined) out.push(it);
+        }
+        return out;
+    }
+    // The block of a section on the page.
+    function _blockFor(id) {
+        const list = _blocks();
+        for (let i = 0; i < list.length; i++)
+            if (list[i].sectionId === id) return list[i];
+        return null;
+    }
+
+    // ── Scroll spy ────────────────────────────────────────────────────
+    // While the page moves under the reader, the nav marks the section at
+    // the top of the view. A jump from the nav sets `_navScroll` so the
+    // sections it passes on the way do not flicker through the nav, and the
+    // last section, which cannot reach the top, stays the one picked.
+    property bool _navScroll: false
+    property bool _spying: false
+    function _spy() {
+        const top = bodyScroll.contentY + bodyScroll.height * 0.25;
+        let pick = "";
+        const list = _blocks();
+        for (let i = 0; i < list.length; i++) {
+            const it = list[i];
+            if (!it.visible) continue;
+            if (pick === "" || bodyCol.y + it.y <= top) pick = it.sectionId;
+        }
+        if (pick === "" || pick === activeSection) return;
+        _spying = true;
+        activeSection = pick;
+        _spying = false;
+    }
+    onActiveSectionChanged: {
+        Qt.callLater(root._revealNavActive);
+        if (!_spying) _scrollToSection(activeSection);
+    }
+    // Bring a section's heading to the top, once the page has laid out.
+    function _scrollToSection(id) {
+        if (!_blockFor(id)) return;
+        _navScroll = true;
+        _reveal = { block: id, lastY: -1, steady: 0, ticks: 0 };
+        revealSettle.restart();
     }
 
     function _activeMeta() {
@@ -771,6 +741,7 @@ Item {
     // then scroll to that setting and focus it once the page is built.
     function revealItem(item) {
         if (!item || !openSection(item.section)) return false;
+        _navScroll = true;
         _reveal = { entry: _indexEntry(item), lastY: -1, steady: 0, ticks: 0 };
         revealSettle.restart();
         return true;
@@ -791,7 +762,7 @@ Item {
         const r = _reveal;
         if (!r) { revealSettle.stop(); return; }
         r.ticks++;
-        const target = _revealTarget(r.entry);
+        const target = r.block ? _blockFor(r.block) : _revealTarget(r.entry);
         if (!target) {
             if (r.ticks > 120) { _reveal = null; revealSettle.stop(); }
             return;
@@ -809,7 +780,7 @@ Item {
         if ((r.ticks >= 10 && r.steady >= 3) || r.ticks > 120) {
             _reveal = null;
             revealSettle.stop();
-            _revealNow(r.entry);
+            if (!r.block) _revealNow(r.entry);
         }
     }
     // The full index entry for a {section, key} or {section, id} pair.
@@ -825,8 +796,10 @@ Item {
     // The page item that shows `entry`: a SettingsRow by its label, a
     // SettingsGroup by its title, a card by its objectName or title text.
     function _findSettingItem(entry) {
+        // Within its own section: the same words can name rows of two.
+        const scope = _blockFor(entry.section) || bodyCol;
         if (entry.objectName && entry.objectName.length > 0)
-            return _findChildByName(bodyCol, entry.objectName);
+            return _findChildByName(scope, entry.objectName);
         const text = entry.title || (entry.key ? I18n.t(entry.key) : "");
         if (!text) return null;
         let textHit = null;
@@ -843,7 +816,7 @@ Item {
             }
             return null;
         };
-        return walk(bodyCol) || textHit;
+        return walk(scope) || textHit;
     }
     function _isRow(it) { return it.hasLabel !== undefined && it.stackBelow !== undefined; }
     function _isGroup(it) { return it.framed !== undefined && it.danger !== undefined && it.rows !== undefined; }
@@ -873,34 +846,37 @@ Item {
         return false;
     }
 
-    // Highlight the matching rows of the open section and dim the others
-    // while a search is on. Written from here, not bound: the rows come and
-    // go with the section Loader.
+    // Highlight the matching rows and dim the others while a search is on.
+    // Written from here, not bound: the rows come with the section Loaders.
     function _applySearchMarks() {
         const q = Idx.norm(root.searchText);
-        const titles = {};
-        let any = false;
-        for (let i = 0; i < searchMatches.length; i++) {
-            if (searchMatches[i].section !== activeSection) continue;
-            titles[searchMatches[i].title] = true;
-            any = true;
-        }
-        const visit = (it, inMatchedGroup) => {
-            const kids = it ? it.children : [];
-            for (let i = 0; i < kids.length; i++) {
-                const k = kids[i];
-                if (!k) continue;
-                let grp = inMatchedGroup;
-                if (_isGroup(k)) grp = any && titles[k.title] === true;
-                if (_isRow(k)) {
-                    const hit = any && (titles[k.label] === true
-                                        || Idx.textMatches(q, k.label, "") || Idx.textMatches(q, k.hint, ""));
-                    k.searchMark = !any ? 0 : (hit ? 1 : (grp ? 0 : -1));
-                }
-                visit(k, grp);
+        const list = _blocks();
+        for (let b = 0; b < list.length; b++) {
+            const block = list[b];
+            const titles = {};
+            let any = false;
+            for (let i = 0; i < searchMatches.length; i++) {
+                if (searchMatches[i].section !== block.sectionId) continue;
+                titles[searchMatches[i].title] = true;
+                any = true;
             }
-        };
-        visit(bodyCol, false);
+            const visit = (it, inMatchedGroup) => {
+                const kids = it ? it.children : [];
+                for (let i = 0; i < kids.length; i++) {
+                    const k = kids[i];
+                    if (!k) continue;
+                    let grp = inMatchedGroup;
+                    if (_isGroup(k)) grp = any && titles[k.title] === true;
+                    if (_isRow(k)) {
+                        const hit = any && (titles[k.label] === true
+                                            || Idx.textMatches(q, k.label, "") || Idx.textMatches(q, k.hint, ""));
+                        k.searchMark = !any ? 0 : (hit ? 1 : (grp ? 0 : -1));
+                    }
+                    visit(k, grp);
+                }
+            };
+            visit(block, false);
+        }
     }
     onSearchTextChanged: Qt.callLater(root._applySearchMarks)
     // The nav row Tab lands on: the open section's, or the first one the
@@ -930,8 +906,6 @@ Item {
             return;
         }
     }
-    onActiveSectionChanged: Qt.callLater(root._revealNavActive)
-
     function _focusNav(from, dir) {
         const step = dir === -1 ? -1 : 1;
         for (let i = from; i >= 0 && i < navRep.count; i += step) {
@@ -947,7 +921,10 @@ Item {
     function openSection(id) {
         for (let i = 0; i < sections.length; i++) {
             if (sections[i].id === id) {
-                activeSection = id;
+                // Asked for by name: scroll there even when it is the
+                // section the nav already marks.
+                if (activeSection === id) _scrollToSection(id);
+                else activeSection = id;
                 return true;
             }
         }
@@ -991,6 +968,49 @@ Item {
     }
 
     // ── Reusable controls ─────────────────────────────────────────────
+
+    // One section on the page: heading, line, rows.
+    component PageBlock: ColumnLayout {
+        id: block
+        property string sectionId: ""
+        readonly property var meta: root._sectionMeta(block.sectionId) || ({ title: "", sub: "" })
+        objectName: "settings-block-" + block.sectionId
+        visible: root._sectionMatches(block.meta)
+        Layout.fillWidth: true
+        spacing: 0
+
+        Text {
+            objectName: block.sectionId === "appearance" ? "settings-page-heading" : ""
+            Layout.fillWidth: true
+            text: block.meta.title
+            color: Theme.text
+            font.pixelSize: Theme.fsLg
+            font.weight: Theme.fwHeading
+            elide: Text.ElideRight
+        }
+        Text {
+            Layout.fillWidth: true
+            Layout.topMargin: Theme.spXs
+            visible: text.length > 0
+            text: block.meta.sub
+            color: Theme.textMuted
+            font.pixelSize: Theme.fsSm
+            wrapMode: Text.WordWrap
+        }
+        Item { Layout.preferredHeight: Theme.sp2xl }
+
+        Item {
+            Layout.fillWidth: true
+            implicitHeight: blockLoader.implicitHeight
+            Loader {
+                id: blockLoader
+                anchors.fill: parent
+                onLoaded: Qt.callLater(root._applySearchMarks)
+                sourceComponent: root._pageFor(block.sectionId)
+            }
+        }
+        Item { Layout.preferredHeight: root.groupGap + Theme.sp2xl }
+    }
 
     component SectionCard: Rectangle {
         Layout.fillWidth: true
@@ -1512,17 +1532,142 @@ Item {
         id: sectionAppearance
         ColumnLayout {
             spacing: root.groupGap
+            // What was in Tweaks (APP-270, sheet H2-Settings): theme, accent,
+            // density, animations — straight on the page.
             SettingsGroup {
-                title: I18n.t("settings.appearance.group.mode")
+                objectName: "settings-appearance-main"
                 SegRow {
+                    objectName: "settings-theme"
                     label: I18n.t("settings.appearance.theme")
+                    hint: I18n.t("settings.appearance.theme.hint")
                     value: AppController.theme
                     options: [
+                        ({value: "system", label: I18n.t("settings.appearance.theme.system")}),
                         ({value: "dark", label: I18n.t("settings.appearance.theme.dark")}),
                         ({value: "light", label: I18n.t("settings.appearance.theme.light")})
                     ]
                     onSelected: (value) => AppController.theme = value
                 }
+                // The colour of the cursor and of what is picked; Lavender
+                // is the theme's own accent.
+                SegRow {
+                    objectName: "settings-accent"
+                    label: I18n.t("settings.appearance.accent")
+                    hint: I18n.t("settings.appearance.accent.hint")
+                    value: Theme.accentTone
+                    options: [
+                        ({value: "lavender", label: I18n.t("settings.appearance.accent.lavender")}),
+                        ({value: "ink", label: I18n.t("settings.appearance.accent.ink")}),
+                        ({value: "graphite", label: I18n.t("settings.appearance.accent.graphite")})
+                    ]
+                    onSelected: (value) => root.set("appearance", "cursorColor", value === "lavender" ? "" : value)
+                }
+                SegRow {
+                    objectName: "settings-density"
+                    label: I18n.t("settings.appearance.density")
+                    hint: I18n.t("settings.appearance.density.hint")
+                    value: AppController.density === "compact" || AppController.density === "spacious" ? AppController.density : "comfy"
+                    options: [ ({ value: "compact",  label: I18n.t("common.density.compact") }),
+                               ({ value: "comfy",    label: I18n.t("common.density.comfy") }),
+                               ({ value: "spacious", label: I18n.t("common.density.spacious") }) ]
+                    onSelected: (value) => AppController.density = value
+                }
+                SegRow {
+                    objectName: "settings-motion"
+                    label: I18n.t("settings.appearance.reducedMotion")
+                    hint: I18n.t("settings.appearance.reducedMotion.hint")
+                    value: Theme.reducedMotion ? "min" : "full"
+                    options: [ ({ value: "full", label: I18n.t("settings.appearance.motion.full") }),
+                               ({ value: "min",  label: I18n.t("settings.appearance.motion.min") }) ]
+                    onSelected: (value) => root.set("appearance", "reducedMotion", value === "min")
+                }
+            }
+            // The style (APP-275): Bold or Quiet, each a set of the switches
+            // below; flip one and the style is "Custom".
+            SettingsGroup {
+                objectName: "settings-style-card"
+                title: I18n.t("settings.appearance.group.style")
+                description: I18n.t("settings.appearance.group.style.desc")
+                SegRow {
+                    objectName: "settings-style"
+                    label: I18n.t("settings.appearance.style")
+                    hint: Style.name === "custom" ? I18n.t("settings.appearance.style.customHint") : ""
+                    value: Style.name
+                    options: Style.name === "custom"
+                        ? [ ({ value: "quiet",  label: I18n.t("style.quiet") }),
+                            ({ value: "bold",   label: I18n.t("style.bold") }),
+                            ({ value: "custom", label: I18n.t("style.custom") }) ]
+                        : [ ({ value: "quiet",  label: I18n.t("style.quiet") }),
+                            ({ value: "bold",   label: I18n.t("style.bold") }) ]
+                    onSelected: (value) => { if (value !== "custom") Style.apply(value); }
+                }
+                SettingsRow {
+                    objectName: "settings-style-reset"
+                    visible: Style.name === "custom"
+                    PillButton {
+                        objectName: "settings-style-reset-button"
+                        text: I18n.t("settings.appearance.style.reset").arg(I18n.t("style." + Style.defaultStyle))
+                        onClicked: Style.apply(Style.defaultStyle)
+                    }
+                }
+                SwitchRow {
+                    objectName: "settings-style-urgency"
+                    label: I18n.t("style.flag.urgency")
+                    hint: I18n.t("style.flag.urgency.hint")
+                    checked: Style.urgency
+                    onToggled: (checked) => Style.setFlag("urgency", checked)
+                }
+                SwitchRow {
+                    objectName: "settings-style-counters"
+                    label: I18n.t("style.flag.counters")
+                    checked: Style.counters
+                    onToggled: (checked) => Style.setFlag("counters", checked)
+                }
+                SwitchRow {
+                    objectName: "settings-style-keyHints"
+                    label: I18n.t("style.flag.keyHints")
+                    hint: I18n.t("style.flag.keyHints.hint")
+                    checked: Style.keyHints
+                    onToggled: (checked) => Style.setFlag("keyHints", checked)
+                }
+                SwitchRow {
+                    objectName: "settings-style-chipFill"
+                    label: I18n.t("style.flag.chipFill")
+                    hint: I18n.t("style.flag.chipFill.hint")
+                    checked: Style.chipFill
+                    onToggled: (checked) => Style.setFlag("chipFill", checked)
+                }
+                SwitchRow {
+                    objectName: "settings-style-factsLine"
+                    label: I18n.t("style.flag.factsLine")
+                    checked: Style.factsLine
+                    onToggled: (checked) => Style.setFlag("factsLine", checked)
+                }
+                SegRow {
+                    objectName: "settings-style-todayExtras"
+                    label: I18n.t("style.flag.todayExtras")
+                    value: Style.todayExtras
+                    options: [ ({ value: "open",      label: I18n.t("style.flag.todayExtras.open") }),
+                               ({ value: "collapsed", label: I18n.t("style.flag.todayExtras.collapsed") }),
+                               ({ value: "hidden",    label: I18n.t("style.flag.todayExtras.hidden") }) ]
+                    onSelected: (value) => Style.setFlag("todayExtras", value)
+                }
+                // Not a switch: without the icons a meeting and a task cannot
+                // be told apart.
+                SettingsRow {
+                    objectName: "settings-style-icons"
+                    label: I18n.t("style.flag.icons")
+                    hint: I18n.t("style.flag.icons.hint")
+                    Text {
+                        text: I18n.t("style.flag.icons.always")
+                        color: Theme.textMuted
+                        font.pixelSize: Theme.fsSm
+                    }
+                }
+            }
+            // The finer knobs: scale, contrast, a cursor colour of its own.
+            SettingsGroup {
+                title: I18n.t("settings.appearance.group.more")
                 // Type and spacing, live (APP-168).
                 SegRow {
                     objectName: "settings-ui-scale"
@@ -1535,13 +1680,6 @@ Item {
                     value: String(Math.round(Theme.scale * 100))
                     options: Theme.scaleSteps.map((s) => ({ value: String(Math.round(s * 100)), label: Math.round(s * 100) + "%" }))
                     onSelected: (value) => root.set("appearance", "uiScale", Number(value) / 100)
-                }
-                SegRow {
-                    label: I18n.t("settings.appearance.density")
-                    value: AppController.density
-                    options: [ ({ value: "compact", label: I18n.t("common.density.compact") }),
-                               ({ value: "comfy",   label: I18n.t("common.density.comfy") }) ]
-                    onSelected: (value) => AppController.density = value
                 }
                 // Soft: hairline borders, closer panels, muted colour —
                 // over whichever theme is showing. highContrast is kept
@@ -1561,13 +1699,13 @@ Item {
                         root.set("appearance", "highContrast", value === "high");
                     }
                 }
-                // The keyboard cursor's colour (APP-174). "" is the theme's
-                // accent, and follows a theme change.
+                // The keyboard cursor's colour (APP-174) from the swatches;
+                // the first dot is the accent picked above.
                 CursorColorRow {
                     objectName: "settings-cursor-color"
                     label: I18n.t("settings.appearance.cursorColor")
                     hint: I18n.t("settings.appearance.cursorColor.hint")
-                    value: Theme.cursorColorPick
+                    value: Theme.accentTone === "custom" ? Theme.cursorColorPick : ""
                     // Straight into the settings JSON: no unqualified `root`
                     // from in here.
                     onSelected: (color) => {
@@ -1591,12 +1729,6 @@ Item {
             }
             SettingsGroup {
                 title: I18n.t("settings.appearance.group.behaviour")
-                SwitchRow {
-                    label: I18n.t("settings.appearance.reducedMotion")
-                    hint: I18n.t("settings.appearance.reducedMotion.hint")
-                    checked: !!(root.settings.appearance && root.settings.appearance.reducedMotion)
-                    onToggled: (checked) => root.set("appearance", "reducedMotion", checked)
-                }
                 // Only where there is a tray to close into. Three states,
                 // because there are three: a switch showed ON while the
                 // choice was still unset, and the next close asked anyway.
@@ -2271,59 +2403,6 @@ Item {
     }
 
     Component {
-        id: sectionCpp
-        ColumnLayout {
-            spacing: root.groupGap
-            SettingsGroup {
-                title: I18n.t("settings.cpp.group.toolchain")
-                SegRow {
-                    label: I18n.t("settings.cpp.compiler")
-                    value: (root.settings.cpp && root.settings.cpp.defaultCompiler) || "clang-17"
-                    options: ["gcc-13", "clang-17", "clang-18"]
-                    onSelected: (value) => root.set("cpp", "defaultCompiler", value)
-                }
-                SegRow {
-                    label: I18n.t("settings.cpp.standard")
-                    value: (root.settings.cpp && root.settings.cpp.defaultStandard) || "C++20"
-                    options: ["C++17", "C++20", "C++23"]
-                    onSelected: (value) => root.set("cpp", "defaultStandard", value)
-                }
-                SegRow {
-                    label: I18n.t("settings.cpp.sanitizer")
-                    value: (root.settings.cpp && root.settings.cpp.defaultSanitizer) || "asan"
-                    options: [ ({ value: "none", label: "None" }), ({ value: "asan", label: "ASan" }), ({ value: "tsan", label: "TSan" }), ({ value: "ubsan", label: "UBSan" }) ]
-                    onSelected: (value) => root.set("cpp", "defaultSanitizer", value)
-                }
-                SegRow {
-                    label: I18n.t("settings.cpp.buildType")
-                    value: (root.settings.cpp && root.settings.cpp.defaultBuildType) || "RelWithDebInfo"
-                    options: ["Debug", "RelWithDebInfo", "Release"]
-                    onSelected: (value) => root.set("cpp", "defaultBuildType", value)
-                }
-            }
-            SettingsGroup {
-                title: I18n.t("settings.cpp.group.tools")
-                TextRow {
-                    label: I18n.t("settings.cpp.bazelArgs"); mono: true; placeholder: "--jobs=12 --keep_going"
-                    value: (root.settings.cpp && root.settings.cpp.bazelArgs) || ""
-                    onCommitted: (text) => root.set("cpp", "bazelArgs", text)
-                }
-                TextRow {
-                    label: I18n.t("settings.cpp.godbolt"); mono: true; placeholder: "https://godbolt.org/"
-                    value: (root.settings.cpp && root.settings.cpp.compilerExplorerUrl) || ""
-                    onCommitted: (text) => root.set("cpp", "compilerExplorerUrl", text)
-                }
-                SwitchRow {
-                    label: I18n.t("settings.cpp.inlineAsm")
-                    hint: I18n.t("settings.cpp.inlineAsm.hint")
-                    checked: !!(root.settings.cpp && root.settings.cpp.showAsmInline)
-                    onToggled: (checked) => root.set("cpp", "showAsmInline", checked)
-                }
-            }
-        }
-    }
-
-    Component {
         id: sectionIntegrations
         ColumnLayout {
             id: intSection
@@ -2341,6 +2420,12 @@ Item {
             // Status-mapping rows are read through an invokable, not a property,
             // so a pick has to say it changed.
             property int statusMapRev: 0
+            // The page stays built (APP-270), so a sync that saw new tracker
+            // statuses has to say so too.
+            Connections {
+                target: AppController
+                function onAppSettingsJsonChanged() { intSection.statusMapRev++; }
+            }
             // A sign-in that landed but still needs a scope field: provider id
             // → the card labels that are empty. Cleared once they are filled.
             property var pendingFields: ({})
