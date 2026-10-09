@@ -177,6 +177,9 @@ TestCase {
     function test_the_russian_layout_is_the_same_keys() {
         compare(router().chordOf(0x41F, 0, "п"), "G");
         compare(router().chordOf(0x41B, Qt.ControlModifier, ""), "Ctrl+K");
+        // Pressing them is Windows only: QTest on Linux aborts on a
+        // non-ASCII key, and the mapping above is what the router uses.
+        if (Qt.platform.os !== "windows") return;
         AppController.currentView = "today";
         tc.win.focusActiveView();
         keyClick(0x41F);   // п

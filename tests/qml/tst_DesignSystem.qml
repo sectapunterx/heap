@@ -105,8 +105,8 @@ TestCase {
         compare(b.height, Theme.chipH);
         const s = make('import TodoCpp; PropertyChip { small: true; key: "status"; value: "open" }');
         compare(s.height, Theme.chipHSmall);
-        const long = make('import TodoCpp; PropertyChip { key: "title"; value: "' + "x".repeat(400) + '" }');
-        verify(long.width <= Theme.chipMaxW, "a long value is cut, not the row widened");
+        const longChip = make('import TodoCpp; PropertyChip { key: "title"; value: "' + "x".repeat(400) + '" }');
+        verify(longChip.width <= Theme.chipMaxW, "a long value is cut, not the row widened");
     }
 
     function test_key_hints_follow_the_style_except_in_menus() {

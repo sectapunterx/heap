@@ -142,7 +142,10 @@ TestCase {
         compare(v.cursorTaskId, "KCUR-1");
         verify(find(tc.win.contentItem, function (it) { return it.objectName === "week-cursor" && it.visible; }) !== null,
                "the cursor is drawn");
-        keyClick(0x43E);   // о — j in the Russian layout
+        // о — j in the Russian layout. Windows only: the router reads the
+        // native key there, and QTest on Linux aborts on a non-ASCII key.
+        if (Qt.platform.os === "windows") keyClick(0x43E);
+        else keyClick(Qt.Key_J);
         verify(v.cursorKey.indexOf("event:") === 0, "j goes on to the meeting");
         keyClick(Qt.Key_Return);
         tryVerify(function () { const e = popup("EventEditor"); return e && e.opened; }, 2000);
