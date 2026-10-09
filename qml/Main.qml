@@ -1072,6 +1072,7 @@ ApplicationWindow {
             onImportJsonRequested: importJsonDialog.open()
             onImportIcsRequested: importIcsDialog.open()
             onImportVaultRequested: importVaultDialog.open()
+            onRemoveExampleRequested: win.removeExample()
             onExportVaultRequested: exportVaultDialog.open()
             onExportIcsRequested: {
                 exportIcsDialog.currentFile = "file:///" + (
@@ -1102,35 +1103,6 @@ ApplicationWindow {
 
                 // state.json unreadable / from a newer heap / not saving.
                 StorageBanner { Layout.fillWidth: true }
-
-                // The example profile (APP-271): says so, and takes it away
-                // in one action — asking first when it was worked in.
-                Rectangle {
-                    objectName: "example-banner"
-                    Layout.fillWidth: true
-                    readonly property bool isExample: AppController.activeProfileId === "lowkey-example"
-                    visible: isExample
-                    implicitHeight: visible ? Theme.px(36) : 0
-                    color: Theme.panel2
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: Theme.sp2xl
-                        anchors.rightMargin: Theme.spLg
-                        spacing: Theme.spLg
-                        Text {
-                            text: I18n.t("example.banner")
-                            color: Theme.textMuted
-                            font.pixelSize: Theme.fsSm
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
-                        }
-                        PillButton {
-                            objectName: "example-remove"
-                            text: I18n.t("example.remove")
-                            onClicked: win.removeExample()
-                        }
-                    }
-                }
 
             TopBar {
                 id: topBar

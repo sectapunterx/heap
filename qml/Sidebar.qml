@@ -40,6 +40,7 @@ Rectangle {
     signal importIcsRequested()
     signal exportVaultRequested()
     signal importVaultRequested()
+    signal removeExampleRequested()
     property alias profileSwitcher: profile
 
     // ── My views ──
@@ -194,6 +195,7 @@ Rectangle {
                 onImportIcsRequested: root.importIcsRequested()
                 onExportVaultRequested: root.exportVaultRequested()
                 onImportVaultRequested: root.importVaultRequested()
+                onRemoveExampleRequested: root.removeExampleRequested()
             }
         }
 
