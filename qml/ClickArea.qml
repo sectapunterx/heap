@@ -83,7 +83,7 @@ Item {
 
     readonly property string _tipText: {
         const base = ca.tip.length > 0 ? ca.tip : ca.label;
-        const keys = ca.shortcutId.length > 0 ? AppController.shortcutFor(ca.shortcutId) : "";
+        const keys = ca.shortcutId.length > 0 ? AppController.shortcutText(ca.shortcutId) : "";
         return keys.length > 0 && base.length > 0 ? base + "  " + keys : base;
     }
     // The keyboard opens it too (APP-184): Tab onto an icon and its name

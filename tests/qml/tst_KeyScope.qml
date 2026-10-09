@@ -206,10 +206,10 @@ TestCase {
         verify(!search.activeFocus, "a second Esc leaves the search");
     }
 
-    // APP-166: `?` opens the cheat-sheet from the view, and types a question
-    // mark in a text field.
+    // APP-166 / APP-272: `?` opens the cheat sheet from the view, and types a
+    // question mark in a text field.
     function test_question_mark_opens_cheat_sheet() {
-        const hk = popup("HotkeysPanel");
+        const hk = popup("KeyCheatSheet");
         verify(hk !== null);
         // The task search is in the Tasks header (APP-258).
         AppController.currentView = "board";
@@ -242,6 +242,8 @@ TestCase {
         // Done is folded on the heap 2 board (APP-262), so the cursor cannot
         // follow the card there: the second D acts on it selected.
         AppController.setSelectedTaskIds([id]);
+        // Within half a second a second d is Vim's "dd", not "put it back".
+        wait(600);
         keyClick(Qt.Key_D);
         tryVerify(function () { return AppController.taskById(id).status === was; }, 1000, "a second D did not put it back");
         AppController.clearSelection();

@@ -66,7 +66,8 @@ Rectangle {
     // "Ctrl+N" as keymap.md writes it: "Ctrl N".
     function prettyKeys(seq) {
         if (!seq) return "";
-        return String(seq).split(", ")[0].replace(/\+(?=.)/g, " ");
+        // Written as every key is (keymap.md): "Ctrl 1", "g b".
+        return AppController.keyText(String(seq));
     }
     // A count as the list shows it: nothing for 0, "999+" past that.
     function countText(n) {

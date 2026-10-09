@@ -17,7 +17,7 @@ Item {
     // cannot leave the guide naming the wrong keys.
     function kbd(id) {
         const list = AppController.shortcuts;
-        for (let i = 0; i < list.length; i++) if (list[i].id === id) return list[i].sequence;
+        for (let i = 0; i < list.length; i++) if (list[i].id === id) return AppController.keyText(list[i].sequence);
         return "";
     }
 

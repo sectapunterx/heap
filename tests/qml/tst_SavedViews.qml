@@ -239,12 +239,12 @@ TestCase {
     function test_alt_digits_apply_the_nth_view() {
         mkView("One", "svprobe card 0");
         const two = mkView("Two", "svprobe card 1", "week");
-        keyClick(Qt.Key_2, Qt.AltModifier);
+        keyClick(Qt.Key_5, Qt.ControlModifier);   // My view 2 is Ctrl+5 (APP-281 A4)
         compare(tc.host.activeId, two);
         compare(AppController.currentView, "week");
         compare(tc.win.searchText, "svprobe card 1");
         // A number with no view behind it does nothing.
-        keyClick(Qt.Key_7, Qt.AltModifier);
+        keyClick(Qt.Key_9, Qt.ControlModifier);
         compare(tc.host.activeId, two);
         AppController.currentView = "board";
     }
@@ -265,7 +265,7 @@ TestCase {
         }
         verify(found !== null);
         compare(found.label, I18n.t("palette.cmd.savedView").arg("Palette probe"));
-        compare(found.sub, "Alt+1");
+        compare(found.sub, AppController.shortcutText("savedView.1"));
         verify(save !== null);
         tc.win.runCommand("savedview:" + id);
         compare(tc.host.activeId, id);

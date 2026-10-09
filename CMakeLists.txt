@@ -229,6 +229,10 @@ qt_add_library(heap_core STATIC
     # The window frame follows heap's theme, not the system's app mode.
     src/platform/WindowFrame.cpp
     src/TypeAhead.cpp
+    # The 0.8.0 keymap: physical keys, two-key sequences (APP-272).
+    src/keys/KeyNames.cpp
+    src/keys/KeyRouter.cpp
+    src/query/CommandQuery.cpp
     # ── audit-plat: begin ──
     src/storage/StateIO.cpp
     src/storage/AsyncSaver.cpp
@@ -443,6 +447,8 @@ qt_add_qml_module(heap_core
         qml/ProfileEditor.qml
         qml/CommandPalette.qml
         qml/HotkeysPanel.qml
+        qml/KeyCheatSheet.qml
+        qml/KeyPendingBar.qml
         qml/NotesView.qml
         qml/MdView.qml
         qml/SettingsView.qml
@@ -478,6 +484,7 @@ qt_add_qml_module(heap_core
         qml/Search.js
         qml/SettingsIndex.js
         qml/PopupStack.js
+        qml/KeyRules.js
     SOURCES
         src/AppController.h
         src/Models.h
@@ -510,6 +517,7 @@ qt_add_qml_module(heap_core
         src/platform/Sound.h
         src/hints/ShortcutHints.h
         src/TypeAhead.h
+        src/keys/KeyRouter.h
         src/integrations/IntegrationTypes.h
         src/integrations/StatusMap.h
         src/integrations/SyncState.h
@@ -539,7 +547,7 @@ qt_add_qml_module(heap_core
 
 # src/markdown too: qt_add_qml_module's generated registration file includes
 # each QML-exposed header by its bare name.
-target_include_directories(heap_core PUBLIC src src/markdown src/capture)
+target_include_directories(heap_core PUBLIC src src/markdown src/capture src/keys)
 target_compile_options(heap_core PRIVATE "${HEAP_WARNING_OPTIONS}")
 target_link_libraries(heap_core PUBLIC
     heap_markdown

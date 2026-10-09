@@ -211,7 +211,7 @@ TestCase {
         for (const c of catalog) {
             const hit = cmds.filter(e => e.commandId === c.id)[0];
             verify(hit !== undefined, c.id + " is not in the palette");
-            compare(hit.sub, c.sequence || "", c.id + " shows its key");
+            compare(hit.sub, AppController.keyText(c.sequence || ""), c.id + " shows its key");
             verify(String(hit.label).length > 0 && hit.label !== c.id, c.id + " has a name");
         }
         for (const id of ["timeMachine.open", "standup.draft", "focus.immersion", "endOfDay.open", "log.open",

@@ -223,7 +223,7 @@ TestCase {
             let hit = null;
             for (let i = 0; i < cmds.length; i++) if (cmds[i].commandId === id) hit = cmds[i];
             verify(hit !== null, id);
-            compare(hit.sub, AppController.shortcutFor(id));
+            compare(hit.sub, AppController.shortcutText(id));
         }
         tc.win.runCommand("zoom.in");
         compare(Theme.scale, 1.1);

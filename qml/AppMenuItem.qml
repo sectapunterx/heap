@@ -25,10 +25,18 @@ MenuItem {
     // A word at the row's end, before its key (heap 2, APP-268): why the
     // row is off ("no branch yet"), or "now" on the current choice.
     property string note: ""
+    // A key that works in this menu only — a column's number in Status.
+    property string keyText: ""
+    // The digit that runs this row while its menu is open (1–4 in Priority).
+    property int number: 0
+    // The "‹ Priority" row on top of a list opened from another menu.
+    property bool isBack: false
+    // Written the way every key is (keymap.md, APP-279): "s", "Shift S",
+    // "y y", "Enter", from the one catalogue, so a rebinding shows here too.
     readonly property string hint: item.shortcutId.length > 0
-        ? (AppController.shortcuts, AppController.shortcutFor(item.shortcutId)) : ""
+        ? (AppController.shortcuts.length >= 0 ? AppController.shortcutText(item.shortcutId) : "") : item.keyText
     // A third pick of the row with the mouse suggests its key once (APP-166).
-    onTriggered: if (item.hint.length > 0 && item.hovered) AppController.noteMouseAction(item.shortcutId)
+    onTriggered: if (item.shortcutId.length > 0 && item.hint.length > 0 && item.hovered) AppController.noteMouseAction(item.shortcutId)
     readonly property bool _check: item.marked || (item.checkable && item.checked)
     readonly property bool _arrow: item.subMenu !== null || item.opensList
     // The width the row wants for its whole label, hint and arrow. AppMenu
@@ -63,6 +71,17 @@ MenuItem {
         const m = item.menu as AppMenu;
         if (m && m.backOnLeft) { m.goBack(); event.accepted = true; }
         else event.accepted = false;
+    }
+    // Esc in such a list goes back to the menu it came from; the menu's own
+    // Esc then closes everything.
+    Keys.onEscapePressed: (event) => {
+        const m = item.menu as AppMenu;
+        if (m && m.backOnLeft) { m.goBack(); event.accepted = true; }
+        else event.accepted = false;
+    }
+    Keys.onPressed: (event) => {
+        const m = item.menu as AppMenu;
+        event.accepted = !!m && m.typeKey(event);
     }
 
     indicator: Item {}

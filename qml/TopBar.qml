@@ -563,7 +563,7 @@ Rectangle {
                     QQC.ToolTip.visible: searchField.activeFocus && searchField.text.length === 0
                     QQC.ToolTip.delay: 600
                     QQC.ToolTip.text: I18n.t("topbar.searchQueryHint").arg(AppController.searchFields().join(": · ") + ":")
-                                                        .arg(AppController.shortcutFor("palette.open"))
+                                                        .arg(AppController.shortcutText("palette.open"))
                 }
                 // Clause count is not worth showing; that it *is* a query is.
                 Rectangle {
@@ -599,7 +599,7 @@ Rectangle {
                     width: kbd.implicitWidth + 10; height: 16
                     Text {
                         id: kbd; anchors.centerIn: parent
-                        text: AppController.shortcutFor("search.focus")
+                        text: AppController.shortcuts.length >= 0 ? AppController.shortcutText("search.focus") : ""
                         color: kbdMA.hovered ? Theme.text : Theme.textDim
                         font.family: Theme.fontMono; font.pixelSize: Theme.fsXs
                     }

@@ -40,6 +40,7 @@
 #include "integrations/StatusMap.h"
 #include "integrations/SyncState.h"
 #include "integrations/TrackerMerge.h"
+#include "keys/KeyNames.h"
 #include "local/Effective.h"
 #include "markdown/MdHtml.h"
 #include "markdown/MdOutline.h"
@@ -53,6 +54,7 @@
 #include "platform/Paths.h"
 #include "platform/Sound.h"
 #include "platform/WindowFrame.h"
+#include "query/CommandQuery.h"
 #include "query/TaskQuery.h"
 #include "recap/WeeklyRecap.h"
 #include "recur/RecurrenceEngine.h"
@@ -82,6 +84,7 @@
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QIcon>
+#include <QInputMethod>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -118,20 +121,46 @@ namespace {
 
 // Bumped when the *meaning* of settings.shortcuts changes. 1 stored every
 // binding; 2 stores only the ones the user rebound; 3 is the heap 2 shell
-// (APP-258), where Ctrl+1..3 open the sidebar's sections and Ctrl+, Settings.
-constexpr int kShortcutsSchema = 3;
+// (APP-258), where Ctrl+1..3 open the sidebar's sections and Ctrl+, Settings;
+// 4 is the Vim-based keymap of 0.8.0 (keymap.md, APP-272): g/y/z/c prefixes,
+// single letters on the task under the cursor, Ctrl+4..9 for My views.
+constexpr int kShortcutsSchema = 4;
 
-// The heap 2 defaults that took a key from something else. A user who had
-// bound one of these keys to an action of their own keeps it: the new
-// default steps aside (APP-258).
-const QList<QPair<QString, QString>>& shellDefaults() {
-  static const QList<QPair<QString, QString>> kList = {
-      {QStringLiteral("section.today"), QStringLiteral("Ctrl+1")},
-      {QStringLiteral("section.tasks"), QStringLiteral("Ctrl+2")},
-      {QStringLiteral("section.knowledge"), QStringLiteral("Ctrl+3")},
-      {QStringLiteral("view.settings"), QStringLiteral("Ctrl+,")},
-  };
-  return kList;
+// The keys whose meaning a returning user's hands still remember (APP-281
+// A4, keymap.md "Что меняется для пользователей 0.7.x"): the old default
+// sequence, the action it ran, and the schema it changed in. The first press
+// of one after the update says once where that action went.
+struct LegacyKey {
+  const char* sequence;
+  const char* oldId;
+  int changedIn;
+};
+
+constexpr LegacyKey kLegacyKeys[] = {
+    {"Ctrl+1", "view.board", 3},
+    {"Ctrl+2", "view.timeline", 3},
+    {"Ctrl+3", "view.week", 3},
+    {"Ctrl+4", "view.month", 3},
+    {"Ctrl+5", "view.archive", 3},
+    {"Ctrl+6", "view.docs", 3},
+    {"Ctrl+7", "view.notes", 3},
+    {"Ctrl+8", "view.settings", 3},
+    {"O", "task.openExternal", 4},
+    {"Z", "board.collapseColumn", 4},
+    {"T", "cal.today", 4},
+    {"G", "cal.goToDate", 4},
+    {"Alt+1", "savedView.1", 4},
+    {"Alt+2", "savedView.2", 4},
+    {"Alt+3", "savedView.3", 4},
+};
+
+// "section.today.alt" and "savedView.3.alt2" are a second key for the action
+// before the suffix: they share its name.
+QString baseShortcutId(const QString& id) {
+  static const QRegularExpression alt(QStringLiteral("\\.alt\\d*$"));
+  QString base = id;
+  base.remove(alt);
+  return base;
 }
 
 // True when `sequence` is exactly what `id` was bound to before the view
@@ -460,7 +489,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.board.collapseColumn.label", {"Board: fold column", "Доска: свернуть колонку"}},
       {"shortcut.board.collapseColumn.desc",
        {"Fold or unfold the column the cursor is in.", "Свернуть или развернуть колонку с курсором."}},
-      {"shortcut.task.openExternal.label", {"Open ticket in browser", "Открыть тикет в браузере"}},
+      {"shortcut.task.openExternal.label", {"Open in tracker", "Открыть в трекере"}},
       {"shortcut.task.openExternal.desc",
        {"Opens the selected (or hovered) mirrored issue in its tracker.",
         "Открывает выбранный (или под курсором) синхронизированный тикет в трекере."}},
@@ -592,9 +621,13 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"palette.profileTasks", {"%1 tasks", "задач: %1"}},
       {"palette.repeats", {"repeats", "повторяется"}},
       // ---- Shortcuts catalog (labels + descriptions) ----
-      {"shortcut.palette.open.label", {"Open Command Palette", "Открыть палитру команд"}},
+      {"shortcut.palette.open.label", {"Command line", "Командная строка"}},
       {"shortcut.palette.open.desc",
-       {"Fuzzy search across tasks, docs, notes, profiles and commands.", "Нечёткий поиск задач, доков, заметок, профилей и команд."}},
+       {"Search, filter and act in one line: tasks, notes, docs, people and commands.",
+        "Поиск, фильтр и действия в одной строке: задачи, заметки, доки, люди и команды."}},
+      {"shortcut.palette.commands.label", {"Command", "Команда"}},
+      {"shortcut.palette.commands.desc",
+       {"The command line on its commands, as > does inside it.", "Командная строка сразу на командах, как «>» в ней."}},
       {"shortcut.timeMachine.open.label", {"Time machine", "Машина времени"}},
       {"shortcut.timeMachine.open.desc", {"Bring back an earlier state from a snapshot.", "Вернуть прежнее состояние из снимка."}},
       {"shortcut.standup.draft.label", {"Standup draft", "Черновик стендапа"}},
@@ -645,6 +678,81 @@ const QHash<QString, I18nEntry>& i18nTable() {
        {"Board, list or calendar, on the lens you left.", "Доска, список или календарь — на том виде, где вы остановились."}},
       {"shortcut.section.knowledge.label", {"Go to Knowledge", "Перейти в «Знания»"}},
       {"shortcut.section.knowledge.desc", {"Notes and links.", "Заметки и ссылки."}},
+      // ---- The 0.8.0 keymap (keymap.md, APP-272) ----
+      {"shortcut.view.calendar.label", {"Go to Calendar", "Перейти к календарю"}},
+      {"shortcut.view.calendar.desc", {"Week or month, the one used last.", "Неделя или месяц — какой был последним."}},
+      {"shortcut.cal.zoomDay.label", {"Calendar: day", "Календарь: день"}},
+      {"shortcut.cal.zoomDay.desc", {"Zoom the calendar to one day.", "Показать в календаре один день."}},
+      {"shortcut.cursor.first.label", {"To the first", "К первому"}},
+      {"shortcut.cursor.first.desc", {"The cursor on the first item of the view.", "Курсор на первый элемент вида."}},
+      {"shortcut.cursor.last.label", {"To the last", "К последнему"}},
+      {"shortcut.cursor.last.desc", {"The cursor on the last item of the view.", "Курсор на последний элемент вида."}},
+      {"shortcut.cursor.pageDown.label", {"Half a screen down", "Полэкрана вниз"}},
+      {"shortcut.cursor.pageDown.desc", {"Move the cursor half a screen down.", "Сдвинуть курсор на полэкрана вниз."}},
+      {"shortcut.cursor.pageUp.label", {"Half a screen up", "Полэкрана вверх"}},
+      {"shortcut.cursor.pageUp.desc", {"Move the cursor half a screen up.", "Сдвинуть курсор на полэкрана вверх."}},
+      {"shortcut.nav.back.label", {"Back", "Назад по переходам"}},
+      {"shortcut.nav.back.desc", {"Where you were before, like Vim's jumplist.", "Туда, где вы были до этого, как jumplist в Vim."}},
+      {"shortcut.nav.forward.label", {"Forward", "Вперёд по переходам"}},
+      {"shortcut.nav.forward.desc", {"Forward again after going back.", "Снова вперёд после «назад»."}},
+      {"shortcut.task.newBelow.label", {"New task below", "Новая задача ниже"}},
+      {"shortcut.task.newBelow.desc",
+       {"In the same column, group or day as the cursor.", "В той же колонке, группе или дне, что и курсор."}},
+      {"shortcut.task.newAbove.label", {"New task above", "Новая задача выше"}},
+      {"shortcut.task.newAbove.desc",
+       {"In the same column, group or day as the cursor.", "В той же колонке, группе или дне, что и курсор."}},
+      {"shortcut.task.rename.label", {"Rename", "Переименовать"}},
+      {"shortcut.task.rename.desc", {"Rename the task under the cursor.", "Переименовать задачу под курсором."}},
+      {"shortcut.task.schedule.label", {"Schedule", "Запланировать"}},
+      {"shortcut.task.schedule.desc",
+       {"Put the task in the next free slot of the selected day.", "Поставить задачу в ближайшее свободное окно выбранного дня."}},
+      {"shortcut.task.due.label", {"Deadline", "Срок"}},
+      {"shortcut.task.due.desc", {"Set the task's deadline.", "Задать срок задачи."}},
+      {"shortcut.task.priority0.label", {"Priority P0", "Приоритет P0"}},
+      {"shortcut.task.priority0.desc", {"Urgent: drop everything.", "Срочно: всё остальное потом."}},
+      {"shortcut.task.priority1.label", {"Priority P1", "Приоритет P1"}},
+      {"shortcut.task.priority1.desc", {"High.", "Высокий."}},
+      {"shortcut.task.priority2.label", {"Priority P2", "Приоритет P2"}},
+      {"shortcut.task.priority2.desc", {"Normal.", "Обычный."}},
+      {"shortcut.task.priority3.label", {"Priority P3", "Приоритет P3"}},
+      {"shortcut.task.priority3.desc", {"Low.", "Низкий."}},
+      {"shortcut.task.timer.label", {"Timer", "Таймер"}},
+      {"shortcut.task.timer.desc", {"Start or pause the task's timer.", "Запустить или поставить на паузу таймер задачи."}},
+      {"shortcut.task.copyId.label", {"Copy ID", "Копировать ID"}},
+      {"shortcut.task.copyId.desc", {"The task's ID to the clipboard.", "ID задачи — в буфер обмена."}},
+      {"shortcut.task.copyBranch.label", {"Copy branch name", "Копировать имя ветки"}},
+      {"shortcut.task.copyBranch.desc", {"The git branch of the task to the clipboard.", "Ветку git задачи — в буфер обмена."}},
+      {"shortcut.task.copyLink.label", {"Copy tracker link", "Копировать ссылку в трекере"}},
+      {"shortcut.task.copyLink.desc", {"The issue's link to the clipboard.", "Ссылку на тикет — в буфер обмена."}},
+      {"shortcut.task.createBranch.label", {"Create git branch", "Создать ветку git"}},
+      {"shortcut.task.createBranch.desc",
+       {"A branch named after the task in the active repository.", "Ветка с именем задачи в активном репозитории."}},
+      {"shortcut.selection.toggle.label", {"Select task", "Отметить задачу"}},
+      {"shortcut.selection.toggle.desc",
+       {"Add the task under the cursor to the selection, or take it out.", "Добавить задачу под курсором в выделение или убрать."}},
+      {"shortcut.selection.range.label", {"Select a range", "Выделить диапазон"}},
+      {"shortcut.selection.range.desc", {"Then j / k grow the selection from the cursor.", "Дальше j / k расширяют выделение от курсора."}},
+      {"keymap.notice.kept", {"lowkey 0.8 has new keys; yours stay: %1.", "В lowkey 0.8 новые клавиши; ваши остались: %1."}},
+      {"keymap.notice.moved", {"%1 is now %2. All keys: ?", "%1 теперь — %2; карта сочетаний — ?"}},
+      {"keymap.was.view.board", {"Today; the board is g b", "«Сегодня»; доска — g b"}},
+      {"keymap.was.view.timeline", {"Tasks; the list is g l", "«Задачи»; список — g l"}},
+      {"keymap.was.view.week", {"Knowledge; the calendar is g c", "«Знания»; календарь — g c"}},
+      {"keymap.was.view.month", {"your first view; the month is g c, then z m", "первый из «Моих видов»; месяц — g c, затем z m"}},
+      {"keymap.was.view.archive",
+       {"your second view; the archive is the is:archived filter", "второй из «Моих видов»; архив — фильтр is:archived"}},
+      {"keymap.was.view.docs", {"your third view; docs are g n", "третий из «Моих видов»; доки — g n"}},
+      {"keymap.was.view.notes", {"your fourth view; notes are g n", "четвёртый из «Моих видов»; заметки — g n"}},
+      {"keymap.was.view.settings", {"your fifth view; settings are Ctrl ,", "пятый из «Моих видов»; настройки — Ctrl ,"}},
+      {"keymap.was.task.openExternal", {"a new task below; open in the tracker is g x", "новая задача ниже; открыть в трекере — g x"}},
+      {"keymap.was.board.collapseColumn", {"the start of z a, which folds the column", "начало z a — свернуть колонку"}},
+      {"keymap.was.cal.today", {"the timer; back to today is 0", "таймер; к сегодня — 0"}},
+      {"keymap.was.cal.goToDate", {"the start of g …; a date is : and the date", "начало g …; к дате — «:» и дата"}},
+      {"keymap.was.savedView.1", {"free; your views are Ctrl 4… and g 1…", "свободна; «Мои виды» — Ctrl 4… и g 1…"}},
+      {"keymap.was.savedView.2", {"free; your views are Ctrl 4… and g 1…", "свободна; «Мои виды» — Ctrl 4… и g 1…"}},
+      {"keymap.was.savedView.3", {"free; your views are Ctrl 4… and g 1…", "свободна; «Мои виды» — Ctrl 4… и g 1…"}},
+      {"hotkeys.reserved.system", {"The system keeps this key", "Эту клавишу занимает система"}},
+      {"hotkeys.prefixTaken", {"%1 cannot be bound: %2 (%3) starts the same way", "%1 нельзя назначить: так же начинается %2 («%3»)"}},
+      {"hotkeys.reserved.navigation", {"Tab moves between fields in every dialog", "Tab переводит между полями во всех диалогах"}},
       {"shell.notice.keys",
        {"lowkey has a new sidebar: Ctrl+1 Today, Ctrl+2 Tasks, Ctrl+3 Knowledge, Ctrl+, Settings. Blocked and In review are in My views.",
         "В lowkey новый сайдбар: Ctrl+1 «Сегодня», Ctrl+2 «Задачи», Ctrl+3 «Знания», Ctrl+, «Настройки». «Заблокировано» и «На ревью» — в "
@@ -688,15 +796,20 @@ const QHash<QString, I18nEntry>& i18nTable() {
         "Копирует Markdown-отчёт задач, завершённых за последние 7 дней, с учётом времени."}},
       {"shortcut.tweaks.open.label", {"Open Tweaks", "Открыть твики"}},
       {"shortcut.tweaks.open.desc", {"Theme, density, workday.", "Тема, плотность, рабочий день."}},
-      {"shortcut.hotkeys.open.label", {"Open Hotkeys", "Открыть горячие клавиши"}},
-      {"shortcut.hotkeys.open.desc", {"This panel.", "Эта панель."}},
+      {"shortcut.hotkeys.open.label", {"Keyboard cheat sheet", "Шпаргалка клавиш"}},
+      {"shortcut.hotkeys.open.desc", {"Every key by area, with a search.", "Все клавиши по разделам, с поиском."}},
+      {"shortcut.hotkeys.edit.label", {"Change shortcuts…", "Изменить сочетания…"}},
+      {"shortcut.hotkeys.edit.desc",
+       {"Give any action a key of your own, two-key sequences included.",
+        "Назначить любому действию свою клавишу, в том числе из двух нажатий."}},
       {"shortcut.redo.label", {"Redo", "Повторить"}},
       {"shortcut.redo.desc", {"Re-apply the operation Ctrl+Z reversed.", "Повторить отменённое действие."}},
       {"shortcut.undo.label", {"Undo", "Отменить"}},
       {"shortcut.undo.desc",
        {"Restore the last deleted task / event / profile.", "Восстановить последнюю удалённую задачу/событие/профиль."}},
-      {"shortcut.search.focus.label", {"Focus search", "Фокус в поиск"}},
-      {"shortcut.search.focus.desc", {"Move the cursor to the header search field.", "Перевести курсор в строку поиска в шапке."}},
+      {"shortcut.search.focus.label", {"Section filter", "Фильтр раздела"}},
+      {"shortcut.search.focus.desc",
+       {"The filter line of the section; Esc goes back to the cursor.", "Строка фильтра раздела; Esc — обратно на курсор."}},
       {"shortcut.quick-capture.label", {"Quick-capture task", "Быстрое создание задачи"}},
       {"shortcut.quick-capture.desc",
        {"Open Quick-capture with on-the-fly date parsing.", "Открыть быстрый ввод с разбором даты на лету."}},
@@ -7023,6 +7136,74 @@ QStringList AppController::searchProblems(const QString& text) const {
   return heap::query::TaskQuery::compile(text, m_today, m_statuses).unknownClauses();
 }
 
+QVariantMap AppController::commandLine(const QString& text, int limit) const {
+  const bool scheduled = heap::query::queryFields().contains(QStringLiteral("scheduled"));
+  const heap::query::CommandQuery cq =
+      heap::query::parseCommandLine(text, m_statuses, m_chrono.get(), QDateTime::currentDateTime(), scheduled);
+  QVariantMap out;
+  out["commandsOnly"] = cq.commandsOnly;
+  out["text"] = cq.text;
+  out["query"] = cq.commandsOnly ? QString() : cq.query();
+  QVariantList tokens;
+  for(const heap::query::CommandToken& t : cq.tokens) {
+    tokens.append(QVariantMap{{"words", t.words}, {"kind", t.kind}, {"clause", t.clause}, {"value", t.value}});
+  }
+  out["tokens"] = tokens;
+  QVariantList tasks;
+  int total = 0;
+  if(!cq.commandsOnly && (!cq.tokens.isEmpty() || !cq.text.isEmpty())) {
+    const heap::query::TaskQuery q = heap::query::TaskQuery::compile(cq.query(), m_today, m_statuses, m_syncNewIds);
+    const QString free = q.freeText();
+    const QString typedId = cq.text.trimmed();
+    QVector<int> exact;
+    QVector<int> open;
+    QVector<int> archived;
+    const QVector<Task>& items = m_tasks.items();
+    for(int row = 0; row < items.size(); ++row) {
+      const Task& t = items.at(row);
+      const QString& hay = m_tasks.searchTextAt(row);
+      if(!free.isEmpty() && !hay.contains(free)) {
+        continue;
+      }
+      if(q.isQuery() && !q.matches(t, hay)) {
+        continue;
+      }
+      ++total;
+      if(!typedId.isEmpty() && t.id.compare(typedId, Qt::CaseInsensitive) == 0) {
+        exact << row;
+      } else if(t.archived) {
+        archived << row;
+      } else {
+        open << row;
+      }
+    }
+    for(const auto* list : {&exact, &open, &archived}) {
+      for(int row : *list) {
+        if(tasks.size() >= limit) {
+          break;
+        }
+        const Task& t = items.at(row);
+        QString statusName = t.status;
+        for(const QVariant& v : m_statuses) {
+          if(v.toMap().value(QStringLiteral("id")).toString() == t.status) {
+            statusName = v.toMap().value(QStringLiteral("name")).toString();
+          }
+        }
+        tasks.append(QVariantMap{{"id", t.id},
+                                 {"title", t.title},
+                                 {"status", t.status},
+                                 {"statusName", statusName},
+                                 {"category", statusCategory(t.status)},
+                                 {"priority", heap::local::effectivePriority(t)},
+                                 {"archived", t.archived}});
+      }
+    }
+  }
+  out["tasks"] = tasks;
+  out["total"] = total;
+  return out;
+}
+
 QStringList AppController::searchFields() const {
   return heap::query::queryFields();
 }
@@ -11569,8 +11750,8 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
         }
         overrides.insert(it.key(), it.value().toString());
       }
-      if(storedSchema < 3) {
-        applyShellShortcutMigration(overrides);
+      if(storedSchema < kShortcutsSchema) {
+        applyKeymapMigration(overrides, storedSchema);
       }
       applyShortcutOverrides(overrides);
     }
@@ -12744,16 +12925,32 @@ void AppController::seedShortcutCatalog() {
   auto add = [this](const char* id, const char* defaultSeq) {
     QVariantMap m;
     const QString sid = QString::fromUtf8(id);
+    // A second key for an action ("undo.alt") reads as the action itself.
+    const auto text = [this, &sid](const char* part) {
+      const QString own = QStringLiteral("shortcut.%1.%2").arg(sid, QLatin1String(part));
+      const QString t = tr_(own);
+      return t != own ? t : tr_(QStringLiteral("shortcut.%1.%2").arg(baseShortcutId(sid), QLatin1String(part)));
+    };
     m["id"] = sid;
-    m["label"] = tr_(QString("shortcut.%1.label").arg(sid));
-    m["description"] = tr_(QString("shortcut.%1.desc").arg(sid));
-    m["defaultSequence"] = QString::fromUtf8(defaultSeq);
-    m["sequence"] = QString::fromUtf8(defaultSeq);
+    m["label"] = text("label");
+    m["description"] = text("desc");
+    const QString def = normalizeSequence(QString::fromUtf8(defaultSeq));
+    m["defaultSequence"] = def;
+    m["sequence"] = def;
     m_shortcuts.append(m);
   };
 
   m_shortcuts.clear();
+  // The keymap of 0.8.0 (keymap.md): Vim-based. A bare letter acts on the
+  // task under the cursor and only while the focus is in the content; Ctrl
+  // chords work everywhere; g / y / z / c start a two-key sequence. KeyRouter
+  // reads every key by its physical place, so the Russian layout works too.
   add("palette.open", "Ctrl+K");
+  // Ctrl+P was a fixed alias of the command line (APP-279): a catalogue entry
+  // now, rebindable and removable like any other.
+  add("palette.open.alt", "Ctrl+P");
+  // ":" opens the command line on its commands, as ">" does inside it.
+  add("palette.commands", ":");
   add("task.new", "Ctrl+N");
   // Done in one key (APP-268, keymap.md "d").
   add("task.done", "D");
@@ -12766,15 +12963,19 @@ void AppController::seedShortcutCatalog() {
   add("task.priority.p2", "3");
   add("task.priority.p3", "4");
   // heap 2 (APP-258): Ctrl+1..3 are the sidebar's sections top to bottom,
-  // Ctrl+, is Settings. The single views have no key of their own any more
-  // — they are lenses inside Tasks and Knowledge — but stay bindable.
+  // Ctrl+, is Settings; g t / g n are the same places from the keymap.
   add("section.today", "Ctrl+1");
+  add("section.today.alt", "G, T");
   add("section.tasks", "Ctrl+2");
   add("section.knowledge", "Ctrl+3");
-  add("view.board", "");
-  add("view.timeline", "");
-  add("view.week", "");
-  add("view.month", "");
+  add("section.knowledge.alt", "G, N");
+  // The lenses of Tasks: g b / g l / g c; the calendar's zoom: z d / z w / z m.
+  add("view.board", "G, B");
+  add("view.timeline", "G, L");
+  add("view.calendar", "G, C");
+  add("cal.zoomDay", "Z, D");
+  add("view.week", "Z, W");
+  add("view.month", "Z, M");
   add("view.archive", "");
   add("view.docs", "");
   add("view.notes", "");
@@ -12789,10 +12990,18 @@ void AppController::seedShortcutCatalog() {
   add("profile.exportMd", "Ctrl+Shift+E");
   add("profile.weeklyReport", "Ctrl+Shift+W");
   add("tweaks.open", "");
+  // The cheat sheet (APP-272): "?" and Ctrl+/; changing keys is its own mode.
   add("hotkeys.open", "Ctrl+/");
+  add("hotkeys.open.alt", "?");
+  add("hotkeys.edit", "");
   add("undo", "Ctrl+Z");
+  add("undo.alt", "U");
   add("redo", "Ctrl+Shift+Z");
+  add("redo.alt", "Ctrl+R");
+  // The section's filter line: "/", as Ctrl+F and Ctrl+L.
   add("search.focus", "Ctrl+F");
+  add("search.focus.alt", "/");
+  add("search.focus.alt2", "Ctrl+L");
   add("quick-capture", "Ctrl+Shift+Space");
   add("quick-capture-notes", "Ctrl+Shift+N");
   add("theme.toggle", "Ctrl+Shift+T");
@@ -12800,18 +13009,39 @@ void AppController::seedShortcutCatalog() {
   add("rail.toggle", "Ctrl+Shift+B");
   add("person.new", "Ctrl+Shift+U");
   add("profile.new", "Ctrl+Shift+P");
+  // Moving around, as in Vim: to the first / last item, half a screen, and
+  // back / forward through where you have been (the jumplist).
+  add("cursor.first", "G, G");
+  add("cursor.last", "Shift+G");
+  add("cursor.pageDown", "Ctrl+D");
+  add("cursor.pageUp", "Ctrl+U");
+  add("nav.back", "Ctrl+O");
+  add("nav.forward", "Ctrl+I");
+  // The task under the cursor (keymap.md "Задача под курсором").
+  add("task.newBelow", "O");
+  add("task.newAbove", "Shift+O");
+  add("task.rename", "I");
+  add("task.schedule", "S");
+  add("task.due", "Shift+S");
+  add("task.priority0", "1");
+  add("task.priority1", "2");
+  add("task.priority2", "3");
+  add("task.priority3", "4");
+  add("task.timer", "T");
+  add("task.copyId", "Y, Y");
+  add("task.copyBranch", "Y, B");
+  add("task.copyLink", "Y, L");
+  add("task.createBranch", "C, B");
+  // Open the issue in its tracker, or the link under the cursor (Vim's gx).
+  add("task.openExternal", "G, X");
+  add("selection.toggle", "V");
+  add("selection.range", "Shift+V");
   add("selection.selectAll", "Ctrl+A");
   add("selection.clearSel", "Esc");
   add("selection.deleteSel", "Del");
-  // The first bare letter in the catalog (HEAP-117). Qt gives a focused text
-  // field the ShortcutOverride for an unmodified key, so typing an "o" still
-  // types it; the QML side additionally holds this back while any overlay is
-  // open. Rebindable like everything else here.
-  add("task.openExternal", "O");
-  // Board keyboard cursor. Bare letters, like task.openExternal above: a
-  // focused text field gets the ShortcutOverride for an unmodified key, so
-  // typing a "j" still types it, and QML holds them back while an overlay
-  // is open. Arrow keys are wired alongside these in Main.qml.
+  // Board keyboard cursor. Bare letters: KeyRouter holds them back while a
+  // text field has the focus, and QML while any overlay is open. Arrow keys
+  // are wired alongside these in Main.qml.
   add("board.cursorDown", "J");
   add("board.cursorUp", "K");
   add("board.cursorLeft", "H");
@@ -12824,7 +13054,8 @@ void AppController::seedShortcutCatalog() {
   add("board.moveRight", "Shift+L");
   add("board.cardMenu", "M");
   add("board.archive", "E");
-  add("board.collapseColumn", "Z");
+  // Fold, as Vim's za.
+  add("board.collapseColumn", "Z, A");
   // Selecting from the keyboard (APP-128): Shift+Up/Down grows the selection
   // a card at a time, Shift+Left/Right takes the whole column and steps on.
   // Moving cards went from Shift+arrows to Ctrl+arrows (Main.qml) to make room.
@@ -12832,12 +13063,12 @@ void AppController::seedShortcutCatalog() {
   add("board.selectUp", "Shift+Up");
   add("board.selectColumnLeft", "Shift+Left");
   add("board.selectColumnRight", "Shift+Right");
-  // Calendar date navigation. Only live on a calendar view, where the board's
-  // own bare letters are not, so the two sets cannot collide.
-  add("cal.today", "T");
-  add("cal.prev", "Left");
-  add("cal.next", "Right");
-  add("cal.goToDate", "G");
+  // The period: [ and ] a day on Today, a week or month in the calendar; 0
+  // back to today. Going to a date is ":" and the date now.
+  add("cal.today", "0");
+  add("cal.prev", "[");
+  add("cal.next", "]");
+  add("cal.goToDate", "");
   // Notes, live only in the Notes view. Ctrl+PgUp/PgDn is how every tabbed
   // editor steps between documents; F2 renames, as in a file manager.
   add("notes.new", "Ctrl+Alt+N");
@@ -12871,17 +13102,26 @@ void AppController::seedShortcutCatalog() {
   add("recap.open", "");
   add("endOfDay.open", "");
   add("welcome.replay", "");
-  // The first nine saved views, in sidebar order. Alt+digit is free in the
-  // catalog and in every text field, and Ctrl+digit already means "view".
-  add("savedView.1", "Alt+1");
-  add("savedView.2", "Alt+2");
-  add("savedView.3", "Alt+3");
-  add("savedView.4", "Alt+4");
-  add("savedView.5", "Alt+5");
-  add("savedView.6", "Alt+6");
-  add("savedView.7", "Alt+7");
-  add("savedView.8", "Alt+8");
-  add("savedView.9", "Alt+9");
+  // My views in sidebar order (APP-281 A4): Ctrl+4…9 after the three
+  // sections, and g 1…g 9.
+  add("savedView.1", "Ctrl+4");
+  add("savedView.1.alt", "G, 1");
+  add("savedView.2", "Ctrl+5");
+  add("savedView.2.alt", "G, 2");
+  add("savedView.3", "Ctrl+6");
+  add("savedView.3.alt", "G, 3");
+  add("savedView.4", "Ctrl+7");
+  add("savedView.4.alt", "G, 4");
+  add("savedView.5", "Ctrl+8");
+  add("savedView.5.alt", "G, 5");
+  add("savedView.6", "Ctrl+9");
+  add("savedView.6.alt", "G, 6");
+  add("savedView.7", "");
+  add("savedView.7.alt", "G, 7");
+  add("savedView.8", "");
+  add("savedView.8.alt", "G, 8");
+  add("savedView.9", "");
+  add("savedView.9.alt", "G, 9");
 
   if(!existingOverrides.isEmpty()) {
     QVariantMap asMap;
@@ -12926,25 +13166,138 @@ void AppController::onGlobalHotkey(int id) {
   }
 }
 
-void AppController::applyShellShortcutMigration(QVariantMap& overrides) {
+void AppController::applyKeymapMigration(QVariantMap& overrides, int storedSchema) {
   // A returning user's own bindings are theirs: a key they gave an action
-  // keeps that action, and the new default it collides with steps aside.
+  // keeps that action, and a new default that would take it — the same key,
+  // or a sequence one of them starts (g with g b) — steps aside.
   QStringList kept;
-  for(const auto& [id, seq] : shellDefaults()) {
+  for(const QVariant& v : std::as_const(m_shortcuts)) {
+    const QVariantMap m = v.toMap();
+    const QString id = m.value(QStringLiteral("id")).toString();
+    const QString def = m.value(QStringLiteral("defaultSequence")).toString();
+    if(def.isEmpty() || overrides.contains(id)) {
+      continue;
+    }
     for(auto it = overrides.constBegin(); it != overrides.constEnd(); ++it) {
-      if(it.key() != id && normalizeSequence(it.value().toString()) == seq) {
-        if(!overrides.contains(id)) {
-          overrides.insert(id, QString());
-        }
-        kept << seq + QStringLiteral(" ") + tr_(QStringLiteral("shortcut.%1.label").arg(it.key()));
+      const QString own = normalizeSequence(it.value().toString());
+      if(it.key() == id || own.isEmpty()) {
+        continue;
+      }
+      if(own == def || heap::keys::isPrefixOf(own, def) || heap::keys::isPrefixOf(def, own)) {
+        overrides.insert(id, QString());
+        kept << keyText(own) + QStringLiteral(" ") + tr_(QStringLiteral("shortcut.%1.label").arg(baseShortcutId(it.key())));
+        break;
       }
     }
   }
-  m_shellNotice = tr_(QStringLiteral("shell.notice.keys"));
-  if(!kept.isEmpty()) {
-    m_shellNotice += tr_(QStringLiteral("shell.notice.kept")).arg(kept.join(QStringLiteral(", ")));
+  // The old keys a hand still reaches for: said once each, on the first press
+  // (APP-281 A4). Not a key the user had moved the old action off, nor one
+  // they use for an action of their own.
+  QJsonArray notice = m_settingsExtra.value(QStringLiteral("keymapNotice")).toArray();
+  for(const LegacyKey& k : kLegacyKeys) {
+    const QString seq = QString::fromLatin1(k.sequence);
+    if(storedSchema >= k.changedIn || overrides.contains(QString::fromLatin1(k.oldId))) {
+      continue;
+    }
+    bool own = false;
+    for(auto it = overrides.constBegin(); it != overrides.constEnd(); ++it) {
+      own = own || normalizeSequence(it.value().toString()) == seq;
+    }
+    if(!own && !notice.contains(seq)) {
+      notice.append(seq);
+    }
   }
-  emit shellNoticeChanged();
+  if(!notice.isEmpty()) {
+    m_settingsExtra.insert(QStringLiteral("keymapNotice"), notice);
+  }
+  if(!kept.isEmpty()) {
+    m_shellNotice = tr_(QStringLiteral("keymap.notice.kept")).arg(kept.join(QStringLiteral(", ")));
+    emit shellNoticeChanged();
+  }
+}
+
+bool AppController::hasKeymapNotice() const {
+  return !m_settingsExtra.value(QStringLiteral("keymapNotice")).toArray().isEmpty();
+}
+
+void AppController::noteKeyPressed(const QString& chord) {
+  QJsonArray notice = m_settingsExtra.value(QStringLiteral("keymapNotice")).toArray();
+  const QString seq = normalizeSequence(chord);
+  if(seq.isEmpty() || !notice.contains(seq)) {
+    return;
+  }
+  for(int i = static_cast<int>(notice.size()) - 1; i >= 0; --i) {
+    if(notice.at(i).toString() == seq) {
+      notice.removeAt(i);
+    }
+  }
+  if(notice.isEmpty()) {
+    m_settingsExtra.remove(QStringLiteral("keymapNotice"));
+  } else {
+    m_settingsExtra.insert(QStringLiteral("keymapNotice"), notice);
+  }
+  scheduleSave();
+  QString what;
+  for(const LegacyKey& k : kLegacyKeys) {
+    if(QString::fromLatin1(k.sequence) == seq) {
+      what = tr_(QStringLiteral("keymap.was.") + QString::fromLatin1(k.oldId));
+    }
+  }
+  emit toast(tr_(QStringLiteral("keymap.notice.moved")).arg(keyText(seq), what));
+}
+
+QString AppController::keyText(const QString& sequence) const {
+#ifdef Q_OS_MACOS
+  constexpr bool kMac = true;
+#else
+  constexpr bool kMac = false;
+#endif
+  return heap::keys::displayKeys(sequence, kMac);
+}
+
+QString AppController::shortcutText(const QString& id) const {
+  return keyText(shortcutFor(id));
+}
+
+QString AppController::prefixShortcutConflict(const QString& id, const QString& sequence) const {
+  const QString want = normalizeSequence(sequence);
+  if(want.isEmpty()) {
+    return {};
+  }
+  for(const QVariant& v : m_shortcuts) {
+    const QVariantMap m = v.toMap();
+    const QString seq = m.value(QStringLiteral("sequence")).toString();
+    if(m.value(QStringLiteral("id")).toString() != id && (heap::keys::isPrefixOf(seq, want) || heap::keys::isPrefixOf(want, seq))) {
+      return m.value(QStringLiteral("id")).toString();
+    }
+  }
+  return {};
+}
+
+QString AppController::keyChord(int key, int modifiers, const QString& text, quint32 scanCode) const {
+  heap::keys::KeyInput in;
+  in.key = key;
+  in.modifiers = Qt::KeyboardModifiers(modifiers);
+  in.text = text;
+  // QML's KeyEvent carries the scan code, not the virtual key: on Windows a
+  // set-1 scan code is the X keycode less 8.
+  const QString platform = QGuiApplication::platformName();
+  heap::keys::NativeKeys native = heap::keys::NativeKeys::None;
+  if(platform == QLatin1String("windows") && scanCode != 0) {
+    in.nativeScanCode = scanCode + 8;
+    native = heap::keys::NativeKeys::X11;
+  } else if(platform == QLatin1String("xcb")) {
+    in.nativeScanCode = scanCode;
+    native = heap::keys::NativeKeys::X11;
+  }
+  const QInputMethod* im = QGuiApplication::inputMethod();
+  const QLocale::Script script = im != nullptr ? im->locale().script() : QLocale::LatinScript;
+  return heap::keys::chordFor(in, native, script == QLocale::LatinScript || script == QLocale::AnyScript);
+}
+
+QString AppController::reservedShortcutReason(const QString& sequence) const {
+  const QString why = heap::keys::reservedReason(normalizeSequence(sequence));
+  return why.isEmpty() ? QString() : tr_(QStringLiteral("hotkeys.reserved.") + why);
 }
 
 int AppController::shortcutIndexOf(const QString& id) const {
@@ -13107,7 +13460,6 @@ struct BuiltinKey {
 };
 
 constexpr BuiltinKey kBuiltinKeys[] = {
-    {"Ctrl+P", "palette.open", "app"},
     {"Down", "board.cursorDown", "board"},
     {"Up", "board.cursorUp", "board"},
     {"Left", "board.cursorLeft", "board"},
@@ -13167,7 +13519,9 @@ QString AppController::findShortcutConflict(const QString& id, const QString& se
     if(m.value("id").toString() == id) {
       continue;
     }
-    if(m.value("sequence").toString() == want) {
+    const QString seq = m.value("sequence").toString();
+    // g with g b: the one key would fire before the sequence could be typed.
+    if(seq == want || heap::keys::isPrefixOf(seq, want) || heap::keys::isPrefixOf(want, seq)) {
       return m.value("id").toString();
     }
   }
@@ -13189,6 +13543,25 @@ bool AppController::setShortcut(const QString& id, const QString& sequence) {
     return true;
   }
 
+  // The system keeps some keys, and Tab drives every dialog (APP-272).
+  if(!seq.isEmpty()) {
+    const QString reserved = reservedShortcutReason(seq);
+    if(!reserved.isEmpty()) {
+      emit toast(reserved, QStringLiteral("warning"));
+      return false;
+    }
+  }
+  // A key that starts another's sequence, or a sequence that starts with
+  // another's key, cannot be swapped: g would make every g … dead.
+  if(!seq.isEmpty()) {
+    const QString prefixOwner = prefixShortcutConflict(id, seq);
+    if(!prefixOwner.isEmpty()) {
+      emit toast(
+          tr_(QStringLiteral("hotkeys.prefixTaken")).arg(keyText(seq), keyText(shortcutFor(prefixOwner)), shortcutLabel(prefixOwner)),
+          QStringLiteral("warning"));
+      return false;
+    }
+  }
   // A built-in key stays where it is whatever the catalog says, so there is
   // nothing to swap: taking it would only make both dead (SHELL-4).
   if(!seq.isEmpty()) {
@@ -13200,18 +13573,19 @@ bool AppController::setShortcut(const QString& id, const QString& sequence) {
   }
 
   // VS-Code-style swap: clear the conflicting owner so the new binding wins.
-  if(!seq.isEmpty()) {
-    const QString conflictId = findShortcutConflict(id, seq);
-    if(!conflictId.isEmpty()) {
-      const int j = shortcutIndexOf(conflictId);
-      if(j >= 0) {
-        QVariantMap o = m_shortcuts[j].toMap();
-        const QString freedLabel = o.value("label").toString();
-        o["sequence"] = QString();
-        m_shortcuts[j] = o;
-        emit toast(tr_("slot.freed").arg(freedLabel));
-      }
+  // Every one: a sequence can collide with several that start with it.
+  int guard = 0;
+  for(QString conflictId = seq.isEmpty() ? QString() : findShortcutConflict(id, seq); !conflictId.isEmpty() && guard < 64;
+      conflictId = findShortcutConflict(id, seq), ++guard) {
+    const int j = shortcutIndexOf(conflictId);
+    if(j < 0) {
+      break;
     }
+    QVariantMap o = m_shortcuts[j].toMap();
+    const QString freedLabel = o.value("label").toString();
+    o["sequence"] = QString();
+    m_shortcuts[j] = o;
+    emit toast(tr_("slot.freed").arg(freedLabel));
   }
 
   m["sequence"] = seq;
@@ -13234,15 +13608,18 @@ void AppController::resetShortcut(const QString& id) {
   if(m.value("sequence").toString() == def) {
     return;
   }
-  // If the default would conflict with another action, swap it out.
-  const QString conflictId = findShortcutConflict(id, def);
-  if(!conflictId.isEmpty()) {
+  // If the default would conflict with another action, swap it out — each
+  // one, since a sequence can collide with several that start with it.
+  int guard = 0;
+  for(QString conflictId = findShortcutConflict(id, def); !conflictId.isEmpty() && guard < 64;
+      conflictId = findShortcutConflict(id, def), ++guard) {
     const int j = shortcutIndexOf(conflictId);
-    if(j >= 0) {
-      QVariantMap o = m_shortcuts[j].toMap();
-      o["sequence"] = QString();
-      m_shortcuts[j] = o;
+    if(j < 0) {
+      break;
     }
+    QVariantMap o = m_shortcuts[j].toMap();
+    o["sequence"] = QString();
+    m_shortcuts[j] = o;
   }
   m["sequence"] = def;
   m_shortcuts[i] = m;

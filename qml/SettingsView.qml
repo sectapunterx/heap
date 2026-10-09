@@ -2258,7 +2258,7 @@ Item {
                             Text {
                                 id: seqText
                                 anchors.centerIn: parent
-                                text: modelData.sequence || I18n.t("settings.shortcuts.notSet")
+                                text: AppController.keyText(modelData.sequence) || I18n.t("settings.shortcuts.notSet")
                                 color: modelData.sequence ? Theme.text : Theme.textDim
                                 font.family: Theme.fontMono
                                 font.pixelSize: Theme.fsSm
