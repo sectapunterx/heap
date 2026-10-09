@@ -25,6 +25,12 @@ MenuItem {
     // A word at the row's end, before its key (heap 2, APP-268): why the
     // row is off ("no branch yet"), or "now" on the current choice.
     property string note: ""
+    // What the note means, on hover or keyboard focus ("the tracker is not
+    // changed: writing to it is off").
+    property string noteTip: ""
+    ToolTip.visible: item.noteTip.length > 0 && (item.hovered || item.highlighted)
+    ToolTip.delay: 500
+    ToolTip.text: item.noteTip
     // A key that works in this menu only — a column's number in Status.
     property string keyText: ""
     // The digit that runs this row while its menu is open (1–4 in Priority).

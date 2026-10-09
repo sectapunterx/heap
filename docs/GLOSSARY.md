@@ -31,8 +31,12 @@ Tweaks — are not checked).
 - ru and en say the same thing; neither adds a promise the other lacks.
 - An error says what happened and what to do next.
 
-## Open discrepancies
+## Decided (owner, 2026-10-09)
 
-- `taskmenu.localOnly`: en "only here" vs ru «только у вас» — different
-  meaning (place vs owner); needs an owner decision.
-- Weekly "recap" (en) vs «сводка» (ru) — kept as is, recap is the en word.
+- `taskmenu.localOnly` means the place: en "only here", ru «только здесь»;
+  the tooltip says why — the tracker is not changed, writing to it is off.
+- Weekly "recap" (en) and «сводка» (ru) stay: the natural word in each
+  language for the same thing.
+- Tone confirmed as written above: «вы» only where an address is needed
+  (hints, explanations); buttons and menu rows are verbs without one
+  («Сохранить», «Открыть в трекере»); sentence case; no exclamations, no "we".

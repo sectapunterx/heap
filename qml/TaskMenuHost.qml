@@ -170,6 +170,7 @@ Item {
             text: host._isDone ? I18n.t("taskmenu.reopen") : I18n.t("taskmenu.done")
             shortcutId: "task.done"
             note: host._isTicket && !host._writeOn && !host._isDone ? I18n.t("taskmenu.localOnly") : ""
+            noteTip: note.length > 0 ? I18n.t("taskmenu.localOnly.tip") : ""
             onTriggered: Qt.callLater(host.markDone)
         }
         AppMenuSeparator {}
