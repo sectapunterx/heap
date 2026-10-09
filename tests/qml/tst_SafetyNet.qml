@@ -85,6 +85,8 @@ TestCase {
 
     function test_a_switch_writes_settings_safety() {
         const sv = settingsAtSafety();
+        // Under the section's "more" line (DG-090).
+        findChild(findChild(sv, "settings-block-safety"), "settings-more-toggle").parent.userOpen = true;
         findChild(sv, "settings-safety-endOfDay").toggled(true);
         verify(AppController.safety.endOfDay === true);
         tryVerify(() => findChild(sv, "settings-safety-endOfDayTime").visible);

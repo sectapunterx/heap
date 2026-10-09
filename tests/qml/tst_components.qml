@@ -89,8 +89,8 @@ TestCase {
     // field, so a freshly pasted token would otherwise still be unsaved when
     // Connect / Test connection / Sync now fires.
     function test_settings_textrow_commit_pending() {
-        const row = createTemporaryQmlObject('import TodoCpp; SettingsView.TextRow { value: "old" }', host);
-        verify(row !== null, "failed to instantiate SettingsView.TextRow");
+        const row = createTemporaryQmlObject('import TodoCpp; SettingsTextRow { value: "old" }', host);
+        verify(row !== null, "failed to instantiate SettingsTextRow");
         let committed = "";
         row.committed.connect(function(t) { committed = t; });
 

@@ -28,6 +28,11 @@ QtObject {
     // Convenience reads — all view'ы / делегаты могут идти через Theme.
     readonly property string weekStart:    _calendar.weekStart    || "mon"
     readonly property string timeFormat:   _calendar.timeFormat   || "24h"
+    // "system" (Settings → Language, DG-100): the clock of the system's locale.
+    readonly property bool twelveHour: timeFormat === "12h"
+        || (timeFormat === "system" && /a/i.test(Qt.locale().timeFormat(Locale.ShortFormat)))
+    // Settings → Git "working on …" line over the view (DG-099), on by default.
+    readonly property bool gitWorkingLine: !(_settings && _settings.git && _settings.git.workingOnLine === false)
     // An explicit undefined check, not `??`: qmlcachegen 6.9.1 (what CI
     // builds with) segfaults AOT-compiling Main.qml when a singleton
     // property it resolves uses the nullish operator. Same shape as
@@ -502,7 +507,7 @@ QtObject {
         const hh = Math.floor(h);
         const mm = Math.round((h - hh) * 60);
         const mmS = String(mm).padStart(2, "0");
-        if (timeFormat === "12h") {
+        if (twelveHour) {
             // 24:00 (midnight at the end of a day) is 12:00am, not noon.
             const h24 = hh % 24;
             const h12 = ((h24 + 11) % 12) + 1;

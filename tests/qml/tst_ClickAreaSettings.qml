@@ -72,60 +72,40 @@ TestCase {
         tryVerify(function () { return chip.checked === before; }, 1000);
     }
 
-    function test_settings_auto_sync_option_runs_on_return() {
-        const sv = settingsAt("integrations");
-        let opt = null;
-        tryVerify(function () { opt = find(sv, "settings-autosync-1440"); return opt !== null; }, 2000);
-        reachable(opt, "daily auto-sync");
-        tryVerify(function () { return sv.settings.integrations.autoSyncMinutes === 1440; }, 1000);
-        verify(opt.checked);
+    function connect(ids) {
+        const s = JSON.parse(AppController.appSettingsJson || "{}");
+        s.integrations = s.integrations || ({});
+        for (const id of ids) s.integrations[id] = Object.assign({}, s.integrations[id], { connected: true });
+        AppController.appSettingsJson = JSON.stringify(s);
     }
 
-    // APP-123: any cadence up to a month — a number and a unit.
-    function test_settings_auto_sync_custom_period() {
+    // The tracker list (DG-093): each tracker is a named Tab stop, Return
+    // opens its detail.
+    function test_settings_tracker_list_picks_on_return() {
         const sv = settingsAt("integrations");
-        let field = null;
-        tryVerify(function () { field = find(sv, "settings-autosync-custom"); return field !== null; }, 2000);
-        const days = find(sv, "settings-autosync-unit-1440");
-        verify(days !== null);
-        field.text = "30";
-        days.activated();
-        tryVerify(function () { return sv.settings.integrations.autoSyncMinutes === 30 * 1440; }, 1000,
-                  "30 days did not save as minutes");
-        field.text = "99";
-        field.editingFinished();
-        tryVerify(function () { return sv.settings.integrations.autoSyncMinutes === 44640; }, 1000,
-                  "a cadence past a month is not capped");
-        find(sv, "settings-autosync-0").activated();
+        let item = null;
+        tryVerify(function () { item = find(sv, "int-list-gitlab-click"); return item !== null; }, 2000);
+        reachable(item, "GitLab in the tracker list");
+        tryVerify(function () { return sv.pickedTracker === "gitlab"; }, 1000);
+        tryVerify(function () { return find(sv, "int-card-gitlab").visible; }, 1000);
+        verify(!find(sv, "int-card-github").visible, "two trackers open at once");
+    }
+
+    // "Как часто" keeps a cadence set before 0.8.1 that is not in its list
+    // (APP-123 allowed any, up to a month).
+    function test_settings_how_often_keeps_a_custom_cadence() {
+        const s = JSON.parse(AppController.appSettingsJson || "{}");
+        s.integrations = Object.assign({}, s.integrations, { autoSyncMinutes: 30 * 1440 });
+        AppController.appSettingsJson = JSON.stringify(s);
+        connect(["github"]);
+        const sv = settingsAt("integrations");
+        sv.pickedTracker = "github";
+        let combo = null;
+        tryVerify(function () { combo = find(sv, "int-often-github"); return combo !== null; }, 2000);
+        verify(combo.currentIndex >= 0);
+        compare(combo.options[combo.currentIndex].value, 30 * 1440);
+        combo.chosen(0);
         tryVerify(function () { return sv.settings.integrations.autoSyncMinutes === 0; }, 1000);
-    }
-
-    function test_settings_card_header_expands_on_return() {
-        const sv = settingsAt("integrations");
-        let card = null;
-        tryVerify(function () { card = find(sv, "int-card-github"); return card !== null; }, 2000);
-        const head = find(card, "int-card-header");
-        const was = card.open;
-        reachable(head, "GitHub card header");
-        tryVerify(function () { return card.open !== was; }, 1000);
-        compare(head.checked, card.open);
-    }
-
-    // Visible glyph colour on the provider tile is picked for the brand fill
-    // (DES-25), not the accent's text colour.
-    function test_provider_glyph_reads_on_its_brand_colour() {
-        const sv = settingsAt("integrations");
-        let card = null;
-        tryVerify(function () { card = find(sv, "int-card-jira"); return card !== null; }, 2000);
-        const tile = find(card, "int-card-tile");
-        verify(tile !== null);
-        let glyph = null;
-        for (let i = 0; i < tile.children.length; i++)
-            if (tile.children[i].visible) glyph = tile.children[i];
-        verify(glyph !== null);
-        compare(String(glyph.color), String(Theme.textOn(tile.color)));
-        verify(Presets.contrast(String(glyph.color), String(tile.color)) >= 4.5,
-               "the Jira glyph is under 4.5:1 on its tile");
     }
 
     // ── Hotkeys ───────────────────────────────────────────────────────

@@ -272,11 +272,13 @@ TestCase {
         sv.activeSection = "data";
         tryVerify(function () { return findChild(sv, "att-cleanup-button") !== null; }, 3000);
         const btn = findChild(sv, "att-cleanup-button");
+        // Under the Data section's "more" line (DG-090).
+        findChild(findChild(sv, "settings-block-data"), "settings-more-toggle").parent.userOpen = true;
         tryVerify(function () { return btn.visible; }, 2000);
-        btn.clicked();
+        btn.activated();
         verify(AppController.attachmentUrl(stored[0].id).toString().length > 0, "the first press only asks");
         verify(String(btn.text).indexOf(I18n.t("att.cleanup.button")) < 0, "the button now says what it will delete");
-        btn.clicked();
+        btn.activated();
         compare(String(AppController.attachmentUrl(stored[0].id)), "", "the second press deletes");
         compare(AppController.unusedAttachments().count, 0);
     }

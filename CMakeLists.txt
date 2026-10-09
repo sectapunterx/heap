@@ -364,11 +364,8 @@ qt_add_qml_module(heap_core
         qml/SeriesScopeDialog.qml
         qml/SyncConflictDialog.qml
         qml/TrackerPushConfirmDialog.qml
-        qml/IntegrationHealthCard.qml
-        qml/IntegrationsInfoCard.qml
         qml/CalendarSubscriptionsCard.qml
         qml/SprintMarker.qml
-        qml/AutoSyncCard.qml
         qml/WeeklyRecapDialog.qml
         qml/EventLogDialog.qml
         qml/TimeMachineDialog.qml
@@ -460,6 +457,8 @@ qt_add_qml_module(heap_core
         qml/SettingsView.qml
         qml/SettingsGroup.qml
         qml/SettingsRow.qml
+        qml/SettingsTextRow.qml
+        qml/SettingsDangerRow.qml
         qml/CursorColorRow.qml
         qml/SeenBeforeHint.qml
         qml/StandupDraftDialog.qml
