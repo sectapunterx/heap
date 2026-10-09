@@ -470,6 +470,8 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"status.deleted", {"Column removed: %1", "Удалена колонка: %1"}},
       {"status.restored", {"Column restored: %1", "Восстановлена колонка: %1"}},
       {"profile.created", {"Profile created: %1", "Профиль создан: %1"}},
+      {"profile.personal", {"Personal", "Личное"}},
+      {"profile.example", {"Example", "Пример"}},
       {"profile.deleted", {"Profile removed: %1", "Удалён профиль: %1"}},
       {"profile.restored", {"Profile restored: %1", "Восстановлен профиль: %1"}},
       {"profile.duplicated", {"Profile duplicated: %1", "Дублирован профиль: %1"}},
@@ -1197,18 +1199,18 @@ AppController::AppController(QObject* parent) :
     }
   });
 
-  // Fresh install or unreadable state — seed a single "Example" profile
-  // from SampleData so the app boots with something sensible.
+  // Fresh install or unreadable state — one empty profile of the person's
+  // own (APP-271); the example is a separate profile offered from Today.
   if(m_profiles.isEmpty() && s_headless) {
     // `heap add` before heap was ever opened: the task goes into an empty
     // workspace, not into the demo, which is the window's first-run offer.
-    Profile p = makeStartingProfile(QStringLiteral("heap"), QString());
+    Profile p = makeStartingProfile(tr_("profile.personal"), QString());
     p.id = QStringLiteral("default");
     m_profiles.push_back(p);
     m_activeProfileId = p.id;
     applyProfileToModels(p);
   } else if(m_profiles.isEmpty()) {
-    seedExampleProfile();
+    seedStartingWorkspace();
   }
 
   // ── Person-id migration ──
@@ -7495,12 +7497,13 @@ void AppController::replayWelcome() {
   emit welcomeReplayRequested();
 }
 
-void AppController::seedExampleProfile() {
-  // Seed a single "Example" profile from SampleData + turn on the first-run
-  // onboarding. Called on a genuine fresh install and by resetToFirstRun().
+void AppController::seedStartingWorkspace() {
+  // A fresh install opens an empty Today in a profile of the person's own
+  // (APP-271); the sample data is the example, a separate profile offered from
+  // there, never mixed into this one.
 
-  // A new user starts on heap. ink / heap. light with soft contrast — or
-  // high contrast and no motion when the system asks for them (design audit
+  // A new user starts on the lowkey themes with normal contrast — or high
+  // contrast and no motion when the system asks for them (design audit
   // DES-23). Written into the settings rather than made the built-in
   // fallback, so someone who has been on heap. dark without ever opening
   // Appearance keeps it, and the Appearance switches show what is in effect.
@@ -7508,9 +7511,30 @@ void AppController::seedExampleProfile() {
     m_appSettingsJson = heap::platform::firstRunAppearanceJson(heap::platform::systemAccessibilityPrefs());
     emit appSettingsJsonChanged();
   }
+  Profile p = makeStartingProfile(tr_("profile.personal"), QString());
+  p.id = QStringLiteral("default");
+  // The starter views stay (APP-258: Blocked / In review are views now).
+  // The reference catalogue is sample content: explicitly empty, not
+  // absent, so it is not seeded into this profile on the first visit.
+  p.docsState = QStringLiteral(R"({"sections":[],"snippets":[],"contacts":[]})");
+  m_profiles.push_back(p);
+  m_activeProfileId = p.id;
+  m_events.reset({});
+  applyProfileToModels(p);
+  emit profilesChanged();
+  emit activeProfileChanged();
+
+  // welcomeSeen stays false until the first task: until then Today is the
+  // first-run screen, again on the next start if the app is closed first.
+  m_demoActive = false;
+  emit onboardingChanged();
+  scheduleSave();
+}
+
+Profile AppController::buildExampleProfile(QVector<CalEvent>* events) const {
   Profile p;
-  p.id = "default";
-  p.name = "Example";
+  p.id = QString::fromLatin1(kExampleProfileId);
+  p.name = tr_("profile.example");
   p.color = "#5cc2dd";
   p.createdAt = QDateTime::currentDateTime();
   const SampleData::Lang seedLang = (m_language == "ru") ? SampleData::Lang::Ru : SampleData::Lang::En;
@@ -7521,30 +7545,107 @@ void AppController::seedExampleProfile() {
     st.push_back(m);
   }
   p.statuses = st;
+  // Empty: the starter reference catalogue is seeded on the first visit.
   p.docsState.clear();
   p.notes = SampleData::notes(seedLang);
   p.activeNoteId = p.notes.isEmpty() ? QString() : p.notes.constFirst().id;
   p.notesState = p.notes.isEmpty() ? QString() : p.notes.constFirst().body;
   p.savedViews = heap::savedviews::starterViews(seedLang == SampleData::Lang::Ru);
-  m_profiles.push_back(p);
-  m_activeProfileId = p.id;
-
-  // Events are global; tag the sample events with this default profile.
-  QVector<CalEvent> sampleEvents = SampleData::events(m_today, seedLang);
-  for(CalEvent& e : sampleEvents) {
-    e.profileId = p.id;
+  if(events) {
+    *events = SampleData::events(m_today, seedLang);
+    for(CalEvent& e : *events) {
+      e.profileId = p.id;
+    }
   }
-  m_events.reset(sampleEvents);
+  return p;
+}
 
-  applyProfileToModels(p);
-  emit profilesChanged();
-  emit activeProfileChanged();
+bool AppController::hasExample() const {
+  return profileIndexOf(QString::fromLatin1(kExampleProfileId)) >= 0;
+}
 
-  // Fresh install: show the welcome dialog and flag the seeded demo so the
-  // board can offer "start fresh". (welcomeSeen stays false from its default.)
-  m_demoActive = true;
-  emit onboardingChanged();
-  scheduleSave();
+QString AppController::openExample() {
+  const QString id = QString::fromLatin1(kExampleProfileId);
+  if(!hasExample()) {
+    snapshotActiveProfile();
+    clearPendingUndo();  // undo is scoped to the active workspace
+    QVector<CalEvent> events;
+    Profile p = buildExampleProfile(&events);
+    // Task ids are app-wide; a sample id the person already uses gets a
+    // fresh one, and the meetings follow it.
+    const QHash<QString, QString> renamed = reissueSharedTaskIds(p, &events);
+    Q_UNUSED(renamed);
+    // Meeting ids too: a second example after a removal must not collide.
+    for(CalEvent& e : events) {
+      if(m_events.indexOfId(e.id) >= 0) {
+        e.id = e.id + QStringLiteral("-") + QString::number(QDateTime::currentMSecsSinceEpoch());
+      }
+      m_events.upsert(e);
+    }
+    m_profiles.push_back(p);
+    m_activeProfileId = p.id;
+    applyProfileToModels(p);
+    emit profilesChanged();
+    emit activeProfileChanged();
+    scheduleSave();
+    return id;
+  }
+  if(m_activeProfileId != id) {
+    setActiveProfileId(id);
+  }
+  return id;
+}
+
+int AppController::exampleChanges() const {
+  const int i = profileIndexOf(QString::fromLatin1(kExampleProfileId));
+  if(i < 0) {
+    return 0;
+  }
+  const Profile& p = m_profiles[i];
+  const QVector<Task>& tasks = p.id == m_activeProfileId ? m_tasks.items() : p.tasks;
+  // A task that is no sample task as it was made (in either language) —
+  // its title, text, column or priority changed, or a task added — is the
+  // person's work. Tasks carry no edit time, so the samples are the measure.
+  QSet<QString> samples;
+  const auto key = [](const Task& t) {
+    return t.title + QChar(0x1f) + t.desc + QChar(0x1f) + t.status + QChar(0x1f) + t.priority;
+  };
+  for(const SampleData::Lang lang : {SampleData::Lang::En, SampleData::Lang::Ru}) {
+    for(const Task& t : SampleData::tasks(lang)) {
+      samples.insert(key(t));
+    }
+  }
+  int n = 0;
+  for(const Task& t : tasks) {
+    if(!samples.contains(key(t))) {
+      ++n;
+    }
+  }
+  return n;
+}
+
+void AppController::removeExample() {
+  const QString id = QString::fromLatin1(kExampleProfileId);
+  if(!hasExample()) {
+    return;
+  }
+  // The example is never the last profile: without one of the person's own
+  // it gives way to an empty one.
+  if(m_profiles.size() <= 1) {
+    snapshotActiveProfile();
+    Profile own = makeStartingProfile(tr_("profile.personal"), QString());
+    own.id = makeProfileId(own.name);
+    own.docsState = QStringLiteral(R"({"sections":[],"snippets":[],"contacts":[]})");
+    m_profiles.push_back(own);
+  }
+  // Its sample meetings go with it rather than staying behind unassigned.
+  for(int r = m_events.rowCount() - 1; r >= 0; --r) {
+    const CalEvent& e = m_events.items().at(r);
+    if(e.profileId == id) {
+      m_events.removeById(e.id);
+    }
+  }
+  deleteProfile(id);
 }
 
 void AppController::resetToFirstRun() {
@@ -7612,8 +7713,8 @@ void AppController::resetToFirstRun() {
   emit docsStateChanged();
 
   m_welcomeSeen = false;
-  m_demoActive = false;  // seedExampleProfile flips this back on
-  seedExampleProfile();
+  m_demoActive = false;
+  seedStartingWorkspace();
 
   // 5. Persist the fresh state immediately and let the UI re-onboard.
   m_loading = false;
@@ -11223,7 +11324,7 @@ void AppController::reloadStateFromDisk() {
   setStorageState(QStringLiteral("ok"), QString());
   loadStateOnStart();
   if(m_profiles.isEmpty()) {
-    seedExampleProfile();
+    seedStartingWorkspace();
   }
 }
 

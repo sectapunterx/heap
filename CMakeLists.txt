@@ -391,6 +391,7 @@ qt_add_qml_module(heap_core
         qml/Sidebar.qml
         qml/ProfileSwitcher.qml
         qml/TodayView.qml
+        qml/FirstRunHero.qml
         qml/AppSwitch.qml
         qml/TaskMenuHost.qml
         qml/TaskDocument.qml
