@@ -591,6 +591,17 @@ class AppController : public QObject {
   // on-disk state.json + backups — and re-seed the Example profile with the
   // first-run onboarding, so the app is exactly "as new" on this device.
   Q_INVOKABLE void resetToFirstRun();
+  // The example (APP-271): a profile of its own, "Example", with the sample
+  // tasks, people, meetings and notes — never mixed into the person's own
+  // profile. openExample() makes it once and switches to it (a second call
+  // only switches); removeExample() takes it away with its meetings, in one
+  // undoable step. exampleChanges() counts the sample tasks edited or added
+  // since it was made, for the question before removing it.
+  Q_INVOKABLE QString openExample();
+  Q_INVOKABLE void removeExample();
+  Q_INVOKABLE bool hasExample() const;
+  Q_INVOKABLE int exampleChanges() const;
+  static constexpr const char* kExampleProfileId = "lowkey-example";
   // Settings -> Data -> "Reset all settings" (UX-5): preferences go back to a
   // new install's (heap. ink + soft contrast included). Kept: the profile
   // card, tracker connections, watched repositories, your own themes, window
@@ -827,6 +838,19 @@ class AppController : public QObject {
   // included up to now.
   Q_INVOKABLE int trackedSecondsOn(const QDate& day) const;
 
+  // Knowledge (APP-269). The tasks a note names — a [[KEY]] or the bare key —
+  // with their column now, in the order written: [{ id, title, status,
+  // statusName, category, profileName }]; a task of another profile carries
+  // that profile's name, of the active one an empty one.
+  Q_INVOKABLE QVariantList noteTaskRefs(const QString& markdown) const;
+  // How each [[target]] of a note reads in the rendered view: a task key →
+  // { kind: "task", label: "<stage glyph> KEY", tip }, a name nothing answers
+  // to → { kind: "missing", label: "name · no such note" }. Notes and headings
+  // that exist are left out (drawn as links).
+  Q_INVOKABLE QVariantMap wikiTargets(const QString& markdown) const;
+  // Tasks whose description or own notepad links the note by its title,
+  // [[Title]]: [{ id, title }]. Backlinks from notes are backlinksToNote().
+  Q_INVOKABLE QVariantList tasksLinkingToNote(const QString& noteId) const;
   Q_INVOKABLE void startTaskTimer(const QString& id);
   Q_INVOKABLE void stopTaskTimer(const QString& id);
   Q_INVOKABLE int elapsedSecondsFor(const QString& id) const;
@@ -2085,9 +2109,12 @@ class AppController : public QObject {
   void snapshotActiveProfile();
   void applyProfileToModels(const Profile& p);
   Profile makeStartingProfile(const QString& name, const QString& color) const;
-  // Seed the first-run "Example" profile (demo tasks/people/events) + onboarding
-  // flags. Shared by the constructor's fresh-install path and resetToFirstRun().
-  void seedExampleProfile();
+  // A fresh install (APP-271): one empty profile of the person's own and the
+  // first-run look. Shared by the constructor's fresh-install path and
+  // resetToFirstRun(). The sample data lives only in the example profile.
+  void seedStartingWorkspace();
+  // The example profile and its meetings, built from SampleData.
+  Profile buildExampleProfile(QVector<CalEvent>* events) const;
 
   // Shortcuts
   QVariantList m_shortcuts;  // [{id,label,description,defaultSequence,sequence}]

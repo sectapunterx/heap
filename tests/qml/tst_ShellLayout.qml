@@ -117,19 +117,6 @@ TestCase {
         tryCompare(rail, "expanded", true);
     }
 
-    // UX-17: the Tweaks panel fits a 720px window on its first open.
-    function test_tweaks_fits_a_small_window() {
-        tc.win.width = 1100;
-        tc.win.height = 720;
-        const tweaks = popup("TweaksPanel");
-        tc.win.runCommand("tweaks.open");
-        tryCompare(tweaks, "opened", true);
-        wait(100);
-        const bottom = tweaks.contentItem.mapToItem(null, 0, tweaks.height).y;
-        tweaks.close();
-        verify(bottom <= tc.win.height, "Tweaks ends at " + bottom + " in a " + tc.win.height + "px window");
-    }
-
     // UX-18: Go to date opens over the middle of the window, not its corner.
     function test_go_to_date_is_centred() {
         tc.win.width = 1400;

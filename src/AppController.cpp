@@ -520,6 +520,8 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"status.deleted", {"Column removed: %1", "Удалена колонка: %1"}},
       {"status.restored", {"Column restored: %1", "Восстановлена колонка: %1"}},
       {"profile.created", {"Profile created: %1", "Профиль создан: %1"}},
+      {"profile.personal", {"Personal", "Личное"}},
+      {"profile.example", {"Example", "Пример"}},
       {"profile.deleted", {"Profile removed: %1", "Удалён профиль: %1"}},
       {"profile.restored", {"Profile restored: %1", "Восстановлен профиль: %1"}},
       {"profile.duplicated", {"Profile duplicated: %1", "Дублирован профиль: %1"}},
@@ -671,6 +673,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.section.tasks.desc",
        {"Board, list or calendar, on the lens you left.", "Доска, список или календарь — на том виде, где вы остановились."}},
       {"shortcut.section.knowledge.label", {"Go to Knowledge", "Перейти в «Знания»"}},
+      {"notes.wiki.missing", {"no such note", "нет такой"}},
       {"shortcut.section.knowledge.desc", {"Notes and links.", "Заметки и ссылки."}},
       // ---- The 0.8.0 keymap (keymap.md, APP-272) ----
       {"shortcut.view.calendar.label", {"Go to Calendar", "Перейти к календарю"}},
@@ -788,8 +791,8 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.profile.weeklyReport.desc",
        {"Copies a Markdown report of tasks marked done in the last 7 days, with tracked time.",
         "Копирует Markdown-отчёт задач, завершённых за последние 7 дней, с учётом времени."}},
-      {"shortcut.tweaks.open.label", {"Open Tweaks", "Открыть твики"}},
-      {"shortcut.tweaks.open.desc", {"Theme, density, workday.", "Тема, плотность, рабочий день."}},
+      {"shortcut.tweaks.open.label", {"Appearance settings", "Настройки внешнего вида"}},
+      {"shortcut.tweaks.open.desc", {"Settings, scrolled to Appearance.", "Настройки на разделе «Внешний вид»."}},
       {"shortcut.hotkeys.open.label", {"Keyboard cheat sheet", "Шпаргалка клавиш"}},
       {"shortcut.hotkeys.open.desc", {"Every key by area, with a search.", "Все клавиши по разделам, с поиском."}},
       {"shortcut.hotkeys.edit.label", {"Change shortcuts…", "Изменить сочетания…"}},
@@ -1338,18 +1341,18 @@ AppController::AppController(QObject* parent) :
     }
   });
 
-  // Fresh install or unreadable state — seed a single "Example" profile
-  // from SampleData so the app boots with something sensible.
+  // Fresh install or unreadable state — one empty profile of the person's
+  // own (APP-271); the example is a separate profile offered from Today.
   if(m_profiles.isEmpty() && s_headless) {
     // `heap add` before heap was ever opened: the task goes into an empty
     // workspace, not into the demo, which is the window's first-run offer.
-    Profile p = makeStartingProfile(QStringLiteral("heap"), QString());
+    Profile p = makeStartingProfile(tr_("profile.personal"), QString());
     p.id = QStringLiteral("default");
     m_profiles.push_back(p);
     m_activeProfileId = p.id;
     applyProfileToModels(p);
   } else if(m_profiles.isEmpty()) {
-    seedExampleProfile();
+    seedStartingWorkspace();
   }
 
   // ── Person-id migration ──
@@ -2183,6 +2186,159 @@ QVariantList AppController::notesMentioningTask(const QString& id) const {
   });
   for(const Note* n : hits) {
     out.append(QVariantMap{{"id", n->id}, {"title", n->title}, {"updated", n->updated}});
+  }
+  return out;
+}
+
+namespace {
+// [[target]] or [[target|label]], the target trimmed; first occurrence order.
+QStringList wikiTargetsOf(const QString& markdown) {
+  static const QRegularExpression rx(QStringLiteral("\\[\\[([^\\]\\|\\n]+)(?:\\|[^\\]\\n]*)?\\]\\]"));
+  QStringList out;
+  auto it = rx.globalMatch(markdown);
+  while(it.hasNext()) {
+    const QString t = it.next().captured(1).trimmed();
+    if(!t.isEmpty() && !out.contains(t)) {
+      out << t;
+    }
+  }
+  return out;
+}
+
+// The stage of a column as one glyph, the shape StatusRing draws.
+QString stageGlyph(const QString& category) {
+  if(category == QStringLiteral("done")) {
+    return QStringLiteral("\u25CF");  // ●
+  }
+  if(category == QStringLiteral("review")) {
+    return QStringLiteral("\u25D5");  // ◕
+  }
+  if(category == QStringLiteral("half") || category == QStringLiteral("prog")) {
+    return QStringLiteral("\u25D1");  // ◑
+  }
+  if(category == QStringLiteral("blocked")) {
+    return QStringLiteral("\u25CC");  // ◌
+  }
+  return QStringLiteral("\u25CB");  // ○
+}
+}  // namespace
+
+QVariantList AppController::noteTaskRefs(const QString& markdown) const {
+  QVariantList out;
+  static const QRegularExpression key(QStringLiteral("(?<![\\w-])([A-Z][A-Z0-9]*-\\d+)(?![\\w-])"));
+  QStringList seen;
+  auto it = key.globalMatch(markdown);
+  while(it.hasNext()) {
+    const QString id = it.next().captured(1);
+    if(seen.contains(id)) {
+      continue;
+    }
+    seen << id;
+    const auto statusNameOf = [this](const QString& st) {
+      const int si = statusIndexOf(st);
+      return si < 0 ? st : m_statuses[si].toMap().value(QStringLiteral("name")).toString();
+    };
+    const int row = m_tasks.indexOfId(id);
+    if(row >= 0) {
+      const Task& t = m_tasks.items().at(row);
+      out.append(QVariantMap{{"id", t.id},
+                             {"title", t.title},
+                             {"status", t.status},
+                             {"statusName", statusNameOf(t.status)},
+                             {"category", statusCategory(t.status)},
+                             {"profileName", QString()}});
+      continue;
+    }
+    for(const Profile& p : m_profiles) {
+      if(p.id == m_activeProfileId) {
+        continue;
+      }
+      const auto hit = std::ranges::find_if(p.tasks, [&](const Task& t) {
+        return t.id == id;
+      });
+      if(hit != p.tasks.end()) {
+        QString name = hit->status, cat = heap::board::defaultCategoryFor(hit->status);
+        for(const QVariant& v : p.statuses) {
+          const QVariantMap m = v.toMap();
+          if(m.value(QStringLiteral("id")).toString() == hit->status) {
+            name = m.value(QStringLiteral("name")).toString();
+            const QString c = m.value(QStringLiteral("category")).toString();
+            if(heap::board::isColumnCategory(c)) {
+              cat = c;
+            }
+          }
+        }
+        out.append(QVariantMap{{"id", hit->id},
+                               {"title", hit->title},
+                               {"status", hit->status},
+                               {"statusName", name},
+                               {"category", cat},
+                               {"profileName", p.name}});
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+QVariantMap AppController::wikiTargets(const QString& markdown) const {
+  QVariantMap out;
+  const QStringList targets = wikiTargetsOf(markdown);
+  if(targets.isEmpty()) {
+    return out;
+  }
+  QHash<QString, QVariantMap> tasks;
+  for(const QVariant& v : noteTaskRefs(targets.join(QChar(' ')))) {
+    const QVariantMap m = v.toMap();
+    tasks.insert(m.value(QStringLiteral("id")).toString(), m);
+  }
+  for(const QString& t : targets) {
+    if(tasks.contains(t)) {
+      const QVariantMap m = tasks.value(t);
+      const QString profile = m.value(QStringLiteral("profileName")).toString();
+      QString tip =
+          m.value(QStringLiteral("title")).toString() + QStringLiteral(" \u00B7 ") + m.value(QStringLiteral("statusName")).toString();
+      if(!profile.isEmpty()) {
+        tip += QStringLiteral(" \u00B7 ") + profile;
+      }
+      out.insert(t,
+                 QVariantMap{{"kind", QStringLiteral("task")},
+                             {"label", stageGlyph(m.value(QStringLiteral("category")).toString()) + QChar(' ') + t},
+                             {"tip", tip}});
+      continue;
+    }
+    if(resolveNoteLink(t).value(QStringLiteral("kind")).toString() == QStringLiteral("missing")) {
+      out.insert(t,
+                 QVariantMap{{"kind", QStringLiteral("missing")}, {"label", t + QStringLiteral(" \u00B7 ") + tr_("notes.wiki.missing")}});
+    }
+  }
+  return out;
+}
+
+QVariantList AppController::tasksLinkingToNote(const QString& noteId) const {
+  QVariantList out;
+  const int row = m_notes.indexOfId(noteId);
+  if(row < 0) {
+    return out;
+  }
+  const QString title = m_notes.items().at(row).title.trimmed();
+  if(title.isEmpty()) {
+    return out;
+  }
+  const auto links = [&](const QString& text) {
+    for(const QString& t : wikiTargetsOf(text)) {
+      // [[Note]] or [[Note#Heading]]
+      const QString name = t.section(QChar('#'), 0, 0).trimmed();
+      if(name.compare(title, Qt::CaseInsensitive) == 0) {
+        return true;
+      }
+    }
+    return false;
+  };
+  for(const Task& t : m_tasks.items()) {
+    if(links(t.desc) || links(t.local.notes)) {
+      out.append(QVariantMap{{"id", t.id}, {"title", t.title}});
+    }
   }
   return out;
 }
@@ -7970,12 +8126,13 @@ void AppController::replayWelcome() {
   emit welcomeReplayRequested();
 }
 
-void AppController::seedExampleProfile() {
-  // Seed a single "Example" profile from SampleData + turn on the first-run
-  // onboarding. Called on a genuine fresh install and by resetToFirstRun().
+void AppController::seedStartingWorkspace() {
+  // A fresh install opens an empty Today in a profile of the person's own
+  // (APP-271); the sample data is the example, a separate profile offered from
+  // there, never mixed into this one.
 
-  // A new user starts on heap. ink / heap. light with soft contrast — or
-  // high contrast and no motion when the system asks for them (design audit
+  // A new user starts on the lowkey themes with normal contrast — or high
+  // contrast and no motion when the system asks for them (design audit
   // DES-23). Written into the settings rather than made the built-in
   // fallback, so someone who has been on heap. dark without ever opening
   // Appearance keeps it, and the Appearance switches show what is in effect.
@@ -7983,9 +8140,30 @@ void AppController::seedExampleProfile() {
     m_appSettingsJson = heap::platform::firstRunAppearanceJson(heap::platform::systemAccessibilityPrefs());
     emit appSettingsJsonChanged();
   }
+  Profile p = makeStartingProfile(tr_("profile.personal"), QString());
+  p.id = QStringLiteral("default");
+  // The starter views stay (APP-258: Blocked / In review are views now).
+  // The reference catalogue is sample content: explicitly empty, not
+  // absent, so it is not seeded into this profile on the first visit.
+  p.docsState = QStringLiteral(R"({"sections":[],"snippets":[],"contacts":[]})");
+  m_profiles.push_back(p);
+  m_activeProfileId = p.id;
+  m_events.reset({});
+  applyProfileToModels(p);
+  emit profilesChanged();
+  emit activeProfileChanged();
+
+  // welcomeSeen stays false until the first task: until then Today is the
+  // first-run screen, again on the next start if the app is closed first.
+  m_demoActive = false;
+  emit onboardingChanged();
+  scheduleSave();
+}
+
+Profile AppController::buildExampleProfile(QVector<CalEvent>* events) const {
   Profile p;
-  p.id = "default";
-  p.name = "Example";
+  p.id = QString::fromLatin1(kExampleProfileId);
+  p.name = tr_("profile.example");
   p.color = "#5cc2dd";
   p.createdAt = QDateTime::currentDateTime();
   const SampleData::Lang seedLang = (m_language == "ru") ? SampleData::Lang::Ru : SampleData::Lang::En;
@@ -7996,30 +8174,107 @@ void AppController::seedExampleProfile() {
     st.push_back(m);
   }
   p.statuses = st;
+  // Empty: the starter reference catalogue is seeded on the first visit.
   p.docsState.clear();
   p.notes = SampleData::notes(seedLang);
   p.activeNoteId = p.notes.isEmpty() ? QString() : p.notes.constFirst().id;
   p.notesState = p.notes.isEmpty() ? QString() : p.notes.constFirst().body;
   p.savedViews = heap::savedviews::starterViews(seedLang == SampleData::Lang::Ru);
-  m_profiles.push_back(p);
-  m_activeProfileId = p.id;
-
-  // Events are global; tag the sample events with this default profile.
-  QVector<CalEvent> sampleEvents = SampleData::events(m_today, seedLang);
-  for(CalEvent& e : sampleEvents) {
-    e.profileId = p.id;
+  if(events) {
+    *events = SampleData::events(m_today, seedLang);
+    for(CalEvent& e : *events) {
+      e.profileId = p.id;
+    }
   }
-  m_events.reset(sampleEvents);
+  return p;
+}
 
-  applyProfileToModels(p);
-  emit profilesChanged();
-  emit activeProfileChanged();
+bool AppController::hasExample() const {
+  return profileIndexOf(QString::fromLatin1(kExampleProfileId)) >= 0;
+}
 
-  // Fresh install: show the welcome dialog and flag the seeded demo so the
-  // board can offer "start fresh". (welcomeSeen stays false from its default.)
-  m_demoActive = true;
-  emit onboardingChanged();
-  scheduleSave();
+QString AppController::openExample() {
+  const QString id = QString::fromLatin1(kExampleProfileId);
+  if(!hasExample()) {
+    snapshotActiveProfile();
+    clearPendingUndo();  // undo is scoped to the active workspace
+    QVector<CalEvent> events;
+    Profile p = buildExampleProfile(&events);
+    // Task ids are app-wide; a sample id the person already uses gets a
+    // fresh one, and the meetings follow it.
+    const QHash<QString, QString> renamed = reissueSharedTaskIds(p, &events);
+    Q_UNUSED(renamed);
+    // Meeting ids too: a second example after a removal must not collide.
+    for(CalEvent& e : events) {
+      if(m_events.indexOfId(e.id) >= 0) {
+        e.id = e.id + QStringLiteral("-") + QString::number(QDateTime::currentMSecsSinceEpoch());
+      }
+      m_events.upsert(e);
+    }
+    m_profiles.push_back(p);
+    m_activeProfileId = p.id;
+    applyProfileToModels(p);
+    emit profilesChanged();
+    emit activeProfileChanged();
+    scheduleSave();
+    return id;
+  }
+  if(m_activeProfileId != id) {
+    setActiveProfileId(id);
+  }
+  return id;
+}
+
+int AppController::exampleChanges() const {
+  const int i = profileIndexOf(QString::fromLatin1(kExampleProfileId));
+  if(i < 0) {
+    return 0;
+  }
+  const Profile& p = m_profiles[i];
+  const QVector<Task>& tasks = p.id == m_activeProfileId ? m_tasks.items() : p.tasks;
+  // A task that is no sample task as it was made (in either language) —
+  // its title, text, column or priority changed, or a task added — is the
+  // person's work. Tasks carry no edit time, so the samples are the measure.
+  QSet<QString> samples;
+  const auto key = [](const Task& t) {
+    return t.title + QChar(0x1f) + t.desc + QChar(0x1f) + t.status + QChar(0x1f) + t.priority;
+  };
+  for(const SampleData::Lang lang : {SampleData::Lang::En, SampleData::Lang::Ru}) {
+    for(const Task& t : SampleData::tasks(lang)) {
+      samples.insert(key(t));
+    }
+  }
+  int n = 0;
+  for(const Task& t : tasks) {
+    if(!samples.contains(key(t))) {
+      ++n;
+    }
+  }
+  return n;
+}
+
+void AppController::removeExample() {
+  const QString id = QString::fromLatin1(kExampleProfileId);
+  if(!hasExample()) {
+    return;
+  }
+  // The example is never the last profile: without one of the person's own
+  // it gives way to an empty one.
+  if(m_profiles.size() <= 1) {
+    snapshotActiveProfile();
+    Profile own = makeStartingProfile(tr_("profile.personal"), QString());
+    own.id = makeProfileId(own.name);
+    own.docsState = QStringLiteral(R"({"sections":[],"snippets":[],"contacts":[]})");
+    m_profiles.push_back(own);
+  }
+  // Its sample meetings go with it rather than staying behind unassigned.
+  for(int r = m_events.rowCount() - 1; r >= 0; --r) {
+    const CalEvent& e = m_events.items().at(r);
+    if(e.profileId == id) {
+      m_events.removeById(e.id);
+    }
+  }
+  deleteProfile(id);
 }
 
 void AppController::resetToFirstRun() {
@@ -8087,8 +8342,8 @@ void AppController::resetToFirstRun() {
   emit docsStateChanged();
 
   m_welcomeSeen = false;
-  m_demoActive = false;  // seedExampleProfile flips this back on
-  seedExampleProfile();
+  m_demoActive = false;
+  seedStartingWorkspace();
 
   // 5. Persist the fresh state immediately and let the UI re-onboard.
   m_loading = false;
@@ -11711,7 +11966,7 @@ void AppController::reloadStateFromDisk() {
   setStorageState(QStringLiteral("ok"), QString());
   loadStateOnStart();
   if(m_profiles.isEmpty()) {
-    seedExampleProfile();
+    seedStartingWorkspace();
   }
 }
 

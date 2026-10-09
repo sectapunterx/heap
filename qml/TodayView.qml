@@ -22,9 +22,18 @@ FocusScope {
     // "N tasks without a date": Tasks · List with that condition.
     signal undatedRequested()
     signal recapRequested()
+    // The first-run screen (APP-271): a task made from its line, and where
+    // tasks from elsewhere come in.
+    signal firstTaskCreated(string id)
+    signal connectRequested()
+    signal importRequested()
+    signal exampleRequested()
 
     property bool allProfiles: false
-    function focusView() { root.forceActiveFocus(); }
+    function focusView() {
+        if (root.firstRun) firstRunHero.focusInput();
+        else root.forceActiveFocus();
+    }
 
     readonly property date day: AppController.selectedDate
     readonly property bool isToday: root._sameDay(root.day, AppController.today)
@@ -41,6 +50,10 @@ FocusScope {
     Timer { interval: 60000; repeat: true; running: root.visible; onTriggered: root._rev++ }
 
     readonly property var dayData: root._rev >= 0 ? AppController.todayData(root.day, root.allProfiles) : ({})
+    // Until the first task (APP-271): the input line, three keys, and the
+    // way in for tasks that live elsewhere — instead of a tour. Closed
+    // before a task was made, it is here again on the next start.
+    readonly property bool firstRun: !AppController.welcomeSeen && root._rev >= 0 && AppController.tasks.rowCount() === 0
     readonly property real nowHour: {
         const n = root._rev >= 0 ? new Date() : new Date();
         return n.getHours() + n.getMinutes() / 60;
@@ -144,6 +157,7 @@ FocusScope {
             // Only the parts that are not zero; nothing at all says so.
             Text {
                 objectName: "today-facts"
+                visible: !root.firstRun
                 Layout.fillWidth: true
                 text: root._facts().length > 0 ? root._facts() : I18n.t("today.nothing")
                 color: Style.factsLine ? Theme.textMuted : Theme.textDim
@@ -157,7 +171,7 @@ FocusScope {
                 Layout.fillWidth: true
                 Layout.bottomMargin: Theme.spXl
                 readonly property var l: root.dayData.load || {}
-                visible: root.dayData.workday === true && (l.meetings > 0 || l.tasks > 0)
+                visible: !root.firstRun && root.dayData.workday === true && (l.meetings > 0 || l.tasks > 0)
                 text: {
                     const parts = [];
                     if (l.meetings > 0) parts.push(I18n.t("load.meetings").arg(I18n.fmtMinutes(l.meetings)));
@@ -171,11 +185,24 @@ FocusScope {
                 font.pixelSize: Theme.fsSm
             }
 
-            SectionHeader { title: I18n.t("today.day") }
+            FirstRunHero {
+                id: firstRunHero
+                visible: root.firstRun
+                Layout.fillWidth: true
+                Layout.topMargin: Theme.sp3xl * 2
+                onCreated: (id) => root.firstTaskCreated(id)
+                onConnectRequested: root.connectRequested()
+                onImportRequested: root.importRequested()
+                onExampleRequested: root.exampleRequested()
+            }
+            Item { visible: root.firstRun; Layout.fillHeight: true }
+
+            SectionHeader { visible: !root.firstRun; title: I18n.t("today.day") }
 
             ListView {
                 id: dayList
                 objectName: "today-day"
+                visible: !root.firstRun
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.topMargin: Theme.spSm
@@ -204,6 +231,7 @@ FocusScope {
         // ── the side ──
         Flickable {
             objectName: "today-side"
+            visible: !root.firstRun
             Layout.preferredWidth: Math.min(Theme.px(470), root.width * 0.38)
             Layout.fillHeight: true
             contentHeight: side.implicitHeight

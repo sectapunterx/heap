@@ -27,7 +27,6 @@ Rectangle {
 
     signal toggleRequested()
     signal newTaskRequested()
-    signal openTweaks(Item anchor)
     signal openHotkeys(Item anchor)
 
     // ── Profile (forwarded from the switcher) ──

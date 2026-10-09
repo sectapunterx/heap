@@ -12,8 +12,10 @@
 
 #include <QApplication>
 #include <QDate>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSignalSpy>
@@ -45,10 +47,83 @@ class OnboardingTest : public ::testing::Test {
   }
 };
 
-TEST_F(OnboardingTest, FreshInstallShowsWelcomeAndFlagsDemo) {
+// APP-271: a fresh install is one empty profile of the person's own — no
+// sample tasks, people, meetings, notes, reference links or views in it —
+// and Today is the first-run screen (welcomeSeen false) until a task.
+TEST_F(OnboardingTest, FreshInstallIsAnEmptyProfileOfYourOwn) {
   AppController app;
   EXPECT_FALSE(app.welcomeSeen());
-  EXPECT_TRUE(app.demoActive());
+  EXPECT_FALSE(app.demoActive());
+  ASSERT_EQ(app.profiles().size(), 1);
+  EXPECT_NE(app.activeProfileId(), QString::fromLatin1(AppController::kExampleProfileId));
+  EXPECT_EQ(app.tasks()->rowCount(), 0);
+  EXPECT_EQ(app.people()->rowCount(), 0);
+  EXPECT_EQ(app.events()->rowCount(), 0);
+  EXPECT_EQ(app.notes()->rowCount(), 0);
+  EXPECT_FALSE(app.hasExample());
+  const QJsonObject docs = QJsonDocument::fromJson(app.docsState().toUtf8()).object();
+  EXPECT_TRUE(docs["sections"].toArray().isEmpty());
+  EXPECT_TRUE(docs["snippets"].toArray().isEmpty());
+  EXPECT_GT(app.statuses().size(), 0) << "a profile needs its columns";
+}
+
+// Closed before the first task: the next start is the first-run screen again.
+TEST_F(OnboardingTest, ClosedBeforeTheFirstTaskStartsFirstRunAgain) {
+  {
+    AppController a;
+    a.flushSave();
+  }
+  AppController b;
+  EXPECT_FALSE(b.welcomeSeen());
+  EXPECT_EQ(b.tasks()->rowCount(), 0);
+  EXPECT_EQ(b.profiles().size(), 1);
+}
+
+// The example is a profile of its own; the person's profile is not touched,
+// a second "open" does not make a second one, and removing it takes its
+// meetings too.
+TEST_F(OnboardingTest, ExampleIsASeparateProfileMadeOnceAndRemovedWhole) {
+  AppController app;
+  const QString own = app.activeProfileId();
+  app.tasks()->reset({makeTask(QStringLiteral("MINE-1"))});
+
+  const QString ex = app.openExample();
+  EXPECT_EQ(ex, QString::fromLatin1(AppController::kExampleProfileId));
+  EXPECT_EQ(app.activeProfileId(), ex);
+  EXPECT_GT(app.tasks()->rowCount(), 0);
+  EXPECT_GT(app.events()->rowCount(), 0);
+  EXPECT_EQ(app.profiles().size(), 2);
+  EXPECT_EQ(app.exampleChanges(), 0);
+
+  // Again: no duplicate, only a switch.
+  app.setActiveProfileId(own);
+  ASSERT_EQ(app.tasks()->rowCount(), 1);
+  app.openExample();
+  EXPECT_EQ(app.profiles().size(), 2);
+  EXPECT_EQ(app.activeProfileId(), ex);
+
+  app.removeExample();
+  EXPECT_FALSE(app.hasExample());
+  EXPECT_EQ(app.profiles().size(), 1);
+  EXPECT_EQ(app.activeProfileId(), own);
+  ASSERT_EQ(app.tasks()->rowCount(), 1);
+  EXPECT_EQ(app.tasks()->items().at(0).id, QStringLiteral("MINE-1"));
+  for(const CalEvent& e : app.events()->items()) {
+    EXPECT_NE(e.profileId, ex) << "a sample meeting stayed behind";
+  }
+}
+
+// A sample task edited or added later is the person's work: counted, so the
+// question before removing can say so.
+TEST_F(OnboardingTest, ExampleChangesCountEditedAndAddedTasks) {
+  AppController app;
+  app.openExample();
+  ASSERT_GT(app.tasks()->rowCount(), 1);
+  Task edited = app.tasks()->items().at(0);
+  edited.title += QStringLiteral(" (mine)");
+  app.tasks()->upsert(edited);
+  app.tasks()->upsert(makeTask(QStringLiteral("NEW-1")));
+  EXPECT_EQ(app.exampleChanges(), 2);
 }
 
 // A new user starts on lowkey / lowkey light with normal contrast (heap 2), written into the
@@ -90,7 +165,6 @@ TEST_F(OnboardingTest, MarkWelcomeSeenPersists) {
 TEST_F(OnboardingTest, DismissDemoPersists) {
   {
     AppController a;
-    ASSERT_TRUE(a.demoActive());
     a.dismissDemo();
     a.flushSave();
   }
@@ -168,24 +242,22 @@ TEST_F(OnboardingTest, ResetToFirstRunRebuildsFreshInstall) {
 
     a.resetToFirstRun();
 
-    // In memory: exactly a fresh install.
+    // In memory: exactly a fresh install — one empty profile (APP-271).
     EXPECT_FALSE(a.welcomeSeen());
-    EXPECT_TRUE(a.demoActive());
+    EXPECT_FALSE(a.demoActive());
     EXPECT_EQ(a.profiles().size(), 1);
-    EXPECT_GT(a.tasks()->rowCount(), 0);  // demo content re-seeded
-    // The user's notes are gone; what is open now is the demo's own note.
+    EXPECT_EQ(a.tasks()->rowCount(), 0);
     EXPECT_FALSE(a.notesState().contains(QStringLiteral("my notes")));
-    EXPECT_EQ(a.notes()->rowCount(), 1);
+    EXPECT_EQ(a.notes()->rowCount(), 0);
     // On disk: stale backup + corrupt snapshot erased, fresh state.json written.
     EXPECT_FALSE(QFile::exists(base + QStringLiteral("/backups/state-old.json")));
     EXPECT_FALSE(QFile::exists(base + QStringLiteral("/state.corrupt-1.json")));
     EXPECT_TRUE(QFile::exists(base + QStringLiteral("/state.json")));
   }
-  // Persisted: a relaunch still lands on first-run onboarding + seeded content.
+  // Persisted: a relaunch still lands on the first-run screen.
   AppController b;
   EXPECT_FALSE(b.welcomeSeen());
-  EXPECT_TRUE(b.demoActive());
-  EXPECT_GT(b.tasks()->rowCount(), 0);
+  EXPECT_EQ(b.tasks()->rowCount(), 0);
 }
 
 // "There is a key for that" (APP-166): the third mouse use of an action names

@@ -450,11 +450,10 @@ ApplicationWindow {
         win.seedStarterDocs();
         if (typeof INITIAL_VIEW !== "undefined" && INITIAL_VIEW && INITIAL_VIEW.length > 0)
             AppController.currentView = INITIAL_VIEW;
-        // First run: greet the user once the overlay is ready. Otherwise, on
-        // the first launch of a week, what moved last week (WEAK PECAP).
-        if (!AppController.welcomeSeen)
-            Qt.callLater(welcome.open);
-        else
+        // First run (APP-271): no tour — Today is the first-run screen
+        // until the first task. Otherwise, on the first launch of a week,
+        // what moved last week (WEAK PECAP).
+        if (AppController.welcomeSeen)
             Qt.callLater(win._maybeShowRecap);
         // Coming from 0.7: say once what the new sidebar moved (APP-258).
         if (AppController.shellNotice.length > 0)
@@ -593,7 +592,7 @@ ApplicationWindow {
     readonly property bool _overlayOpen: taskEditor.opened || eventEditor.opened
         || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
-        || tweaks.opened || hotkeys.opened || cheatSheet.opened || closeAsk.opened || goToDatePopup.opened
+        || hotkeys.opened || cheatSheet.opened || closeAsk.opened || goToDatePopup.opened
         || weeklyRecap.opened || standupDraft.opened || timeMachine.opened || eventLog.opened || endOfDay.opened
 
     // ── Keyboard scope ────────────────────────────────────────────────
@@ -697,7 +696,7 @@ ApplicationWindow {
     // app usable behind them.
     readonly property bool _focusInPopover: {
         for (let p = win.activeFocusItem; p; p = p.parent)
-            if (p === tweaks.contentItem || p === hotkeys.contentItem) return true;
+            if (p === hotkeys.contentItem) return true;
         return false;
     }
     // Focus on a control outside the view that was reached with Tab — a
@@ -1079,7 +1078,6 @@ ApplicationWindow {
                 exportIcsDialog.open();
             }
 
-            onOpenTweaks:  (anchor) => win._togglePopover(tweaks, anchor)
             onOpenHotkeys: (anchor) => win._togglePopover(hotkeys, anchor)
             activeSavedViewId: savedViewsHost.activeView ? savedViewsHost.activeId : ""
             savedViewModified: savedViewsHost.modified
@@ -1103,51 +1101,31 @@ ApplicationWindow {
                 // state.json unreadable / from a newer heap / not saving.
                 StorageBanner { Layout.fillWidth: true }
 
-                // First-run demo banner: offer to clear the seeded sample data.
+                // The example profile (APP-271): says so, and takes it away
+                // in one action — asking first when it was worked in.
                 Rectangle {
+                    objectName: "example-banner"
                     Layout.fillWidth: true
-                    visible: AppController.demoActive
-                    implicitHeight: visible ? 40 : 0
+                    readonly property bool isExample: AppController.activeProfileId === "lowkey-example"
+                    visible: isExample
+                    implicitHeight: visible ? Theme.px(36) : 0
                     color: Theme.panel2
-                    border.color: Theme.border
-                    border.width: 1
                     RowLayout {
                         anchors.fill: parent
                         anchors.leftMargin: Theme.sp2xl
                         anchors.rightMargin: Theme.spLg
                         spacing: Theme.spLg
                         Text {
-                            text: "✦  " + I18n.t("demo.banner.text")
-                            color: Theme.text
-                            font.pixelSize: Theme.fsMd
+                            text: I18n.t("example.banner")
+                            color: Theme.textMuted
+                            font.pixelSize: Theme.fsSm
                             Layout.fillWidth: true
                             elide: Text.ElideRight
                         }
-                        // Two-step: the first click arms, the second wipes.
-                        // One stray click used to take every task with it.
                         PillButton {
-                            id: startFreshBtn
-                            objectName: "demo-start-fresh"
-                            property bool armed: false
-                            text: armed ? I18n.t("demo.banner.startFresh.confirm") : I18n.t("demo.banner.startFresh")
-                            // Quiet until armed (APP-198): a banner is no
-                            // dialog, and its offer was the brightest spot.
-                            danger: armed
-                            onClicked: {
-                                if (!armed) {
-                                    armed = true;
-                                    startFreshDisarm.restart();
-                                    return;
-                                }
-                                armed = false;
-                                startFreshDisarm.stop();
-                                AppController.startFresh();
-                            }
-                            Timer { id: startFreshDisarm; interval: 4000; onTriggered: startFreshBtn.armed = false }
-                        }
-                        PillButton {
-                            text: I18n.t("demo.banner.keep")
-                            onClicked: AppController.dismissDemo()
+                            objectName: "example-remove"
+                            text: I18n.t("example.remove")
+                            onClicked: win.removeExample()
                         }
                     }
                 }
@@ -1157,7 +1135,9 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 // The tasks and knowledge sections; Today and Settings carry
                 // their own titles.
-                visible: section === "tasks" || section === "knowledge"
+                // Knowledge is one screen with its own header (APP-269); the
+                // full Docs catalogue keeps this one, to come back.
+                visible: section === "tasks" || view === "docs"
                 section: AppController.currentSection
                 view: AppController.currentView
                 onLensSelected: (id) => win.openLens(id)
@@ -1320,6 +1300,15 @@ ApplicationWindow {
                         ignoreUnknownSignals: true
                         function onTaskClicked(id) { win.showTask(AppController.taskById(id)); }
                     }
+                    // A doc page in the Knowledge list opens in Docs (APP-269).
+                    Connections {
+                        target: notesLoader.item as NotesView
+                        ignoreUnknownSignals: true
+                        function onDocPageRequested(id) {
+                            AppController.currentView = "docs";
+                            docsBridge.requestedAnchor = "page:" + id;
+                        }
+                    }
 
                     // Today's day hands its clicks up here, where the editors are.
                     Connections {
@@ -1330,6 +1319,11 @@ ApplicationWindow {
                         function onTaskClicked(id) { win.openTask(id); }
                         function onUndatedRequested() { win.showQuery("is:undated", "list"); }
                         function onRecapRequested() { win.runCommand("recap.open"); }
+                        // The first-run screen (APP-271).
+                        function onFirstTaskCreated(id) { win.notice(quickCapture.headline(id)); }
+                        function onConnectRequested() { win.runCommand("settings:integrations"); }
+                        function onImportRequested() { importVaultDialog.open(); }
+                        function onExampleRequested() { win.openExample(); }
                     }
 
                     // First visit to one of the kept-alive views builds it.
@@ -1620,13 +1614,11 @@ ApplicationWindow {
     }
 
     // After a "delete all data" reset the controller rebuilds a fresh install;
-    // jump back to the board and re-greet the user, mirroring true first-run.
+    // back to Today, which is the first-run screen again (APP-271).
     Connections {
         target: AppController
         function onFirstRunReset() {
-            AppController.currentView = "board";
-            welcome.step = 0;
-            Qt.callLater(welcome.open);
+            AppController.openSection("today");
         }
         // Settings → Help "Replay" re-opens the guide from the top without
         // touching any persisted onboarding flags.
@@ -1806,6 +1798,76 @@ ApplicationWindow {
         }
         if (t.id) taskDoc.open(t.id);
     }
+    // The example profile (APP-271): opened, it is the active profile and
+    // Today shows its day; a second "Open the example" only switches to it.
+    function openExample() {
+        AppController.openExample();
+        AppController.openSection("today");
+    }
+    // "Remove the example?" only when it was worked in; untouched, it goes.
+    function removeExample() {
+        const n = AppController.exampleChanges();
+        if (n > 0) {
+            removeExampleDialog.changes = n;
+            removeExampleDialog.open();
+        } else {
+            AppController.removeExample();
+        }
+    }
+    Popup {
+        id: removeExampleDialog
+        objectName: "remove-example-dialog"
+        property int changes: 0
+        modal: true
+        focus: true
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(Theme.px(440), (parent ? parent.width : 440) - 2 * Theme.sp2xl)
+        padding: Theme.inset
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        Overlay.modal: ModalScrim {}
+        background: ModalSurface {}
+        onOpened: keepExample.forceActiveFocus()
+        contentItem: ColumnLayout {
+            spacing: Theme.spLg
+            Text {
+                Layout.fillWidth: true
+                text: I18n.t("example.remove.title")
+                color: Theme.text
+                font.pixelSize: Theme.fsLg
+                font.weight: Theme.fwHeading
+                wrapMode: Text.WordWrap
+            }
+            Text {
+                objectName: "remove-example-body"
+                Layout.fillWidth: true
+                text: I18n.t("example.remove.body") + " " + I18n.count(removeExampleDialog.changes, "example.remove.changed")
+                color: Theme.textMuted
+                font.pixelSize: Theme.fsSm
+                wrapMode: Text.WordWrap
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spMd
+                Item { Layout.fillWidth: true }
+                PillButton {
+                    id: keepExample
+                    text: I18n.t("example.remove.keep")
+                    onClicked: removeExampleDialog.close()
+                }
+                PillButton {
+                    objectName: "remove-example-confirm"
+                    text: I18n.t("example.remove.confirm")
+                    danger: true
+                    onClicked: {
+                        removeExampleDialog.close();
+                        AppController.removeExample();
+                    }
+                }
+            }
+        }
+    }
+
     // A query in the Tasks search, on a lens (Today's "N without a date").
     function showQuery(q, lens) {
         topBar.searchText = q;
@@ -1941,14 +2003,15 @@ ApplicationWindow {
         case "quick-capture-notes":  quickCaptureNotes.open(); break;
         case "panel.right":          win.toggleRightPanel(); break;
         case "rail.toggle":          win.toggleSideRail(); break;
-        case "theme.toggle":         AppController.theme = (AppController.theme === "dark" ? "light" : "dark"); break;
+        case "theme.toggle":         AppController.theme = (Theme.slot === "dark" ? "light" : "dark"); break;
         case "person.new":           personPicker.open_(); break;
         case "profile.new":          profileEditor.showCreate(); break;
         case "profile.next":         win._cycleProfile(1); break;
         case "profile.prev":         win._cycleProfile(-1); break;
         case "profile.exportMd":     AppController.copyActiveProfileMarkdownToClipboard(); break;
         case "profile.weeklyReport": AppController.copyWeeklyReportToClipboard(); break;
-        case "tweaks.open":          rail.openTweaks(rail.tweaksAnchor); break;
+        // The Tweaks popover is gone (APP-270): its key opens Appearance.
+        case "tweaks.open":          win.runCommand("settings:appearance"); break;
         case "hotkeys.open":         win.openCheatSheet(); break;
         case "hotkeys.edit":         rail.openHotkeys(rail.hotkeysAnchor); break;
         case "palette.commands":     cmdPalette.openWith(">"); break;
@@ -2463,7 +2526,7 @@ ApplicationWindow {
         sequence: _kbd("theme.toggle")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: AppController.theme = (AppController.theme === "dark" ? "light" : "dark")
+        onActivated: AppController.theme = (Theme.slot === "dark" ? "light" : "dark")
     }
     Shortcut {
         sequence: _kbd("person.new")
@@ -2593,7 +2656,7 @@ ApplicationWindow {
         sequence: _kbd("tweaks.open")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: rail.openTweaks(rail.tweaksAnchor)
+        onActivated: win.runCommand("settings:appearance")
     }
     // The event log (APP-187).
     Shortcut {
@@ -3057,16 +3120,9 @@ ApplicationWindow {
         }
     }
 
-    // Tweaks + Hotkeys popovers (opened from the side rail)
-    // Re-clamped whenever their height settles: on the first open the panel
-    // measures itself after it is placed, and the Tweaks panel hung 24px
-    // below a 720px window.
-    TweaksPanel  {
-        id: tweaks
-        onHeightChanged: if (opened && parent) win._placePopover(tweaks, parent)
-        // A setting found by the panel's search (APP-210).
-        onOpenSettingsItem: (item) => win.openSettingsItem(item)
-    }
+    // The Hotkeys popover (opened from the side rail). Re-clamped whenever
+    // its height settles: on the first open it measures itself after it is
+    // placed.
     HotkeysPanel {
         id: hotkeys
         onHeightChanged: if (opened && parent) win._placePopover(hotkeys, parent)

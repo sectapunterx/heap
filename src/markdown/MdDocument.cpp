@@ -59,6 +59,16 @@ void MdDocument::setTicketTitles(const QVariantMap& titles) {
   scheduleParse();
 }
 
+void MdDocument::setWikiTargets(const QVariantMap& targets) {
+  if(m_wikiTargets == targets) {
+    return;
+  }
+  m_wikiTargets = targets;
+  emit wikiTargetsChanged();
+  m_dirty = true;
+  scheduleParse();
+}
+
 void MdDocument::setAllowRemoteImages(bool allow) {
   if(m_allowRemoteImages == allow) {
     return;
@@ -124,6 +134,10 @@ MdHtmlOptions MdDocument::buildOptions() const {
   options.imageBaseDir = m_imageBaseDir;
   for(auto it = m_ticketTitles.constBegin(); it != m_ticketTitles.constEnd(); ++it) {
     options.ticketTitles.insert(it.key(), it.value().toString());
+  }
+  for(auto it = m_wikiTargets.constBegin(); it != m_wikiTargets.constEnd(); ++it) {
+    const QVariantMap m = it.value().toMap();
+    options.wikiTargets.insert(it.key(), {m.value(QStringLiteral("kind")).toString(), m.value(QStringLiteral("label")).toString()});
   }
   return options;
 }

@@ -12,19 +12,22 @@ import "Mention.js" as Mention
 Item {
     id: root
 
-    // ── View mode: "edit" | "split" | "preview" ──────────────────────
-    // Persists via AppController.appSettingsJson under settings.notes.viewMode.
-    property string viewMode: "edit"
+    // ── Mode: "live" | "edit" (APP-269) ─────────────────────────────
+    // Knowledge has no Text / Split / Preview: the note is drawn and the
+    // block under the caret is edited in place ("live"). The whole source
+    // ("edit") is the fallback for big edits, Ctrl+Shift+M or the Source
+    // switch. Stored as settings.notes.mode; the 0.7 viewMode is not read,
+    // so everyone starts in live.
+    property string viewMode: "live"
 
     function _readViewMode() {
         const raw = AppController.appSettingsJson || "";
-        if (!raw.length) return "edit";
+        if (!raw.length) return "live";
         try {
             const s = JSON.parse(raw);
-            const v = s && s.notes && s.notes.viewMode;
-            if (v === "edit" || v === "split" || v === "preview") return v;
+            if (s && s.notes && s.notes.mode === "source") return "edit";
         } catch (e) {}
-        return "edit";
+        return "live";
     }
     function _writeViewMode(mode) {
         const raw = AppController.appSettingsJson || "";
@@ -32,7 +35,7 @@ Item {
         if (raw.length) {
             try { s = JSON.parse(raw); } catch (e) { s = {}; }
         }
-        s.notes = Object.assign({}, s.notes || {}, { viewMode: mode });
+        s.notes = Object.assign({}, s.notes || {}, { mode: mode === "edit" ? "source" : "live" });
         AppController.appSettingsJson = JSON.stringify(s);
     }
     onViewModeChanged: if (_loadedOnce) _writeViewMode(viewMode)
@@ -67,14 +70,40 @@ Item {
     // Both are computed after typing pauses, not on every keystroke: over a
     // 3 MB note the live binding cost seconds per character. Empty (and
     // uncomputed) while the pane is hidden.
-    property bool showBacklinks: false
+    // Shown beside the note when there is room (sheet H2-Knowledge).
+    property bool showBacklinks: root.width > Theme.px(1000)
     property var  _incoming: []
     property var  _outgoing: []
+    // APP-269: the tasks the note names, the tasks that link here, the
+    // note's links out of lowkey.
+    property var  _taskRefs: []
+    property var  _taskLinks: []
+    property var  _external: []
+    function _externalLinks(text) {
+        const out = [], seen = {};
+        const rx = /\[([^\]\n]+)\]\((https?:[^)\s]+)\)|(https?:\/\/[^\s)>\]]+)/g;
+        let m;
+        while ((m = rx.exec(text)) !== null && out.length < 50) {
+            const url = m[2] || m[3];
+            if (seen[url]) continue;
+            seen[url] = true;
+            out.push({ url: url, label: m[1] || url });
+        }
+        return out;
+    }
     function _refreshLinks() {
-        if (!root.showBacklinks) { root._incoming = []; root._outgoing = []; return; }
+        if (!root.showBacklinks) {
+            root._incoming = []; root._outgoing = []; root._taskRefs = []; root._taskLinks = []; root._external = [];
+            return;
+        }
         root._incoming = AppController.backlinksToNote(AppController.activeNoteId);
         root._outgoing = AppController.outgoingNoteLinks(editor.text);
+        root._taskRefs = AppController.noteTaskRefs(editor.text);
+        root._taskLinks = AppController.tasksLinkingToNote(AppController.activeNoteId);
+        root._external = root._externalLinks(editor.text);
     }
+    // How each [[target]] reads in the drawn note: a task chip, "no such".
+    property var _wiki: ({})
     onShowBacklinksChanged: _refreshLinks()
     Timer { id: linksTimer; interval: 400; onTriggered: root._refreshLinks() }
 
@@ -85,6 +114,7 @@ Item {
         interval: 300
         onTriggered: {
             root._stats = AppController.noteStats(editor.text);
+            root._wiki = AppController.wikiTargets(editor.text);
             root._refreshAttachments();
         }
     }
@@ -269,16 +299,34 @@ Item {
     }
     function _focusEditorAtEnd() {
         Qt.callLater(function () {
-            if (root.viewMode === "preview") root.viewMode = "split";
+            if (root.viewMode === "live") {
+                liveEditor.focusEditor();
+                return;
+            }
             editor.forceActiveFocus();
             editor.cursorPosition = editor.length;
         });
+    }
+    // An edit made in the live view, into the source field: only what
+    // differs, so the field keeps its undo history and the save follows.
+    function _applyFromLive(next) {
+        const old = editor.text;
+        if (old === next) return;
+        let p = 0;
+        const max = Math.min(old.length, next.length);
+        while (p < max && old.charCodeAt(p) === next.charCodeAt(p)) p++;
+        let s = 0;
+        while (s < max - p && old.charCodeAt(old.length - 1 - s) === next.charCodeAt(next.length - 1 - s)) s++;
+        if (old.length - s > p) editor.remove(p, old.length - s);
+        const inserted = next.substring(p, next.length - s);
+        if (inserted.length > 0) editor.insert(p, inserted);
     }
     // Where the keyboard goes when the view is switched to (PERA-5): the
     // editor, caret where it was left; in preview there is nothing to type
     // into, so the notes list.
     function takeFocus() {
-        if (root.viewMode !== "preview") editor.forceActiveFocus();
+        if (root.viewMode === "live") liveEditor.forceActiveFocus();
+        else if (root.viewMode !== "preview") editor.forceActiveFocus();
         else if (root._listShown) notesList.takeFocus();
         else root.forceActiveFocus();
     }
@@ -602,14 +650,12 @@ Item {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 56
-            color: Theme.panel
-            Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 1; color: Theme.border }
+            color: Theme.bg
 
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: Theme.inset; anchors.rightMargin: Theme.inset
                 spacing: root._headerTight ? Theme.spMd : Theme.sp2xl
-                Rectangle { width: 4; height: 28; radius: 2; color: Theme.accent }
                 // The title gives way first when the header runs short — at
                 // 150 % with the right panel open the mode toggle was pushed
                 // past the view's edge, "Preview" under the panel (SCALE-3).
@@ -751,60 +797,34 @@ Item {
                     }
                 }
 
-                // ── Edit · Split · Preview toggle ──────────────────────
-                // One frame around the group instead of a border per segment,
-                // which doubled up into a 2px seam between them.
-                // Each segment as wide as its word needs (APP-189): a fixed
-                // 64px cut longer translations.
+                // ── The whole source (APP-269) ─────────────────────────
+                // Off: the note is edited where it is drawn. On: the
+                // source of all of it, for edits across many blocks.
                 Rectangle {
                     objectName: "notes-mode-toggle"
-                    Layout.preferredWidth: segRow.implicitWidth + 2 * Theme.sp2xs
-                    Layout.minimumWidth: segRow.implicitWidth + 2 * Theme.sp2xs
-                    Layout.preferredHeight: Theme.px(26)
+                    Layout.preferredHeight: Theme.px(24)
                     radius: Theme.radiusMd
-                    color: Theme.panel2
-                    border.color: Theme.border
+                    readonly property bool on: root.viewMode === "edit"
+                    color: on ? Theme.accentSoft : (srcMA.hovered ? Theme.panel3 : Theme.panel2)
+                    border.color: on ? Theme.accent : Theme.border
                     border.width: 1
-                    Row {
-                        id: segRow
-                        anchors.fill: parent
-                        anchors.margins: Theme.sp2xs
-                        spacing: 0
-                        Repeater {
-                            model: [
-                                { id: "edit",    label: I18n.t("notes.mode.edit") },
-                                { id: "split",   label: I18n.t("notes.mode.split") },
-                                { id: "preview", label: I18n.t("notes.mode.preview") }
-                            ]
-                            delegate: Rectangle {
-                                id: segBtn
-                                required property var modelData
-                                readonly property bool active: root.viewMode === modelData.id
-                                width: root._headerTight ? segTxt.implicitWidth + 2 * Theme.spMd
-                                                         : Math.max(Theme.px(64), segTxt.implicitWidth + 2 * Theme.spLg)
-                                height: parent.height
-                                radius: Theme.radiusSm
-                                color: active ? Theme.accentSoft
-                                     : (segMA.hovered ? Theme.panel3 : "transparent")
-                                Text {
-                                    id: segTxt
-                                    anchors.centerIn: parent
-                                    text: modelData.label
-                                    color: parent.active ? Theme.accentStrong : Theme.text
-                                    font.pixelSize: Theme.fsSm
-                                    font.weight: Theme.fwTitle
-                                }
-                                ClickArea {
-                                    id: segMA
-                                    label: segTxt.text
-                                    showTip: false
-                                    role: Accessible.RadioButton
-                                    checkable: true
-                                    checked: segBtn.active
-                                    onActivated: root.viewMode = segBtn.modelData.id
-                                }
-                            }
-                        }
+                    implicitWidth: srcTxt.implicitWidth + 2 * Theme.spLg
+                    Text {
+                        id: srcTxt
+                        anchors.centerIn: parent
+                        text: I18n.t("notes.mode.source")
+                        color: parent.on ? Theme.accentStrong : Theme.textMuted
+                        font.pixelSize: Theme.fsSm
+                        font.weight: Theme.fwTitle
+                    }
+                    ClickArea {
+                        id: srcMA
+                        label: srcTxt.text
+                        showTip: false
+                        role: Accessible.CheckBox
+                        checkable: true
+                        checked: parent.on
+                        onActivated: root.viewMode = (root.viewMode === "edit" ? "live" : "edit")
                     }
                 }
             }
@@ -841,7 +861,7 @@ Item {
                 id: notesList
                 objectName: "notes-list-pane"
                 visible: root._listShown
-                Layout.preferredWidth: visible ? Math.min(240, root.width * 0.35) : 0
+                Layout.preferredWidth: visible ? Math.min(Theme.px(260), root.width * 0.35) : 0
                 Layout.fillHeight: true
                 onNoteActivated: (id) => {
                     // Flush first: the editor debounces its saves, so the last
@@ -852,12 +872,17 @@ Item {
                 }
                 // "+" makes a note to write in: the cursor goes there.
                 onNoteCreated: (id) => root._focusEditorAtEnd()
+                // Docs in Knowledge (APP-269): a reference opens under the
+                // link rules, a page opens in Docs, a snippet is copied.
+                onRefActivated: (url) => preview.openExternal(url)
+                onPageActivated: (id) => root.docPageRequested(id)
+                onSnippetActivated: (title, code) => AppController.copyToClipboard(code)
             }
 
             // Editor pane — visible in edit + split modes.
             Flickable {
                 id: notesScroll
-                visible: root.viewMode === "edit" || root.viewMode === "split"
+                visible: root.viewMode === "edit"
                 // Scroll sync: the editor leads while the reader scrolls it.
                 onContentYChanged: if (root.viewMode === "split") root._syncFrom("editor")
                 Layout.fillWidth: true
@@ -1015,7 +1040,9 @@ Item {
             MdView {
                 id: preview
                 objectName: "notesPreview"
-                visible: root.viewMode === "preview" || root.viewMode === "split"
+                // Kept for its link handling (openExternal); the live view
+                // draws the note now.
+                visible: false
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 document: mdDocument
@@ -1055,6 +1082,21 @@ Item {
                 onContentYChanged: if (root.viewMode === "split") root._syncFrom("preview")
             }
 
+            // The note drawn, the block under the caret edited in place.
+            MdBlockEditor {
+                id: liveEditor
+                objectName: "notes-live"
+                visible: root.viewMode === "live"
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                text: editor.text
+                placeholder: I18n.t("notes.placeholderBody")
+                wikiTargets: root._wiki
+                onEdited: (t) => root._applyFromLive(t)
+                onInternalLinkActivated: (kind, target) => root._followLink(kind, target)
+                onEscaped: if (root._listShown) notesList.focusList()
+            }
+
             // ── Links pane (HEAP-79) ──────────────────────────────────
             Rectangle {
                 objectName: "notes-links-pane"
@@ -1074,6 +1116,55 @@ Item {
                         id: linksCol
                         width: parent.width
                         spacing: Theme.spMd
+
+                        // The tasks this note names, with their column now.
+                        Text {
+                            visible: root._taskRefs.length > 0
+                            text: I18n.t("notes.tasksInNote")
+                            color: Theme.textMuted
+                            font.pixelSize: Theme.fsSm
+                            font.weight: Theme.fwTitle
+                        }
+                        Repeater {
+                            model: root._taskRefs
+                            delegate: Text {
+                                id: refTask
+                                required property var modelData
+                                objectName: "note-task-" + modelData.id
+                                Layout.fillWidth: true
+                                text: modelData.id + "  <font color=\"" + Theme.textMuted + "\">· " + modelData.statusName
+                                      + (modelData.profileName.length > 0 ? " · " + modelData.profileName : "") + "</font>"
+                                textFormat: Text.StyledText
+                                color: Theme.text
+                                font.pixelSize: Theme.fsSm
+                                elide: Text.ElideRight
+                                ClickArea {
+                                    label: refTask.modelData.id + " " + refTask.modelData.title
+                                    role: Accessible.Link
+                                    onActivated: root.taskRequested(refTask.modelData.id)
+                                }
+                            }
+                        }
+                        Item { visible: root._taskRefs.length > 0; Layout.preferredHeight: Theme.spMd }
+                        // Tasks that link this note by its title, [[Note]].
+                        Repeater {
+                            model: root._taskLinks
+                            delegate: Text {
+                                id: linkTask
+                                required property var modelData
+                                objectName: "note-linked-task-" + modelData.id
+                                Layout.fillWidth: true
+                                text: I18n.t("notes.linkedTask").arg(modelData.id)
+                                color: Theme.text
+                                font.pixelSize: Theme.fsSm
+                                elide: Text.ElideRight
+                                ClickArea {
+                                    label: linkTask.text + " " + linkTask.modelData.title
+                                    role: Accessible.Link
+                                    onActivated: root.taskRequested(linkTask.modelData.id)
+                                }
+                            }
+                        }
 
                         // What else refers to this note.
                         Text {
@@ -1124,6 +1215,37 @@ Item {
                                     color: Theme.textMuted
                                     font.pixelSize: Theme.fsXs
                                     elide: Text.ElideRight
+                                }
+                            }
+                        }
+
+                        // Links out of lowkey, opened under the usual rules.
+                        Text {
+                            visible: root._external.length > 0
+                            Layout.topMargin: Theme.spMd
+                            text: I18n.t("notes.external")
+                            color: Theme.textMuted
+                            font.pixelSize: Theme.fsSm
+                            font.weight: Theme.fwTitle
+                        }
+                        Repeater {
+                            model: root._external
+                            delegate: Text {
+                                id: extLink
+                                required property var modelData
+                                Layout.fillWidth: true
+                                text: modelData.label
+                                color: Theme.text
+                                font.pixelSize: Theme.fsSm
+                                font.underline: extCA.hovered
+                                wrapMode: Text.Wrap
+                                maximumLineCount: 2
+                                elide: Text.ElideRight
+                                ClickArea {
+                                    id: extCA
+                                    label: extLink.modelData.url
+                                    role: Accessible.Link
+                                    onActivated: preview.openExternal(extLink.modelData.url)
                                 }
                             }
                         }
@@ -1229,9 +1351,7 @@ Item {
         context: Qt.WindowShortcut
         enabled: root.visible
         onActivated: {
-            if (root.viewMode === "edit")         root.viewMode = "split";
-            else if (root.viewMode === "split")   root.viewMode = "preview";
-            else                                   root.viewMode = "edit";
+            root.viewMode = root.viewMode === "edit" ? "live" : "edit";
         }
     }
 
@@ -1455,6 +1575,7 @@ Item {
     // expected to exist.
     signal taskRequested(string taskId)
     signal personRequested(string personId)
+    signal docPageRequested(string pageId)
 
     function _followLink(kind, target) {
         // A ticket in a note is a task: opening it is the whole reason for
@@ -1534,6 +1655,7 @@ Item {
         _reloading = false;
         root._refreshTitle();
         root._stats = AppController.noteStats(editor.text);
+        root._wiki = AppController.wikiTargets(editor.text);
         root._refreshLinks();
         root._refreshAttachments();
     }
@@ -1570,6 +1692,7 @@ Item {
     // Main.qml swaps views through a Loader, so this item is destroyed on
     // every view switch — without a flush the last keystrokes are lost.
     function _flushPending() {
+        liveEditor.flush();
         if (!persistTimer.running) return;
         persistTimer.stop();
         _persistNow();

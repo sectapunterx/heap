@@ -20,19 +20,21 @@
 
 // Section catalogue, in nav order. SettingsView builds its nav from this.
 var SECTIONS = [
-    { id: "profile",       icon: "qrc:/brand/icons/heap-13-profile.svg" },
+    // One page since APP-270, in this order: how it looks, the working day,
+    // the keys, the trackers, the data, about - the rest in between. The
+    // profile (name, handle) is not the first thing any more.
     { id: "appearance",    icon: "qrc:/brand/icons/heap-14-appearance.svg" },
-    { id: "language",      icon: "qrc:/brand/icons/heap-15-language.svg" },
+    { id: "calendar",      icon: "qrc:/brand/icons/heap-17-calendar.svg" },
+    { id: "tasks",         icon: "qrc:/brand/icons/heap-01-board.svg" },
     { id: "notifications", icon: "qrc:/brand/icons/heap-16-notifications.svg" },
     // Gentle, opt-in heads-ups (APP-172).
     { id: "safety",        icon: "qrc:/brand/icons/heap-11-tweaks.svg" },
-    { id: "calendar",      icon: "qrc:/brand/icons/heap-17-calendar.svg" },
-    { id: "tasks",         icon: "qrc:/brand/icons/heap-01-board.svg" },
     { id: "shortcuts",     icon: "qrc:/brand/icons/heap-10-hotkeys.svg" },
-    { id: "cpp",           icon: "qrc:/brand/icons/heap-18-code.svg", unimplemented: true },
     { id: "integrations",  icon: "qrc:/brand/icons/heap-19-integrations.svg" },
     { id: "git",           icon: "qrc:/brand/icons/heap-07-code-review.svg" },
     { id: "data",          icon: "qrc:/brand/icons/heap-20-data.svg" },
+    { id: "language",      icon: "qrc:/brand/icons/heap-15-language.svg" },
+    { id: "profile",       icon: "qrc:/brand/icons/heap-13-profile.svg" },
     { id: "help",          icon: "qrc:/brand/icons/heap-21-help.svg" },
     { id: "about",         icon: "qrc:/brand/icons/heap-22-about.svg" }
 ];
@@ -47,15 +49,25 @@ var ITEMS = [
     ["profile", "group", "settings.profile.group.avatar"],
     ["profile", "row", "settings.profile.avatarColor"],
 
-    ["appearance", "group", "settings.appearance.group.mode"],
     ["appearance", "row", "settings.appearance.theme"],
-    ["appearance", "row", "settings.appearance.scale"],
+    ["appearance", "row", "settings.appearance.accent"],
     ["appearance", "row", "settings.appearance.density"],
+    ["appearance", "row", "settings.appearance.reducedMotion"],
+    ["appearance", "group", "settings.appearance.group.style"],
+    ["appearance", "row", "settings.appearance.style"],
+    ["appearance", "row", "style.flag.urgency"],
+    ["appearance", "row", "style.flag.counters"],
+    ["appearance", "row", "style.flag.keyHints"],
+    ["appearance", "row", "style.flag.chipFill"],
+    ["appearance", "row", "style.flag.factsLine"],
+    ["appearance", "row", "style.flag.todayExtras"],
+    ["appearance", "row", "style.flag.icons"],
+    ["appearance", "group", "settings.appearance.group.more"],
+    ["appearance", "row", "settings.appearance.scale"],
     ["appearance", "row", "settings.appearance.contrast"],
     ["appearance", "row", "settings.appearance.cursorColor"],
     ["appearance", "group", "settings.appearance.group.themes"],
     ["appearance", "group", "settings.appearance.group.behaviour"],
-    ["appearance", "row", "settings.appearance.reducedMotion"],
     ["appearance", "row", "settings.system.closeToTray"],
     ["appearance", "row", "settings.system.startAtLogin"],
     ["appearance", "row", "settings.system.startMinimized"],
@@ -130,16 +142,6 @@ var ITEMS = [
     ["shortcuts", "row", "settings.shortcuts.sub"],
     ["shortcuts", "row", "settings.shortcuts.mouseHints"],
     ["shortcuts", "group", "settings.shortcuts.group.all"],
-
-    ["cpp", "group", "settings.cpp.group.toolchain"],
-    ["cpp", "row", "settings.cpp.compiler"],
-    ["cpp", "row", "settings.cpp.standard"],
-    ["cpp", "row", "settings.cpp.sanitizer"],
-    ["cpp", "row", "settings.cpp.buildType"],
-    ["cpp", "group", "settings.cpp.group.tools"],
-    ["cpp", "row", "settings.cpp.bazelArgs"],
-    ["cpp", "row", "settings.cpp.godbolt"],
-    ["cpp", "row", "settings.cpp.inlineAsm"],
 
     ["integrations", "card", "intinfo.title"],
     ["integrations", "group", "health.title"],

@@ -30,7 +30,7 @@ Item {
         {anchor: "help-profiles", label: root.tr2("Profiles — workspaces, JSON", "Профили — рабочие пространства, JSON")},
         {anchor: "help-search", label: root.tr2("Search & Command Palette", "Поиск и палитра команд")},
         {anchor: "help-filter", label: root.tr2("Filters — priorities, archived, show-done, saved views", "Фильтры — приоритеты, архив, выполненные, сохранённые виды")},
-        {anchor: "help-tweaks", label: root.tr2("Tweaks — theme, density, contrast", "Твики — тема, плотность, контраст")},
+        {anchor: "help-tweaks", label: root.tr2("Appearance — theme, accent, density, style", "Внешний вид — тема, акцент, плотность, стиль")},
         {anchor: "help-hotkeys", label: root.tr2("Hotkeys — rebinding and conflicts", "Горячие клавиши — переназначение и конфликты")},
         {anchor: "help-automation", label: root.tr2("Automation & Notifications", "Автоматизация и уведомления")},
         {anchor: "help-git", label: root.tr2("Git Watcher — branch focus, PR", "Git Watcher — фокус по ветке, PR")},
@@ -682,8 +682,8 @@ Item {
         HelpCard {
             objectName: "help-tweaks"
             H2 {
-                text: root.tr2("Tweaks — appearance",
-                              "Твики — внешний вид")
+                text: root.tr2("Appearance",
+                              "Внешний вид")
             }
             RowLayout {
                 spacing: Theme.spSm
@@ -691,8 +691,8 @@ Item {
                     keys: root.kbd("tweaks.open")
                 }
                 Body {
-                    text: root.tr2("— a floating panel with quick toggles.",
-                                  "— плавающая панель с быстрыми переключателями.")
+                    text: root.tr2("— Settings, on Appearance. What used to be in Tweaks is there now.",
+                                  "— Настройки, раздел «Внешний вид». Всё, что было в «Твиках», теперь там.")
                 }
             }
 
@@ -701,8 +701,8 @@ Item {
                               "Тема")
             }
             Body {
-                text: root.tr2("Dark / Light. Changes instantly, no restart.",
-                              "Тёмная / светлая. Меняется сразу, без перезапуска.")
+                text: root.tr2("As in the system / Dark / Light. Changes instantly, no restart.",
+                              "Как в системе / тёмная / светлая. Меняется сразу, без перезапуска.")
             }
 
             H3 {
@@ -710,8 +710,8 @@ Item {
                               "Плотность")
             }
             Body {
-                text: root.tr2("Compact (tighter, smaller fonts) or Comfy (roomier).",
-                              "Компактная (плотнее, мельче шрифты) или просторная.")
+                text: root.tr2("Compact, Normal or Spacious.",
+                              "Компактно, обычно или свободно.")
             }
 
             H3 {
@@ -724,12 +724,12 @@ Item {
             }
 
             H3 {
-                text: root.tr2("Reduced motion",
-                              "Меньше движения")
+                text: root.tr2("Animations",
+                              "Анимации")
             }
             Body {
-                text: root.tr2("Fully disables animations — for weak machines and for accessibility.",
-                              "Полностью отключает анимации — для слабых машин и для доступности.")
+                text: root.tr2("Minimum turns animations off — for weak machines and for accessibility.",
+                              "«Минимум» отключает анимации — для слабых машин и для доступности.")
             }
 
             H3 {

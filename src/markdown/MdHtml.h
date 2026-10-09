@@ -56,6 +56,16 @@ struct MdHtmlOptions {
   // Where a relative image path ("attachments/x.png") is looked up. Empty: a
   // relative path cannot be resolved, and the image says so.
   QString imageBaseDir;
+
+  // How a [[target]] reads (APP-269): kind "task" — a chip with the task's
+  // stage, linked to the task; "missing" — grey, with what is wrong. A
+  // target not here is a link to a note. `label` is plain text.
+  struct WikiTarget {
+    QString kind;
+    QString label;
+  };
+
+  QHash<QString, WikiTarget> wikiTargets;
 };
 
 // An image source, made loadable where that is safe.

@@ -405,6 +405,7 @@ qt_add_qml_module(heap_core
         qml/Sidebar.qml
         qml/ProfileSwitcher.qml
         qml/TodayView.qml
+        qml/FirstRunHero.qml
         qml/AppSwitch.qml
         qml/TaskMenuHost.qml
         qml/TaskDocument.qml
@@ -438,7 +439,6 @@ qt_add_qml_module(heap_core
         qml/EventEditor.qml
         qml/PersonEditor.qml
         qml/PersonPicker.qml
-        qml/TweaksPanel.qml
         qml/Toast.qml
         qml/ToastTiming.js
         qml/AppMenu.qml

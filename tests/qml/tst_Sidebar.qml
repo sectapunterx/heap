@@ -144,6 +144,9 @@ TestCase {
 
     function test_the_quiet_style_shows_no_counts_and_no_keys() {
         AppController.appSettingsJson = "{}";
+        // A new install has no tasks (APP-271): give the view one to count.
+        if (AppController.tasks.rowCount() === 0)
+            AppController.saveTask(AppController.quickTaskDraft("sidebar count", new Date()));
         const id = mkView("sb-all", "");
         const sb = bar(true);
         Style.apply("bold");
