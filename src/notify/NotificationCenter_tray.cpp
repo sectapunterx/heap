@@ -20,7 +20,13 @@ QIcon trayIcon() {
   QIcon icon(QStringLiteral(":/brand/lowkey/lowkey-tray-template.svg"));
   icon.setIsMask(true);
 #else
+  // colorScheme() is Qt 6.5+; the clang-tidy job builds against the distro's
+  // older Qt, where a dark panel is the safer guess.
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
   const bool dark = QGuiApplication::styleHints()->colorScheme() != Qt::ColorScheme::Light;
+#else
+  const bool dark = true;
+#endif
   QIcon icon(dark ? QStringLiteral(":/brand/lowkey/lowkey-tray-light.svg") : QStringLiteral(":/brand/lowkey/lowkey-tray-dark.svg"));
 #endif
   return icon.isNull() ? QGuiApplication::windowIcon() : icon;

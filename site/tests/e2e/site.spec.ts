@@ -93,7 +93,7 @@ test('the language switch leads to the same page in the other language', async (
 test.describe('tracker writes are described as off by default', () => {
   test('en', async ({ page }) => {
     await page.goto('');
-    const card = page.locator('[data-card="Read-only by default"]');
+    const card = page.locator('[data-card="Trackers are read-only"]');
     await expect(card).toContainText('Nothing is written to your trackers.');
     await expect(card).toContainText('Status write-back is turned on per tracker');
     await expect(page.locator('#faq')).toContainText('by default nothing is written back');
@@ -103,7 +103,7 @@ test.describe('tracker writes are described as off by default', () => {
 
   test('ru', async ({ page }) => {
     await page.goto('ru/');
-    const card = page.locator('[data-card="По умолчанию только чтение"]');
+    const card = page.locator('[data-card="Трекеры — только чтение"]');
     await expect(card).toContainText('В трекеры ничего не пишется.');
     await expect(card).toContainText('Запись статуса включается для каждого трекера отдельно');
     await expect(page.locator('#faq')).toContainText('обратно по умолчанию ничего не пишется');

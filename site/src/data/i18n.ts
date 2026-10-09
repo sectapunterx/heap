@@ -349,7 +349,7 @@ const en: typeof ru = {
     net: [
       ['Update check', 'on start · off in Settings → About', 'Asks GitHub whether a newer version exists. Sends nothing about you or your data. Downloads the update only when you click Update, and checks it against the release’s checksums.'],
       ['Trackers', 'only the ones you connect', 'Pull your tasks — by hand, or on a timer if you set one. A status is written back only where you turned write-back on.'],
-      ['Browser sign-in', 'when you click Connect', 'Your browser opens the tracker’s own sign-in page. lowkey never sees your password.'],
+      ['Browser sign-in', 'when you click Connect', 'Your browser opens the tracker’s own sign-in page; lowkey never sees your password.'],
       ['Calendar links', 'only if you subscribe', 'Downloads the .ics file at the link you added, every 15 minutes by default.'],
       ['PR state', 'only for repositories you add', 'Runs your own gh or glab about once a minute. Off in Settings → Git.'],
       ['Mattermost', 'only if connected', 'Reads the people in your channels to offer them as @mentions. Posts nothing.'],
