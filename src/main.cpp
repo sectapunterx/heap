@@ -235,14 +235,14 @@ int smokeVerdict(const QQmlApplicationEngine& engine, const QList<QQmlError>& qm
   return problems.isEmpty() ? 0 : 1;
 }
 
-// Closes heap.log when it goes out of scope. Declared between the smoke temp
+// Closes lowkey.log when it goes out of scope. Declared between the smoke temp
 // dir and the QML engine, so it runs after the engine (and AppController's
 // final save) and before the temp dir is removed: an open log is what used to
 // keep every --smoke run's %TEMP%\heap-XXXXXX behind (PLAT-16).
 //
 // With --data-dir, the closed log is first copied to <dir>/logs/smoke.log:
 // the temp folder goes, and with it the only record of *why* a packaged build
-// failed its smoke test (PLAT-2). The profile's own heap.log is not touched.
+// failed its smoke test (PLAT-2). The profile's own lowkey.log is not touched.
 struct LogCloser {
   bool enabled = false;
   QString keepAs;  // where the smoke run's log is copied; empty = nowhere
@@ -404,7 +404,7 @@ int main(int argc, char* argv[]) {
   }
 
   // Before any QML asks for "lowkey Golos Text" / "lowkey JetBrains Mono" (Theme.qml); after
-  // the file logger, so a face that fails to load is in heap.log.
+  // the file logger, so a face that fails to load is in lowkey.log.
   heap::platform::registerBundledFonts();
   heap::platform::useBundledUiFontByDefault();
 

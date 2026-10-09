@@ -53,7 +53,7 @@ void rotateIfNeeded() {
   QFile::rename(base, rolled);
 
   QDir dir(heap::logging::logDirPath());
-  const QStringList rolledLogs = dir.entryList({"heap.log.*"}, QDir::Files | QDir::NoSymLinks, QDir::Time);
+  const QStringList rolledLogs = dir.entryList({"lowkey.log.*"}, QDir::Files | QDir::NoSymLinks, QDir::Time);
   for(int i = kKeepRotated; i < rolledLogs.size(); ++i) {
     dir.remove(rolledLogs[i]);
   }
@@ -110,7 +110,7 @@ QString logDirPath() {
 }
 
 QString logFilePath() {
-  return logDirPath() + "/heap.log";
+  return logDirPath() + "/lowkey.log";  // heap.log before 0.8.0 (APP-280)
 }
 
 void installFileLogger() {

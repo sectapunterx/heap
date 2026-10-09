@@ -41,7 +41,7 @@ constexpr int kWindowWaitMs = 4000;
 Response headless(const Request& request) {
   // The same models and save path as the window, minus everything that
   // reaches outside the data dir (see AppController::setHeadless). The log
-  // goes to heap.log only: the quiet handler installed first drops the echo.
+  // goes to lowkey.log only: the quiet handler installed first drops the echo.
   heap::logging::installFileLogger();
   qInfo("command line: %s", request.verb == Verb::Add ? "add" : "done");
   AppController::setHeadless(true);
