@@ -72,8 +72,14 @@ TEST_F(LegacyData, EverythingIsCopiedAndTheOldFolderStays) {
   EXPECT_EQ(readFile(newDir_ + "/history/2026-10-01T12-00.json.gz"), QByteArray("snapshot"));
   EXPECT_EQ(readFile(newDir_ + "/attachments/0123456789abcdef0123456789abcdef.png"), QByteArray("png"));
   EXPECT_EQ(readFile(newDir_ + "/secrets.json"), QByteArray("{}"));
-  // The old folder is untouched apart from the marker.
-  EXPECT_TRUE(QFileInfo::exists(oldDir_ + "/state.json"));
+  // The old folder is untouched apart from the marker: every file still
+  // there with the same bytes, so 0.7.x can still be pointed at it.
+  EXPECT_EQ(readFile(oldDir_ + "/state.json"), QByteArray(R"({"schemaVersion":11})"));
+  EXPECT_EQ(readFile(oldDir_ + "/backups/state-20261001-120000.json"), QByteArray("backup"));
+  EXPECT_EQ(readFile(oldDir_ + "/history/2026-10-01T12-00.json.gz"), QByteArray("snapshot"));
+  EXPECT_EQ(readFile(oldDir_ + "/attachments/0123456789abcdef0123456789abcdef.png"), QByteArray("png"));
+  EXPECT_EQ(readFile(oldDir_ + "/secrets.json"), QByteArray("{}"));
+  EXPECT_EQ(readFile(oldDir_ + "/logs/heap.log"), QByteArray("old log"));
   EXPECT_TRUE(QFileInfo::exists(oldDir_ + "/" + QLatin1String(heap::brand::kMovedMarker)));
   EXPECT_FALSE(QFileInfo::exists(newDir_ + ".moving")) << "the staging folder is gone";
 }

@@ -29,18 +29,52 @@ Item {
     readonly property var calendarView: inner.item
     function step(dir) { if (root.calendarView) root.calendarView.step(dir); }
 
+    // The sprints ending inside the grid's range: the week (or day) from its
+    // first day, the month from its first cell. Rebuilt when the tasks change.
+    readonly property var sprints: {
+        // calendarView is a var: the Loader's item is either view.
+        const v = root.calendarView;
+        if (!v || v.taskRev === undefined || v.taskRev < 0) return [];
+        const month = root.zoom === "month";
+        const from = month ? v.gridStart : v.weekStart;
+        if (!from || !from.getFullYear) return [];
+        const days = month ? v.rows * 7 : v.spanDays;
+        const to = new Date(from.getFullYear(), from.getMonth(), from.getDate() + days - 1);
+        return AppController.sprintMarkers(from, to);
+    }
+
     RowLayout {
         anchors.fill: parent
         spacing: 0
-        // APP-255: the Jira sprint marker (SprintMarker.qml, fed by
-        // AppController.sprintMarkers(from, to)) belongs above the grid,
-        // between the header and the day columns: wrap the Loader below in a
-        // ColumnLayout and put it first, from the week's / month's range.
-        Loader {
-            id: inner
+        ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            sourceComponent: root.zoom === "month" ? monthComp : gridComp
+            spacing: 0
+            // APP-255: the Jira sprints that end in the range on screen, above
+            // the grid. A fact from the last pull; nothing here moves a card.
+            Flow {
+                objectName: "calendar-sprints"
+                Layout.fillWidth: true
+                Layout.leftMargin: Theme.spMd
+                Layout.rightMargin: Theme.spMd
+                Layout.topMargin: Theme.spXs
+                Layout.bottomMargin: Theme.spXs
+                visible: root.sprints.length > 0
+                spacing: Theme.spSm
+                Repeater {
+                    model: root.sprints
+                    delegate: SprintMarker {
+                        required property var modelData
+                        sprint: modelData
+                    }
+                }
+            }
+            Loader {
+                id: inner
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                sourceComponent: root.zoom === "month" ? monthComp : gridComp
+            }
         }
         UndatedTray {
             id: tray

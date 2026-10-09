@@ -24,6 +24,7 @@
 #include <gtest/gtest.h>
 
 #include <cctype>
+#include <functional>
 
 namespace {
 
@@ -194,6 +195,147 @@ TEST_P(UpgradeLossless, EveryV11KeyIsStillThere) {
   }
   const QJsonObject again = readJson(appDataDir() + "/state.json");
   EXPECT_EQ(again.value("profiles"), QJsonDocument::fromJson(v12).object().value("profiles"));
+}
+
+// The demo seed a 0.7.2 fixture holds has no keys a newer build wrote, no
+// rebound keys, no timer and no tracker card. Here the same file gets all of
+// them, the way a real 0.7.x profile has them, and the whole document has to
+// come through the upgrade and the next launch.
+namespace {
+
+QJsonArray withFirst(QJsonArray a, const std::function<void(QJsonObject&)>& edit) {
+  QJsonObject o = a.at(0).toObject();
+  edit(o);
+  a[0] = o;
+  return a;
+}
+
+QString sequenceIn(AppController& app, const QString& id) {
+  for(const QVariant& v : app.shortcuts()) {
+    const QVariantMap m = v.toMap();
+    if(m.value(QStringLiteral("id")).toString() == id) {
+      return m.value(QStringLiteral("sequence")).toString();
+    }
+  }
+  return {};
+}
+
+QJsonObject richV11() {
+  QJsonObject root = readJson(QStringLiteral(HEAP_STATE_FIXTURES_DIR "/v0.7.2.json"));
+  const QJsonObject later{{"from", "a later build"}};
+  root["laterRootKey"] = later;
+
+  QJsonObject settings = root.value("settings").toObject();
+  settings["laterSetting"] = later;
+  // Rebound in 0.7.2: one moved to a key of its own, one cleared on purpose.
+  settings["shortcuts"] = QJsonObject{{"theme.toggle", "Ctrl+Shift+Y"}, {"task.openExternal", ""}};
+  settings["shortcutsSchema"] = 2;
+  root["settings"] = settings;
+
+  root["events"] = withFirst(root.value("events").toArray(), [&](QJsonObject& e) {
+    e["laterEventKey"] = later;
+  });
+
+  root["profiles"] = withFirst(root.value("profiles").toArray(), [&](QJsonObject& p) {
+    p["laterProfileKey"] = later;
+    p["people"] = withFirst(p.value("people").toArray(), [&](QJsonObject& o) {
+      o["laterPersonKey"] = later;
+    });
+    p["statuses"] = withFirst(p.value("statuses").toArray(), [&](QJsonObject& o) {
+      o["laterStatusKey"] = later;
+    });
+    QJsonArray tasks = withFirst(p.value("tasks").toArray(), [&](QJsonObject& t) {
+      t["laterTaskKey"] = later;
+      t["trackedSeconds"] = 5400;  // the 0.7 timer's one total
+    });
+    // A tracker card edited here: its local values move into `local`.
+    QJsonObject card = tasks.at(1).toObject();
+    card["id"] = QStringLiteral("t-tracker-card");
+    card["rank"] = 1.0e9;  // its own place, not a tie with the card it was copied from
+    card["externalId"] = QStringLiteral("10042");
+    card["externalUrl"] = QStringLiteral("https://example.atlassian.net/browse/PROJ-42");
+    card["externalProvider"] = QStringLiteral("jira");
+    card["title"] = QStringLiteral("My own title");
+    card["desc"] = QStringLiteral("My own notes on it");
+    card["priority"] = QStringLiteral("P0");
+    card["externalMeta"] =
+        QJsonObject{{"remoteTitle", "The tracker's title"}, {"remoteBody", "The tracker's body"}, {"remotePriority", "P2"}};
+    tasks.append(card);
+    p["tasks"] = tasks;
+  });
+  return root;
+}
+
+void writeState(const QJsonObject& root) {
+  QDir(appDataDir()).removeRecursively();
+  QDir().mkpath(appDataDir());
+  QFile f(appDataDir() + "/state.json");
+  ASSERT_TRUE(f.open(QIODevice::WriteOnly));
+  f.write(QJsonDocument(root).toJson());
+}
+
+}  // namespace
+
+TEST(UpgradeLosslessRich, AFullV11ProfileComesThroughTheUpgradeAndTheNextLaunch) {
+  const QJsonObject before = richV11();
+  writeState(before);
+  {
+    AppController app;
+    EXPECT_EQ(sequenceIn(app, QStringLiteral("theme.toggle")), QStringLiteral("Ctrl+Shift+Y")) << "a rebind stays the user's";
+    EXPECT_TRUE(sequenceIn(app, QStringLiteral("task.openExternal")).isEmpty()) << "a cleared binding stays cleared";
+    app.flushSave();
+  }
+  const QJsonObject after = readJson(appDataDir() + "/state.json");
+  ASSERT_EQ(after.value("schemaVersion").toInt(), heap::state::kSchemaVersion);
+
+  // Whatever a later build wrote, at every level, is still there.
+  EXPECT_EQ(after.value("laterRootKey"), before.value("laterRootKey"));
+  const QJsonObject settings = after.value("settings").toObject();
+  EXPECT_EQ(settings.value("laterSetting"), before.value("laterRootKey"));
+  const QJsonObject shortcuts = settings.value("shortcuts").toObject();
+  EXPECT_EQ(shortcuts.value("theme.toggle").toString(), QStringLiteral("Ctrl+Shift+Y"));
+  EXPECT_TRUE(shortcuts.contains("task.openExternal") && shortcuts.value("task.openExternal").toString().isEmpty());
+  EXPECT_EQ(after.value("events").toArray().at(0).toObject().value("laterEventKey"), before.value("laterRootKey"));
+
+  QJsonObject pb = before.value("profiles").toArray().at(0).toObject();
+  QJsonObject pa = after.value("profiles").toArray().at(0).toObject();
+  EXPECT_EQ(pa.value("laterProfileKey"), before.value("laterRootKey"));
+  const QJsonArray firstTasks = pb.value("tasks").toArray();
+  const QJsonObject tasksBefore = byId(pb.take("tasks").toArray());
+  const QJsonObject tasksAfter = byId(pa.take("tasks").toArray());
+  expectKept(pb, pa, QStringLiteral("profiles/0"), false);
+  ASSERT_EQ(tasksBefore.keys(), tasksAfter.keys());
+  for(auto it = tasksBefore.begin(); it != tasksBefore.end(); ++it) {
+    const QJsonObject t = it.value().toObject();
+    expectKept(t, tasksAfter.value(it.key()).toObject(), "tasks/" + it.key(), !t.value("externalId").toString().isEmpty());
+  }
+
+  const QJsonObject timed = tasksAfter.value(firstTasks.at(0).toObject().value("id").toString()).toObject();
+  EXPECT_EQ(timed.value("trackedSeconds").toInt(), 5400);
+  EXPECT_EQ(timed.value("local").toObject().value("sessions").toArray().at(0).toObject().value("seconds").toInt(), 5400)
+      << "the old total is one session before 0.8.0";
+
+  const QJsonObject card = tasksAfter.value("t-tracker-card").toObject();
+  EXPECT_EQ(card.value("title").toString(), QStringLiteral("The tracker's title"));
+  EXPECT_EQ(card.value("priority").toString(), QStringLiteral("P2"));
+  const QJsonObject local = card.value("local").toObject();
+  EXPECT_EQ(local.value("myPriority").toString(), QStringLiteral("P0"));
+  EXPECT_TRUE(local.value("notes").toString().contains(QStringLiteral("My own title")));
+  EXPECT_TRUE(local.value("notes").toString().contains(QStringLiteral("My own notes on it")));
+
+  // The next launch reads the v12 file and writes it back unchanged: the rung
+  // ran once and does not run again.
+  {
+    AppController app;
+    EXPECT_EQ(sequenceIn(app, QStringLiteral("theme.toggle")), QStringLiteral("Ctrl+Shift+Y"));
+    app.flushSave();
+  }
+  QJsonObject again = readJson(appDataDir() + "/state.json");
+  QJsonObject first = after;
+  for(QJsonObject* doc : {&again, &first}) {
+    doc->remove("taskHistory");  // a log of this run, not the user's data
+  }
+  EXPECT_EQ(QJsonDocument(again).toJson().toStdString(), QJsonDocument(first).toJson().toStdString());
 }
 
 INSTANTIATE_TEST_SUITE_P(Profiles, UpgradeLossless, ::testing::ValuesIn(sources()), [](const auto& info) {

@@ -2538,6 +2538,26 @@ Item {
                             readonly property var act: IntegrationActivity.states[intCard.intKey] || ({})
                             readonly property var busy: intCard.act.busy || ({})
                             readonly property string lastError: intCard.act.error || ""
+                            // Merge / pull requests (APP-242), read-only:
+                            // whether they come in, which ones, and whether
+                            // their cards may be moved here.
+                            readonly property string reviewEnabledKey: intDelegate.modelData.reviewEnabledKey || ""
+                            readonly property string reviewRolesKey: intDelegate.modelData.reviewRolesKey || ""
+                            readonly property bool hasReviews: intDelegate.modelData.reviewRolesKey !== undefined
+                            readonly property bool reviewsOn: intCard.reviewEnabledKey === ""
+                                || intCard.conf[intCard.reviewEnabledKey] === true
+                                || intCard.conf[intCard.reviewEnabledKey] === "true"
+                            readonly property var reviewRoles: {
+                                const v = intCard.conf[intCard.reviewRolesKey];
+                                if (v === undefined || v === null)
+                                    return intDelegate.modelData.reviewRolesDefault || [];
+                                return String(v).split(",").map(s => s.trim().toLowerCase()).filter(s => s.length > 0);
+                            }
+                            function toggleReviewRole(role) {
+                                const next = intCard.reviewRoles.filter(r => r !== role);
+                                if (next.length === intCard.reviewRoles.length) next.push(role);
+                                root.setNested("integrations", intCard.intKey, intCard.reviewRolesKey, next.join(","));
+                            }
                             function run(action) {
                                 intCard.commitFields()
                                 IntegrationActivity.start(intCard.intKey, action)
@@ -2754,6 +2774,67 @@ Item {
                                           : I18n.t("settings.integrations.writeStatus.offHint").arg(intDelegate.modelData.name)
                                     checked: intCard.conf.writeStatus === true
                                     onToggled: (checked) => AppController.setTrackerWriteEnabled(intCard.intKey, checked)
+                                }
+
+                                SwitchRow {
+                                    objectName: "int-review-pull-" + intCard.intKey
+                                    visible: intCard.hasReviews && intCard.reviewEnabledKey !== ""
+                                    Layout.fillWidth: true
+                                    separator: false
+                                    label: I18n.t("settings.int.review.pull")
+                                    checked: intCard.reviewsOn
+                                    onToggled: (checked) => root.setNested("integrations", intCard.intKey, intCard.reviewEnabledKey, checked)
+                                }
+                                SettingsRow {
+                                    objectName: "int-review-roles-" + intCard.intKey
+                                    visible: intCard.hasReviews && intCard.reviewRolesKey !== "" && intCard.reviewsOn
+                                    Layout.fillWidth: true
+                                    separator: false
+                                    label: I18n.t("settings.int.review.roles")
+                                    Row {
+                                        spacing: Theme.spXs
+                                        Repeater {
+                                            model: ["author", "assignee", "reviewer"]
+                                            delegate: Rectangle {
+                                                id: roleChip
+                                                required property string modelData
+                                                readonly property bool on: intCard.reviewRoles.indexOf(roleChip.modelData) >= 0
+                                                objectName: "int-review-role-" + intCard.intKey + "-" + roleChip.modelData
+                                                implicitWidth: roleTxt.implicitWidth + 2 * Theme.spMd
+                                                implicitHeight: Theme.chipHSmall
+                                                radius: Theme.radiusSm
+                                                color: roleChip.on ? Theme.accentSoft : "transparent"
+                                                border.color: roleChip.on ? Theme.accent : Theme.border
+                                                border.width: 1
+                                                Text {
+                                                    id: roleTxt
+                                                    anchors.centerIn: parent
+                                                    text: I18n.t("settings.int.review.role." + roleChip.modelData)
+                                                    color: roleChip.on ? Theme.text : Theme.textMuted
+                                                    font.pixelSize: Theme.fsSm
+                                                }
+                                                ClickArea {
+                                                    objectName: roleChip.objectName + "-click"
+                                                    anchors.fill: parent
+                                                    label: roleTxt.text
+                                                    checkable: true
+                                                    checked: roleChip.on
+                                                    showTip: false
+                                                    onActivated: intCard.toggleReviewRole(roleChip.modelData)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                SwitchRow {
+                                    objectName: "int-review-movable-" + intCard.intKey
+                                    visible: intCard.hasReviews && intCard.reviewsOn
+                                    Layout.fillWidth: true
+                                    separator: false
+                                    label: I18n.t("settings.int.review.movable")
+                                    hint: I18n.t("settings.int.review.movable.hint")
+                                    checked: intCard.conf.reviewMovable === true
+                                    onToggled: (checked) => root.setNested("integrations", intCard.intKey, "reviewMovable", checked)
                                 }
 
                                 // Device-flow banner: show the code the user must

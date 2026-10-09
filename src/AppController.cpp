@@ -128,6 +128,9 @@ namespace {
 // single letters on the task under the cursor, Ctrl+4..9 for My views.
 constexpr int kShortcutsSchema = 4;
 
+// Defined with the other load helpers below.
+bool slugLegacyPersonIds(Profile& pr);
+
 // The keys whose meaning a returning user's hands still remember (APP-281
 // A4, keymap.md "Что меняется для пользователей 0.7.x"): the old default
 // sequence, the action it ran, and the schema it changed in. The first press
@@ -1380,30 +1383,9 @@ AppController::AppController(QObject* parent) :
   // sample-data ids ("p1".."p6") to slug form ("e.zaharov"). CalEvent.
   // attendees is a freeform string of names — no cross-references to fix.
   {
-    static const QRegularExpression kLegacyId(QStringLiteral("^p-?[0-9a-fA-F]+$"));
     bool changed = false;
     for(Profile& pr : m_profiles) {
-      QSet<QString> taken;
-      for(const Person& pe : pr.people) {
-        taken.insert(pe.id);
-      }
-      for(Person& pe : pr.people) {
-        if(!kLegacyId.match(pe.id).hasMatch() && !pe.id.isEmpty()) {
-          continue;
-        }
-        const QString slug = heap::text::slugifyPersonName(pe.name);
-        if(slug.isEmpty()) {
-          continue;
-        }
-        QString candidate = slug;
-        for(int i = 2; taken.contains(candidate) && i < 1000; ++i) {
-          candidate = slug + QChar('-') + QString::number(i);
-        }
-        taken.remove(pe.id);
-        taken.insert(candidate);
-        pe.id = candidate;
-        changed = true;
-      }
+      changed = slugLegacyPersonIds(pr) || changed;
     }
     if(changed) {
       for(const Profile& pr : m_profiles) {
@@ -8189,6 +8171,9 @@ Profile AppController::buildExampleProfile(QVector<CalEvent>* events) const {
   const SampleData::Lang seedLang = (m_language == "ru") ? SampleData::Lang::Ru : SampleData::Lang::En;
   p.tasks = SampleData::tasks(seedLang);
   p.people = SampleData::people(seedLang);
+  // The ids every later launch would give them anyway: an example saved with
+  // "p1" was renamed on each start, and the file never matched what it held.
+  slugLegacyPersonIds(p);
   QVariantList st;
   for(const auto& m : SampleData::statuses(seedLang)) {
     st.push_back(m);
@@ -10649,6 +10634,13 @@ QVariantList AppController::integrationCatalog() const {
     m.insert(QStringLiteral("directory"), d.kind == heap::integrations::ProviderKind::Directory);
     // Whether the card offers "change the status in …" (APP-243).
     m.insert(QStringLiteral("writesStatus"), heap::integrations::writesStatus(d));
+    // Merge / pull requests (APP-242): the config keys the card's switches
+    // write, absent for a provider that has none.
+    if(!d.reviewLists.isEmpty() && d.reviewParser != nullptr) {
+      m.insert(QStringLiteral("reviewEnabledKey"), d.reviewEnabledKey);
+      m.insert(QStringLiteral("reviewRolesKey"), d.reviewRolesKey);
+      m.insert(QStringLiteral("reviewRolesDefault"), d.reviewRolesDefault);
+    }
     out.append(m);
   }
   return out;
@@ -11571,6 +11563,35 @@ const QStringList& knownRootKeys() {
   return keys;
 }
 
+// Legacy "p-XXXXXXXX" ids (UUID-short, pre-slug scheme) and the sample-data
+// ids ("p1".."p6") become slug ids ("e.zaharov"). True when one changed.
+bool slugLegacyPersonIds(Profile& pr) {
+  static const QRegularExpression kLegacyId(QStringLiteral("^p-?[0-9a-fA-F]+$"));
+  bool changed = false;
+  QSet<QString> taken;
+  for(const Person& pe : pr.people) {
+    taken.insert(pe.id);
+  }
+  for(Person& pe : pr.people) {
+    if(!kLegacyId.match(pe.id).hasMatch() && !pe.id.isEmpty()) {
+      continue;
+    }
+    const QString slug = heap::text::slugifyPersonName(pe.name);
+    if(slug.isEmpty()) {
+      continue;
+    }
+    QString candidate = slug;
+    for(int i = 2; taken.contains(candidate) && i < 1000; ++i) {
+      candidate = slug + QChar('-') + QString::number(i);
+    }
+    taken.remove(pe.id);
+    taken.insert(candidate);
+    pe.id = candidate;
+    changed = true;
+  }
+  return changed;
+}
+
 const QStringList& knownSettingsKeys() {
   static const QStringList keys = {QStringLiteral("theme"),
                                    QStringLiteral("density"),
@@ -12149,8 +12170,11 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
     qWarning("state.json schema v%d is newer than this build's v%d — saving disabled", onDiskSchema, heap::state::kSchemaVersion);
   }
 
-  // Keys this build does not know, at the version it writes: kept (PLAT-26).
-  if(onDiskSchema == heap::state::kSchemaVersion) {
+  // Keys this build does not know: kept (PLAT-26), from the first version that
+  // carried them through on, as for profiles and tasks. Only the current
+  // version used to qualify, so a 0.7.x (v11) file lost its root and settings
+  // extras on the upgrade to v12 (APP-273).
+  if(onDiskSchema >= heap::state::kPassThroughSince && onDiskSchema <= heap::state::kSchemaVersion) {
     m_rootExtra = unknownKeys(root, knownRootKeys());
     m_settingsExtra = unknownKeys(root.value("settings").toObject(), knownSettingsKeys());
   }

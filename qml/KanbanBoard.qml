@@ -1084,6 +1084,25 @@ Item {
                                         NumberAnimation { target: cntPill; property: "scale"; to: 1; duration: Theme.durPop; easing.type: Theme.easeExit }
                                     }
                                 }
+                                // The column's estimates added up (APP-246): a
+                                // fact beside the count, tasks without one
+                                // counted apart. Quiet shows it on hover only.
+                                Text {
+                                    id: colEst
+                                    objectName: "column-estimate"
+                                    visible: col.estimate.minutes > 0 && (!Style.quiet || col.headerRevealed)
+                                    text: "~" + I18n.fmtMinutes(col.estimate.minutes)
+                                    color: Theme.textDim
+                                    font.family: Theme.fontUi
+                                    font.features: Theme.tabularNums
+                                    font.pixelSize: Theme.fsSm
+                                    Accessible.role: Accessible.StaticText
+                                    Accessible.name: colEst.text
+                                        + (col.estimate.without > 0 ? " · " + I18n.count(col.estimate.without, "estimate.without") : "")
+                                    QQC.ToolTip.visible: col.estimate.without > 0 && estHover.hovered
+                                    QQC.ToolTip.text: I18n.count(col.estimate.without, "estimate.without")
+                                    HoverHandler { id: estHover }
+                                }
                                 Item { Layout.fillWidth: true }
                             }
                             // "+" at the header's end, laid over it like the
@@ -1533,6 +1552,14 @@ Item {
                         today: AppController.today
                         newIds: AppController.syncNewTaskIds
                     }
+                    // An edited estimate changes no count: its own tick.
+                    ChangeTick { id: estTick }
+                    Connections {
+                        target: AppController.tasks
+                        function onDataChanged() { estTick.bump() }
+                    }
+                    readonly property var estimate: (estTick.rev >= 0 && colFilter.count > 0)
+                        ? AppController.estimateSummary(colFilter.ids()) : ({ minutes: 0, without: 0 })
                 }
             }
 

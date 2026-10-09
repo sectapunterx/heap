@@ -149,6 +149,9 @@ var ITEMS = [
     ["integrations", "card", "settings.integrations.autoSync"],
     // The card row names its tracker ("%1"); search shows it with a generic word.
     ["integrations", "card", "settings.integrations.writeStatus", "settings.integrations.writeStatus.any"],
+    ["integrations", "card", "settings.int.review.pull"],
+    ["integrations", "card", "settings.int.review.roles"],
+    ["integrations", "card", "settings.int.review.movable"],
     ["integrations", "group", "settings.integrations.group.services"],
 
     ["git", "group", "settings.git.repos"],
