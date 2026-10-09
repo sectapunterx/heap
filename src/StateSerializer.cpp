@@ -1201,6 +1201,25 @@ void migrateTaskV11ToV12(QJsonObject& task, bool ru) {
   }
 }
 
+// v11→v12 (APP-251): the timer kept one total; it becomes one session with no
+// date ("before 0.8.0"), so the sum stays what it was and new sessions add to
+// it. trackedSeconds itself is kept: it is the sum the views read.
+void migrateTimerToSessionsV11ToV12(QJsonObject& task) {
+  const int tracked = task.value(QStringLiteral("trackedSeconds")).toInt(0);
+  if(tracked <= 0) {
+    return;
+  }
+  QJsonObject local = task.value(QStringLiteral("local")).toObject();
+  if(local.contains(QStringLiteral("sessions"))) {
+    return;
+  }
+  local["sessions"] = QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("before-0.8.0")},
+                                             {QStringLiteral("start"), QString()},
+                                             {QStringLiteral("end"), QString()},
+                                             {QStringLiteral("seconds"), tracked}}};
+  task["local"] = local;
+}
+
 // heap 2 (APP-258): the old sidebar's Focus pair (Blocked, In review) jumped
 // to a board column; it is now two ordinary saved views at the top of "My
 // views", for every profile that has those columns and lacks such a view.
@@ -1294,6 +1313,7 @@ bool migrateState(QJsonObject& root, int fromVersion) {
       for(const auto& v : tasks) {
         QJsonObject t = v.toObject();
         migrateTaskV11ToV12(t, ru);
+        migrateTimerToSessionsV11ToV12(t);
         out.append(t);
       }
       return out;

@@ -1,6 +1,8 @@
 #include "local/Effective.h"
 #include "views/SavedViewMatch.h"
 
+#include <optional>
+
 namespace heap::savedviews {
 
 CompiledView compile(const SavedView& v, const QDate& today, const QVariantList& statuses) {
@@ -40,8 +42,17 @@ QHash<QString, int> countMatches(const QVector<SavedView>& views,
   }
   QVector<CompiledView> compiled;
   compiled.reserve(views.size());
+  std::optional<QSet<QString>> blocked;  // built once, if any view asks
   for(const SavedView& v : views) {
     compiled.append(compile(v, today, statuses));
+    if(compiled.last().query.usesBlocked()) {
+      if(!blocked) {
+        blocked = heap::query::openlyBlockedIds(tasks.items(), [](const Task& t) {
+          return t.status == QLatin1String("done");
+        });
+      }
+      compiled.last().query.setBlockedIds(*blocked);
+    }
     out.insert(v.id, 0);
   }
   QVector<int> counts(views.size(), 0);

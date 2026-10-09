@@ -31,6 +31,14 @@ TaskFilterProxy::TaskFilterProxy(QObject* parent) : QSortFilterProxyModel(parent
 }
 
 void TaskFilterProxy::refilter() {
+  // `is:blocked` is a fact about other rows: taken from the model now.
+  if(m_query.usesBlocked()) {
+    if(const auto* tasks = qobject_cast<const TaskModel*>(sourceModel()); tasks != nullptr) {
+      m_query.setBlockedIds(heap::query::openlyBlockedIds(tasks->items(), [](const Task& t) {
+        return t.status == QStringLiteral("done");
+      }));
+    }
+  }
   m_refiltering = true;
   invalidateFilter();
   m_refiltering = false;
@@ -216,6 +224,22 @@ bool TaskFilterProxy::lessThan(const QModelIndex& left, const QModelIndex& right
       return ld.isValid();
     }
     cmp = ld < rd ? -1 : (rd < ld ? 1 : 0);
+  } else if(mode == QStringLiteral("when")) {
+    // "When" I plan to do it (APP-250); no plan sorts last, like no date.
+    const QDateTime ld = src->data(left, TaskModel::ScheduledAtRole).toDateTime();
+    const QDateTime rd = src->data(right, TaskModel::ScheduledAtRole).toDateTime();
+    if(ld.isValid() != rd.isValid()) {
+      return ld.isValid();
+    }
+    cmp = ld < rd ? -1 : (rd < ld ? 1 : 0);
+  } else if(mode == QStringLiteral("estimate")) {
+    // Smallest first; no estimate last in either direction.
+    const int le = src->data(left, TaskModel::EstimateMinutesRole).toInt();
+    const int re = src->data(right, TaskModel::EstimateMinutesRole).toInt();
+    if((le > 0) != (re > 0)) {
+      return le > 0;
+    }
+    cmp = le - re;
   } else if(mode == QStringLiteral("updated")) {
     const QDateTime lu = src->data(left, TaskModel::StatusChangedAtRole).toDateTime();
     const QDateTime ru = src->data(right, TaskModel::StatusChangedAtRole).toDateTime();

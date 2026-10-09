@@ -47,6 +47,19 @@ struct LocalTag {
   bool operator==(const LocalTag&) const = default;
 };
 
+// One stretch of time on the timer (APP-251). `start`/`end` are when it ran;
+// a session with no start is what the timer had summed up before 0.8.0 (or
+// before sessions existed), and then `seconds` is its length. For a dated
+// session `seconds` is unused: the length is end - start.
+struct TimerSession {
+  QString id;
+  QDateTime start;
+  QDateTime end;
+  int seconds = 0;
+
+  bool operator==(const TimerSession&) const = default;
+};
+
 struct TaskLocal {
   // The card's own notepad, markdown (APP-237). Also where a locally edited
   // tracker description or title lands instead of being dropped.
@@ -68,6 +81,9 @@ struct TaskLocal {
   // The column a task was in when "Done" (d) took it out, so a second d puts
   // it back there (APP-268).
   QString doneFrom;
+  // What the timer recorded, session by session (APP-251). The task's
+  // trackedSeconds is their sum, kept in step by every write.
+  QVector<TimerSession> sessions;
   // Keys of `local` this build does not read, carried through a save.
   QJsonObject extra;
 

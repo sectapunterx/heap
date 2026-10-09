@@ -1,0 +1,355 @@
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Layouts
+import QtQuick.Controls.Basic as QQC
+import TodoCpp
+
+// The card's own checklist (APP-236): my steps, at any depth, never sent to
+// the tracker and never rewritten by a pull. One row per item; the keyboard
+// works the list: Space / x tick, Enter or F2 edit, Tab / Shift+Tab a level
+// deeper / shallower, Alt+↑/↓ move with the sub-items, Delete remove, C make
+// it a card of its own. A tick on a parent ticks everything under it; a
+// parent all of whose children are done closes itself, drawn with its own
+// mark. "As text" edits the whole list as lines ("-- [x] item").
+ColumnLayout {
+    id: root
+    objectName: "task-doc-checklist"
+
+    property string taskId: ""
+    // Bumped by the document on every change to the tasks.
+    property int rev: 0
+    signal openTask(string id)
+
+    readonly property var items: root.rev >= 0 && root.taskId.length > 0 ? AppController.taskChecklist(root.taskId) : []
+    readonly property int doneCount: root.items.filter(i => i.done).length
+    property bool textMode: false
+    // The row to give the keyboard back to after the list is rebuilt.
+    property string _focusId: ""
+    property string _editId: ""
+
+    spacing: Theme.spXs
+
+    function focusItem(id) {
+        root._focusId = id;
+        for (let i = 0; i < rows.count; i++) {
+            const r = rows.itemAt(i) as ItemRow;
+            if (r && r.itemId === id) { r.forceActiveFocus(); return; }
+        }
+    }
+    function focusAdd() { addField.forceActiveFocus(); }
+
+    RowLayout {
+        Layout.fillWidth: true
+        spacing: Theme.spMd
+        SectionHeader {
+            title: I18n.t("local.checklist")
+            note: root.items.length > 0 ? root.doneCount + "/" + root.items.length : ""
+        }
+        Text {
+            objectName: "cl-text-mode"
+            text: root.textMode ? I18n.t("local.checklist.asList") : I18n.t("local.checklist.asText")
+            color: tmCA.hovered ? Theme.text : Theme.textDim
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsXs
+            ClickArea {
+                id: tmCA
+                label: parent.text
+                onActivated: {
+                    if (root.textMode) AppController.setTaskChecklistText(root.taskId, textArea.text);
+                    else textArea.text = AppController.taskChecklistText(root.taskId);
+                    root.textMode = !root.textMode;
+                    if (root.textMode) textArea.forceActiveFocus();
+                }
+            }
+        }
+    }
+
+    // ── the list ──
+    Repeater {
+        id: rows
+        model: root.textMode ? [] : root.items
+        delegate: ItemRow {}
+    }
+
+    // A new step — or several: a pasted list is one item per line, levels
+    // and ticks read from its dashes and [x]. Enter adds, Shift+Enter is a
+    // new line. After Enter on an item being edited, what is typed here goes
+    // right after that item, at its level.
+    property string _insertAfter: ""
+    property int _insertLevel: 1
+    QQC.TextArea {
+        id: addField
+        objectName: "cl-add"
+        visible: !root.textMode
+        Layout.fillWidth: true
+        wrapMode: TextEdit.Wrap
+        textFormat: TextEdit.PlainText
+        placeholderText: I18n.t("local.checklist.addPh")
+        placeholderTextColor: Theme.textDim
+        color: Theme.text
+        font.family: Theme.fontUi
+        font.pixelSize: Theme.fsSm
+        leftPadding: Theme.spSm
+        topPadding: Theme.spXs
+        bottomPadding: Theme.spXs
+        background: Rectangle {
+            radius: Theme.radiusMd
+            color: "transparent"
+            border.width: 1
+            border.color: addField.activeFocus ? Theme.focusRing : Theme.border
+        }
+        function submit() {
+            if (addField.text.trim().length === 0) return;
+            const id = AppController.addChecklistItems(root.taskId, root._insertAfter, addField.text, root._insertLevel);
+            addField.text = "";
+            if (root._insertAfter.length > 0 && id.length > 0) root._insertAfter = id;
+        }
+        Keys.onReturnPressed: (e) => { if (e.modifiers & Qt.ShiftModifier) { e.accepted = false; return; } addField.submit(); }
+        Keys.onEnterPressed: addField.submit()
+        Keys.onEscapePressed: { root._insertAfter = ""; addField.text = ""; }
+        Keys.onUpPressed: (e) => {
+            if (addField.text.length === 0 && root.items.length > 0) root.focusItem(root.items[root.items.length - 1].id);
+            else e.accepted = false;
+        }
+        onActiveFocusChanged: if (!activeFocus) { root._insertAfter = ""; root._insertLevel = 1; }
+    }
+
+    // ── the list as text ──
+    QQC.TextArea {
+        id: textArea
+        objectName: "cl-text"
+        visible: root.textMode
+        Layout.fillWidth: true
+        wrapMode: TextEdit.Wrap
+        textFormat: TextEdit.PlainText
+        selectByMouse: true
+        color: Theme.text
+        font.family: Theme.fontMono
+        font.pixelSize: Theme.fsSm
+        background: Rectangle {
+            radius: Theme.radiusMd
+            color: Theme.panel2
+            border.width: 1
+            border.color: textArea.activeFocus ? Theme.focusRing : Theme.border
+        }
+        Keys.onEscapePressed: {
+            AppController.setTaskChecklistText(root.taskId, textArea.text);
+            root.textMode = false;
+        }
+        onActiveFocusChanged: if (!activeFocus && root.textMode) AppController.setTaskChecklistText(root.taskId, textArea.text)
+    }
+
+    AppMenu {
+        id: itemMenu
+        objectName: "cl-menu"
+        property var item: ({})
+        AppMenuItem {
+            text: I18n.t("local.checklist.edit")
+            onTriggered: { root._editId = itemMenu.item.id; root.focusItem(itemMenu.item.id); }
+        }
+        AppMenuItem {
+            text: itemMenu.item.cardId ? I18n.t("local.checklist.backToList") : I18n.t("local.checklist.toCard")
+            onTriggered: {
+                if (itemMenu.item.cardId) AppController.checklistCardBack(root.taskId, itemMenu.item.id);
+                else AppController.checklistItemToCard(root.taskId, itemMenu.item.id);
+            }
+        }
+        AppMenuSeparator {}
+        AppMenuItem {
+            text: I18n.t("local.checklist.remove")
+            danger: true
+            onTriggered: AppController.removeChecklistItem(root.taskId, itemMenu.item.id)
+        }
+    }
+
+    component ItemRow: FocusScope {
+        id: row
+        required property var modelData
+        required property int index
+        readonly property string itemId: row.modelData.id
+        readonly property bool editing: root._editId === row.itemId
+        objectName: "cl-item-" + row.index
+        Layout.fillWidth: true
+        implicitHeight: Math.max(Theme.chipHSmall, rowLine.implicitHeight)
+        activeFocusOnTab: true
+
+        Component.onCompleted: if (root._focusId === row.itemId) Qt.callLater(() => row.forceActiveFocus())
+        onActiveFocusChanged: if (activeFocus) root._focusId = row.itemId
+
+        function act(fn) { root._focusId = row.itemId; fn(); }
+
+        Keys.onPressed: (e) => {
+            if (row.editing) return;
+            const alt = (e.modifiers & Qt.AltModifier);
+            if (e.key === Qt.Key_Space || (e.key === Qt.Key_X && !e.modifiers)) {
+                row.act(() => AppController.toggleChecklistItem(root.taskId, row.itemId));
+            } else if (e.key === Qt.Key_Tab) {
+                row.act(() => AppController.indentChecklistItem(root.taskId, row.itemId, 1));
+            } else if (e.key === Qt.Key_Backtab) {
+                row.act(() => AppController.indentChecklistItem(root.taskId, row.itemId, -1));
+            } else if (alt && e.key === Qt.Key_Up) {
+                row.act(() => AppController.moveChecklistItem(root.taskId, row.itemId, -1));
+            } else if (alt && e.key === Qt.Key_Down) {
+                row.act(() => AppController.moveChecklistItem(root.taskId, row.itemId, 1));
+            } else if (e.key === Qt.Key_Up) {
+                if (row.index > 0) root.focusItem(root.items[row.index - 1].id);
+            } else if (e.key === Qt.Key_Down) {
+                if (row.index + 1 < root.items.length) root.focusItem(root.items[row.index + 1].id);
+                else root.focusAdd();
+            } else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter || e.key === Qt.Key_F2) {
+                root._editId = row.itemId;
+                editField.text = row.modelData.text;
+                editField.forceActiveFocus();
+            } else if (e.key === Qt.Key_Delete) {
+                const next = root.items[row.index + 1] || root.items[row.index - 1];
+                root._focusId = next ? next.id : "";
+                AppController.removeChecklistItem(root.taskId, row.itemId);
+            } else if (e.key === Qt.Key_C && !e.modifiers) {
+                if (!row.modelData.cardId) row.act(() => AppController.checklistItemToCard(root.taskId, row.itemId));
+            } else if (e.key === Qt.Key_Menu) {
+                itemMenu.item = row.modelData;
+                itemMenu.popup(row, 0, row.height);
+            } else return;
+            e.accepted = true;
+        }
+        onEditingChanged: if (row.editing) { editField.text = row.modelData.text; editField.forceActiveFocus(); }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: Theme.radiusSm
+            color: row.activeFocus ? Theme.rowHighlight : (rowHover.hovered ? Theme.panel2 : "transparent")
+        }
+        HoverHandler { id: rowHover }
+        TapHandler {
+            acceptedButtons: Qt.RightButton
+            onTapped: { itemMenu.item = row.modelData; itemMenu.popup(); }
+        }
+
+        RowLayout {
+            id: rowLine
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.leftMargin: Theme.spXl * (row.modelData.level - 1) + Theme.spXs
+            spacing: Theme.spSm
+
+            CheckMark {
+                objectName: row.modelData.done ? (row.modelData.autoDone ? "cl-check-auto" : "cl-check-manual") : "cl-check-open"
+                done: row.modelData.done
+                auto: row.modelData.autoDone
+                ClickArea {
+                    label: row.modelData.text
+                    tip: row.modelData.autoDone ? I18n.t("local.checklist.autoTip") : ""
+                    checkable: true
+                    checked: row.modelData.done
+                    role: Accessible.CheckBox
+                    onActivated: row.act(() => AppController.toggleChecklistItem(root.taskId, row.itemId))
+                }
+            }
+            Text {
+                id: itemText
+                visible: !row.editing
+                Layout.fillWidth: true
+                text: row.modelData.text
+                textFormat: Text.PlainText
+                wrapMode: Text.Wrap
+                color: row.modelData.done ? Theme.textDim : Theme.text
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsSm
+                font.strikeout: row.modelData.done
+                TapHandler {
+                    onTapped: row.forceActiveFocus()
+                    onDoubleTapped: root._editId = row.itemId
+                }
+            }
+            QQC.TextField {
+                id: editField
+                objectName: "cl-edit"
+                visible: row.editing
+                Layout.fillWidth: true
+                color: Theme.text
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsSm
+                padding: 0
+                leftPadding: Theme.spXs
+                background: Rectangle { radius: Theme.radiusSm; color: Theme.panel2; border.width: 1; border.color: Theme.focusRing }
+                // Enter keeps the text and starts the next item at this level.
+                onAccepted: {
+                    const lvl = row.modelData.level;
+                    const id = row.itemId;
+                    root._editId = "";
+                    AppController.editChecklistItem(root.taskId, id, editField.text);
+                    root._insertAfter = id;
+                    root._insertLevel = lvl;
+                    root._focusId = "";
+                    Qt.callLater(() => { addField.forceActiveFocus(); root._insertAfter = id; root._insertLevel = lvl; });
+                }
+                Keys.onEscapePressed: { root._editId = ""; row.forceActiveFocus(); }
+                Keys.onTabPressed: {
+                    AppController.editChecklistItem(root.taskId, row.itemId, editField.text);
+                    root._editId = "";
+                    row.act(() => AppController.indentChecklistItem(root.taskId, row.itemId, 1));
+                }
+                onActiveFocusChanged: if (!activeFocus && row.editing) {
+                    root._editId = "";
+                    AppController.editChecklistItem(root.taskId, row.itemId, editField.text);
+                }
+            }
+            // An item that became a card: its key, opening it.
+            Text {
+                objectName: "cl-card"
+                visible: String(row.modelData.cardId || "").length > 0
+                text: "→ " + row.modelData.cardId
+                color: cardCA.hovered ? Theme.text : Theme.textMuted
+                font.family: Theme.fontMono
+                font.pixelSize: Theme.fsXs
+                ClickArea {
+                    id: cardCA
+                    enabled: !!row.modelData.cardExists
+                    label: parent.text
+                    onActivated: root.openTask(row.modelData.cardId)
+                }
+            }
+        }
+    }
+
+    // Open / done by hand / closed because every sub-item is done. Shapes,
+    // not only colours: a square box, a square with a tick, and a round one
+    // with a tick for "closed automatically".
+    component CheckMark: Item {
+        id: cm
+        property bool done: false
+        property bool auto: false
+        implicitWidth: Theme.iconSize
+        implicitHeight: Theme.iconSize
+        onDoneChanged: canvas.requestPaint()
+        onAutoChanged: canvas.requestPaint()
+        Canvas {
+            id: canvas
+            anchors.fill: parent
+            property color ink: cm.done ? Theme.textMuted : Theme.borderStrong
+            onInkChanged: requestPaint()
+            onPaint: {
+                const ctx = getContext("2d");
+                ctx.reset();
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = canvas.ink;
+                const w = width, h = height;
+                ctx.beginPath();
+                if (cm.auto) {
+                    ctx.arc(w / 2, h / 2, w / 2 - 0.5, 0, Math.PI * 2);
+                } else {
+                    ctx.roundedRect(0.5, 0.5, w - 1, h - 1, Theme.radiusSm, Theme.radiusSm);
+                }
+                ctx.stroke();
+                if (cm.done) {
+                    ctx.beginPath();
+                    ctx.moveTo(w * 0.25, h * 0.52);
+                    ctx.lineTo(w * 0.43, h * 0.7);
+                    ctx.lineTo(w * 0.76, h * 0.32);
+                    ctx.stroke();
+                }
+            }
+        }
+    }
+}

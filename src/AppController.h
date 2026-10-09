@@ -737,6 +737,91 @@ class AppController : public QObject {
   // Notes that name the task (its id as a word), newest first:
   // [{id, title, updated}] — the task document's "Mentioned in" (APP-265).
   Q_INVOKABLE QVariantList notesMentioningTask(const QString& id) const;
+
+  // ---- The local layer (APP-236…241, 246, 251): AppControllerLocal.cpp ----
+  // Nothing here is ever sent to a tracker, and no sync path writes it.
+  //
+  // My priority / due over the tracker's (APP-238): both sides and whether
+  // the tracker moved its own since I set mine — {isTicket, trackerPriority,
+  // trackerDueAt, trackerDueHasTime, myPriority, myDueAt, myDueHasTime,
+  // priorityChanged, dueChanged}.
+  Q_INVOKABLE QVariantMap trackerValues(const QString& id) const;
+  // Drops my value so the tracker's shows again: field "priority", "due", or
+  // empty for both. One undo step.
+  Q_INVOKABLE void resetToTracker(const QString& id, const QString& field = QString());
+  // Keeps mine and stops showing "changed in the tracker".
+  Q_INVOKABLE void acknowledgeTrackerChange(const QString& id);
+  // The notepad copied into a new note that names the task (APP-237);
+  // returns the note's title ("" when there is nothing to copy).
+  Q_INVOKABLE QString copyTaskNotesToNote(const QString& id);
+
+  // The card's own checklist (APP-236). Items: [{id, text, level, done,
+  // autoDone, cardId, cardExists, hasChildren}].
+  Q_INVOKABLE QVariantList taskChecklist(const QString& id) const;
+  Q_INVOKABLE QString taskChecklistText(const QString& id) const;
+  Q_INVOKABLE void setTaskChecklistText(const QString& id, const QString& text);
+  // Adds the lines of `text` after `afterItemId` (empty = at the end). A line
+  // with no dashes takes `level`. Returns the id of the last item added.
+  Q_INVOKABLE QString addChecklistItems(const QString& id, const QString& afterItemId, const QString& text, int level = 1);
+  Q_INVOKABLE void editChecklistItem(const QString& id, const QString& itemId, const QString& text);
+  Q_INVOKABLE void toggleChecklistItem(const QString& id, const QString& itemId);
+  Q_INVOKABLE void indentChecklistItem(const QString& id, const QString& itemId, int delta);
+  Q_INVOKABLE bool moveChecklistItem(const QString& id, const QString& itemId, int dir);
+  Q_INVOKABLE void removeChecklistItem(const QString& id, const QString& itemId);
+  // The item becomes a local card "part of" this one; its sub-items move
+  // into the new card's checklist and the item ticks with the card's Done.
+  // Returns the new card's id.
+  Q_INVOKABLE QString checklistItemToCard(const QString& id, const QString& itemId);
+  // Back: the card is removed and its checklist returns under the item.
+  // Refused (false) when the card has time on its timer.
+  Q_INVOKABLE bool checklistCardBack(const QString& id, const QString& itemId);
+
+  // My tags (APP-239). The catalogue: [{id, color, count}] over the profile.
+  Q_INVOKABLE QVariantList localTagCatalog() const;
+  // Ids ("#x" or "x") or {id, color}; a tag known elsewhere keeps its colour.
+  Q_INVOKABLE void setTaskLocalTags(const QString& id, const QVariantList& tags);
+  // Renames everywhere; onto an existing tag = merge.
+  Q_INVOKABLE void renameLocalTag(const QString& from, const QString& to);
+  Q_INVOKABLE void deleteLocalTag(const QString& tag);
+  Q_INVOKABLE void setLocalTagColor(const QString& tag, const QString& color);
+
+  // Links drawn by hand (APP-240): related (both ways), blocks / blocked by,
+  // part of. [{kind, linkId, target, url, isTask, exists, title, key,
+  // statusName, done}].
+  Q_INVOKABLE QVariantList taskRelations(const QString& id) const;
+  // A task by id, tracker key or URL, or a bare URL. False when `ref` is
+  // neither.
+  Q_INVOKABLE bool addRelatedLink(const QString& id, const QString& ref);
+  Q_INVOKABLE void removeRelatedLink(const QString& id, const QString& linkId);
+  // Cards whose title, id or key hold every word of `text`, for picking a
+  // link target by search: [{id, key, title, statusName}], open ones first.
+  Q_INVOKABLE QVariantList matchTasks(const QString& text, int limit = 6, const QString& exceptId = QString()) const;
+  // `blocksOther`: id blocks ref; else ref blocks id.
+  Q_INVOKABLE bool addBlockLink(const QString& id, const QString& ref, bool blocksOther);
+  Q_INVOKABLE void removeBlockLink(const QString& blockerId, const QString& blockedId);
+
+  // The comment draft (APP-241). Saved as typed; never sent anywhere.
+  Q_INVOKABLE QString taskCommentDraft(const QString& id) const;
+  Q_INVOKABLE void setTaskCommentDraft(const QString& id, const QString& text);
+  Q_INVOKABLE void clearTaskCommentDraft(const QString& id);
+  // Puts the draft on the clipboard (markdown, plus HTML for rich editors
+  // such as Jira's) and returns the ticket's URL for the caller to open.
+  Q_INVOKABLE QString copyCommentDraft(const QString& id);
+
+  // Estimates (APP-246): {count, minutes, without} over `ids` — the tasks
+  // with no estimate are a count of their own, not zero minutes.
+  Q_INVOKABLE QVariantMap estimateSummary(const QStringList& ids) const;
+
+  // Timer sessions (APP-251): [{id, start, end, seconds, undated}], newest
+  // first. Edits recompute the task's total.
+  Q_INVOKABLE QVariantList taskSessions(const QString& id) const;
+  Q_INVOKABLE bool addTaskSession(const QString& id, const QDateTime& start, const QDateTime& end);
+  Q_INVOKABLE bool updateTaskSession(const QString& id, const QString& sessionId, const QDateTime& start, const QDateTime& end);
+  Q_INVOKABLE void removeTaskSession(const QString& id, const QString& sessionId);
+  // Seconds on the timer on `day` across the profile, a running timer
+  // included up to now.
+  Q_INVOKABLE int trackedSecondsOn(const QDate& day) const;
+
   Q_INVOKABLE void startTaskTimer(const QString& id);
   Q_INVOKABLE void stopTaskTimer(const QString& id);
   Q_INVOKABLE int elapsedSecondsFor(const QString& id) const;
@@ -2022,6 +2107,17 @@ class AppController : public QObject {
   static double nextQuarterHour(const QDateTime& when);
   void scheduleFocusBlockFor(const QString& taskId);
   void focusBlockOnStatusChange(const QString& taskId, const QString& from, const QString& to);
+  // The local layer's own bookkeeping (AppControllerLocal.cpp).
+  void noteOpenBlockers_(const QString& taskId);
+  void followCardDone_(const Task* before, const Task& after);
+  // Rewrites a task's checklist through `edit` as one undo step.
+  void editChecklist_(const QString& id, const std::function<void(QVector<LocalCheckItem>&)>& edit);
+  // A task by id, tracker key or URL in the active profile; -1 = none.
+  int resolveTaskRef_(const QString& ref) const;
+  // TaskQuery::compile with this board's statuses and new ids, and the
+  // blocked set when the query asks `is:blocked` (APP-250).
+  heap::query::TaskQuery compileTaskQuery_(const QString& text) const;
+  bool m_followingCards = false;
   // Keeps a task's scheduledAt on the focus block it came from: moved with
   // it, cleared when it is deleted (after == nullptr).
   void followFocusBlock(const CalEvent& before, const CalEvent* after);

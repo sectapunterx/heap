@@ -52,6 +52,10 @@ FocusScope {
         titleField.forceActiveFocus();
         titleField.cursorPosition = titleField.length;
     }
+    // A linked card, or a checklist item that became one: opened here.
+    function openOther(id) {
+        if (id && id.length > 0 && AppController.taskById(id).id) root.open(id);
+    }
     function close() {
         if (!root.opened) return;
         root.flush();
@@ -62,6 +66,7 @@ FocusScope {
     }
     // Write what is typed now (before a switch, a quit, a close).
     function flush() {
+        draft.flush();
         body.flush();
         saveTimer.stop();
         if (root._dirtyTitle || root._dirtyBody) root._save();
@@ -183,11 +188,17 @@ FocusScope {
         case "labels": return (t.labels || []).length > 0;
         case "recurrence": return String(t.recurrence || "").length > 0;
         case "estimate": return t.estimateMinutes > 0;
+        case "tags": return root._localTags.length > 0;
         }
         return true;
     }
+    // My own layer (APP-238/239): both sides of priority and due, my tags.
+    readonly property var _tv: root._rev >= 0 && root._exists ? AppController.trackerValues(root.taskId) : ({})
+    readonly property bool _mine: root._isTicket && (String(root._tv.myPriority || "").length > 0 || root._valid(root._tv.myDueAt))
+    readonly property var _localTags: root._exists && root.task.localTags ? root.task.localTags : []
+    property bool _tagsEditing: false
     function _visible(key) { return root._has(key) || root._shown.indexOf(key) >= 0; }
-    onTaskIdChanged: root._shown = []
+    onTaskIdChanged: { root._shown = []; root._tagsEditing = false; }
 
     // A date typed into a chip ("tomorrow 15:00", "пт"): read like the input.
     function _applyDate(field, text) {
@@ -385,6 +396,15 @@ FocusScope {
                         }));
                     }
                 }
+                // My tags (APP-239): mine on any card, never the tracker's.
+                PropertyChip {
+                    id: tagsChip
+                    objectName: "task-doc-tags"
+                    visible: root._visible("tags")
+                    key: I18n.t("local.tags.key")
+                    value: root._localTags.map(l => "#" + l.id).join(" ")
+                    onClicked: { root._tagsEditing = true; tagsEditor.open(); }
+                }
                 PropertyChip {
                     id: recurChip
                     objectName: "task-doc-recurrence"
@@ -410,10 +430,65 @@ FocusScope {
                     id: addChip
                     objectName: "task-doc-add"
                     add: true
-                    visible: ["scheduled", "due", "labels", "recurrence", "estimate"].some(k => !root._visible(k))
+                    visible: ["scheduled", "due", "labels", "tags", "recurrence", "estimate"].some(k => !root._visible(k))
                     value: I18n.t("taskdoc.addProp")
                     onClicked: addMenu.popup(addChip, 0, addChip.height + Theme.spXs)
                 }
+            }
+
+            // Mine over the tracker's (APP-238): what the tracker says, said
+            // quietly, and "changed in the tracker" when it moved since I
+            // set mine — never overwriting mine. Reset is one action.
+            RowLayout {
+                objectName: "task-doc-tracker-values"
+                Layout.fillWidth: true
+                visible: root._mine
+                spacing: Theme.spMd
+                Text {
+                    objectName: "task-doc-tracker-values-text"
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: {
+                        const tv = root._tv;
+                        const bits = [];
+                        if (String(tv.myPriority || "").length > 0) bits.push(String(tv.trackerPriority || "—"));
+                        if (root._valid(tv.myDueAt))
+                            bits.push(root._valid(tv.trackerDueAt) ? I18n.t("local.tracker.due").arg(root._when(tv.trackerDueAt, tv.trackerDueHasTime))
+                                                                   : I18n.t("local.tracker.noDue"));
+                        return I18n.t("local.tracker.says").arg(root._badge.name || root._ticket.provider || "").arg(bits.join(", "))
+                            + (tv.priorityChanged || tv.dueChanged ? " · " + I18n.t("local.trackerChanged") : "");
+                    }
+                    color: root._tv.priorityChanged || root._tv.dueChanged ? Theme.signalNow : Theme.textDim
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsXs
+                }
+                Text {
+                    objectName: "task-doc-keep-mine"
+                    visible: !!(root._tv.priorityChanged || root._tv.dueChanged)
+                    text: I18n.t("local.tracker.keepMine")
+                    color: keepCA.hovered ? Theme.text : Theme.textMuted
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsXs
+                    ClickArea { id: keepCA; label: parent.text; onActivated: AppController.acknowledgeTrackerChange(root.taskId) }
+                }
+                Text {
+                    objectName: "task-doc-reset-tracker"
+                    text: I18n.t("local.tracker.reset")
+                    color: resetCA.hovered ? Theme.text : Theme.textMuted
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsXs
+                    ClickArea { id: resetCA; label: parent.text; onActivated: AppController.resetToTracker(root.taskId, "") }
+                }
+            }
+
+            TaskLocalTags {
+                id: tagsEditor
+                Layout.fillWidth: true
+                visible: root._tagsEditing
+                taskId: root.taskId
+                rev: root._rev
+                tags: root._localTags
+                onDone: root._tagsEditing = false
             }
 
             // The tracker's text, read-only, above my notes (APP-237).
@@ -440,12 +515,34 @@ FocusScope {
                     font.pixelSize: Theme.fsMd
                     onLinkActivated: (link) => Qt.openUrlExternally(link)
                 }
+            }
+            // My notes on a tracker card: never sent, never pulled over.
+            RowLayout {
+                visible: root._isTicket
+                spacing: Theme.spMd
                 Text {
                     text: I18n.t("taskdoc.myNotes")
                     color: Theme.textDim
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsXs
-                    Layout.topMargin: Theme.spMd
+                }
+                // A long notepad copied into Knowledge, naming the task.
+                Text {
+                    objectName: "task-doc-notes-to-note"
+                    visible: body.text.trim().length > 0
+                    text: I18n.t("local.notes.toNote")
+                    color: toNoteCA.hovered ? Theme.text : Theme.textDim
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsXs
+                    ClickArea {
+                        id: toNoteCA
+                        label: parent.text
+                        onActivated: {
+                            root.flush();
+                            const title = AppController.copyTaskNotesToNote(root.taskId);
+                            if (title.length > 0) root.internalLinkActivated("note", title);
+                        }
+                    }
                 }
             }
 
@@ -460,6 +557,33 @@ FocusScope {
                 onEdited: if (!root._loading) { root._dirtyBody = true; saveTimer.restart(); }
                 onEscaped: root.close()
                 onInternalLinkActivated: (kind, target) => root.internalLinkActivated(kind, target)
+            }
+
+            // My plan for the task (APP-236): its own scroll when it is long,
+            // so the text above keeps its room.
+            QQC.ScrollView {
+                id: planScroll
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(checklist.implicitHeight, root.height * 0.4)
+                contentWidth: availableWidth
+                clip: true
+                TaskLocalChecklist {
+                    id: checklist
+                    width: planScroll.availableWidth
+                    taskId: root.taskId
+                    rev: root._rev
+                    onOpenTask: (id) => root.openOther(id)
+                }
+            }
+
+            // The answer I am writing for the ticket (APP-241).
+            TaskCommentDraft {
+                id: draft
+                Layout.fillWidth: true
+                visible: root._isTicket
+                taskId: root._isTicket ? root.taskId : ""
+                rev: root._rev
+                trackerName: root._badge.name || root._ticket.provider || ""
             }
 
             // Delete, apart from everything else.
@@ -521,6 +645,14 @@ FocusScope {
                         value: (root._badge.name || root._ticket.provider || "") + " " + (root.task.externalKey || "") + " ↗"
                         link: String(root.task.externalUrl || "")
                     }
+                }
+
+                // Links drawn by hand: related, waits on, blocks (APP-240).
+                TaskRelations {
+                    Layout.fillWidth: true
+                    taskId: root.taskId
+                    rev: root._rev
+                    onOpenTask: (id) => root.openOther(id)
                 }
 
                 // Mentioned in: notes that name the task.
@@ -592,6 +724,12 @@ FocusScope {
                         color: Theme.textDim
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsXs
+                    }
+                    // Session by session (APP-251).
+                    TaskSessions {
+                        Layout.fillWidth: true
+                        taskId: root.taskId
+                        rev: root._rev
                     }
                 }
 
@@ -673,13 +811,16 @@ FocusScope {
         id: addMenu
         objectName: "task-doc-add-menu"
         Instantiator {
-            model: ["scheduled", "due", "labels", "recurrence", "estimate"]
+            model: ["scheduled", "due", "labels", "tags", "recurrence", "estimate"]
             delegate: AppMenuItem {
                 required property string modelData
                 visible: !root._visible(modelData)
                 height: visible ? implicitHeight : 0
                 text: I18n.t("taskdoc.add." + modelData)
-                onTriggered: root._shown = root._shown.concat([modelData])
+                onTriggered: {
+                    root._shown = root._shown.concat([modelData]);
+                    if (modelData === "tags") { root._tagsEditing = true; Qt.callLater(tagsEditor.open); }
+                }
             }
             onObjectAdded: (i, o) => addMenu.insertItem(i, o)
             onObjectRemoved: (i, o) => addMenu.removeItem(o)

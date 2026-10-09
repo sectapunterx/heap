@@ -19,6 +19,10 @@ const QSet<QString>& knownFields() {
                                   QStringLiteral("mention"),
                                   QStringLiteral("tag"),
                                   QStringLiteral("is"),
+                                  QStringLiteral("scheduled"),
+                                  QStringLiteral("estimate"),
+                                  QStringLiteral("branch"),
+                                  QStringLiteral("has"),
                                   QStringLiteral("sort"),
                                   QStringLiteral("limit")};
   return f;
@@ -158,11 +162,46 @@ bool compareDate(const QDate& lhs, Op op, const QDate& rhs) {
   return false;
 }
 
+// "30m", "1.5h", "2ч", "45м", "90" (minutes) → minutes; -1 when unreadable.
+int parseMinutes(const QString& raw) {
+  static const QRegularExpression rx(QStringLiteral("^(\\d+(?:[.,]\\d+)?)\\s*(m|min|h|ч|м|мин)?$"),
+                                     QRegularExpression::CaseInsensitiveOption);
+  const QRegularExpressionMatch m = rx.match(raw.trimmed());
+  if(!m.hasMatch()) {
+    return -1;
+  }
+  const double n = QString(m.captured(1)).replace(QLatin1Char(','), QLatin1Char('.')).toDouble();
+  const QString unit = m.captured(2).toLower();
+  const bool hours = unit == QLatin1String("h") || unit == QStringLiteral("ч");
+  return static_cast<int>(hours ? n * 60.0 + 0.5 : n + 0.5);
+}
+
+bool compareInt(int lhs, Op op, int rhs) {
+  switch(op) {
+    case Op::Lt:
+      return lhs < rhs;
+    case Op::Le:
+      return lhs <= rhs;
+    case Op::Gt:
+      return lhs > rhs;
+    case Op::Ge:
+      return lhs >= rhs;
+    case Op::Eq:
+    case Op::In:
+      return lhs == rhs;
+  }
+  return false;
+}
+
 QString haystackOf(const Task& t) {
   QStringList parts{t.title, t.id, t.desc, t.assignee, t.externalMeta.project};
   for(const Label& l : t.labels) {
     parts << l.id;
   }
+  for(const LocalTag& l : t.local.tags) {
+    parts << l.id;
+  }
+  parts << t.local.notes << t.local.commentDraft;
   return parts.join(QChar(' ')).toLower();
 }
 
@@ -296,11 +335,34 @@ TaskQuery TaskQuery::compile(const QString& text, const QDate& today, const QVar
                                         QStringLiteral("overdue"),
                                         QStringLiteral("recurring"),
                                         QStringLiteral("undated"),
-                                        QStringLiteral("new")};
+                                        QStringLiteral("new"),
+                                        QStringLiteral("someday"),
+                                        QStringLiteral("unscheduled"),
+                                        QStringLiteral("blocked")};
       for(const QString& v : cl.values) {
         ok = ok && kIs.contains(v);
+        q.m_usesBlocked = q.m_usesBlocked || v == QLatin1String("blocked");
       }
-    } else if(cl.field == QLatin1String("deadline")) {
+    } else if(cl.field == QLatin1String("has")) {
+      static const QSet<QString> kHas = {QStringLiteral("notes"),
+                                         QStringLiteral("draft"),
+                                         QStringLiteral("checklist"),
+                                         QStringLiteral("links"),
+                                         QStringLiteral("tags")};
+      for(const QString& v : cl.values) {
+        ok = ok && kHas.contains(v);
+      }
+    } else if(cl.field == QLatin1String("estimate")) {
+      if(cl.values.first() == QLatin1String("none")) {
+        cl.special = QStringLiteral("none");
+      } else {
+        cl.minutes = parseMinutes(cl.values.first());
+        ok = cl.minutes >= 0;
+        if(cl.op == Op::In) {
+          cl.op = Op::Eq;
+        }
+      }
+    } else if(cl.field == QLatin1String("deadline") || cl.field == QLatin1String("scheduled")) {
       const QString v = cl.values.first();
       if(v == QLatin1String("none")) {
         cl.special = QStringLiteral("none");
@@ -358,7 +420,49 @@ bool TaskQuery::clauseMatches(const Clause& c, const Task& t, const QString& hay
         return true;
       }
     }
+    // My own tags answer the same #tag, whatever tracker the card is from.
+    for(const LocalTag& l : t.local.tags) {
+      if(c.values.contains(l.id.toLower())) {
+        return true;
+      }
+    }
     return false;
+  }
+  if(c.field == QLatin1String("branch")) {
+    const QString b = t.branch.toLower();
+    for(const QString& v : c.values) {
+      if(v == QLatin1String("none") ? b.isEmpty() : b.contains(v)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  if(c.field == QLatin1String("has")) {
+    for(const QString& v : c.values) {
+      bool hit = false;
+      if(v == QLatin1String("notes")) {
+        hit = !t.local.notes.trimmed().isEmpty();
+      } else if(v == QLatin1String("draft")) {
+        hit = !t.local.commentDraft.trimmed().isEmpty();
+      } else if(v == QLatin1String("checklist")) {
+        hit = !t.local.checklist.isEmpty();
+      } else if(v == QLatin1String("links")) {
+        hit = !t.local.related.isEmpty() || !t.links.isEmpty();
+      } else if(v == QLatin1String("tags")) {
+        hit = !t.local.tags.isEmpty();
+      }
+      if(hit) {
+        return true;
+      }
+    }
+    return false;
+  }
+  if(c.field == QLatin1String("estimate")) {
+    if(c.special == QLatin1String("none")) {
+      return t.estimateMinutes <= 0;
+    }
+    // A task with no estimate satisfies no comparison, as with dates.
+    return t.estimateMinutes > 0 && compareInt(t.estimateMinutes, c.op, c.minutes);
   }
   if(c.field == QLatin1String("mention")) {
     // Who it is about: the tracker's assignee, or an @name in the text.
@@ -388,6 +492,13 @@ bool TaskQuery::clauseMatches(const Clause& c, const Task& t, const QString& hay
         hit = !done && !t.archived && !t.someday && !t.scheduledAt.isValid() && !heap::local::effectiveDueAt(t).isValid();
       } else if(v == QLatin1String("new")) {
         hit = m_newIds.contains(t.id);
+      } else if(v == QLatin1String("someday")) {
+        hit = t.someday && !done && !t.archived;
+      } else if(v == QLatin1String("unscheduled")) {
+        // Open, not parked, and no "when" (a deadline alone is not a plan).
+        hit = !done && !t.archived && !t.someday && !t.scheduledAt.isValid();
+      } else if(v == QLatin1String("blocked")) {
+        hit = !done && m_blocked.contains(t.id);
       }
       if(hit) {
         return true;
@@ -395,8 +506,9 @@ bool TaskQuery::clauseMatches(const Clause& c, const Task& t, const QString& hay
     }
     return false;
   }
-  if(c.field == QLatin1String("deadline")) {
-    const QDate due = heap::local::effectiveDueAt(t).isValid() ? heap::local::effectiveDueAt(t).date() : QDate();
+  if(c.field == QLatin1String("deadline") || c.field == QLatin1String("scheduled")) {
+    const QDateTime at = c.field == QLatin1String("scheduled") ? t.scheduledAt : heap::local::effectiveDueAt(t);
+    const QDate due = at.isValid() ? at.date() : QDate();
     if(c.special == QLatin1String("none")) {
       return !due.isValid();
     }
@@ -455,6 +567,21 @@ bool TaskQuery::matches(const Task& t, const QString& haystack) const {
     }
   }
   return !anyClauses;
+}
+
+QSet<QString> openlyBlockedIds(const QVector<Task>& tasks, const std::function<bool(const Task&)>& isDone) {
+  QSet<QString> out;
+  for(const Task& t : tasks) {
+    if(t.links.isEmpty() || t.archived || isDone(t)) {
+      continue;
+    }
+    for(const TaskLink& l : t.links) {
+      if(l.type == QLatin1String("blocks")) {
+        out.insert(l.targetId);
+      }
+    }
+  }
+  return out;
 }
 
 }  // namespace heap::query

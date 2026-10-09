@@ -32,6 +32,8 @@ Rectangle {
         ({ id: "manual", label: I18n.t("filter.sort.manual") }),
         ({ id: "priority", label: I18n.t("filter.sort.priority") }),
         ({ id: "due", label: I18n.t("filter.sort.due") }),
+        ({ id: "when", label: I18n.t("filter.sort.when") }),
+        ({ id: "estimate", label: I18n.t("filter.sort.estimate") }),
         ({ id: "updated", label: I18n.t("filter.sort.updated") }),
         ({ id: "title", label: I18n.t("filter.sort.title") }),
         ({ id: "id", label: I18n.t("filter.sort.id") })

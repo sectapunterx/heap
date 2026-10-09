@@ -32,6 +32,21 @@ Rectangle {
             font.pixelSize: Theme.fsMd
             font.weight: Theme.fwTitle
         }
+        // The selection's estimates added up (APP-246): "~6 h · 3 without
+        // an estimate". A fact; nothing is asked for.
+        Text {
+            id: estSum
+            objectName: "selection-estimate"
+            readonly property var sum: AppController.selectionCount > 0
+                ? AppController.estimateSummary(AppController.selectedTaskIds) : ({ minutes: 0, without: 0 })
+            visible: estSum.sum.minutes > 0
+            text: "~" + I18n.fmtMinutes(estSum.sum.minutes)
+                + (estSum.sum.without > 0 ? " · " + I18n.count(estSum.sum.without, "estimate.without") : "")
+            color: Theme.textMuted
+            font.family: Theme.fontUi
+            font.features: Theme.tabularNums
+            font.pixelSize: Theme.fsSm
+        }
         Rectangle {
             Layout.preferredWidth: 1; Layout.preferredHeight: 18; color: Theme.border
         }
