@@ -335,29 +335,6 @@ Rectangle {
         || (card._isTicket && (syncChip.shown || !!card._ticket.conflict
                                || (!!card._ticket.outOfScope && !card._ticket.gone)))
 
-    // Ink on a text-coloured dot: reads on every theme, and is not the
-    // cursor's colour. In the corner, over the title's right padding.
-    Rectangle {
-        objectName: "tc-selected-mark"
-        visible: card._selected
-        anchors.top: parent.top
-        anchors.right: parent.right
-        anchors.margins: Theme.spMd
-        z: 4
-        implicitWidth: Theme.fsMd + Theme.sp2xs
-        implicitHeight: implicitWidth
-        radius: width / 2
-        color: Theme.text
-        Text {
-            anchors.centerIn: parent
-            text: "✓"
-            color: Theme.bg
-            font.family: Theme.fontUi
-            font.pixelSize: Theme.fsXs
-            font.weight: Theme.fwTitle
-        }
-    }
-
     ColumnLayout {
         id: contentCol
         anchors.fill: parent
@@ -503,7 +480,29 @@ Rectangle {
             Item { Layout.fillWidth: true }
         }
 
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Theme.spSm
+        // Selected (DG-026, N-Oth-Select-Drag): a check in a filled ring
+        // before the title — form, not colour; the card's fill says it too.
+        Rectangle {
+            objectName: "tc-selected-mark"
+            visible: card._selected
+            Layout.alignment: Qt.AlignTop
+            Layout.topMargin: Math.max(0, (titleT.font.pixelSize * 1.35 - height) / 2)
+            implicitWidth: Theme.statusRingSize
+            implicitHeight: implicitWidth
+            radius: width / 2
+            color: Theme.textMuted
+            Icon {
+                anchors.centerIn: parent
+                name: "check"
+                size: Math.round(parent.width * 0.75)
+                color: Theme.bg
+            }
+        }
         Text {
+            id: titleT
             objectName: "tc-title"
             Layout.fillWidth: true
             text: card.task ? card.task.title : ""
@@ -520,8 +519,7 @@ Rectangle {
             wrapMode: Text.Wrap
             maximumLineCount: 3
             elide: Text.ElideRight
-            // Clear of the selection mark in the corner.
-            rightPadding: card._selected && !card._alerting ? Theme.fsMd + Theme.spSm : 0
+        }
         }
 
         // The one line of facts: key, date, priority.
@@ -618,16 +616,6 @@ Rectangle {
                     onClicked: if (card.task) AppController.stopTaskTimer(card.task.id)
                 }
             }
-            Text {
-                objectName: "tc-branch-glyph"
-                visible: Style.detailedCards && !card._branchMatched
-                         && !!(card.task && card.task.branch && String(card.task.branch).length > 0)
-                text: "⎇"
-                color: Theme.textDim
-                font.family: Theme.fontMono
-                font.pixelSize: Theme.fsXs
-                Accessible.name: I18n.t("taskcard.hasBranch")
-            }
             Item { Layout.fillWidth: true }
             // P0 and P1 only on a compact card (APP-262); the detailed one
             // (APP-281 A1) shows any priority, P2 and P3 in dim text.
@@ -648,16 +636,25 @@ Rectangle {
         // The branch checked out now is this task's (APP-281 A3): the one
         // fact of "what am I on", so it shows in both styles — and only on
         // this card.
-        Text {
-            objectName: "tc-branch"
+        RowLayout {
             Layout.fillWidth: true
             visible: card._branchMatched
-            text: "⎇ " + AppController.focusedBranch
-            textFormat: Text.PlainText
-            color: Theme.textMuted
-            font.family: Theme.fontMono
-            font.pixelSize: Theme.fsXs
-            elide: Text.ElideMiddle
+            spacing: Theme.spXs
+            Icon {
+                name: "branch"
+                size: Theme.px(12)
+                color: Theme.textMuted
+            }
+            Text {
+                objectName: "tc-branch"
+                Layout.fillWidth: true
+                text: AppController.focusedBranch
+                textFormat: Text.PlainText
+                color: Theme.textMuted
+                font.family: Theme.fontMono
+                font.pixelSize: Theme.fsXs
+                elide: Text.ElideMiddle
+            }
         }
 
         // Under the cursor: the description's first line, the checklist, and

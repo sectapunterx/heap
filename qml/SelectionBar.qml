@@ -4,13 +4,24 @@ import QtQuick.Layouts
 import QtQuick.Controls.Basic
 import TodoCpp
 
+// The multi-select bar along the bottom (X-Menus-Task, DG-026): "3 выбрано",
+// then each bulk action as a word with its key — Готово d, Запланировать s,
+// Приоритет 1–4, Переместить Shift H / L, В архив e, Удалить Del, Снять Esc.
+// The label and carry-on actions the bar used to hold stay in the command
+// line while a selection exists (Ctrl K: "Метка для выбранных…",
+// "Перенести выбранные…").
 Rectangle {
     id: bar
+    objectName: "selection-bar"
     // The list under "is:archived" (DG-161): the bulk action restores.
     property bool restoring: false
+    // Done and Schedule run the window's own commands, as d and s do.
+    signal commandRequested(string id)
     visible: AppController.selectionCount > 0
     // Carries the selection on (APP-248): "tomorrow", "window", "someday", "clear".
     function carry(mode) { AppController.carryTasks(AppController.selectedTaskIds, mode); }
+    function openCarry() { carryMenu.popup(bar, 0, -carryMenu.implicitHeight - Theme.spSm); }
+    function openLabel() { labelPopup.open(); }
     opacity: visible ? 1 : 0
     Behavior on opacity {
         NumberAnimation {
@@ -18,19 +29,20 @@ Rectangle {
         }
     }
     radius: Theme.radiusLg
-    color: Theme.panel2
-    border.color: Theme.borderStrong
+    color: Theme.panel
+    border.color: Theme.border
     border.width: 1
-    implicitHeight: 44
-    implicitWidth: row.implicitWidth + 24
+    implicitHeight: Theme.px(42)
+    implicitWidth: row.implicitWidth + 2 * Theme.spXl
 
     RowLayout {
         id: row
         anchors.fill: parent
         anchors.leftMargin: Theme.spXl; anchors.rightMargin: Theme.spXl
-        spacing: Theme.spLg
+        spacing: Theme.sp2xl
 
         Text {
+            objectName: "selection-count"
             text: I18n.t("selection.bar.count").replace("%1", AppController.selectionCount)
             color: Theme.text
             font.family: Theme.fontUi
@@ -52,50 +64,91 @@ Rectangle {
             font.features: Theme.tabularNums
             font.pixelSize: Theme.fsSm
         }
-        Rectangle {
-            Layout.preferredWidth: 1; Layout.preferredHeight: 18; color: Theme.border
+        BarAction {
+            objectName: "sel-done"
+            text: I18n.t("selection.bar.done")
+            keys: AppController.shortcutText("task.done")
+            onActivated: bar.commandRequested("task.done")
         }
-
-        PillButton {
-            text: I18n.t("selection.bar.move")
-            onClicked: moveMenu.popup()
+        BarAction {
+            objectName: "sel-schedule"
+            text: I18n.t("selection.bar.schedule")
+            keys: AppController.shortcutText("task.schedule")
+            onActivated: bar.commandRequested("task.schedule")
         }
-        // Priority and labels for the whole selection (TASKS-32): the two
-        // edits a triage pass makes most, which took one editor per card.
-        PillButton {
+        // Priority for the whole selection (TASKS-32): 1–4 on the keyboard.
+        BarAction {
+            id: priBtn
             objectName: "sel-priority"
             text: I18n.t("selection.bar.priority")
-            onClicked: priorityMenu.popup()
+            keys: AppController.shortcutText("task.priority0") + "–" + AppController.shortcutText("task.priority3")
+            onActivated: priorityMenu.popup(priBtn, 0, -priorityMenu.implicitHeight - Theme.spSm)
         }
-        // Carry the whole selection on (APP-248): tomorrow, the next free
-        // windows one after another, someday, or no date.
-        PillButton {
-            objectName: "sel-carry"
-            text: I18n.t("carry.menu")
-            onClicked: carryMenu.popup()
+        BarAction {
+            id: moveBtn
+            objectName: "sel-move"
+            text: I18n.t("selection.bar.move")
+            keys: AppController.shortcutText("board.moveLeft") + " / " + AppController.shortcutText("board.moveRight").replace(/^Shift\s+/, "")
+            onActivated: moveMenu.popup(moveBtn, 0, -moveMenu.implicitHeight - Theme.spSm)
         }
-        PillButton {
-            id: labelBtn
-            objectName: "sel-label"
-            text: I18n.t("selection.bar.label")
-            onClicked: labelPopup.open()
+        BarAction {
+            // The archive holds already-archived tasks — the bulk action
+            // there restores them.
+            objectName: "sel-archive"
+            text: I18n.t(bar.restoring ? "selection.bar.unarchive" : "selection.bar.archive")
+            keys: bar.restoring ? "" : AppController.shortcutText("board.archive")
+            onActivated: AppController.setSelectedTasksArchived(!bar.restoring)
         }
-        PillButton {
-            // The archive holds already-archived tickets — the only
-            // sensible bulk action is to restore (unarchive). Elsewhere we
-            // offer the inverse.
-            readonly property bool _restoring: bar.restoring
-            text: I18n.t(_restoring ? "selection.bar.unarchive" : "selection.bar.archive")
-            onClicked: AppController.setSelectedTasksArchived(!_restoring)
-        }
-        PillButton {
+        BarAction {
+            objectName: "sel-delete"
             text: I18n.t("selection.bar.delete")
-            danger: true
-            onClicked: AppController.deleteSelectedTasks()
+            keys: AppController.shortcutText("selection.deleteSel")
+            onActivated: AppController.deleteSelectedTasks()
         }
-        PillButton {
+        BarAction {
+            objectName: "sel-clear"
             text: I18n.t("selection.bar.clear")
-            onClicked: AppController.clearSelection()
+            keys: AppController.shortcutText("selection.clearSel")
+            onActivated: AppController.clearSelection()
+        }
+    }
+
+    // A word and its key: the bar's one kind of button.
+    component BarAction: Item {
+        id: act
+        property string text: ""
+        property string keys: ""
+        signal activated()
+        Layout.alignment: Qt.AlignVCenter
+        implicitWidth: actRow.implicitWidth
+        implicitHeight: actRow.implicitHeight
+        Row {
+        id: actRow
+        spacing: Theme.spSm
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: act.text
+            color: actArea.hovered ? Theme.text : Theme.textMuted
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsMd
+            font.weight: Theme.fwTitle
+        }
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            visible: Style.keyHints && act.keys.length > 0
+            text: act.keys
+            color: Theme.textDim
+            font.family: Theme.fontMono
+            font.pixelSize: Theme.fsXs
+        }
+        }
+        ClickArea {
+            id: actArea
+            anchors.fill: parent
+            anchors.margins: -Theme.spXs
+            label: act.text
+            showTip: false
+            onActivated: act.activated()
         }
     }
 
@@ -106,7 +159,10 @@ Rectangle {
             model: ["P0", "P1", "P2", "P3"]
             AppMenuItem {
                 required property string modelData
+                required property int index
                 text: modelData
+                shortcutId: "task.priority" + index
+                number: index + 1
                 onTriggered: AppController.setSelectedTasksPriority(modelData)
             }
         }
@@ -131,7 +187,7 @@ Rectangle {
     Popup {
         id: labelPopup
         objectName: "sel-label-popup"
-        parent: labelBtn
+        parent: bar
         y: -height - Theme.spSm
         padding: Theme.spMd
         focus: true
@@ -168,6 +224,7 @@ Rectangle {
 
     AppMenu {
         id: moveMenu
+        objectName: "sel-move-menu"
         Repeater {
             model: AppController.statuses
             AppMenuItem {

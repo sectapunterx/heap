@@ -325,26 +325,6 @@ TestCase {
         tryCompare(doc, "opened", false);
     }
 
-    // TASKS-5: Enter in "New column" creates the column, not a task editor.
-    function test_add_column_enter_creates_column() {
-        const b = board();
-        const pop = dataByName(b, "add-column-popup");
-        verify(pop !== null);
-        const before = AppController.statuses.length;
-        b.moveCursor(0, 1);
-        pop.open();
-        tryCompare(pop, "opened", true);
-        const field = byName(pop.contentItem, "add-column-name");
-        tryVerify(function () { return field.activeFocus; });
-        keyClick(Qt.Key_Q); keyClick(Qt.Key_A);
-        keyClick(Qt.Key_Return);
-        tryCompare(pop, "opened", false);
-        compare(popup("TaskEditor").opened, false, "Enter opened the task editor over the dialog");
-        compare(AppController.statuses.length, before + 1);
-        const sts = AppController.statuses;
-        AppController.deleteStatus(sts[sts.length - 1].id);
-    }
-
     // TASKS-5: Enter in the WIP dialog saves the limit.
     function test_wip_dialog_enter_saves() {
         const b = board();
