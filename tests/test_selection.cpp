@@ -238,10 +238,21 @@ TEST_F(SelectionTest, SwitchingViewClearsSelection) {
   app_->setSelectedTaskIds({"T-1"});
   ASSERT_EQ(app_->selectionCount(), 1);
 
-  app_->setCurrentView("timeline");
+  app_->setCurrentView("week");
 
   EXPECT_EQ(app_->selectionCount(), 0);
-  EXPECT_EQ(app_->currentView(), QStringLiteral("timeline"));
+  EXPECT_EQ(app_->currentView(), QStringLiteral("week"));
+}
+
+// The timeline and the archive of 0.8.0 are the list now (DG-161, DG-162):
+// a stored or typed name of theirs still lands on a view.
+TEST_F(SelectionTest, LegacyViewNamesOpenTheList) {
+  app_->setCurrentView("board");
+  app_->setCurrentView("timeline");
+  EXPECT_EQ(app_->currentView(), QStringLiteral("list"));
+  app_->setCurrentView("board");
+  app_->setCurrentView("archive");
+  EXPECT_EQ(app_->currentView(), QStringLiteral("list"));
 }
 
 TEST_F(SelectionTest, SwitchingToSameViewDoesNotClear) {

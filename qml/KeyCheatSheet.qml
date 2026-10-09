@@ -101,7 +101,6 @@ Popup {
         { id: "view", rows: [
             { label: "keys.row.zoom", ids: ["cal.zoomDay", "view.week", "view.month"] },
             { label: "keys.row.fold", ids: ["board.collapseColumn"] },
-            { ids: ["panel.right"] },
             { ids: ["rail.toggle"] },
             { label: "keys.row.scale", ids: ["zoom.in", "zoom.out", "zoom.reset"] },
             { ids: ["theme.toggle"] },

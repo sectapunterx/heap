@@ -60,13 +60,6 @@ TestCase {
         const occ = AppController.eventOccurrences(day, day);
         return occ.length > 0 ? occ[0] : null;
     }
-    function makeDay(day) {
-        AppController.selectedDate = day;
-        const dc = createTemporaryQmlObject('import TodoCpp; DayCalendar { anchors.fill: parent }', host);
-        verify(dc !== null);
-        wait(0);
-        return dc;
-    }
     function scrollToTop(root) {
         const stack = [root];
         while (stack.length > 0) {
@@ -88,75 +81,9 @@ TestCase {
 
     // ── TIME-17: a click on the day grid opens the editor, snapped ──
 
-    function test_day_click_asks_for_an_editor_instead_of_saving() {
-        const day = probeDay(1201);
-        clearRange(day, day);
-        const dc = makeDay(day);
-        let got = null;
-        dc.createRequested.connect((s, e, d) => { got = { s: s, e: e, d: d }; });
-        const before = AppController.events.rowCount();
-        const area = findChild(dc, "day-create-area");
-        verify(area !== null);
-        // 14:40 on the grid, which a 15-minute snap puts at 14:45.
-        mouseClick(area, 20, Theme.hourH * (14 + 40 / 60));
-
-        compare(AppController.events.rowCount(), before, "nothing is saved by a click");
-        verify(got !== null, "the editor is asked for");
-        fuzzyCompare(got.s, 14.75, 0.01);
-        fuzzyCompare(got.e, 15.75, 0.01);
-    }
-
     // ── TIME-1: dragging one occurrence asks, and "this" moves only it ──
 
-    function test_dragging_an_occurrence_asks_and_moves_only_it() {
-        const first = probeDay(1210);
-        clearRange(first, probeDay(1216));
-        const id = addEvent(first, 10, 11, "FREQ=DAILY;COUNT=5");
-        const day = probeDay(1212);
-        const dc = makeDay(day);
-        const block = findChild(dc, "event-" + id);
-        verify(block !== null && block.visible);
-
-        dragBy(block, 0, Theme.hourH * 2);
-        const scope = dc.scopePrompt;
-        verify(scope !== null, "the scope dialog exists");
-        verify(scope.opened, "the scope question is asked");
-        scope.answer("this");
-        wait(20);
-
-        fuzzyCompare(occOn(day).start, 12, 0.01);
-        fuzzyCompare(occOn(first).start, 10, 0.01);
-        compare(AppController.eventOccurrences(first, probeDay(1216)).length, 5, "no occurrence vanished");
-    }
-
     // ── TIME-10: the after-midnight piece moves the event by the drag ──
-
-    function test_dragging_an_overnight_tail_shifts_the_hours() {
-        const day = probeDay(1218);
-        const eve = probeDay(1217);
-        clearRange(eve, day);
-        const ev = AppController.newEventDraft(22, eve);
-        ev.title = "overnight";
-        ev.date = eve;
-        ev.endDate = day;
-        ev.end = 2;
-        AppController.saveEvent(ev);
-        tc.seeded.push(ev.id);
-        const dc = makeDay(day);
-        const block = findChild(dc, "event-" + ev.id);
-        verify(block !== null && block.visible);
-        verify(!block.wholeEvent);
-        // The day opens on the working hours; the tail sits at 00:00.
-        scrollToTop(dc);
-
-        dragBy(block, 0, Theme.hourH);
-        wait(20);
-
-        const back = AppController.eventById(ev.id);
-        fuzzyCompare(back.start, 23, 0.01);
-        fuzzyCompare(back.end, 3, 0.01);
-        verify(sameDay(back.date, eve), "the event still starts the evening before");
-    }
 
     // ── TIME-4: the week grid's vertical drag reaches the model ──
 
@@ -193,47 +120,7 @@ TestCase {
 
     // ── TIME-11: an event and a task block at the same time sit side by side ──
 
-    function test_task_block_and_event_do_not_overlap() {
-        const day = probeDay(1240);
-        clearRange(day, day);
-        const evId = addEvent(day, 10, 11, "", "covering meeting");
-        const at = new Date(day);
-        at.setHours(10, 0, 0, 0);
-        const draft = AppController.newTaskDraft("todo");
-        draft.title = "side-by-side probe";
-        draft.scheduledAt = at;
-        draft.hasTime = true;
-        AppController.saveTask(draft);
-        tc.seededTasks.push(draft.id);
-
-        const dc = makeDay(day);
-        const ev = findChild(dc, "event-" + evId);
-        const tb = findChild(dc, "taskblock-" + draft.id);
-        verify(ev !== null && tb !== null);
-        verify(tb.visible);
-        verify(tb.x + tb.width <= ev.x + 1 || ev.x + ev.width <= tb.x + 1, "the two columns do not overlap");
-        let got = "";
-        dc.taskClicked.connect((tid) => got = tid);
-        mouseClick(tb);
-        compare(got, draft.id, "the task block takes its own click");
-    }
-
     // ── TIME-29: the empty-day hint is not drawn over task blocks ──
-
-    function test_no_events_hint_hides_under_task_blocks() {
-        const day = probeDay(1245);
-        clearRange(day, day);
-        const at = new Date(day);
-        at.setHours(15, 0, 0, 0);
-        const draft = AppController.newTaskDraft("todo");
-        draft.title = "hint probe";
-        draft.scheduledAt = at;
-        draft.hasTime = true;
-        AppController.saveTask(draft);
-        tc.seededTasks.push(draft.id);
-        const dc = makeDay(day);
-        compare(dc._visibleTaskBlocks, 1);
-    }
 
     // ── TIME-24 / TIME-32: the editor's parsing and rule builder ──
 
@@ -423,14 +310,6 @@ TestCase {
 
     // ── TIME-28: the mini week counts occurrences ──
 
-    function test_mini_week_counts_a_daily_series() {
-        const first = probeDay(1300);
-        clearRange(first, probeDay(1310));
-        addEvent(first, 9, 10, "FREQ=DAILY");
-        const mw = createTemporaryQmlObject('import TodoCpp; MiniWeek { }', host);
-        verify(mw.eventCountFor(probeDay(1303)) >= 1, "a later day of the series has a dot");
-    }
-
     // ── TIME-1: an occurrence moved days away shows on its new day ──
 
     function occOf(id, day) {
@@ -440,7 +319,7 @@ TestCase {
         return null;
     }
 
-    function test_moved_occurrence_shows_in_week_and_mini_week() {
+    function test_moved_occurrence_shows_in_week() {
         const friday = new Date(2034, 0, 13);
         const monday = new Date(2034, 0, 16);
         clearRange(new Date(2034, 0, 1), new Date(2034, 0, 31));
@@ -456,8 +335,6 @@ TestCase {
             for (const e of d.events)
                 if (e.title === "moved friday" && sameDay(d.date, monday)) seen = true;
         verify(seen, "the week of the new day draws it");
-        const mw = createTemporaryQmlObject('import TodoCpp; MiniWeek { }', host);
-        compare(mw.eventCountFor(monday), 1, "the mini week counts it");
     }
 
     // ── TIME-2: an untouched repeat rule is saved back as it was given ──

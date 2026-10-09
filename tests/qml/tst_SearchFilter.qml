@@ -45,78 +45,6 @@ TestCase {
         tc.seeded = [];
     }
 
-    // Flatten a TimelineView's buckets to the ids it would show.
-    function timelineIds(tv) {
-        const out = [];
-        const groups = tv.buildGroups();
-        for (const k in groups) {
-            const arr = groups[k];
-            for (let i = 0; i < arr.length; i++) out.push(arr[i].id);
-        }
-        return out;
-    }
-
-    function test_timeline_applies_clauses_not_substrings() {
-        const blocked = seed("sf probe alpha", "blocked", "P1");
-        const todo    = seed("sf probe beta", "todo", "P1");
-        const other   = seed("sf unrelated gamma", "blocked", "P1");
-
-        const tv = make('import TodoCpp; TimelineView { anchors.fill: parent; showDone: true }');
-
-        tv.searchText = "status:blocked";
-        let ids = timelineIds(tv);
-        verify(ids.indexOf(blocked) >= 0, "a blocked task must survive status:blocked");
-        verify(ids.indexOf(other) >= 0);
-        verify(ids.indexOf(todo) < 0, "status:blocked must drop a todo task");
-
-        // Before the fix this was empty: no task's text contains the literal
-        // string "status:blocked".
-        verify(ids.length > 0, "a clause must not filter everything out");
-    }
-
-    function test_timeline_composes_a_clause_with_a_search_word() {
-        const blocked = seed("sf probe alpha", "blocked", "P1");
-        const other   = seed("sf unrelated gamma", "blocked", "P1");
-
-        const tv = make('import TodoCpp; TimelineView { anchors.fill: parent; showDone: true }');
-
-        tv.searchText = "status:blocked alpha";
-        const ids = timelineIds(tv);
-        verify(ids.indexOf(blocked) >= 0, "the clause and the word both hold for this one");
-        verify(ids.indexOf(other) < 0, "'alpha' is still a substring test");
-    }
-
-    function test_plain_text_search_is_unchanged() {
-        const blocked = seed("sf probe alpha", "blocked", "P1");
-        const other   = seed("sf unrelated gamma", "blocked", "P1");
-
-        const tv = make('import TodoCpp; TimelineView { anchors.fill: parent; showDone: true }');
-
-        tv.searchText = "alpha";
-        const ids = timelineIds(tv);
-        verify(ids.indexOf(blocked) >= 0);
-        verify(ids.indexOf(other) < 0);
-    }
-
-    function test_archive_view_filters_by_clause_too() {
-        const id = seed("sf archived alpha", "todo", "P0");
-        AppController.setArchived(id, true);
-
-        const av = make('import TodoCpp; ArchiveView { anchors.fill: parent }');
-
-        av.searchText = "priority:P0";
-        let items = av.buildItems();
-        let found = false;
-        for (let i = 0; i < items.length; i++) if (items[i].id === id) found = true;
-        verify(found, "the archived P0 task must survive priority:P0");
-
-        av.searchText = "priority:P3";
-        items = av.buildItems();
-        for (let i = 0; i < items.length; i++) {
-            verify(items[i].id !== id, "priority:P3 must not admit a P0 task");
-        }
-    }
-
     // With no clauses the id set is empty, and accepts() must fall through to
     // the substring test rather than rejecting everything.
     function test_plain_words_fall_through_to_the_substring_test() {
@@ -125,21 +53,6 @@ TestCase {
         const s = Search.compile(AppController, "status:blocked login", 0);
         compare(s.isQuery, true);
         compare(s.freeText, "login", "the clause is consumed, the word is not");
-    }
-
-    // The views compute their snapshots inside bindings, so nothing here may be
-    // a QML property written during a rebuild — that is a binding loop, which
-    // Qt reports once and then stops re-evaluating. This catches a regression
-    // back to a QML object with properties.
-    function test_rebuilding_a_view_logs_no_binding_loop() {
-        seed("sf loop probe", "todo", "P1");
-        const av = make('import TodoCpp; ArchiveView { anchors.fill: parent }');
-        av.searchText = "priority:P0";
-        av.searchText = "priority:P1";
-        av.buildItems();
-        // A binding loop is reported as a warning, not a failure, so assert on
-        // the message rather than trusting the run to have gone quiet.
-        failOnWarning(/Binding loop detected/);
     }
 
     // What the search field lights up on.

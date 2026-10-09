@@ -340,6 +340,10 @@ QtObject {
     // ── heap 2 components (APP-259) ──────────────────────────────────
     // A chip is a fixed height, line-height 1 and its content centred, so
     // chips line up at every scale and density; a filter condition is smaller.
+    // A window narrower than this (logical px, the window's own width) is
+    // "small" (X-Oth-Small, DG-008): the sidebar folds to its icons and
+    // Today's side column goes under the day. 1280 folds, 1366 does not.
+    readonly property int compactWindowWidth: 1360
     readonly property int chipH:       px(28)
     readonly property int chipHSmall:  px(24)
     readonly property int chipMaxW:    px(240)

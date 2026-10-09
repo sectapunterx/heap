@@ -12,8 +12,8 @@ import TodoCpp
 // Names: search, filter, calendar, flag, chevron-down, chevron-up,
 // chevron-left, chevron-right, branch, lock, expand, collapse, info, link,
 // attachment, timer, check, plus, close, more, arrow-out, arrow-up,
-// arrow-down, arrow-left, arrow-right, settings, list, doc, person, archive,
-// bolt, undo, sidebar.
+// arrow-down, arrow-left, arrow-right, sun (Today), settings, list, doc,
+// person, archive, bolt, undo, sidebar.
 Item {
     id: root
 
@@ -62,6 +62,7 @@ Item {
         "arrow-down":    { s: "M8 3v10M4 9l4 4 4-4" },
         "arrow-left":    { s: "M13 8H3M7 4 3 8l4 4" },
         "arrow-right":   { s: "M3 8h10M9 4l4 4-4 4" },
+        "sun":           { s: _c(8, 8, 3) + "M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1" },
         "settings":      { s: _c(8, 8, 2.2) + "M8 1.8v2M8 12.2v2M1.8 8h2M12.2 8h2M3.6 3.6 5 5M11 11l1.4 1.4M3.6 12.4 5 11M11 5l1.4-1.4" },
         "list":          { s: "M6 4h8M6 8h8M6 12h8", f: _c(2.5, 4, 1) + _c(2.5, 8, 1) + _c(2.5, 12, 1) },
         "doc":           { s: "M3 2.5h7l3 3v8H3zM10 2.5v3h3M5.5 8.5h5M5.5 11h5" },

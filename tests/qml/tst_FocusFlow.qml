@@ -188,29 +188,4 @@ TestCase {
         compare(Qt.formatDate(AppController.selectedDate, "yyyy-MM-dd"), "2031-05-13", "Alt+Left from the view");
     }
 
-    // SHELL-17: in the archive, Down from the view enters the list and moves
-    // from card to card.
-    function test_archive_rows_are_reachable_from_the_keyboard() {
-        for (let i = 0; i < 2; i++) {
-            const d = AppController.newTaskDraft("todo");
-            d._isNew = true;
-            d.id = "FOCUSARCH-" + i;
-            d.title = "focusflow archived " + i;
-            AppController.saveTask(d);
-            AppController.setArchived(d.id, true);
-            tc.seeded.push(d.id);
-        }
-        tc.win.searchText = "focusflow archived";
-        switchTo("archive");
-        const v = tc.win.activeViewItem();
-        tryCompare(v, "count", 2);
-        tryVerify(focusIsInView, 2000);
-        keyClick(Qt.Key_Down);
-        tryVerify(function () { return typeName(tc.win.activeFocusItem).indexOf("TaskCard") === 0; }, 2000,
-                  "Down did not reach a card: " + typeName(tc.win.activeFocusItem));
-        const first = tc.win.activeFocusItem.taskId;
-        keyClick(Qt.Key_Down);
-        tryVerify(function () { return tc.win.activeFocusItem.taskId !== first; }, 2000, "Down did not move to the next card");
-        verify(tc.win.activeFocusItem.Accessible.name.indexOf("focusflow archived") >= 0);
-    }
 }

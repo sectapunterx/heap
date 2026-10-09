@@ -33,14 +33,19 @@ Item {
     function currentState() {
         if (!root.host) return ({});
         const cur = AppController.currentView;
-        const taskView = ["board", "timeline", "week", "month", "archive"].indexOf(cur) >= 0;
+        const taskView = ["board", "list", "week", "month"].indexOf(cur) >= 0;
         return {
             query: root.host.searchText,
             priorities: root.host._activePriorities,
             sort: root.host.boardSortMode,
             archived: root.host.showArchived,
             showDone: root.host.showDoneTimeline,
-            view: taskView ? cur : (root.activeView ? root.activeView.view : "board")
+            // A view saved on the 0.8.0 timeline or archive is the list now:
+            // being there is not a change to it.
+            view: taskView ? (root.activeView && cur === "list"
+                              && (root.activeView.view === "timeline" || root.activeView.view === "archive")
+                              ? root.activeView.view : cur)
+                           : (root.activeView ? root.activeView.view : "board")
         };
     }
 
@@ -58,7 +63,10 @@ Item {
         if (!v || !root.host) return false;
         const chips = {};
         for (let j = 0; j < v.priorities.length; j++) chips[v.priorities[j]] = true;
-        root.host.searchText = v.query;
+        // A view saved on the archive or the timeline of 0.8.0 opens on the
+        // list (DG-161/162); the archive keeps its "is:archived".
+        root.host.searchText = v.view === "archive" && !/(^|\s)is:archived(\s|$)/i.test(v.query)
+            ? (v.query + " is:archived").trim() : v.query;
         root.host.prioritiesFilter = chips;
         root.host.boardSortMode = v.sort;
         root.host.showArchived = v.archived;

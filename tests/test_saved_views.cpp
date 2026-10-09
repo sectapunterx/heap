@@ -191,13 +191,10 @@ class SavedViewsTest : public ::testing::Test {
 };
 
 TEST_F(SavedViewsTest, AFreshInstallStartsWithTheStarterViews) {
-  // The old sidebar's Focus pair first (APP-258), then the three starters.
+  // The old sidebar's Focus pair first (APP-258), then the two starters:
+  // the four of the sheets (DG-006).
   EXPECT_EQ(names(),
-            (QStringList{QStringLiteral("Blocked"),
-                         QStringLiteral("In review"),
-                         QStringLiteral("Urgent"),
-                         QStringLiteral("Due this week"),
-                         QStringLiteral("Overdue")}));
+            (QStringList{QStringLiteral("Blocked"), QStringLiteral("In review"), QStringLiteral("Urgent"), QStringLiteral("This week")}));
   for(const QVariant& v : app_->savedViews()) {
     EXPECT_TRUE(v.toMap().value("problems").toStringList().isEmpty()) << v.toMap().value("query").toString().toStdString();
   }
@@ -206,7 +203,7 @@ TEST_F(SavedViewsTest, AFreshInstallStartsWithTheStarterViews) {
 TEST_F(SavedViewsTest, ANewProfileGetsStartersButDeletedOnesNeverComeBack) {
   const QString work = app_->createProfile(QStringLiteral("Work"));
   ASSERT_FALSE(work.isEmpty());
-  EXPECT_EQ(app_->savedViews().size(), 5);
+  EXPECT_EQ(app_->savedViews().size(), 4);
   clearViews();
   EXPECT_TRUE(app_->savedViews().isEmpty());
   app_->flushSave();
@@ -220,7 +217,7 @@ TEST_F(SavedViewsTest, ANewProfileGetsStartersButDeletedOnesNeverComeBack) {
   app_->setActiveProfileId(work);
   EXPECT_TRUE(app_->savedViews().isEmpty()) << "starter views are seeded once, at creation";
   app_->setActiveProfileId(other);
-  EXPECT_EQ(app_->savedViews().size(), 5);
+  EXPECT_EQ(app_->savedViews().size(), 4);
 }
 
 TEST_F(SavedViewsTest, ViewsBelongToTheirProfileAndSurviveARestart) {

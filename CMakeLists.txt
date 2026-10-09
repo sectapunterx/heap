@@ -424,8 +424,6 @@ qt_add_qml_module(heap_core
         qml/TaskCard.qml
         qml/TaskListView.qml
         qml/SelectionBar.qml
-        qml/ArchiveView.qml
-        qml/TimelineView.qml
         qml/WeekView.qml
         qml/CalendarView.qml
         qml/CalendarNav.qml
@@ -433,14 +431,12 @@ qt_add_qml_module(heap_core
         qml/MonthView.qml
         qml/DocsView.qml
         qml/DocsEditor.qml
-        qml/MiniWeek.qml
-        qml/DayCalendar.qml
         qml/DatePickerPopup.qml
-        qml/PeopleList.qml
         qml/TaskEditor.qml
         qml/EventEditor.qml
         qml/PersonEditor.qml
         qml/PersonPicker.qml
+        qml/PeopleDialog.qml
         qml/Toast.qml
         qml/ToastTiming.js
         qml/AppMenu.qml

@@ -227,13 +227,11 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 keys: AppController.shortcuts.length >= 0 ? root.prettyKeys(AppController.shortcutFor("task.new")) : ""
             }
-            Text {
+            Icon {
                 visible: !root.expanded
                 anchors.centerIn: parent
-                text: "+"
+                name: "plus"
                 color: Theme.textMuted
-                font.family: Theme.fontUi
-                font.pixelSize: Theme.fsLg
             }
             ClickArea {
                 id: newTaskCA
@@ -249,21 +247,21 @@ Rectangle {
             objectName: "sidebar-section-today"
             section: "today"
             label: I18n.t("sidebar.today")
-            iconSource: "qrc:/brand/icons/heap-17-calendar.svg"
+            iconName: "sun"
             shortcutId: "section.today"
         }
         NavRow {
             objectName: "sidebar-section-tasks"
             section: "tasks"
             label: I18n.t("sidebar.tasks")
-            iconSource: "qrc:/brand/icons/heap-01-board.svg"
+            iconName: "list"
             shortcutId: "section.tasks"
         }
         NavRow {
             objectName: "sidebar-section-knowledge"
             section: "knowledge"
             label: I18n.t("sidebar.knowledge")
-            iconSource: "qrc:/brand/icons/heap-09-notes.svg"
+            iconName: "doc"
             shortcutId: "section.knowledge"
         }
 
@@ -322,7 +320,7 @@ Rectangle {
             objectName: "sidebar-section-settings"
             section: "settings"
             label: I18n.t("sidebar.settings")
-            iconSource: "qrc:/brand/icons/heap-12-settings.svg"
+            iconName: "settings"
             shortcutId: "view.settings"
         }
         // The rest is in the command line.
@@ -400,7 +398,8 @@ Rectangle {
         id: nav
         property string section: ""
         property string label: ""
-        property url iconSource
+        // The sheets' line icon (Icon.qml, DG-003).
+        property string iconName: ""
         property string shortcutId: ""
         readonly property bool active: root._section === nav.section
         readonly property string _keys: nav.shortcutId.length && AppController.shortcuts.length >= 0
@@ -414,12 +413,11 @@ Rectangle {
             radius: Theme.radiusMd
             color: navCA.hovered && !nav.active ? Theme.panel2 : "transparent"
         }
-        IconImage {
+        Icon {
             visible: !root.expanded
             anchors.centerIn: parent
-            source: nav.iconSource
-            width: 18; height: 18
-            sourceSize.width: 18; sourceSize.height: 18
+            name: nav.iconName
+            size: Theme.px(16)
             color: nav.active ? Theme.text : Theme.textMuted
         }
         Text {
@@ -435,7 +433,7 @@ Rectangle {
             color: nav.active || navCA.hovered ? Theme.text : Theme.textMuted
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
-            font.weight: nav.active ? Theme.fwTitle : Theme.fwBody
+            font.weight: nav.active && Style.fills ? Theme.fwHeading : Theme.fwBody
         }
         CursorBar {
             objectName: "sidebar-cursor"
@@ -563,7 +561,7 @@ Rectangle {
             color: vr.active || vrMA.containsMouse ? Theme.text : Theme.textMuted
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
-            font.weight: vr.active ? Theme.fwTitle : Theme.fwBody
+            font.weight: vr.active && Style.fills ? Theme.fwHeading : Theme.fwBody
         }
         CursorBar {
             visible: vr.active && root.expanded

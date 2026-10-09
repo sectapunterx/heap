@@ -88,6 +88,8 @@ Item {
         Item {
             id: syncDot
             objectName: "sidebar-sync-dot"
+            // Quiet has no profile dot (DG-006); a running sync still shows.
+            visible: Style.fills || root.syncDotShown || root.compact
             width: Theme.spLg
             height: root.height
             Rectangle {

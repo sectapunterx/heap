@@ -1994,6 +1994,9 @@ class AppController : public QObject {
   QHash<QString, QString> m_pendingPushes;
   // Non-zero while a bulk move runs moveTask per card: one toast for the lot.
   int m_bulkMoveDepth = 0;
+  // toggleDone() says "Done: X" itself; the move's own "X → Done" would be a
+  // second toast for the same action (DG-140).
+  bool m_moveToastHeld = false;
   // Sound palette (APP-177): muted for CLI requests; a bulk move plays one
   // sound when the loop ends, not one per card — "done" if anything closed,
   // else "refuse" if a card was refused. -1: nothing pending.

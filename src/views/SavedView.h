@@ -286,9 +286,9 @@ inline SavedView reviewView(bool ru) {
 }
 
 inline QVector<SavedView> starterViews(bool ru) {
-  // Blocked and In review (the old Focus pair), then three that answer a
+  // Blocked and In review (the old Focus pair), then two that answer a
   // question a board alone does not: what is on fire, what is due before
-  // the weekend, what slipped.
+  // the weekend (the four of the sheets, DG-006; overdue is Today's).
   SavedView urgent;
   urgent.id = QStringLiteral("view-urgent");
   urgent.name = text(QStringLiteral("savedview.starter.urgent"), ru);
@@ -299,13 +299,29 @@ inline QVector<SavedView> starterViews(bool ru) {
   week.name = text(QStringLiteral("savedview.starter.dueWeek"), ru);
   week.query = QStringLiteral("due:week is:open");
   week.sort = QStringLiteral("due");
+  return {blockedView(ru), reviewView(ru), urgent, week};
+}
 
-  SavedView overdue;
-  overdue.id = QStringLiteral("view-overdue");
-  overdue.name = text(QStringLiteral("savedview.starter.overdue"), ru);
-  overdue.query = QStringLiteral("is:overdue");
-  overdue.sort = QStringLiteral("due");
-  return {blockedView(ru), reviewView(ru), urgent, week, overdue};
+// A starter view's name in the UI language (DG-007): a profile made before a
+// language switch kept the names it was seeded with. Only a name the user
+// never changed follows; a renamed view keeps its own.
+inline QString displayName(const SavedView& v, bool ru) {
+  static const QHash<QString, QString> kKeys = {
+      {QStringLiteral("view-blocked"), QStringLiteral("savedview.starter.blocked")},
+      {QStringLiteral("view-review"), QStringLiteral("savedview.starter.review")},
+      {QStringLiteral("view-urgent"), QStringLiteral("savedview.starter.urgent")},
+      {QStringLiteral("view-due-week"), QStringLiteral("savedview.starter.dueWeek")},
+      {QStringLiteral("view-overdue"), QStringLiteral("savedview.starter.overdue")},
+  };
+  const auto it = kKeys.constFind(v.id);
+  if(it == kKeys.constEnd()) {
+    return v.name;
+  }
+  // 0.8.0 called the week one "Due this week" / "Срок на этой неделе".
+  const bool seeded = v.name == text(*it, true) || v.name == text(*it, false) ||
+                      (v.id == QLatin1String("view-due-week") &&
+                       (v.name == QLatin1String("Due this week") || v.name == QStringLiteral("Срок на этой неделе")));
+  return seeded ? text(*it, ru) : v.name;
 }
 
 inline QString text(const QString& key, bool ru) {
@@ -319,7 +335,7 @@ inline QString text(const QString& key, bool ru) {
       {QStringLiteral("savedview.starter.blocked"), {"Blocked", "Заблокировано"}},
       {QStringLiteral("savedview.starter.review"), {"In review", "На ревью"}},
       {QStringLiteral("savedview.starter.urgent"), {"Urgent", "Срочное"}},
-      {QStringLiteral("savedview.starter.dueWeek"), {"Due this week", "Срок на этой неделе"}},
+      {QStringLiteral("savedview.starter.dueWeek"), {"This week", "Эта неделя"}},
       {QStringLiteral("savedview.starter.overdue"), {"Overdue", "Просрочено"}},
       {QStringLiteral("savedview.saved"), {"View saved: %1", "Вид сохранён: %1"}},
       {QStringLiteral("savedview.updated"), {"View updated: %1", "Вид обновлён: %1"}},

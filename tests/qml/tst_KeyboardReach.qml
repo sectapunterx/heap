@@ -123,24 +123,6 @@ TestCase {
         verify(!chip.activeFocus, "Esc must hand the keyboard back to the view");
     }
 
-    function test_mini_week_and_day_panel_move_the_day() {
-        const days = byName("miniweek-days");
-        verify(days !== null);
-        days.forceActiveFocus(Qt.TabFocusReason);
-        const d0 = AppController.selectedDate;
-        keyClick(Qt.Key_Right);
-        verify(sameDay(AppController.selectedDate, plusDays(d0, 1)), "→ on the mini week");
-        keyClick(Qt.Key_Home);
-        verify(sameDay(AppController.selectedDate, AppController.today));
-
-        const cal = find(tc.win.contentItem, function (it) { return String(it).indexOf("DayCalendar") === 0; });
-        verify(cal !== null);
-        verify(cal.activeFocusOnTab);
-        cal.forceActiveFocus(Qt.TabFocusReason);
-        keyClick(Qt.Key_Left);
-        verify(sameDay(AppController.selectedDate, plusDays(AppController.today, -1)), "← on the day panel");
-    }
-
     function test_settings_search_enter_opens_the_section() {
         AppController.currentView = "settings";
         tryVerify(function () { return tc.win.activeViewItem() && tc.win.activeViewItem().openSection !== undefined; });

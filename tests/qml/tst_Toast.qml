@@ -88,10 +88,12 @@ TestCase {
         const t = make();
         for (let i = 0; i < 4; i++) t.showWithAction("Deleted " + i, "Undo", 10, function () {});
         compare(t.count, t.maxVisible);
-        compare(t._queue.length, 1, "the fourth waits for a slot");
+        compare(t.maxVisible, 1, "one toast at a time (DG-140)");
+        compare(t._queue.length, 3, "the others wait for the slot");
+        compare(t.waiting, 3, "and are counted as +N");
         t.dismiss(t._items[0].id);
         compare(t.count, t.maxVisible);
-        compare(t._queue.length, 0);
+        compare(t._queue.length, 2);
     }
 
     function test_width_is_capped_and_long_text_wraps() {
@@ -138,11 +140,11 @@ TestCase {
         compare(Timing.duration("error", 3, true), 8000);
         const t = make();
         t.show("note");
-        t.show("careful", "warning");
-        t.showWithAction("Deleted", "Undo", 5, function () {});
         compare(t._items[0].ms, 4000);
-        compare(t._items[1].ms, 5500);
-        compare(t._items[2].ms, 8000);
+        t.show("careful", "warning");
+        compare(t._items[0].ms, 5500, "a plain notice gives way to the next");
+        t.showWithAction("Deleted", "Undo", 5, function () {});
+        compare(t._items[0].ms, 8000);
     }
 
     // Two actions (APP-204's refused move): same look, same clock, both
@@ -156,16 +158,16 @@ TestCase {
         ], 0, "warning");
         compare(t._items[0].ms, 8000, "a toast with actions stays at least 8 s");
         t.showWithActions("short", [{ label: "Go", fn: function () {} }], 3);
-        compare(t._items[1].ms, 8000);
+        compare(t._queue[0].ms, 8000);
         wait(0);
         const c = cards(t)[0];
         verify(c.width <= Theme.toastMaxWidth);
-        verify(child(c, "toast-accent").visible);
         const second = child(c, "toast-action-2");
         verify(second !== null && second.parent.visible);
         second.activated();
         compare(ran, "archive");
-        compare(t.count, 1, "the second action closed its toast");
+        compare(t.count, 1, "the second action closed its toast; the waiting one came up");
+        compare(t.message, "short");
     }
 
     // The clock itself, with `now` passed in.
@@ -253,37 +255,36 @@ TestCase {
         verify(Math.abs(st.x + st.width / 2 - t.width / 2) <= 1, "stack at " + st.x);
     }
 
-    function test_wide_area_puts_the_stack_bottom_right() {
+    // DG-140: a wide work area keeps it at the bottom centre too.
+    function test_wide_area_keeps_bottom_centre() {
         const w = Theme.toastWideFrom + 300;
         const t = createTemporaryQmlObject('import TodoCpp; Toast { width: ' + w + '; areaWidth: ' + w + '; anchors.bottom: parent.bottom }', host);
         t.appVisible = true;
         t.show("short");
-        t.show("a somewhat longer second notice", "warning");
         wait(0);
-        verify(t.wide);
+        verify(!t.wide);
         const st = child(t, "toast-stack");
-        compare(st.x + st.width, w - Theme.sp3xl);
-        for (const c of cards(t)) {
-            compare(c.x + c.width, st.width, "every card is flush right");
-            verify(c.width <= Theme.toastMaxWidth);
-        }
+        verify(Math.abs(st.x + st.width / 2 - t.width / 2) <= 1, "stack at " + st.x);
     }
 
     // ── APP-225: how it looks and arrives ───────────────────────────────
-    function test_kind_icon_and_accent_bar() {
+    // DG-140: a ring for the kind, the action underlined, its key after it;
+    // an error is told by its shape, not a red bar.
+    function test_kind_ring_action_and_key() {
         const t = make();
         t.show("note");
-        t.show("broke", "error");
+        t.showWithAction("broke", "Retry", 10, function () {}, "error", "Ctrl Z");
         wait(0);
         const cs = cards(t);
-        compare(cs.length, 2);
-        verify(child(cs[0], "toast-kind-icon") !== null);
-        verify(!child(cs[0], "toast-accent").visible, "a notice has no accent bar");
-        verify(child(cs[1], "toast-accent").visible, "an error has the accent bar");
-        compare(child(cs[1], "toast-message").font.pixelSize, Theme.fsLg);
+        compare(cs.length, 1, "one toast at a time");
+        compare(child(cs[0], "toast-kind-icon").category, "blocked");
+        compare(child(cs[0], "toast-message").font.pixelSize, Theme.fsMd);
+        compare(child(cs[0], "toast-key").text, "Ctrl Z");
+        verify(child(cs[0], "toast-key").visible);
+        verify(child(cs[0], "toast-accent") === null, "no accent bar");
     }
 
-    function test_new_toast_slides_in_rebuilt_ones_do_not() {
+    function test_new_toast_slides_in() {
         AppController.appSettingsJson = JSON.stringify({ appearance: { reducedMotion: false } });
         compare(Theme.reducedMotion, false);
         const t = make();
@@ -296,15 +297,8 @@ TestCase {
         t.show("second");
         wait(0);
         const cs = cards(t);
-        compare(cs.length, 2);
-        const first = cs.filter(k => k.modelData.message === "first")[0];
-        const second = cs.filter(k => k.modelData.message === "second")[0];
-        // Whether the Repeater kept the first card or rebuilt it, it must
-        // stand still: no second slide, no fade.
-        compare(first.transform[0].y, 0, "the first toast played its entrance again");
-        compare(first.opacity, 1);
-        verify(second.entering);
-        tryVerify(function () { return first.y < second.y; }, 1000, "the newest toast is at the bottom");
+        compare(cs.length, 1, "the plain notice gave way");
+        compare(cs[0].modelData.message, "second");
     }
 
     function test_reduced_motion_only_appears() {
@@ -316,6 +310,5 @@ TestCase {
         const c = cards(t)[0];
         compare(c.transform[0].y, 0, "it moved with Reduce motion on");
         compare(c.opacity, 1);
-        compare(child(c, "toast-pulse").opacity, 0, "the border pulsed with Reduce motion on");
     }
 }

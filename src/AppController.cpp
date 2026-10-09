@@ -529,7 +529,8 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"status.restored", {"Column restored: %1", "Восстановлена колонка: %1"}},
       {"profile.created", {"Profile created: %1", "Профиль создан: %1"}},
       {"profile.personal", {"Personal", "Личное"}},
-      {"profile.example", {"Example", "Пример"}},
+      // The sheets name it "Example" in both languages (DG-007).
+      {"profile.example", {"Example", "Example"}},
       {"profile.deleted", {"Profile removed: %1", "Удалён профиль: %1"}},
       {"profile.restored", {"Profile restored: %1", "Восстановлен профиль: %1"}},
       {"profile.duplicated", {"Profile duplicated: %1", "Дублирован профиль: %1"}},
@@ -765,8 +766,8 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shell.notice.kept", {" Your own keys stay: %1.", " Ваши клавиши остались: %1."}},
       {"shortcut.view.board.label", {"Go to Board", "Перейти к доске"}},
       {"shortcut.view.board.desc", {"Kanban of the active profile.", "Канбан активного профиля."}},
-      {"shortcut.view.timeline.label", {"Go to Timeline", "Перейти к ленте"}},
-      {"shortcut.view.timeline.desc", {"Feed by deadlines.", "Лента по дедлайнам."}},
+      {"shortcut.view.timeline.label", {"Go to List", "Перейти к списку"}},
+      {"shortcut.view.timeline.desc", {"Tasks as a list, grouped by date.", "Задачи списком, по сроку."}},
       {"shortcut.view.week.label", {"Go to Week", "Перейти к неделе"}},
       {"shortcut.view.week.desc", {"Seven-day planner.", "Семидневный планировщик."}},
       {"shortcut.view.month.label", {"Go to Month", "Перейти к месяцу"}},
@@ -822,11 +823,11 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.quick-capture-notes.desc",
        {"Open Quick-capture for Notes (appends to the Notes block).", "Открыть быстрый ввод заметки (дописывает в блок заметок)."}},
       {"shortcut.view.archive.label", {"Go to Archive", "Перейти к архиву"}},
-      {"shortcut.view.archive.desc", {"Archived tickets of the active profile.", "Архивные тикеты активного профиля."}},
-      {"shortcut.panel.right.label", {"Show / hide calendar column", "Показать/скрыть колонку календаря"}},
-      {"shortcut.panel.right.desc",
-       {"Fold the calendar and people column away to give the board the room.",
-        "Спрятать колонку календаря и людей, чтобы доске хватило места."}},
+      {"shortcut.view.archive.desc", {"The list with \"is:archived\", by month.", "Список с условием «в архиве», по месяцам."}},
+      {"shortcut.people.open.label", {"Whom to write: everyone", "Кому написать: все"}},
+      {"shortcut.people.open.desc",
+       {"The people something is pending on, one of them open beside the list.",
+        "Люди, от которых что-то ждёте; один открыт рядом со списком."}},
       {"shortcut.rail.toggle.label", {"Expand / collapse sidebar", "Развернуть/свернуть боковую панель"}},
       {"shortcut.rail.toggle.desc",
        {"Switch the left sidebar between labels and the icon-only rail.",
@@ -1518,7 +1519,7 @@ QString AppController::tr_(const QString& key) const {
 void AppController::setCurrentView(const QString& requested) {
   // An unknown name (a --view typo, a stale binding) lands on the board rather
   // than on a blank content area that would then be saved and come back.
-  const QString v = heap::views::isKnown(requested) ? requested : QStringLiteral("today");
+  const QString v = heap::views::isKnown(requested) ? heap::views::canonical(requested) : QStringLiteral("today");
   if(v == m_currentView) {
     return;
   }
@@ -1535,7 +1536,8 @@ QString AppController::currentSection() const {
 
 QString AppController::sectionView(const QString& section) const {
   const QString last = m_sectionViews.value(section);
-  return heap::views::isKnown(last) && heap::views::sectionOf(last) == section ? last : heap::views::defaultViewOf(section);
+  const QString v = heap::views::canonical(last);
+  return heap::views::isKnown(v) && heap::views::sectionOf(v) == section ? v : heap::views::defaultViewOf(section);
 }
 
 void AppController::openSection(const QString& section) {
@@ -2501,7 +2503,9 @@ QVariantMap AppController::toggleDone(const QStringList& ids) {
         }
         t.local.doneFrom.clear();
         m_tasks.upsert(t);
+        m_moveToastHeld = true;
         moveTask(id, target);
+        m_moveToastHeld = false;
         lastTarget = target;
       } else if(!isDone) {
         unchecked += uncheckedItems(t);
@@ -2510,7 +2514,9 @@ QVariantMap AppController::toggleDone(const QStringList& ids) {
         }
         t.local.doneFrom = t.status;
         m_tasks.upsert(t);
+        m_moveToastHeld = true;
         moveTask(id, doneCol);
+        m_moveToastHeld = false;
         lastTarget = doneCol;
       } else {
         continue;
@@ -2681,7 +2687,7 @@ void AppController::moveTaskRanked(const QString& id, const QString& newStatus, 
   }
 
   // One toast: the move toast used to replace the recurrence one at once.
-  if(m_bulkMoveDepth == 0) {
+  if(m_bulkMoveDepth == 0 && !m_moveToastHeld) {
     const QString moved = tr_("task.moved").arg(taskId, statusName);
     emit undoableToast(recursNote.isEmpty() ? moved : moved + QStringLiteral(" · ") + recursNote, 5);
   } else if(!recursNote.isEmpty()) {
@@ -12215,7 +12221,7 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
       // A view this build does not have (a hand edit, an older --view typo
       // that got saved) would leave the content area blank on every launch.
       const QString v = s["currentView"].toString();
-      m_currentView = heap::views::isKnown(v) ? v : QStringLiteral("today");
+      m_currentView = heap::views::isKnown(v) ? heap::views::canonical(v) : QStringLiteral("today");
       emit currentViewChanged();
     }
     m_sectionViews.clear();
@@ -13520,7 +13526,8 @@ void AppController::seedShortcutCatalog() {
   add("quick-capture", "Ctrl+Shift+Space");
   add("quick-capture-notes", "Ctrl+Shift+N");
   add("theme.toggle", "Ctrl+Shift+T");
-  add("panel.right", "Ctrl+\\");
+  // The legacy right panel is gone (DG-002); its people have a dialog.
+  add("people.open", "");
   add("rail.toggle", "Ctrl+Shift+B");
   add("person.new", "Ctrl+Shift+U");
   add("profile.new", "Ctrl+Shift+P");

@@ -4,41 +4,39 @@ import QtQuick
 import TodoCpp
 import "ToastTiming.js" as Timing
 
-// The notices at the bottom of the window.
+// The notices at the bottom of the window (sheet X/N-Ntf-Toasts, DG-140).
 //
-// It used to be one slot: a later toast replaced the one on screen, so an
-// "Undo" was lost the moment anything else said something (a save, a sync).
-// Toasts now stack — newest at the bottom, up to `maxVisible` at once — and the
-// rest wait their turn. A toast with an action (Undo, Retry) is never pushed
-// off: when the stack is full a plain notice makes room first, and if every
-// visible toast has an action, the newcomer waits.
+// One at a time, bottom centre: a ring for the kind, the text, an underlined
+// action and its key ("Готово: APP-112  Отменить  Ctrl Z"). The rest wait,
+// counted as "+N" on the one on screen (and every notice is in the log). A
+// toast with an action (Undo, Retry) is never pushed off: a plain notice
+// gives way to a newcomer, an action toast makes the newcomer wait.
 //
 // show(message, kind) / showWithAction(message, label, seconds, fn, kind) as
 // before; `kind` is "info" | "success" | "warning" | "error" and picks the
-// icon and the border; a warning or an error also gets a bar on the left and
-// one soft pulse of its border when it arrives. show(message, kind, tag): a
+// ring. show(message, kind, tag): a
 // plain notice with the same tag as one on screen takes its place instead of
 // stacking ("Scale 110%" then "Scale 125%" while Ctrl+= is pressed).
 //
-// APP-225: on a big monitor the old 13px bar at the bottom centre was gone
-// before anyone saw it. The type is a step larger, the toast sits on a
-// popup's elevation, and in a wide work area the stack moves to its
-// bottom-right corner. Its time (ToastTiming.js) stands still while the
-// pointer or the keyboard is on it and while the window is in the
-// background or minimized.
+// The toast sits on a popup's elevation. Its time (ToastTiming.js) stands
+// still while the pointer or the keyboard is on it and while the window is in
+// the background or minimized. An error is told by its shape and words, not
+// by red (the sheet); the bold style tints the ring.
 //
 // The item spans the area the toasts may use (`areaWidth`, the work area in
 // Main); the stack places itself inside it.
 Item {
     id: root
-    // The width the stack lives in: the work area beside the side rail and
-    // the right panel. Decides between the corner and the centre.
+    // The width the toast lives in: the work area beside the side rail.
     property real areaWidth: parent ? parent.width : 600
-    readonly property bool wide: Timing.corner(areaWidth, Theme.toastWideFrom)
+    // Always the bottom centre now (the sheet); kept for callers.
+    readonly property bool wide: false
     // Never wider than this, whatever the message: a 1000px bar at 1100px
     // covered the board it was talking about. Long text wraps (three lines).
     readonly property real maxToastWidth: Math.max(0, Math.min(Theme.toastMaxWidth, areaWidth - 2 * Theme.sp3xl))
-    readonly property int maxVisible: 3
+    readonly property int maxVisible: 1
+    // Waiting behind the one on screen: "+N".
+    readonly property int waiting: _queue.length
 
     // Whether someone can see the toasts: the window is in front and not
     // minimized. Bound to the window; a test sets it.
@@ -131,9 +129,10 @@ Item {
         _push({ id: ++_seq, message: String(s), kind: k || "info", actionLabel: "", actionFn: null,
                 ms: _duration(k || "info", 0, false), tag: tag || "" });
     }
-    function showWithAction(s, label, seconds, fn, k) {
+    // `key`: the shortcut that does the action too, shown after it ("Ctrl Z").
+    function showWithAction(s, label, seconds, fn, k, key) {
         _push({ id: ++_seq, message: String(s), kind: k || "info", actionLabel: label || "",
-                actionFn: fn, action2Label: "", action2Fn: null,
+                actionFn: fn, action2Label: "", action2Fn: null, key: key || "",
                 ms: _duration(k || "info", seconds, !!label) });
     }
     // Up to three actions side by side ([{label, fn}, …]): "Open in
@@ -204,9 +203,8 @@ Item {
                 objectName: "toast-card"
                 readonly property color kindColor: Theme.toastKindColor(modelData.kind)
                 readonly property bool alert: modelData.kind === "warning" || modelData.kind === "error"
-                // Room on the left for the accent bar.
-                readonly property int leftPad: Theme.sp2xl + (alert ? Theme.toastAccentWidth + Theme.spSm : 0)
-                readonly property int rightPad: Theme.sp2xl
+                readonly property int leftPad: Theme.spXl
+                readonly property int rightPad: Theme.spXl
                 // Whether this card plays its entrance (a new toast, not a
                 // rebuilt one) — read by tests.
                 property bool entering: false
@@ -216,7 +214,7 @@ Item {
                 readonly property real lane: stack.width
 
                 width: Math.min(card.cap, rowL.implicitWidth + card.leftPad + card.rightPad)
-                height: rowL.implicitHeight + 2 * Theme.spXl
+                height: Math.max(Theme.px(40), rowL.implicitHeight + 2 * Theme.spMd)
                 x: card.wide ? card.lane - card.width : Math.round((card.lane - card.width) / 2)
                 Accessible.role: Accessible.AlertMessage
                 Accessible.name: modelData.message
@@ -236,7 +234,6 @@ Item {
                     slide.y = Theme.toastSlide;
                     card.opacity = 0;
                     enter.start();
-                    if (card.alert) pulse.start();
                 }
 
                 ParallelAnimation {
@@ -257,39 +254,8 @@ Item {
                     anchors.fill: parent
                     radius: Theme.popupRadius
                     color: Theme.toastBg
-                    border.color: card.alert ? card.kindColor : Theme.toastBorder
+                    border.color: Theme.toastBorder
                     border.width: 1
-                }
-
-                // A warning or an error: a bar down the left edge.
-                Rectangle {
-                    objectName: "toast-accent"
-                    visible: card.alert
-                    x: Theme.spMd
-                    y: Theme.spMd
-                    width: Theme.toastAccentWidth
-                    height: card.height - 2 * Theme.spMd
-                    radius: width / 2
-                    color: card.kindColor
-                }
-
-                // One soft pulse of the border as a warning or an error
-                // arrives, so it is seen on the far side of the screen.
-                Rectangle {
-                    id: glow
-                    objectName: "toast-pulse"
-                    anchors.fill: parent
-                    anchors.margins: -Theme.sp2xs
-                    radius: face.radius + Theme.sp2xs
-                    color: "transparent"
-                    border.color: card.kindColor
-                    border.width: Theme.sp2xs
-                    opacity: 0
-                    SequentialAnimation {
-                        id: pulse
-                        NumberAnimation { target: glow; property: "opacity"; to: 0.9; duration: Theme.durMove; easing.type: Theme.easePulse }
-                        NumberAnimation { target: glow; property: "opacity"; to: 0; duration: Theme.durPulse; easing.type: Theme.easePulse }
-                    }
                 }
 
                 Row {
@@ -297,26 +263,19 @@ Item {
                     x: card.leftPad
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: Theme.spLg
-
-                    // The kind, as a shape and not only a colour.
-                    Rectangle {
+                    // The kind as a shape (StatusRing): done = filled,
+                    // notice = ring, warning = a quarter, error = a barred
+                    // ring. Coloured only in the bold style.
+                    StatusRing {
                         objectName: "toast-kind-icon"
                         anchors.verticalCenter: parent.verticalCenter
-                        width: Theme.toastIcon
-                        height: Theme.toastIcon
-                        radius: width / 2
-                        color: "transparent"
-                        border.color: card.kindColor
-                        border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: card.modelData.kind === "error" ? "✕"
-                                : card.modelData.kind === "warning" ? "!"
-                                : card.modelData.kind === "success" ? "✓" : "i"
-                            color: card.kindColor
-                            font.pixelSize: Theme.fsSm
-                            font.weight: Theme.fwTitle
-                        }
+                        size: Theme.px(12)
+                        category: card.modelData.kind === "success" ? "done"
+                                : card.modelData.kind === "warning" ? "half"
+                                : card.modelData.kind === "error" ? "blocked" : "todo"
+                        ink: Style.chipFill ? card.kindColor
+                           : card.modelData.kind === "error" ? Theme.text
+                           : card.modelData.kind === "info" ? Theme.textDim : Theme.textMuted
                     }
                     Text {
                         id: msgT
@@ -324,35 +283,43 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         // Wraps inside the card's cap instead of growing it.
                         width: Math.min(implicitWidth,
-                                        card.cap - card.leftPad - card.rightPad - Theme.toastIcon - rowL.spacing
+                                        card.cap - card.leftPad - card.rightPad - Theme.px(12) - rowL.spacing
+                                        - (moreT.visible ? moreT.implicitWidth + rowL.spacing : 0)
+                                        - (keyT.visible ? keyT.implicitWidth + rowL.spacing : 0)
                                         - (actionBox.visible ? actionBox.implicitWidth + rowL.spacing : 0)
                                         - (action2Box.visible ? action2Box.implicitWidth + rowL.spacing : 0)
                                         - (action3Box.visible ? action3Box.implicitWidth + rowL.spacing : 0))
                         text: card.modelData.message
                         textFormat: Text.PlainText
                         color: Theme.toastText
-                        font.pixelSize: Theme.fsLg
+                        font.pixelSize: Theme.fsMd
                         wrapMode: Text.Wrap
                         maximumLineCount: 3
                         elide: Text.ElideRight
+                    }
+                    Text {
+                        id: moreT
+                        objectName: "toast-more"
+                        visible: root.waiting > 0
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "+" + root.waiting
+                        color: Theme.textDim
+                        font.pixelSize: Theme.fsMd
                     }
                     Rectangle {
                         id: actionBox
                         visible: card.modelData.actionLabel.length > 0
                         anchors.verticalCenter: parent.verticalCenter
-                        radius: Theme.radiusSm
-                        color: actionMA.hovered ? Theme.accentSoft : "transparent"
-                        border.color: Theme.accent
-                        border.width: 1
-                        implicitWidth: actionT.implicitWidth + 2 * Theme.spLg
+                        color: "transparent"
+                        implicitWidth: actionT.implicitWidth
                         implicitHeight: actionT.implicitHeight + 2 * Theme.spXs
                         Text {
                             id: actionT
                             anchors.centerIn: parent
                             text: card.modelData.actionLabel
-                            color: Theme.accentStrong
+                            color: Theme.toastText
                             font.pixelSize: Theme.fsMd
-                            font.weight: Theme.fwTitle
+                            font.underline: true
                         }
                         ClickArea {
                             id: actionMA
@@ -367,19 +334,16 @@ Item {
                         id: action2Box
                         visible: !!card.modelData.action2Label && card.modelData.action2Label.length > 0
                         anchors.verticalCenter: parent.verticalCenter
-                        radius: Theme.radiusSm
-                        color: action2MA.hovered ? Theme.accentSoft : "transparent"
-                        border.color: Theme.accent
-                        border.width: 1
-                        implicitWidth: action2T.implicitWidth + 2 * Theme.spLg
+                        color: "transparent"
+                        implicitWidth: action2T.implicitWidth
                         implicitHeight: action2T.implicitHeight + 2 * Theme.spXs
                         Text {
                             id: action2T
                             anchors.centerIn: parent
                             text: card.modelData.action2Label || ""
-                            color: Theme.accentStrong
+                            color: Theme.toastText
                             font.pixelSize: Theme.fsMd
-                            font.weight: Theme.fwTitle
+                            font.underline: true
                         }
                         ClickArea {
                             id: action2MA
@@ -394,19 +358,16 @@ Item {
                         id: action3Box
                         visible: !!card.modelData.action3Label && card.modelData.action3Label.length > 0
                         anchors.verticalCenter: parent.verticalCenter
-                        radius: Theme.radiusSm
-                        color: action3MA.hovered ? Theme.accentSoft : "transparent"
-                        border.color: Theme.accent
-                        border.width: 1
-                        implicitWidth: action3T.implicitWidth + 2 * Theme.spLg
+                        color: "transparent"
+                        implicitWidth: action3T.implicitWidth
                         implicitHeight: action3T.implicitHeight + 2 * Theme.spXs
                         Text {
                             id: action3T
                             anchors.centerIn: parent
                             text: card.modelData.action3Label || ""
-                            color: Theme.accentStrong
+                            color: Theme.toastText
                             font.pixelSize: Theme.fsMd
-                            font.weight: Theme.fwTitle
+                            font.underline: true
                         }
                         ClickArea {
                             id: action3MA
@@ -415,6 +376,16 @@ Item {
                             showTip: false
                             onActivated: card.runAction(card.modelData.action3Fn)
                         }
+                    }
+                    Text {
+                        id: keyT
+                        objectName: "toast-key"
+                        visible: !!card.modelData.key && card.modelData.key.length > 0
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: card.modelData.key || ""
+                        color: Theme.textDim
+                        font.family: Theme.fontMono
+                        font.pixelSize: Theme.fsXs
                     }
                 }
             }

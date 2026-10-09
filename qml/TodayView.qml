@@ -29,6 +29,8 @@ FocusScope {
     signal connectRequested()
     signal importRequested()
     signal exampleRequested()
+    // "Кому написать" in full, on this person (DG-002).
+    signal peopleRequested(string id)
 
     property bool allProfiles: false
     function focusView() {
@@ -221,12 +223,18 @@ FocusScope {
         onOpenRequested: root.taskClicked(menuHost.taskId)
     }
 
-    RowLayout {
+    // A small window (X-Oth-Small, DG-008): the side goes under the day, its
+    // blocks side by side in three columns.
+    readonly property bool stacked: Window.width > 0 && Window.width < Theme.compactWindowWidth
+
+    GridLayout {
         anchors.fill: parent
         anchors.leftMargin: Theme.sp3xl
         anchors.rightMargin: Theme.sp3xl
         anchors.topMargin: Theme.sp2xl
-        spacing: Theme.sp3xl
+        columns: root.stacked ? 1 : 2
+        rowSpacing: Theme.sp2xl
+        columnSpacing: Theme.sp3xl
 
         // ── the day ──
         ColumnLayout {
@@ -358,19 +366,34 @@ FocusScope {
         Flickable {
             objectName: "today-side"
             visible: !root.firstRun
-            Layout.preferredWidth: Math.min(Theme.px(470), root.width * 0.38)
-            Layout.fillHeight: true
+            Layout.preferredWidth: root.stacked ? -1 : Math.min(Theme.px(470), root.width * 0.38)
+            Layout.fillWidth: root.stacked
+            Layout.fillHeight: !root.stacked
+            Layout.preferredHeight: root.stacked ? Math.min(side.implicitHeight, root.height * 0.45) : -1
+            Layout.bottomMargin: root.stacked ? Theme.sp2xl : 0
             contentHeight: side.implicitHeight
             clip: true
             boundsBehavior: Flickable.StopAtBounds
-            ColumnLayout {
+            // A hairline between the day and the side once it is under it.
+            Rectangle {
+                visible: root.stacked
+                width: parent.width
+                height: 1
+                color: Theme.border
+            }
+            GridLayout {
                 id: side
                 width: parent.width
-                spacing: Theme.sp2xl
+                y: root.stacked ? Theme.sp2xl : 0
+                columns: root.stacked ? 3 : 1
+                rowSpacing: Theme.sp2xl
+                columnSpacing: Theme.sp3xl
 
                 // In progress; hidden when nothing is.
                 ColumnLayout {
                     objectName: "today-inprogress"
+                    Layout.alignment: Qt.AlignTop
+                    Layout.preferredWidth: root.stacked ? Theme.px(100) : -1
                     Layout.fillWidth: true
                     visible: (root.dayData.inProgress || []).length > 0
                     spacing: Theme.spSm
@@ -445,6 +468,8 @@ FocusScope {
                 // Deadlines today / tomorrow; overdue apart, never in red.
                 ColumnLayout {
                     objectName: "today-deadlines"
+                    Layout.alignment: Qt.AlignTop
+                    Layout.preferredWidth: root.stacked ? Theme.px(100) : -1
                     Layout.fillWidth: true
                     visible: (root.dayData.deadlines || []).length > 0 || (root.dayData.overdue || []).length > 0
                     spacing: Theme.spSm
@@ -476,6 +501,8 @@ FocusScope {
                 // Whom to write; hidden when nobody. Folded in the quiet style.
                 ColumnLayout {
                     objectName: "today-people"
+                    Layout.alignment: Qt.AlignTop
+                    Layout.preferredWidth: root.stacked ? Theme.px(100) : -1
                     Layout.fillWidth: true
                     visible: (root.dayData.people || []).length > 0
                     spacing: Theme.spSm
@@ -522,6 +549,11 @@ FocusScope {
                                 color: Theme.textMuted
                                 font.family: Theme.fontUi
                                 font.pixelSize: Theme.fsSm
+                                ClickArea {
+                                    objectName: "today-person-open"
+                                    label: pr.modelData.name
+                                    onActivated: root.peopleRequested(pr.modelData.id)
+                                }
                             }
                             PillButton {
                                 objectName: "today-wrote"
@@ -535,6 +567,7 @@ FocusScope {
                 // Tasks without a date: a fact and a way there.
                 Text {
                     objectName: "today-undated"
+                    Layout.columnSpan: root.stacked ? 3 : 1
                     Layout.fillWidth: true
                     visible: (root.dayData.undated || 0) > 0
                     text: I18n.count(root.dayData.undated || 0, "today.n.undated") + "  →"
@@ -548,6 +581,7 @@ FocusScope {
                 // The week's recap, on its last working day (APP-211).
                 Text {
                     objectName: "today-recap"
+                    Layout.columnSpan: root.stacked ? 3 : 1
                     Layout.fillWidth: true
                     visible: root.dayData.recapDay === true
                     text: I18n.t("today.recap") + "  →"
@@ -557,7 +591,7 @@ FocusScope {
                     font.underline: recapCA.hovered
                     ClickArea { id: recapCA; label: parent.text; onActivated: root.recapRequested() }
                 }
-                Item { Layout.fillHeight: true }
+                Item { visible: !root.stacked; Layout.fillHeight: true }
             }
         }
     }

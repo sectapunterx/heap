@@ -12,24 +12,32 @@ inline const QStringList& all() {
   static const QStringList names = {QStringLiteral("today"),
                                     QStringLiteral("board"),
                                     QStringLiteral("list"),
-                                    QStringLiteral("timeline"),
                                     // The calendar lens at the day zoom (APP-264).
                                     QStringLiteral("day"),
                                     QStringLiteral("week"),
                                     QStringLiteral("month"),
                                     QStringLiteral("docs"),
                                     QStringLiteral("notes"),
-                                    QStringLiteral("archive"),
                                     QStringLiteral("settings")};
   return names;
 }
 
+// The views 0.8.0 had and the sheets replaced (DG-161, DG-162): the
+// timeline is the list, the archive is the list with "is:archived". A name
+// from an older state.json, a saved view or --view still lands somewhere.
+inline QString canonical(const QString& name) {
+  if(name == QStringLiteral("timeline") || name == QStringLiteral("archive")) {
+    return QStringLiteral("list");
+  }
+  return name;
+}
+
 inline bool isKnown(const QString& name) {
-  return all().contains(name);
+  return all().contains(canonical(name));
 }
 
 // heap 2 (APP-258): the sidebar has four places, and each view belongs to
-// one. Board, timeline, the calendars and the archive are lenses of Tasks;
+// one. Board, list and the calendars are lenses of Tasks;
 // notes and docs are Knowledge.
 inline const QStringList& sections() {
   static const QStringList names = {
