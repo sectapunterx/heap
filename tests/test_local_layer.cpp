@@ -45,8 +45,9 @@ TaskLocal makeLocal() {
       QStringLiteral("r1"), QStringLiteral("related"), QStringLiteral("https://gitlab.example/a/-/merge_requests/17"), QString()}};
   l.commentDraft = QStringLiteral("Reproduced, see notes.");
   l.doneFrom = QStringLiteral("review");
-  l.sessions = {TimerSession{QStringLiteral("before-0.8.0"), QDateTime(), QDateTime(), 1200},
-                TimerSession{QStringLiteral("s1"), QDateTime(QDate(2026, 10, 8), QTime(9, 0)), QDateTime(QDate(2026, 10, 8), QTime(10, 30)), 0}};
+  l.sessions = {
+      TimerSession{QStringLiteral("before-0.8.0"), QDateTime(), QDateTime(), 1200},
+      TimerSession{QStringLiteral("s1"), QDateTime(QDate(2026, 10, 8), QTime(9, 0)), QDateTime(QDate(2026, 10, 8), QTime(10, 30)), 0}};
   l.extra = QJsonObject{{QStringLiteral("futureLocalField"), 1}};
   return l;
 }

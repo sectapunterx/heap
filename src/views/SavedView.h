@@ -116,14 +116,13 @@ inline QStringList normalizePriorities(const QStringList& ps) {
 }
 
 inline QString normalizeSort(const QString& s) {
-  static const QStringList kModes = {
-      QStringLiteral("manual"),
-      QStringLiteral("priority"),
-      QStringLiteral("due"),
-      QStringLiteral("when"),
-      QStringLiteral("estimate"),
-      QStringLiteral("updated"),
-      QStringLiteral("title")};
+  static const QStringList kModes = {QStringLiteral("manual"),
+                                     QStringLiteral("priority"),
+                                     QStringLiteral("due"),
+                                     QStringLiteral("when"),
+                                     QStringLiteral("estimate"),
+                                     QStringLiteral("updated"),
+                                     QStringLiteral("title")};
   return kModes.contains(s) ? s : QStringLiteral("manual");
 }
 

@@ -346,11 +346,8 @@ TaskQuery TaskQuery::compile(const QString& text, const QDate& today, const QVar
         q.m_usesBlocked = q.m_usesBlocked || v == QLatin1String("blocked");
       }
     } else if(cl.field == QLatin1String("has")) {
-      static const QSet<QString> kHas = {QStringLiteral("notes"),
-                                         QStringLiteral("draft"),
-                                         QStringLiteral("checklist"),
-                                         QStringLiteral("links"),
-                                         QStringLiteral("tags")};
+      static const QSet<QString> kHas = {
+          QStringLiteral("notes"), QStringLiteral("draft"), QStringLiteral("checklist"), QStringLiteral("links"), QStringLiteral("tags")};
       for(const QString& v : cl.values) {
         ok = ok && kHas.contains(v);
       }

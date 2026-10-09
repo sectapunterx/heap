@@ -122,11 +122,10 @@ Task makeFullTask() {
       LocalLink{QStringLiteral("r2"), QStringLiteral("related"), QStringLiteral("APP-12"), QStringLiteral("work")}};
   t.local.commentDraft = QStringLiteral("Reproduced on 0.8.0, see notes.");
   t.local.doneFrom = QStringLiteral("review");
-  t.local.sessions = {TimerSession{QStringLiteral("before-0.8.0"), QDateTime(), QDateTime(), 3600},
-                      TimerSession{QStringLiteral("s1"),
-                                   QDateTime(QDate(2026, 7, 10), QTime(23, 30, 0, 250)),
-                                   QDateTime(QDate(2026, 7, 11), QTime(0, 45)),
-                                   0}};
+  t.local.sessions = {
+      TimerSession{QStringLiteral("before-0.8.0"), QDateTime(), QDateTime(), 3600},
+      TimerSession{
+          QStringLiteral("s1"), QDateTime(QDate(2026, 7, 10), QTime(23, 30, 0, 250)), QDateTime(QDate(2026, 7, 11), QTime(0, 45)), 0}};
   t.local.extra = QJsonObject{{QStringLiteral("futureLocalField"), true}};
   // A key a newer build wrote: it has to come back out as itself (PLAT-15).
   t.extra = QJsonObject{{QStringLiteral("futureTaskField"), QJsonObject{{QStringLiteral("n"), 1}}}};

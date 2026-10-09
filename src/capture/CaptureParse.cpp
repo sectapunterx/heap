@@ -19,7 +19,8 @@ int estimateMinutes(QStringView token) {
   static const QRegularExpression kRe(
       QStringLiteral(R"(^~(?:(\d+(?:[.,]\d+)?)\s*(h|ч|час|часа|часов)\s*(?:(\d+)\s*(m|м|мин))?|(\d+)\s*(m|м|мин|min))$)"),
       QRegularExpression::CaseInsensitiveOption);
-  const auto m = kRe.matchView(token);
+  // Not matchView(): CI builds with Qt 6.9, which does not have it.
+  const auto m = kRe.match(token.toString());
   if(!m.hasMatch()) {
     return 0;
   }

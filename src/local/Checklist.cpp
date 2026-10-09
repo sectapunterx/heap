@@ -78,7 +78,7 @@ Line parseLine(const QString& raw) {
     ++pos;
   }
   // "[x]" / "[ ]" (a Cyrillic х too: same key on a Russian layout).
-  if(pos + 2 < s.size() &&s.at(pos) == QLatin1Char('[') && s.at(pos + 2) == QLatin1Char(']') &&
+  if(pos + 2 < s.size() && s.at(pos) == QLatin1Char('[') && s.at(pos + 2) == QLatin1Char(']') &&
      (pos + 3 == s.size() || isBlank(s.at(pos + 3)))) {
     const QChar m = s.at(pos + 1);
     const bool tick = m == QLatin1Char('x') || m == QLatin1Char('X') || m == QChar(0x0445) || m == QChar(0x0425);

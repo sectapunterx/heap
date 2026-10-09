@@ -1,6 +1,5 @@
-#include "local/Sessions.h"
-
 #include "local/Checklist.h"
+#include "local/Sessions.h"
 
 #include <algorithm>
 #include <limits>

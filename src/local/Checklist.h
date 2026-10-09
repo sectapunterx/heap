@@ -35,6 +35,7 @@ struct Line {
   bool done = false;
   QString text;
 };
+
 Line parseLine(const QString& line);
 
 // Index one past the last descendant of items[i].

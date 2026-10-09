@@ -101,7 +101,8 @@ TEST_F(LocalFeatures, MyPriorityStaysThroughAPullAndTheChangeIsShown) {
   EXPECT_EQ(task("gh-1")->priority, QString("P3"));
   EXPECT_EQ(heap::local::effectivePriority(*task("gh-1")), QString("P0")) << "a pull never takes mine";
   EXPECT_TRUE(app_->trackerValues(QStringLiteral("gh-1")).value(QStringLiteral("priorityChanged")).toBool());
-  EXPECT_TRUE(app_->tasks()->data(app_->tasks()->index(app_->tasks()->indexOfId(QStringLiteral("gh-1")), 0), TaskModel::LocalRole)
+  EXPECT_TRUE(app_->tasks()
+                  ->data(app_->tasks()->index(app_->tasks()->indexOfId(QStringLiteral("gh-1")), 0), TaskModel::LocalRole)
                   .toMap()
                   .value(QStringLiteral("trackerChanged"))
                   .toBool());
@@ -165,8 +166,7 @@ TEST_F(LocalFeatures, APastedListKeepsLevelsAndTicksAndTheNextStepFollows) {
   EXPECT_TRUE(fix.value(QStringLiteral("done")).toBool());
   EXPECT_TRUE(fix.value(QStringLiteral("autoDone")).toBool()) << "closed because its children are";
   EXPECT_EQ(role().value(QStringLiteral("next")).toString(), QString("ship"));
-  EXPECT_EQ(app_->taskChecklistText(QStringLiteral("T-1")),
-            QString("- [x] repro\n- [x] fix\n-- [x] parser\n-- [x] tests\n- ship"));
+  EXPECT_EQ(app_->taskChecklistText(QStringLiteral("T-1")), QString("- [x] repro\n- [x] fix\n-- [x] parser\n-- [x] tests\n- ship"));
 }
 
 TEST_F(LocalFeatures, AnItemBecomesACardThatTicksWithItsDone) {
@@ -313,7 +313,8 @@ TEST_F(LocalFeatures, EstimateSumsCountTheTasksWithoutOneApart) {
   t = *task(QStringLiteral("T-2"));
   t.estimateMinutes = 30;
   app_->tasks()->upsert(t);
-  const QVariantMap s = app_->estimateSummary({QStringLiteral("T-1"), QStringLiteral("T-2"), QStringLiteral("T-3"), QStringLiteral("nope")});
+  const QVariantMap s =
+      app_->estimateSummary({QStringLiteral("T-1"), QStringLiteral("T-2"), QStringLiteral("T-3"), QStringLiteral("nope")});
   EXPECT_EQ(s.value(QStringLiteral("count")).toInt(), 3);
   EXPECT_EQ(s.value(QStringLiteral("minutes")).toInt(), 120);
   EXPECT_EQ(s.value(QStringLiteral("without")).toInt(), 1);
@@ -364,7 +365,8 @@ TEST(LocalMigration, AV11TimerTotalBecomesOneUndatedSession) {
                    {QStringLiteral("profiles"),
                     QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("p")}, {QStringLiteral("tasks"), QJsonArray{task}}}}}};
   ASSERT_TRUE(heap::state::migrateState(root, 11));
-  const QJsonObject migrated = root[QStringLiteral("profiles")].toArray().at(0).toObject()[QStringLiteral("tasks")].toArray().at(0).toObject();
+  const QJsonObject migrated =
+      root[QStringLiteral("profiles")].toArray().at(0).toObject()[QStringLiteral("tasks")].toArray().at(0).toObject();
   const Task t = heap::state::taskFromJson(migrated);
   EXPECT_EQ(t.trackedSeconds, 5400);
   ASSERT_EQ(t.local.sessions.size(), 1);
