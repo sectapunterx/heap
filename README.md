@@ -4,8 +4,7 @@
 
 <h3 align="center">Quiet by default.</h3>
 
-<p align="center">A developer’s workday in one window — tickets, meetings and notes, from the keyboard.<br>
-<sub>Formerly <b>heap</b>. Same app, same data.</sub></p>
+<p align="center">A developer’s workday in one window — tickets, meetings and notes, from the keyboard.</p>
 
 <p align="center">
   <a href="https://github.com/sectapunterx/heap/releases/latest"><b>Download</b></a> ·
@@ -39,12 +38,6 @@ Download from [Releases](https://github.com/sectapunterx/heap/releases/latest):
 
 Updates: lowkey checks for a new version on start and installs it only when you click **Update**. The check is
 off-switchable in Settings → About.
-
-### Coming from heap 0.7
-
-Install 0.8 over it, or let 0.7’s own update check find it. On the first start your data is copied from the
-`heap` folder to the `lowkey` one; the old folder stays untouched, with a `MOVED-TO-LOWKEY.txt` note inside.
-Your shortcuts carry over — the first time you press one whose key changed, a toast says where it went now.
 
 ## The first ten minutes
 
