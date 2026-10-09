@@ -21,6 +21,7 @@ FocusScope {
     signal taskClicked(string id)
     // "N tasks without a date": Tasks · List with that condition.
     signal undatedRequested()
+    signal recapRequested()
 
     property bool allProfiles: false
     function focusView() { root.forceActiveFocus(); }
@@ -388,6 +389,19 @@ FocusScope {
                     font.pixelSize: Theme.fsSm
                     font.underline: undCA.hovered
                     ClickArea { id: undCA; label: parent.text; onActivated: root.undatedRequested() }
+                }
+
+                // The week's recap, on its last working day (APP-211).
+                Text {
+                    objectName: "today-recap"
+                    Layout.fillWidth: true
+                    visible: root.dayData.recapDay === true
+                    text: I18n.t("today.recap") + "  →"
+                    color: Theme.textMuted
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
+                    font.underline: recapCA.hovered
+                    ClickArea { id: recapCA; label: parent.text; onActivated: root.recapRequested() }
                 }
                 Item { Layout.fillHeight: true }
             }

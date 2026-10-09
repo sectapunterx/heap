@@ -72,4 +72,12 @@ TestCase {
         const v = createTemporaryQmlObject('import TodoCpp; TodayView { anchors.fill: parent }', host);
         compare(findChild(v, "today-facts").text, I18n.t("today.nothing"));
     }
+
+    // The weekly recap is offered on the week's last working day only
+    // (Mon-Fri by default: Friday yes, Thursday and Saturday no).
+    function test_the_recap_line_is_on_the_last_working_day() {
+        compare(AppController.todayData(new Date(2026, 9, 9), false).recapDay, true, "Friday");
+        compare(AppController.todayData(new Date(2026, 9, 8), false).recapDay, false, "Thursday");
+        compare(AppController.todayData(new Date(2026, 9, 10), false).recapDay, false, "Saturday");
+    }
 }

@@ -197,7 +197,7 @@ TestCase {
         tryVerify(function () { return cmd._parse.total >= 2; }, 1000);
         keyClick(Qt.Key_Return, Qt.ControlModifier);
         tryCompare(cmd, "opened", false);
-        tryCompare(AppController, "currentView", "timeline");
+        tryCompare(AppController, "currentView", "list");
         verify(tc.win.searchText.indexOf("status:blocked") >= 0, tc.win.searchText);
         tc.win.searchText = "";
         AppController.currentView = "board";

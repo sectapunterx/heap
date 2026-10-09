@@ -1329,6 +1329,7 @@ ApplicationWindow {
                         function onCreateRequested(startHour, endHour, day) { win.createEventAt(startHour, endHour, day); }
                         function onTaskClicked(id) { win.openTask(id); }
                         function onUndatedRequested() { win.showQuery("is:undated", "list"); }
+                        function onRecapRequested() { win.runCommand("recap.open"); }
                     }
 
                     // First visit to one of the kept-alive views builds it.
@@ -1936,10 +1937,6 @@ ApplicationWindow {
         case "task.new":             quickCapture.open(); break;
         case "task.done":            win.markDone(); break;
         case "task.schedule":        win.scheduleKeyTasks(); break;
-        case "task.priority.p0":     win.priorityKeyTasks("P0"); break;
-        case "task.priority.p1":     win.priorityKeyTasks("P1"); break;
-        case "task.priority.p2":     win.priorityKeyTasks("P2"); break;
-        case "task.priority.p3":     win.priorityKeyTasks("P3"); break;
         case "quick-capture":        quickCapture.open(); break;
         case "quick-capture-notes":  quickCaptureNotes.open(); break;
         case "panel.right":          win.toggleRightPanel(); break;
@@ -3009,36 +3006,6 @@ ApplicationWindow {
         if (ids.length > 0) AppController.setTaskPriority(ids[0], p);
     }
     readonly property bool _taskKeysOn: win._boardKeysOn
-    Shortcut {
-        sequences: [win._kbd("task.schedule")]
-        context: Qt.ApplicationShortcut
-        enabled: win._taskKeysOn && win._kbd("task.schedule").length > 0
-        onActivated: win.scheduleKeyTasks()
-    }
-    Shortcut {
-        sequences: [win._kbd("task.priority.p0")]
-        context: Qt.ApplicationShortcut
-        enabled: win._taskKeysOn && win._kbd("task.priority.p0").length > 0
-        onActivated: win.priorityKeyTasks("P0")
-    }
-    Shortcut {
-        sequences: [win._kbd("task.priority.p1")]
-        context: Qt.ApplicationShortcut
-        enabled: win._taskKeysOn && win._kbd("task.priority.p1").length > 0
-        onActivated: win.priorityKeyTasks("P1")
-    }
-    Shortcut {
-        sequences: [win._kbd("task.priority.p2")]
-        context: Qt.ApplicationShortcut
-        enabled: win._taskKeysOn && win._kbd("task.priority.p2").length > 0
-        onActivated: win.priorityKeyTasks("P2")
-    }
-    Shortcut {
-        sequences: [win._kbd("task.priority.p3")]
-        context: Qt.ApplicationShortcut
-        enabled: win._taskKeysOn && win._kbd("task.priority.p3").length > 0
-        onActivated: win.priorityKeyTasks("P3")
-    }
     // v marks the row on the list (H2-List's hint bar), as Space does.
     Shortcut {
         sequence: "V"

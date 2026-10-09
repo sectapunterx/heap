@@ -323,9 +323,14 @@ Rectangle {
     // The detailed card (APP-281 A1) keeps the description's first line, the
     // checklist and the pull request at rest; the other facts wait for the
     // cursor as on a compact one.
-    readonly property bool _hasRestDetails: Style.detailedCards
-        && (card._excerpt.length > 0 || (card._cl.total || 0) > 0
-            || (card.task ? String(card.task.prState || "") : "").length > 0)
+    // One line at rest, the most telling one: the pull request, else the
+    // checklist, else the description's first line. Three lines turned the
+    // board into a feed; the rest waits for the cursor.
+    readonly property string _restLine: !Style.detailedCards ? ""
+        : (card.task ? String(card.task.prState || "") : "").length > 0 ? "pr"
+        : (card._cl.total || 0) > 0 ? "checklist"
+        : card._excerpt.length > 0 ? "excerpt" : ""
+    readonly property bool _hasRestDetails: card._restLine.length > 0
     readonly property bool _alerting: card._isStuck || card._isArchived
         || (card._isTicket && (syncChip.shown || !!card._ticket.conflict
                                || (!!card._ticket.outOfScope && !card._ticket.gone)))
@@ -678,7 +683,7 @@ Rectangle {
                 Text {
                     objectName: "tc-excerpt"
                     Layout.fillWidth: true
-                    visible: card._excerpt.length > 0
+                    visible: card._excerpt.length > 0 && (card.detailsOpen || card._restLine === "excerpt")
                     text: card._excerpt
                     textFormat: Text.PlainText
                     color: Theme.textMuted
@@ -694,7 +699,7 @@ Rectangle {
                     id: checklistRow
                     readonly property int _total: card._cl.total || 0
                     readonly property int _done: card._cl.done || 0
-                    visible: _total > 0
+                    visible: _total > 0 && (card.detailsOpen || card._restLine === "checklist")
                     Layout.fillWidth: true
                     spacing: Theme.spSm
 
@@ -737,7 +742,7 @@ Rectangle {
                 Flow {
                     id: metaFlow
                     Layout.fillWidth: true
-                    visible: card.detailsOpen ? card._hasFacts : (Style.detailedCards && prT.prState.length > 0)
+                    visible: card.detailsOpen ? card._hasFacts : card._restLine === "pr"
                     spacing: Theme.spLg
 
                     // Provider badge: which tracker this card mirrors

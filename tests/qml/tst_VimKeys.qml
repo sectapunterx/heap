@@ -211,6 +211,10 @@ TestCase {
         wait(50);
         compare(AppController.statusCategory(AppController.taskById("VIM-0").status), "done", "dd put it back");
         wait(600);
+        // Done is folded on the heap 2 board (APP-262), so the cursor cannot
+        // follow the card there: the later d acts on it selected.
+        AppController.setSelectedTaskIds(["VIM-0"]);
+        tc.win.focusActiveView();
         keyClick(Qt.Key_D);
         tryVerify(function () { return AppController.statusCategory(AppController.taskById("VIM-0").status) !== "done"; }, 1000,
                   "a later d takes it back");
