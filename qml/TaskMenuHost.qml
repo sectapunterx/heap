@@ -60,8 +60,8 @@ Item {
             host.menu.pushActionRequested.connect(host.runPushAction);
         }
         // The keys its rows show (APP-166), as they stand when it opens.
-        host.menu.editKey = host.boardKeys ? "board.open" : "";
-        host.menu.archiveKey = host.boardKeys && !host._isArchived ? "board.archive" : "";
+        host.menu.editKey = "board.open";
+        host.menu.archiveKey = !host._isArchived ? "board.archive" : "";
         host.menu.canSendPush = host._isTicket && !!host._ticket.unsynced && !host._ticket.gone;
         host.menu.canDropPush = host._isTicket && !!host._ticket.unsynced;
         return host.menu;
@@ -101,7 +101,8 @@ Item {
             cur = AppController.statuses.findIndex(st => st.id === host._t.status);
         else if (host._t)
             cur = ["P0", "P1", "P2", "P3"].indexOf(host._t.priority);
-        sub.currentIndex = Math.max(0, cur);
+        // Row 0 is "‹ back".
+        sub.currentIndex = Math.max(0, cur) + 1;
     }
     // Left in a list: the card menu again, on the row the list came from.
     function backToMenu(which) {
@@ -161,6 +162,7 @@ Item {
         AppMenuSeparator {}
         AppMenuItem {
             objectName: "tc-menu-schedule"
+            shortcutId: "task.schedule"
             text: I18n.t("taskmenu.schedule")
             enabled: !host._isDone
             note: host._isDone ? I18n.t("taskmenu.why.done") : ""
@@ -170,6 +172,7 @@ Item {
         }
         AppMenuItem {
             objectName: "tc-menu-due"
+            shortcutId: "task.due"
             text: host._isTicket ? I18n.t("taskmenu.myDue") : I18n.t("taskmenu.due")
             onTriggered: host.openRequested()
         }
@@ -199,6 +202,7 @@ Item {
         }
         AppMenuItem {
             objectName: "tc-menu-timer"
+            shortcutId: "task.timer"
             text: host._t && host._t.isTiming ? I18n.t("taskcard.stopTimer") : I18n.t("taskcard.startTimer")
             onTriggered: {
                 if (!host._t) return;
@@ -219,6 +223,7 @@ Item {
             objectName: "tc-menu-copylink"
             visible: host._isTicket && String(host._ticket.url || "").length > 0
             height: visible ? implicitHeight : 0
+            shortcutId: "task.copyLink"
             text: I18n.t("taskcard.copyLink")
             onTriggered: AppController.copyToClipboard(String(host._ticket.url || ""))
         }
@@ -241,17 +246,20 @@ Item {
         AppMenuSeparator {}
         AppMenuItem {
             objectName: "tc-menu-copyid"
+            shortcutId: "task.copyId"
             text: I18n.t("taskcard.copyId")
             onTriggered: if (host._t && host._t.id) AppController.copyToClipboard(host._t.id)
         }
         AppMenuItem {
             objectName: "tc-menu-branch"
+            shortcutId: "task.createBranch"
             text: I18n.t("taskcard.createBranch")
             onTriggered: if (host._t && host._t.id) AppController.createBranchForTask(host._t.id)
         }
         AppMenuItem {
             objectName: "tc-menu-copybranch"
             readonly property bool _has: !!(host._t && host._t.branch && String(host._t.branch).length > 0)
+            shortcutId: _has ? "task.copyBranch" : ""
             text: I18n.t("taskcard.copyBranch")
             enabled: _has
             note: _has ? "" : I18n.t("taskmenu.why.noBranch")
@@ -283,15 +291,27 @@ Item {
         backOnLeft: true
         // A row was picked; statusMenu() moves the task.
         signal picked(string statusId)
+        // "‹ Column": back to the task's menu, like ← and Esc (APP-279).
+        AppMenuItem {
+            objectName: "tc-status-back"
+            isBack: true
+            text: "‹ " + I18n.t("taskmenu.column")
+            onTriggered: statusMenu.goBack()
+        }
         Instantiator {
             model: AppController.statuses
             delegate: AppMenuItem {
                 required property var modelData
+                required property int index
                 text: modelData.name
                 marked: !!(host._t && host._t.status === modelData.id)
+                note: marked ? I18n.t("taskmenu.now") : ""
+                // A column by its number while the list is open.
+                number: index < 9 ? index + 1 : 0
+                keyText: index < 9 ? String(index + 1) : ""
             }
             onObjectAdded: (index, object) => {
-                statusMenu.insertItem(index, object);
+                statusMenu.insertItem(index + 1, object);
                 object["triggered"].connect(() => statusMenu.picked(object["modelData"].id));
             }
             onObjectRemoved: (index, object) => statusMenu.removeItem(object)
@@ -305,15 +325,26 @@ Item {
         id: priorityMenu
         objectName: "tc-priority-menu"
         backOnLeft: true
+        AppMenuItem {
+            objectName: "tc-priority-back"
+            isBack: true
+            text: "‹ " + (host._isTicket ? I18n.t("taskmenu.myPriority") : I18n.t("taskmenu.priority"))
+            onTriggered: priorityMenu.goBack()
+        }
         Instantiator {
             model: ["P0", "P1", "P2", "P3"]
             delegate: AppMenuItem {
                 required property string modelData
-                text: modelData
+                required property int index
+                text: modelData === "P0" ? "P0 · " + I18n.t("taskmenu.urgent") : modelData
                 marked: !!(host._t && host._t.priority === modelData)
+                note: marked ? I18n.t("taskmenu.now") : ""
+                // 1–4, the same keys as on the cursor (keymap.md).
+                shortcutId: "task.priority" + index
+                number: index + 1
                 onTriggered: AppController.setTaskPriority(host.taskId, modelData)
             }
-            onObjectAdded: (index, object) => priorityMenu.insertItem(index, object)
+            onObjectAdded: (index, object) => priorityMenu.insertItem(index + 1, object)
             onObjectRemoved: (index, object) => priorityMenu.removeItem(object)
         }
     }

@@ -342,9 +342,14 @@ class AppController : public QObject {
   }
 
   Q_INVOKABLE void ackShellNotice();
-  // The shortcut catalog moved to the heap 2 shell (APP-258); called for a
-  // settings file written before it.
-  void applyShellShortcutMigration(QVariantMap& overrides);
+  // The shortcut catalog moved to the heap 2 shell (APP-258) and the Vim-based
+  // keymap (APP-272); called for a settings file written before it.
+  void applyKeymapMigration(QVariantMap& overrides, int storedSchema);
+  // Old keys whose first press after the update still owes a word (APP-281 A4).
+  Q_INVOKABLE bool hasKeymapNotice() const;
+  // A key was pressed (KeyRouter's chord): if it is one of those, say once
+  // where its old action went.
+  Q_INVOKABLE void noteKeyPressed(const QString& chord);
 
   int workdayStart() const {
     return m_workdayStart;
@@ -1304,6 +1309,11 @@ class AppController : public QObject {
   // tasks of the active profile that satisfy the clauses, and is meaningful
   // only when `isQuery` is true (with no clauses every task would be in it).
   Q_INVOKABLE QVariantMap compileSearch(const QString& text) const;
+  // The command line (APP-267): `text` in the language quick capture speaks
+  // read as clauses ({words, kind, clause, value}) and the words left, and the
+  // tasks of the active profile it finds — `limit` of them, open before
+  // archived, the one whose id was typed first — with how many there are.
+  Q_INVOKABLE QVariantMap commandLine(const QString& text, int limit = 50) const;
 
   // Does this text hold at least one clause? Parsing only — it never walks the
   // task list, so the search field can ask on every keystroke to show whether
@@ -1463,6 +1473,19 @@ class AppController : public QObject {
   Q_INVOKABLE QString defaultShortcutFor(const QString& id) const;
   Q_INVOKABLE QString shortcutDescription(const QString& id) const;
   Q_INVOKABLE QString shortcutLabel(const QString& id) const;
+  // A key as it is written beside its action (keymap.md): "d", "Shift S",
+  // "g b", "Ctrl K", "Enter"; the macOS glyphs on a Mac. One notation for the
+  // menus, the cheat sheet, the hints and the tooltips (APP-279).
+  Q_INVOKABLE QString keyText(const QString& sequence) const;
+  Q_INVOKABLE QString shortcutText(const QString& id) const;
+  // Why a key cannot be bound (the system keeps it, Tab drives dialogs); "".
+  Q_INVOKABLE QString reservedShortcutReason(const QString& sequence) const;
+  // The action whose sequence starts with `sequence`, or that `sequence`
+  // starts with (g and g b): such a key is refused, not swapped; "" when none.
+  Q_INVOKABLE QString prefixShortcutConflict(const QString& id, const QString& sequence) const;
+  // A key press as the keymap reads it (KeyRouter), for recording a binding:
+  // the physical key in any layout. `scanCode` is the event's nativeScanCode.
+  Q_INVOKABLE QString keyChord(int key, int modifiers, const QString& text, quint32 scanCode) const;
   // The catalog action holding `sequence` (or the built-in key that does, as a
   // catalog id or a builtin.* id shortcutLabel() names); empty when free.
   Q_INVOKABLE QString findShortcutConflict(const QString& id, const QString& sequence) const;

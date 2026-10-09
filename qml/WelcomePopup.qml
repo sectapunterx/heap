@@ -53,7 +53,7 @@ Popup {
     function withKeys(key, ids) {
         let text = I18n.t(key);
         const list = ids || [];
-        for (let i = 0; i < list.length; i++) text = text.arg(AppController.shortcutFor(list[i]));
+        for (let i = 0; i < list.length; i++) text = text.arg(AppController.shortcutText(list[i]));
         return text;
     }
 
@@ -141,7 +141,7 @@ Popup {
         // A key that is not in the catalogue (the `?` of the cheat-sheet).
         property string fixedKey: ""
         property string fixedLabel: ""
-        readonly property string combo: chip.fixedKey.length > 0 ? chip.fixedKey : AppController.shortcutFor(sid)
+        readonly property string combo: chip.fixedKey.length > 0 ? chip.fixedKey : AppController.shortcutText(sid)
         visible: combo !== ""
         radius: Theme.radiusMd
         color: Theme.panel2

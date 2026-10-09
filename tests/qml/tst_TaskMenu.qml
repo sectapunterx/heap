@@ -59,7 +59,7 @@ TestCase {
         let done = null;
         for (let i = 0; i < m.count; i++) if (m.itemAt(i).objectName === "tc-menu-done") done = m.itemAt(i);
         verify(done !== null);
-        compare(done.hint, AppController.shortcutFor("task.done"));
+        compare(done.hint, AppController.shortcutText("task.done"));
         h.markDone();
         compare(AppController.taskById(id).status, AppController.doneColumn());
         h.markDone();

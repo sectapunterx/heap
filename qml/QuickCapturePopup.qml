@@ -442,6 +442,13 @@ Popup {
     // Opt-in timing (HEAP_PERF_LOG=1 / --perf-log): hotkey or open() to the
     // first frame that shows the popup. Logs only; a no-op otherwise.
     onAboutToShow: AppController.perfMarkShown("capture", contentItem)
+    // The command line's "nothing found · create «…»" (APP-267): the input
+    // opens with those words in it.
+    property string _openText: ""
+    function openWithText(text) {
+        root._openText = text || "";
+        root.open();
+    }
     onOpened: {
         inputField.text = "";
         _preview = {ok: false};
@@ -458,6 +465,11 @@ Popup {
         _lastAdded = "";
         keepOpen = false;
         at.dismiss();
+        if (_openText.length > 0) {
+            inputField.text = _openText;
+            inputField.cursorPosition = inputField.length;
+        }
+        _openText = "";
         inputField.forceActiveFocus();
     }
 

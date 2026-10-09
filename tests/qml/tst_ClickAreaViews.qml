@@ -52,7 +52,7 @@ TestCase {
         verify(prev.activeFocusOnTab);
         compare(prev.Accessible.name, I18n.t("month.prev"));
         compare(next.Accessible.name, I18n.t("month.next"));
-        verify(prev._tipText.indexOf(AppController.shortcutFor("cal.prev")) > 0,
+        verify(prev._tipText.indexOf(AppController.shortcutText("cal.prev")) > 0,
                "the tooltip does not name the key: " + prev._tipText);
 
         const d0 = AppController.selectedDate;
@@ -155,7 +155,7 @@ TestCase {
         keyClick(Qt.Key_Return);
         compare(got, AppController.statuses[0].id);
         const fold = areaIn(byName(board, "column-fold"));
-        verify(fold._tipText.indexOf(AppController.shortcutFor("board.collapseColumn")) > 0, fold._tipText);
+        verify(fold._tipText.indexOf(AppController.shortcutText("board.collapseColumn")) > 0, fold._tipText);
     }
 
     function test_timeline_show_done_is_a_checkbox() {

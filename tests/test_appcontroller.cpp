@@ -300,27 +300,169 @@ TEST_F(AppControllerTest, SpaceTypedAsTheKeyIsSpace) {
   EXPECT_EQ(app_->shortcutFor(QStringLiteral("task.new")), QString("Ctrl+Alt+Space"));
 }
 
-// SHELL-4 (2026-09-30-1): the keys QML wires next to the catalog (Ctrl+P, the
+// SHELL-4 (2026-09-30-1): the keys QML wires next to the catalog (the
 // board's arrows, Enter, Menu, Ctrl+arrows, the notes' Ctrl+Shift+M) count as
-// taken, and a rebind onto one is refused instead of killing both.
+// taken, and a rebind onto one is refused instead of killing both. Ctrl+P is
+// a catalogue entry since APP-279 (palette.open.alt), so it is swapped.
 TEST_F(AppControllerTest, BuiltinKeysAreConflicts) {
-  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("theme.toggle"), QStringLiteral("Ctrl+P")), QString("palette.open"));
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("theme.toggle"), QStringLiteral("Ctrl+P")), QString("palette.open.alt"));
   EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("theme.toggle"), QStringLiteral("Up")), QString("board.cursorUp"));
   EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("board.archive"), QStringLiteral("Menu")), QString("board.cardMenu"));
   EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("theme.toggle"), QStringLiteral("Ctrl+Shift+M")), QString("builtin.notesMode"));
   EXPECT_FALSE(app_->shortcutLabel(QStringLiteral("builtin.notesMode")).isEmpty());
-  // The action the key belongs to, and a view where the key is not live.
-  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("palette.open"), QStringLiteral("Ctrl+P")), QString());
+  // A view where the key is not live.
   EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("cal.prev"), QStringLiteral("Up")), QString());
 
   const QString before = app_->shortcutFor(QStringLiteral("theme.toggle"));
   QSignalSpy toasts(app_.get(), &AppController::toast);
-  EXPECT_FALSE(app_->setShortcut(QStringLiteral("theme.toggle"), QStringLiteral("Ctrl+P")));
+  EXPECT_FALSE(app_->setShortcut(QStringLiteral("theme.toggle"), QStringLiteral("Up")));
   EXPECT_EQ(app_->shortcutFor(QStringLiteral("theme.toggle")), before);
-  EXPECT_EQ(app_->shortcutFor(QStringLiteral("palette.open")), QString("Ctrl+K"));
   ASSERT_EQ(toasts.count(), 1);
   EXPECT_EQ(toasts.last().at(1).toString(), QStringLiteral("warning"));
-  EXPECT_TRUE(app_->setShortcut(QStringLiteral("palette.open"), QStringLiteral("Ctrl+P")));
+  // Ctrl+P is an ordinary entry: it can be taken (and is freed) or cleared.
+  EXPECT_TRUE(app_->setShortcut(QStringLiteral("theme.toggle"), QStringLiteral("Ctrl+P")));
+  EXPECT_TRUE(app_->shortcutFor(QStringLiteral("palette.open.alt")).isEmpty());
+  app_->resetShortcut(QStringLiteral("palette.open.alt"));
+  EXPECT_EQ(app_->shortcutFor(QStringLiteral("palette.open.alt")), QString("Ctrl+P"));
+}
+
+// The 0.8.0 keymap (keymap.md, APP-272): Vim-based defaults, a second key of
+// an action named like the action, two-key sequences.
+TEST_F(AppControllerTest, TheVimKeymapIsTheDefault) {
+  const QList<QPair<const char*, const char*>> expected = {{"task.done", "D"},
+                                                           {"view.board", "G, B"},
+                                                           {"view.timeline", "G, L"},
+                                                           {"view.calendar", "G, C"},
+                                                           {"section.today.alt", "G, T"},
+                                                           {"section.knowledge.alt", "G, N"},
+                                                           {"task.openExternal", "G, X"},
+                                                           {"task.schedule", "S"},
+                                                           {"task.due", "Shift+S"},
+                                                           {"task.priority0", "1"},
+                                                           {"task.priority3", "4"},
+                                                           {"task.timer", "T"},
+                                                           {"task.copyId", "Y, Y"},
+                                                           {"task.copyBranch", "Y, B"},
+                                                           {"task.copyLink", "Y, L"},
+                                                           {"task.createBranch", "C, B"},
+                                                           {"board.collapseColumn", "Z, A"},
+                                                           {"view.week", "Z, W"},
+                                                           {"view.month", "Z, M"},
+                                                           {"cal.today", "0"},
+                                                           {"cal.prev", "["},
+                                                           {"cal.next", "]"},
+                                                           {"cursor.first", "G, G"},
+                                                           {"cursor.last", "Shift+G"},
+                                                           {"nav.back", "Ctrl+O"},
+                                                           {"nav.forward", "Ctrl+I"},
+                                                           {"hotkeys.open", "Ctrl+/"},
+                                                           {"hotkeys.open.alt", "?"},
+                                                           {"palette.open.alt", "Ctrl+P"},
+                                                           {"palette.commands", ":"},
+                                                           {"search.focus.alt", "/"},
+                                                           {"undo.alt", "U"},
+                                                           {"redo.alt", "Ctrl+R"},
+                                                           {"savedView.1", "Ctrl+4"},
+                                                           {"savedView.6", "Ctrl+9"},
+                                                           {"savedView.1.alt", "G, 1"},
+                                                           {"cal.goToDate", ""}};
+  for(const auto& [id, seq] : expected) {
+    EXPECT_EQ(app_->defaultShortcutFor(QString::fromLatin1(id)), QString::fromLatin1(seq)) << id;
+  }
+  // No two actions share a key, and no key is the start of another's.
+  const QVariantList cat = app_->shortcuts();
+  for(const QVariant& a : cat) {
+    const QString id = a.toMap().value(QStringLiteral("id")).toString();
+    const QString seq = a.toMap().value(QStringLiteral("sequence")).toString();
+    if(!seq.isEmpty()) {
+      EXPECT_TRUE(app_->findShortcutConflict(id, seq).isEmpty()) << id.toStdString() << " " << seq.toStdString();
+    }
+    EXPECT_FALSE(a.toMap().value(QStringLiteral("label")).toString().startsWith(QStringLiteral("shortcut."))) << id.toStdString();
+  }
+  // A second key reads as its action.
+  EXPECT_EQ(app_->shortcutLabel(QStringLiteral("undo.alt")), app_->shortcutLabel(QStringLiteral("undo")));
+  EXPECT_EQ(app_->shortcutLabel(QStringLiteral("savedView.2.alt")), app_->shortcutLabel(QStringLiteral("savedView.2")));
+}
+
+TEST_F(AppControllerTest, KeysAreWrittenTheKeymapWay) {
+  EXPECT_EQ(app_->keyText(QStringLiteral("G, B")), QStringLiteral("g b"));
+  EXPECT_EQ(app_->shortcutText(QStringLiteral("task.done")), QStringLiteral("d"));
+  EXPECT_EQ(app_->shortcutText(QStringLiteral("task.due")), QStringLiteral("Shift S"));
+#ifndef Q_OS_MACOS
+  EXPECT_EQ(app_->shortcutText(QStringLiteral("board.open")), QStringLiteral("Enter"));
+  EXPECT_EQ(app_->shortcutText(QStringLiteral("palette.open")), QStringLiteral("Ctrl K"));
+#endif
+  // A rebinding shows at once.
+  EXPECT_TRUE(app_->setShortcut(QStringLiteral("task.done"), QStringLiteral("Shift+D")));
+  EXPECT_EQ(app_->shortcutText(QStringLiteral("task.done")), QStringLiteral("Shift D"));
+}
+
+// "Нельзя назначить g, если есть g b" (APP-272): a prefix is refused, not
+// swapped; the same sequence is swapped as any key is.
+TEST_F(AppControllerTest, APrefixOfASequenceIsRefused) {
+  EXPECT_FALSE(app_->prefixShortcutConflict(QStringLiteral("theme.toggle"), QStringLiteral("G")).isEmpty());
+  QSignalSpy toasts(app_.get(), &AppController::toast);
+  EXPECT_FALSE(app_->setShortcut(QStringLiteral("theme.toggle"), QStringLiteral("G")));
+  EXPECT_EQ(app_->shortcutFor(QStringLiteral("view.board")), QStringLiteral("G, B"));
+  ASSERT_EQ(toasts.count(), 1);
+  // …and a sequence that starts with a bound single key.
+  EXPECT_FALSE(app_->setShortcut(QStringLiteral("theme.toggle"), QStringLiteral("D, D")));
+  EXPECT_EQ(app_->shortcutFor(QStringLiteral("task.done")), QStringLiteral("D"));
+  // The same sequence: swapped.
+  EXPECT_TRUE(app_->setShortcut(QStringLiteral("theme.toggle"), QStringLiteral("G, B")));
+  EXPECT_TRUE(app_->shortcutFor(QStringLiteral("view.board")).isEmpty());
+  // A sequence of the user's own, after the g it starts with is free of it.
+  EXPECT_TRUE(app_->setShortcut(QStringLiteral("view.board"), QStringLiteral("Ctrl+Alt+B")));
+}
+
+TEST_F(AppControllerTest, SystemKeysAreRefusedWithAReason) {
+  EXPECT_FALSE(app_->reservedShortcutReason(QStringLiteral("Alt+F4")).isEmpty());
+  EXPECT_FALSE(app_->reservedShortcutReason(QStringLiteral("Tab")).isEmpty());
+  EXPECT_TRUE(app_->reservedShortcutReason(QStringLiteral("Ctrl+Shift+K")).isEmpty());
+  QSignalSpy toasts(app_.get(), &AppController::toast);
+  EXPECT_FALSE(app_->setShortcut(QStringLiteral("theme.toggle"), QStringLiteral("Alt+F4")));
+  ASSERT_EQ(toasts.count(), 1);
+  EXPECT_EQ(toasts.last().at(1).toString(), QStringLiteral("warning"));
+}
+
+// The command line (APP-267): "block p0 order" is the Blocked column, P0 and
+// a word; the clauses and the tasks they find.
+TEST_F(AppControllerTest, TheCommandLineReadsTheSharedLanguage) {
+  Task a = mkTask(QStringLiteral("APP-105"), QStringLiteral("Order checkout times out"));
+  a.status = QStringLiteral("blocked");
+  a.priority = QStringLiteral("P0");
+  Task b = mkTask(QStringLiteral("APP-106"), QStringLiteral("Order history"));
+  b.priority = QStringLiteral("P0");
+  Task c = mkTask(QStringLiteral("APP-107"), QStringLiteral("Order export"));
+  c.status = QStringLiteral("blocked");
+  c.priority = QStringLiteral("P0");
+  c.archived = true;
+  app_->tasks()->reset({a, b, c});
+
+  const QVariantMap r = app_->commandLine(QStringLiteral("block p0 order"));
+  const QVariantList tokens = r.value(QStringLiteral("tokens")).toList();
+  ASSERT_EQ(tokens.size(), 2);
+  EXPECT_EQ(tokens.at(0).toMap().value(QStringLiteral("clause")).toString(), QStringLiteral("status:blocked"));
+  EXPECT_EQ(tokens.at(1).toMap().value(QStringLiteral("clause")).toString(), QStringLiteral("priority:P0"));
+  EXPECT_EQ(r.value(QStringLiteral("text")).toString(), QStringLiteral("order"));
+  EXPECT_EQ(r.value(QStringLiteral("total")).toInt(), 2);
+  const QVariantList tasks = r.value(QStringLiteral("tasks")).toList();
+  ASSERT_EQ(tasks.size(), 2);
+  EXPECT_EQ(tasks.at(0).toMap().value(QStringLiteral("id")).toString(), QStringLiteral("APP-105"));
+  EXPECT_TRUE(tasks.at(1).toMap().value(QStringLiteral("archived")).toBool()) << "archived last";
+
+  // The id typed comes first; a limit keeps the count.
+  const QVariantMap byId = app_->commandLine(QStringLiteral("APP-106"), 1);
+  EXPECT_EQ(byId.value(QStringLiteral("total")).toInt(), 1);
+  EXPECT_EQ(byId.value(QStringLiteral("tasks")).toList().value(0).toMap().value(QStringLiteral("id")).toString(),
+            QStringLiteral("APP-106"));
+  const QVariantMap capped = app_->commandLine(QStringLiteral("order"), 1);
+  EXPECT_EQ(capped.value(QStringLiteral("total")).toInt(), 3);
+  EXPECT_EQ(capped.value(QStringLiteral("tasks")).toList().size(), 1);
+  // ">" is commands only: no task search.
+  const QVariantMap cmds = app_->commandLine(QStringLiteral("> order"));
+  EXPECT_TRUE(cmds.value(QStringLiteral("commandsOnly")).toBool());
+  EXPECT_EQ(cmds.value(QStringLiteral("total")).toInt(), 0);
 }
 
 // Interface scale from the keyboard (APP-168): Ctrl+= / Ctrl+- / Ctrl+0 are
@@ -2027,7 +2169,7 @@ TEST_F(AppControllerTest, TheOpenTicketShortcutIsInTheCatalogAndRebindable) {
       continue;
     }
     found = true;
-    EXPECT_EQ(m.value(QStringLiteral("defaultSequence")).toString(), QStringLiteral("O"));
+    EXPECT_EQ(m.value(QStringLiteral("defaultSequence")).toString(), QStringLiteral("G, X"));
     EXPECT_FALSE(m.value(QStringLiteral("label")).toString().isEmpty()) << "the shortcut has no translated label";
     EXPECT_FALSE(m.value(QStringLiteral("description")).toString().isEmpty());
   }
@@ -2036,7 +2178,7 @@ TEST_F(AppControllerTest, TheOpenTicketShortcutIsInTheCatalogAndRebindable) {
   EXPECT_TRUE(app_->setShortcut(QStringLiteral("task.openExternal"), QStringLiteral("Ctrl+Shift+O")));
   EXPECT_EQ(app_->shortcutFor(QStringLiteral("task.openExternal")), QStringLiteral("Ctrl+Shift+O"));
   app_->resetShortcut(QStringLiteral("task.openExternal"));
-  EXPECT_EQ(app_->shortcutFor(QStringLiteral("task.openExternal")), QStringLiteral("O"));
+  EXPECT_EQ(app_->shortcutFor(QStringLiteral("task.openExternal")), QStringLiteral("G, X"));
 }
 
 TEST_F(AppControllerTest, ProviderBadgesCoverEveryProviderInTheCatalog) {

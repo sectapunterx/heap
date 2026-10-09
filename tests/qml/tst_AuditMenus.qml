@@ -81,7 +81,7 @@ TestCase {
         tryVerify(() => list.opened, 1000);
         // On the task's own status, so an Enter straight away changes nothing.
         const cur = AppController.statuses.findIndex(st => st.id === AppController.taskById(id).status);
-        compare(list.currentIndex, cur);
+        compare(list.currentIndex, cur + 1, "row 0 is ‹ back");
 
         // Left: back to the card menu, on the row the list came from.
         tryVerify(() => list.itemAt(list.currentIndex).activeFocus, 1000);
@@ -108,8 +108,8 @@ TestCase {
         tryVerify(() => findChild(m.card, "tc-priority-menu") !== null, 1000, "Right did not open the priority list");
         const list = findChild(m.card, "tc-priority-menu");
         tryVerify(() => list.opened, 1000);
-        list.currentIndex = 0;
-        tryVerify(() => list.itemAt(0).activeFocus, 1000);
+        list.currentIndex = 1;
+        tryVerify(() => list.itemAt(1).activeFocus, 1000);
         keyClick(Qt.Key_Return);
         tryCompare(AppController.taskById(id), "priority", "P0");
         tryVerify(() => !list.visible);
@@ -121,7 +121,7 @@ TestCase {
         const b = makeBoard();
         const m = openCardMenu(b, id);
         const archive = m.menu.itemAt(indexOfItem(m.menu, "tc-menu-archive"));
-        compare(archive.hint, AppController.shortcutFor("board.archive"));
+        compare(archive.hint, AppController.shortcutText("board.archive"));
         verify(archive.hint.length > 0);
         const hint = findChild(archive, "menu-row-hint");
         verify(hint !== null && hint.visible && hint.text === archive.hint);

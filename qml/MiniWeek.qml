@@ -205,7 +205,7 @@ Rectangle {
         property string tip: ""
         // A catalogue shortcut the tooltip names, as bound now.
         property string shortcutId: ""
-        readonly property string _keys: nav.shortcutId.length > 0 ? AppController.shortcutFor(nav.shortcutId) : ""
+        readonly property string _keys: nav.shortcutId.length > 0 ? AppController.shortcutText(nav.shortcutId) : ""
         property bool accent: false
         signal clicked()
         implicitWidth: 24; implicitHeight: 24

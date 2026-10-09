@@ -160,6 +160,26 @@ target_link_libraries(heap_rank_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Qml GTest:
 add_test(NAME heap_rank_tests COMMAND heap_rank_tests)
 
 # "There is a key for that" counter (APP-166) — header-only.
+# The 0.8.0 keymap: key names, physical keys, prefixes (APP-272/279).
+add_executable(heap_keys_tests test_keys.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../src/keys/KeyNames.cpp)
+target_include_directories(heap_keys_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_keys_tests PRIVATE Qt6::Core Qt6::Gui GTest::gtest GTest::gtest_main)
+add_test(NAME heap_keys_tests COMMAND heap_keys_tests)
+
+# The command line's input language (APP-267).
+add_executable(heap_command_query_tests
+    test_command_query.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/query/CommandQuery.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/capture/CaptureParse.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoTokenizer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_en.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_ru.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoParser.cpp
+)
+target_include_directories(heap_command_query_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_command_query_tests PRIVATE Qt6::Core heap_markdown GTest::gtest GTest::gtest_main)
+add_test(NAME heap_command_query_tests COMMAND heap_command_query_tests)
+
 add_executable(heap_shortcut_hints_tests test_shortcut_hints.cpp)
 target_include_directories(heap_shortcut_hints_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(heap_shortcut_hints_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)

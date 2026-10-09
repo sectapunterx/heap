@@ -8,6 +8,7 @@ import QtQuick.Dialogs
 import TodoCpp
 import "DocsStarter.js" as DocsStarter
 import "ThemePresets.js" as Presets
+import "KeyRules.js" as KeyRules
 
 ApplicationWindow {
     id: win
@@ -409,7 +410,7 @@ ApplicationWindow {
         if (msg.length === 0) return;
         AppController.ackShellNotice();
         toast.showWithAction(msg, I18n.t("shell.notice.action"), 15, function () {
-            rail.openHotkeys(rail.hotkeysAnchor);
+            win.openCheatSheet();
         });
     }
 
@@ -537,7 +538,7 @@ ApplicationWindow {
     readonly property bool _overlayOpen: taskEditor.opened || eventEditor.opened
         || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
-        || tweaks.opened || hotkeys.opened || closeAsk.opened || goToDatePopup.opened
+        || tweaks.opened || hotkeys.opened || cheatSheet.opened || closeAsk.opened || goToDatePopup.opened
         || weeklyRecap.opened || standupDraft.opened || timeMachine.opened || eventLog.opened || endOfDay.opened
 
     // ── Keyboard scope ────────────────────────────────────────────────
@@ -670,7 +671,7 @@ ApplicationWindow {
     // popovers are not modal and keep them.
     readonly property bool _modalOpen: taskEditor.opened || eventEditor.opened
         || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
-        || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
+        || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened || cheatSheet.opened
         || closeAsk.opened || goToDatePopup.opened || eventLog.opened
         || (_focusInPopup && !_focusInPopover) || _dimmerShown
     readonly property bool _globalKeysOn: !hotkeys.isCapturing && !_modalOpen
@@ -1479,7 +1480,7 @@ ApplicationWindow {
             if (id === "task-new")            quickCapture.open();
             else if (id === "quick-capture")  quickCapture.open();
             else if (id === "palette")        cmdPalette.open();
-            else if (id === "hotkeys")        rail.openHotkeys(rail.hotkeysAnchor);
+            else if (id === "hotkeys")        win.openCheatSheet();
             // "Bring your stuff" (APP-169): the same pickers as the palette's.
             else if (id === "vault-import")   importVaultDialog.open();
             else if (id === "profile-import") importJsonDialog.open();
@@ -1715,10 +1716,23 @@ ApplicationWindow {
         if (v && v.hoveredTaskId) return [v.hoveredTaskId];
         return [];
     }
-    // D (APP-268): nothing under the key, nothing happens.
+    // D (APP-268): nothing under the key, nothing happens. A second d on the
+    // same tasks within half a second is Vim's "dd" habit, not "take it
+    // back" (keymap rule 6).
     function markDone() {
         const ids = taskDoc.opened && taskDoc.activeFocus ? [taskDoc.taskId] : win._keyTaskIds();
-        if (ids.length > 0) AppController.toggleDone(ids);
+        if (ids.length === 0) return;
+        const key = ids.join(",");
+        const now = Date.now();
+        if (KeyRules.isRepeatedDone(key, now, win._lastDoneKey, win._lastDoneAt)) return;
+        win._lastDoneKey = key;
+        win._lastDoneAt = now;
+        AppController.toggleDone(ids);
+    }
+    // The cheat sheet ("?", Ctrl+/); changing keys is the Hotkeys panel.
+    function openCheatSheet() {
+        if (cheatSheet.opened) cheatSheet.close();
+        else cheatSheet.open();
     }
     function _toastCaptured(title, taskId) {
         const line = taskId ? quickCapture.headline(taskId) : "";
@@ -1740,6 +1754,7 @@ ApplicationWindow {
         function onCurrentViewChanged() {
             const v = AppController.currentView;
             if (v === "week" || v === "month") win._calendarView = v;
+            win._noteNav(v);
         }
     }
     function openLens(id) {
@@ -1748,6 +1763,15 @@ ApplicationWindow {
         else AppController.currentView = id;
     }
     function runCommand(id) {
+        // The calendar lens is week or month, the one used last (APP-272 g c).
+        if (id === "view.calendar") {
+            win.openLens("calendar");
+            return;
+        }
+        if (id === "palette.open") {
+            cmdPalette.open();
+            return;
+        }
         if (id.indexOf("section.") === 0) {
             AppController.openSection(id.slice(8));
             return;
@@ -1802,7 +1826,9 @@ ApplicationWindow {
         case "profile.exportMd":     AppController.copyActiveProfileMarkdownToClipboard(); break;
         case "profile.weeklyReport": AppController.copyWeeklyReportToClipboard(); break;
         case "tweaks.open":          rail.openTweaks(rail.tweaksAnchor); break;
-        case "hotkeys.open":         rail.openHotkeys(rail.hotkeysAnchor); break;
+        case "hotkeys.open":         win.openCheatSheet(); break;
+        case "hotkeys.edit":         rail.openHotkeys(rail.hotkeysAnchor); break;
+        case "palette.commands":     cmdPalette.openWith(">"); break;
         case "search.focus":         win._focusSearch(); break;
         case "event.new":            eventEditor.showForDraft(AppController.newEventDraft(9, AppController.selectedDate)); break;
         case "welcome.replay":       AppController.replayWelcome(); break;
@@ -1858,6 +1884,14 @@ ApplicationWindow {
     CommandPalette {
         id: cmdPalette
         onCommandRequested: (id) => win.runCommand(id)
+        // The command line (APP-267): the task the cursor was on, the found
+        // filter shown in Tasks or saved as a view, nothing found → a task.
+        contextProvider: function () { return win._keyTaskIds(); }
+        onQueryRequested: (query, mode) => {
+            win.showQuery(query, mode === "board" ? "board" : "list");
+            if (mode === "save") Qt.callLater(savedViewsHost.openSave);
+        }
+        onCreateRequested: (text) => quickCapture.openWithText(text)
         onOpenTask: (taskId) => win.showTask(AppController.taskById(taskId))
         onOpenPerson: (personId) => personEditor.showFor(AppController.personById(personId))
         onNavigateToDoc: (sectionId) => docsBridge.requestedAnchor = "sec-" + sectionId
@@ -1885,11 +1919,305 @@ ApplicationWindow {
     // Each Shortcut's sequence is bound through _kbd(id), which depends on
     // AppController.shortcuts (a Q_PROPERTY) so the binding re-evaluates on
     // shortcutsChanged — rebinding in the Hotkeys panel applies instantly.
+    //
+    // Only a chord with Ctrl, Alt or Meta is a Qt Shortcut's (APP-272): a bare
+    // letter or a two-key sequence ("g b") is KeyRouter's below, which holds
+    // it back while the person types and reads it by the physical key.
     function _kbd(id) {
         const list = AppController.shortcuts;
         for (let i = 0; i < list.length; i++)
-            if (list[i].id === id) return list[i].sequence;
+            if (list[i].id === id) return KeyRules.isRouterSequence(list[i].sequence) ? "" : list[i].sequence;
         return "";
+    }
+
+    // ── The 0.8.0 keymap (keymap.md, APP-272) ─────────────────────────
+    // Catalogue ids a Qt Shortcut item runs when bound to a Ctrl chord (here,
+    // in SavedViewsHost and in NotesView). KeyRouter leaves those to it unless
+    // the key came from a non-Latin layout; everything else it runs itself
+    // through runShortcut().
+    readonly property var _qtOwned: [
+        "palette.open", "palette.open.alt", "panel.right", "rail.toggle", "task.new", "quick-capture",
+        "quick-capture-notes", "section.today", "section.tasks", "section.knowledge", "view.board",
+        "view.timeline", "view.week", "view.month", "view.docs", "view.notes", "view.settings", "view.archive",
+        "theme.toggle", "person.new", "profile.new", "profile.next", "profile.prev", "profile.exportMd",
+        "profile.weeklyReport", "focus.immersion", "timeMachine.open", "standup.draft", "recap.open",
+        "endOfDay.open", "welcome.replay", "zoom.in", "zoom.out", "zoom.reset", "tweaks.open", "log.open",
+        "hotkeys.open", "undo", "redo", "search.focus", "selection.selectAll", "selection.clearSel",
+        "selection.deleteSel", "cal.today", "cal.prevDay", "cal.nextDay", "cal.newEvent", "cal.prev", "cal.next",
+        "cal.goToDate", "cal.taskEarlier", "cal.taskLater", "cal.taskEarlierWeek", "cal.taskLaterWeek",
+        "cal.taskTimeEarlier", "cal.taskTimeLater", "board.cursorDown", "board.cursorUp", "board.cursorLeft",
+        "board.cursorRight", "board.open", "board.toggleSelect", "board.moveDown", "board.moveUp",
+        "board.moveLeft", "board.moveRight", "board.selectDown", "board.selectUp", "board.selectColumnLeft",
+        "board.selectColumnRight", "board.cardMenu", "board.archive", "board.collapseColumn", "task.done",
+        "task.openExternal", "notes.new", "notes.next", "notes.prev", "notes.rename", "notes.toggleList",
+        "savedView.1", "savedView.2", "savedView.3", "savedView.4", "savedView.5", "savedView.6",
+        "savedView.7", "savedView.8", "savedView.9"
+    ]
+    readonly property var _dayViews: ["today", "board", "timeline", "week", "month", "archive"]
+    // Shift V: j / k grow the selection from the cursor until Esc.
+    property bool _rangeMode: false
+    // The last d, so a Vim-habit "dd" does not take Done back (keymap rule 6).
+    property string _lastDoneKey: ""
+    property real _lastDoneAt: 0
+    // Ctrl O / Ctrl I: where the person was, like Vim's jumplist.
+    property var _navBack: []
+    property var _navFwd: []
+    property string _navCur: ""
+    property bool _navMoving: false
+    function _noteNav(v) {
+        if (win._navMoving || v === win._navCur) {
+            win._navCur = v;
+            return;
+        }
+        if (win._navCur.length > 0) {
+            win._navBack.push(win._navCur);
+            if (win._navBack.length > 50) win._navBack.shift();
+            win._navFwd = [];
+        }
+        win._navCur = v;
+    }
+    function navStep(dir) {
+        const from = dir < 0 ? win._navBack : win._navFwd;
+        const to = dir < 0 ? win._navFwd : win._navBack;
+        if (from.length === 0) return;
+        const target = from.pop();
+        to.push(AppController.currentView);
+        win._navMoving = true;
+        AppController.currentView = target;
+        win._navMoving = false;
+        win._navCur = AppController.currentView;
+    }
+
+    // Whether the action of `id` means something where the person is now.
+    // A bare key stands down while anything takes typed text or a popup is
+    // up; a Ctrl chord only behind a modal.
+    function _keyLive(id) {
+        if (hotkeys.isCapturing || win._captureActive) return false;
+        const routed = KeyRules.isRouterSequence(AppController.shortcutFor(id));
+        if (routed ? win._viewKeysBlocked : !win._globalKeysOn) return false;
+        const base = KeyRules.baseId(id);
+        const v = AppController.currentView;
+        const b = win.activeViewItem();
+        if (base.indexOf("board.") === 0)
+            return v === "board" && !(b && b.cardMenuOpen === true);
+        if (base.indexOf("cursor.") === 0)
+            return v === "board" && !!b && typeof b.moveCursor === "function" && !win._typing;
+        if (base.indexOf("notes.") === 0) return v === "notes";
+        if (base.indexOf("savedView.") === 0) return Number(base.slice(10)) <= AppController.savedViews.length;
+        if (base.indexOf("task.") === 0 && base !== "task.new")
+            return win._keyTaskIds().length > 0 || (base === "task.done" && taskDoc.opened && taskDoc.activeFocus);
+        switch (base) {
+        case "cal.prev": case "cal.next":
+            return ["today", "week", "month"].indexOf(v) >= 0;
+        case "cal.today": case "cal.prevDay": case "cal.nextDay": case "cal.goToDate":
+            return win._dayViews.indexOf(v) >= 0;
+        case "cal.zoomDay":
+            return (v === "week" || v === "month") && !!b && typeof b.setZoom === "function";
+        case "cal.newEvent":
+            return !win._overlayOpen;
+        case "cal.taskEarlier": case "cal.taskLater": case "cal.taskEarlierWeek": case "cal.taskLaterWeek":
+        case "cal.taskTimeEarlier": case "cal.taskTimeLater":
+            return win._moveKeysOn;
+        case "selection.toggle": case "selection.range":
+            return v === "board" || win._keyTaskIds().length > 0;
+        case "selection.clearSel":
+            return AppController.selectionCount > 0 || win._rangeMode
+                || (v === "board" && win._boardCursorShown());
+        case "selection.deleteSel":
+            return AppController.selectionCount > 0;
+        case "selection.selectAll":
+            return ["board", "timeline", "week", "archive"].indexOf(v) >= 0;
+        case "nav.back": return win._navBack.length > 0 && !win._typing;
+        case "nav.forward": return win._navFwd.length > 0 && !win._typing;
+        case "undo": return AppController.hasPendingUndo && !win._overlayOpen && !win._typing;
+        case "redo": return AppController.canRedo && !win._overlayOpen && !win._typing;
+        case "focus.immersion": return !!(AppController.safety && AppController.safety.immersion);
+        case "standup.draft": return !!(AppController.safety && AppController.safety.standupDraft);
+        }
+        return true;
+    }
+    // The board's keyboard cursor is drawn (there is something for Esc to
+    // let go of), and letting go of it.
+    function _boardCursorShown() {
+        const bi = boardLoader.item;
+        return !!bi && bi["cursorVisible"] === true;
+    }
+    function _clearBoardCursor() {
+        const bi = boardLoader.item;
+        if (bi && typeof bi["clearCursor"] === "function") bi["clearCursor"]();
+    }
+    // KeyRouter's handler: run the first of `ids` that is live here.
+    function _routeKey(ids, dry) {
+        const list = String(ids).split(",");
+        for (let i = 0; i < list.length; i++) {
+            if (!win._keyLive(list[i])) continue;
+            if (!dry) win.runShortcut(list[i]);
+            return list[i];
+        }
+        return "";
+    }
+    function _eachKeyTask(fn) {
+        const ids = win._keyTaskIds();
+        for (let i = 0; i < ids.length; i++) {
+            const t = AppController.taskById(ids[i]);
+            if (t && t.id) fn(t);
+        }
+        return ids.length;
+    }
+    function _copyKeyTask(field) {
+        const out = [];
+        win._eachKeyTask(function (t) {
+            const v = field === "id" ? t.id
+                : field === "branch" ? String(t.branch || "")
+                : String((t.ticket && t.ticket.url) || t.externalUrl || "");
+            if (v.length > 0) out.push(v);
+        });
+        if (out.length === 0) {
+            toast.show(I18n.t(field === "branch" ? "keys.copy.noBranch" : "keys.copy.noLink"), "warning");
+            return;
+        }
+        AppController.copyToClipboard(out.join(field === "id" ? ", " : "\n"));
+        toast.show(I18n.t("keys.copied").arg(out.join(", ")));
+    }
+    // Runs a catalogue action from the keyboard — every id, whichever way its
+    // key came in.
+    function runShortcut(id) {
+        const base = KeyRules.baseId(id);
+        const b = win.activeViewItem();
+        const call = function (name) {
+            if (b && typeof b[name] === "function") b[name].apply(b, Array.prototype.slice.call(arguments, 1));
+        };
+        switch (base) {
+        case "board.cursorDown":
+            if (win._rangeMode) call("extendSelection", 1); else call("moveCursor", 0, 1);
+            return;
+        case "board.cursorUp":
+            if (win._rangeMode) call("extendSelection", -1); else call("moveCursor", 0, -1);
+            return;
+        case "board.cursorLeft": call("moveCursor", -1, 0); return;
+        case "board.cursorRight": call("moveCursor", 1, 0); return;
+        case "board.open": call("openCursor"); return;
+        case "board.toggleSelect": call("toggleCursorSelection"); return;
+        case "board.moveDown": call("moveCursorCard", 0, 1); return;
+        case "board.moveUp": call("moveCursorCard", 0, -1); return;
+        case "board.moveLeft": call("moveSelectionOrCard", -1); return;
+        case "board.moveRight": call("moveSelectionOrCard", 1); return;
+        case "board.selectDown": call("extendSelection", 1); return;
+        case "board.selectUp": call("extendSelection", -1); return;
+        case "board.selectColumnLeft": call("selectColumnAndStep", -1); return;
+        case "board.selectColumnRight": call("selectColumnAndStep", 1); return;
+        case "board.cardMenu": call("openCursorMenu"); return;
+        case "board.archive": call("archiveCursor"); return;
+        case "board.collapseColumn": call("toggleCursorColumn"); return;
+        case "cursor.first": call("moveCursor", 0, -100000); return;
+        case "cursor.last": call("moveCursor", 0, 100000); return;
+        case "cursor.pageDown": call("moveCursor", 0, 8); return;
+        case "cursor.pageUp": call("moveCursor", 0, -8); return;
+        case "nav.back": win.navStep(-1); return;
+        case "nav.forward": win.navStep(1); return;
+        case "task.done": win.markDone(); return;
+        case "task.openExternal": {
+            const ids = win._keyTaskIds();
+            // Never a whole multi-selection: one browser tab per card.
+            if (ids.length === 1) AppController.openTaskExternal(ids[0]);
+            return;
+        }
+        case "task.newBelow": case "task.newAbove": {
+            const ids = win._keyTaskIds();
+            const t = ids.length > 0 ? AppController.taskById(ids[0]) : null;
+            if (t && t.status) quickCapture.openIn(t.status);
+            else quickCapture.open();
+            return;
+        }
+        case "task.rename": {
+            const ids = win._keyTaskIds();
+            if (ids.length > 0) win.openTask(ids[0]);
+            return;
+        }
+        case "task.due": {
+            const ids = win._keyTaskIds();
+            if (ids.length > 0) win.openTask(ids[0]);
+            return;
+        }
+        case "task.schedule":
+            win._eachKeyTask(function (t) { AppController.scheduleTaskAtNextFreeSlot(t.id, AppController.selectedDate); });
+            return;
+        case "task.priority0": case "task.priority1": case "task.priority2": case "task.priority3": {
+            const p = "P" + base.slice(13);
+            win._eachKeyTask(function (t) { AppController.setTaskPriority(t.id, p); });
+            return;
+        }
+        case "task.timer":
+            win._eachKeyTask(function (t) {
+                if (t.isTiming) AppController.stopTaskTimer(t.id); else AppController.startTaskTimer(t.id);
+            });
+            return;
+        case "task.copyId": win._copyKeyTask("id"); return;
+        case "task.copyBranch": win._copyKeyTask("branch"); return;
+        case "task.copyLink": win._copyKeyTask("link"); return;
+        case "task.createBranch": {
+            const ids = win._keyTaskIds();
+            if (ids.length > 0) AppController.createBranchForTask(ids[0]);
+            return;
+        }
+        case "selection.toggle":
+            if (AppController.currentView === "board") { call("toggleCursorSelection"); return; }
+            win._eachKeyTask(function (t) { AppController.toggleTaskSelection(t.id); });
+            return;
+        case "selection.range":
+            win._rangeMode = !win._rangeMode;
+            if (win._rangeMode && AppController.currentView === "board") call("toggleCursorSelection");
+            return;
+        case "selection.clearSel":
+            win._rangeMode = false;
+            AppController.clearSelection();
+            win._clearBoardCursor();
+            return;
+        case "selection.deleteSel": AppController.deleteSelectedTasks(); return;
+        case "selection.selectAll": call("selectAllVisible"); return;
+        case "cal.today": AppController.selectedDate = AppController.today; return;
+        case "cal.prev": case "cal.next": {
+            const dir = base === "cal.prev" ? -1 : 1;
+            if (b && typeof b.step === "function" && AppController.currentView !== "today") { b.step(dir); return; }
+            const d = AppController.selectedDate;
+            AppController.selectedDate = new Date(d.getFullYear(), d.getMonth(), d.getDate() + dir);
+            return;
+        }
+        case "cal.prevDay": case "cal.nextDay": {
+            const d = AppController.selectedDate;
+            AppController.selectedDate = new Date(d.getFullYear(), d.getMonth(), d.getDate() + (base === "cal.prevDay" ? -1 : 1));
+            return;
+        }
+        case "cal.goToDate": goToDatePopup.openAt(AppController.selectedDate, win.contentItem); return;
+        case "cal.zoomDay": call("setZoom", "day"); return;
+        case "cal.newEvent": {
+            const day = AppController.selectedDate;
+            eventEditor.showForDraft(AppController.newEventDraft(AppController.nextFreeSlot(day, 1), day));
+            return;
+        }
+        case "cal.taskEarlier": win._moveViewTask(-1, 0); return;
+        case "cal.taskLater": win._moveViewTask(1, 0); return;
+        case "cal.taskEarlierWeek": win._moveViewTask(-7, 0); return;
+        case "cal.taskLaterWeek": win._moveViewTask(7, 0); return;
+        case "cal.taskTimeEarlier": win._moveViewTask(0, -1); return;
+        case "cal.taskTimeLater": win._moveViewTask(0, 1); return;
+        case "undo": AppController.undo(); return;
+        case "redo": AppController.redo(); return;
+        }
+        win.runCommand(base);
+    }
+
+    KeyRouter {
+        id: keyRouter
+        objectName: "key-router"
+        window: win
+        enabled: !hotkeys.isCapturing && !win._captureActive
+        bindings: AppController.shortcuts
+        qtOwned: win._qtOwned
+        handler: function (ids, dry) { return win._routeKey(ids, dry); }
+        // The old keys of 0.7 say once where their action went (APP-281 A4).
+        onChordPressed: (chord) => { if (AppController.hasKeymapNotice()) AppController.noteKeyPressed(chord); }
+        Component.onCompleted: win._navCur = AppController.currentView
     }
 
     Shortcut {
@@ -1898,12 +2226,12 @@ ApplicationWindow {
         enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: cmdPalette.open()
     }
-    // Built-in alias: Ctrl+P always opens the palette, independent of the
-    // catalog. If the user rebinds palette.open elsewhere, this still works.
+    // Ctrl+P: the same, as a catalogue entry of its own (APP-279) — it can be
+    // rebound or cleared like any other.
     Shortcut {
-        sequence: "Ctrl+P"
+        sequence: win._kbd("palette.open.alt")
         context: Qt.ApplicationShortcut
-        enabled: win._globalKeysOn
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: cmdPalette.open()
     }
 
@@ -2151,22 +2479,10 @@ ApplicationWindow {
         sequence: _kbd("hotkeys.open")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: rail.openHotkeys(rail.hotkeysAnchor)
+        onActivated: win.openCheatSheet()
     }
-    // `?` opens the same cheat-sheet (APP-166), as in most keyboard-first
-    // apps. A view key: it stands down while anything takes typed text, so a
-    // question mark in a title is still a question mark. Shift+/ is what the
-    // key reports on layouts where Qt does not fold it into Key_Question, and
-    // Shift+? where the event keeps the Shift it took to type it.
-    Shortcut {
-        objectName: "shortcut-question-cheatsheet"
-        sequences: ["?", "Shift+?", "Shift+/"]
-        context: Qt.ApplicationShortcut
-        enabled: !win._viewKeysBlocked && !hotkeys.opened
-        onActivated: rail.openHotkeys(rail.hotkeysAnchor)
-        // Where a layout reports the key both ways, both sequences match.
-        onActivatedAmbiguously: rail.openHotkeys(rail.hotkeysAnchor)
-    }
+    // `?` opens the same cheat sheet (APP-166): hotkeys.open.alt, a key
+    // KeyRouter runs, so it stands down while anything takes typed text.
     Shortcut {
         sequence: _kbd("undo")
         context: Qt.ApplicationShortcut
@@ -2215,10 +2531,10 @@ ApplicationWindow {
         enabled: sequence.length > 0 && !win._viewKeysBlocked
             && (AppController.selectionCount > 0
                 || (AppController.currentView === "board"
-                    && !!boardLoader.item && boardLoader.item["cursorVisible"] === true))
+                    && win._boardCursorShown()))
         onActivated: {
             AppController.clearSelection();
-            if (boardLoader.item && boardLoader.item.clearCursor) boardLoader.item.clearCursor();
+            win._clearBoardCursor();
         }
     }
     // Esc on a tabbed-to control outside the view (filter chip, mini week, day
@@ -2679,6 +2995,23 @@ ApplicationWindow {
     // a narrow one its bottom centre (APP-225). Popups and dialogs sit on
     // the overlay above it, so a toast never covers Quick Capture or a
     // dialog's buttons.
+    // The cheat sheet (APP-272): every key by area, with a search.
+    KeyCheatSheet {
+        id: cheatSheet
+        onEditRequested: Qt.callLater(function () { rail.openHotkeys(rail.hotkeysAnchor); })
+    }
+
+    // "g …": the first key of a sequence waits for its second (keymap rule 3).
+    KeyPendingBar {
+        objectName: "key-pending-bar"
+        pending: keyRouter.pending
+        isLive: function (id) { return win._keyLive(id); }
+        x: mainColumn.x + Math.round((mainColumn.width - width) / 2)
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: Theme.spXl + win._selectionBarSpace
+        z: 101
+    }
+
     Toast {
         id: toast
         objectName: "toast"

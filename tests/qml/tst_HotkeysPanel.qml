@@ -172,15 +172,16 @@ TestCase {
         panel.close();
     }
 
-    // SHELL-4: Ctrl+P stays the palette's whatever the catalog says; taking it
-    // made both dead. The rebind is refused and the old key kept.
+    // SHELL-4: the board's arrows stay the board's whatever the catalog says;
+    // taking one made both dead. The rebind is refused and the old key kept.
+    // (Ctrl+P is a catalogue entry since APP-279.)
     function test_builtin_key_is_not_taken() {
         const panel = openPanel();
         const before = AppController.shortcutFor("task.new");
         tryVerify(function () { return field(panel, "task.new") !== null; }, 2000, "no chip for task.new");
         field(panel, "task.new").forceActiveFocus();
         keyClick(Qt.Key_Return);
-        keyClick(Qt.Key_P, Qt.ControlModifier);
+        keyClick(Qt.Key_Up);
         keyClick(Qt.Key_Return);
         compare(AppController.shortcutFor("task.new"), before);
         AppController.resetAllShortcuts();

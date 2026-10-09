@@ -215,7 +215,7 @@ Rectangle {
             text: I18n.t("recap.button")
             dot: root.recapUnseen
             tip: {
-                const keys = (AppController.shortcuts, AppController.shortcutFor("recap.open"));
+                const keys = AppController.shortcuts.length >= 0 ? AppController.shortcutText("recap.open") : "";
                 const what = root.recapUnseen ? I18n.t("recap.button.unseen") : I18n.t("recap.button.tip");
                 return keys.length > 0 ? what + "  " + keys : what;
             }
