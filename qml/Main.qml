@@ -271,7 +271,8 @@ ApplicationWindow {
     // is Tasks · List with the condition "is:archived", grouped by month.
     readonly property bool _archiveQuery: /(^|\s)is:archived(\s|$)/i.test(win.searchText)
     function openArchive() {
-        if (!win._archiveQuery) win.searchText = (win.searchText.trim() + " is:archived").trim();
+        if (!win._archiveQuery)
+            win.searchText = (win.searchText.replace(/(^|\s)is:open(?=\s|$)/gi, " ").trim() + " is:archived").trim();
         AppController.currentView = "list";
     }
     // By date an archive is one "Earlier" heap: it goes by month unless
@@ -285,13 +286,22 @@ ApplicationWindow {
     property bool _filtersRestored: false
     function _restoreFilters() {
         const f = _settingsObject().filters || {};
-        win.searchText = typeof f.search === "string" ? f.search : "";
+        win.searchText = win.defaultQuery(typeof f.search === "string" ? f.search : "", f.v === 2);
         win.prioritiesFilter = (f.priorities && typeof f.priorities === "object") ? f.priorities : ({});
         win.boardSortMode = typeof f.sort === "string" && f.sort.length > 0 ? f.sort : "manual";
         win.showArchived = f.archived === true;
         win.showDoneTimeline = f.showDone === true;
         savedViewsHost.activeId = typeof f.savedView === "string" ? f.savedView : "";
         win._filtersRestored = true;
+    }
+    // The query a start begins from: what was saved, with "is:open" in
+    // front once for filters saved before it was the default — unless the
+    // saved query already says which tasks it wants by status or state.
+    function defaultQuery(saved, current) {
+        const q = String(saved || "").trim();
+        if (current) return q;
+        if (/(^|\s)-?(is|status):\S+/i.test(q) || /(^|\s)OR(\s|$)/.test(q)) return q;
+        return ("is:open " + q).trim();
     }
     function _saveFiltersSoon() { if (win._filtersRestored) filterSaveTimer.restart(); }
     // The selection follows the filters: a card selected and then hidden by
@@ -319,7 +329,7 @@ ApplicationWindow {
         interval: 400
         onTriggered: {
             const s = win._settingsObject();
-            s.filters = { search: win.searchText, priorities: win.prioritiesFilter, sort: win.boardSortMode,
+            s.filters = { v: 2, search: win.searchText, priorities: win.prioritiesFilter, sort: win.boardSortMode,
                           archived: win.showArchived, showDone: win.showDoneTimeline,
                           savedView: savedViewsHost.activeId };
             AppController.appSettingsJson = JSON.stringify(s);
@@ -1016,6 +1026,7 @@ ApplicationWindow {
             onSavedViewActivated: (id) => savedViewsHost.apply(id)
             onSavedViewRenameRequested: (id) => savedViewsHost.openRename(id)
             onSavedViewUpdateRequested: (id) => savedViewsHost.updateFromCurrent(id)
+            onSavedViewEditRequested: (id) => savedViewsHost.openEdit(id)
             onSaveViewRequested: savedViewsHost.openSave()
         }
 
@@ -1076,6 +1087,8 @@ ApplicationWindow {
                 onSeenBeforeActivated: (hit) => win.openSeenBefore(hit)
                 resultCount: section === "tasks" ? filterBar._fc.total : -1
                 onSaveViewRequested: savedViewsHost.openSave()
+                profileName: rail.profileSwitcher.active.name || ""
+                onProfileChipClicked: rail.profileSwitcher.openMenu()
             }
 
                 FilterBar {
@@ -1258,7 +1271,9 @@ ApplicationWindow {
                         onTaskRequested: (id) => win.openTask(id)
                     }
                     SelectionBar {
+                        id: selectionBar
                         restoring: win._archiveQuery
+                        onCommandRequested: (id) => win.runCommand(id)
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.bottom: parent.bottom
                         anchors.bottomMargin: Theme.sp2xl
@@ -1694,6 +1709,23 @@ ApplicationWindow {
         }
         if (id === "view.archive") {
             win.openArchive();
+            return;
+        }
+        // The selection's label and carry-on, off the bar since DG-026.
+        if (id === "selection.label") { if (AppController.selectionCount > 0) selectionBar.openLabel(); return; }
+        if (id === "selection.carry") { if (AppController.selectionCount > 0) selectionBar.openCarry(); return; }
+        // Off the profile menu since DG-151: the profile's import / export
+        // and duplicate live in the command line.
+        if (id === "profile.duplicate") { rail.duplicateProfileRequested(); return; }
+        if (id === "ics.import") { rail.importIcsRequested(); return; }
+        if (id === "ics.export") { rail.exportIcsRequested(); return; }
+        if (id === "vault.import") { rail.importVaultRequested(); return; }
+        if (id === "vault.export") { rail.exportVaultRequested(); return; }
+        // Off the column menu since DG-025: the column under the board's
+        // cursor (else the first one).
+        if (id.indexOf("column:") === 0) {
+            const b = boardLoader.item;
+            if (b && b.columnCommand) b.columnCommand(id.slice(7));
             return;
         }
         if (id === "view.timeline") {
@@ -2969,7 +3001,7 @@ ApplicationWindow {
     Connections {
         target: AppController
         function onActiveProfileChanged() {
-            win.searchText = "";
+            win.searchText = win.defaultQuery("", false);
             win.prioritiesFilter = ({});
             savedViewsHost.leave();   // views belong to the profile being left
             AppController.selectedDate = AppController.today;

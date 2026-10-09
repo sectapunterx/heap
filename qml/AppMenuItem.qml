@@ -9,6 +9,8 @@ MenuItem {
     id: item
     // A text glyph shown before the label ("↗", "⎘" …).
     property string glyph: ""
+    // A stage ring in the glyph column (the column's "Этап колонки" list).
+    property string ring: ""
     // Marks the current choice without making the row a toggle — a list of
     // profiles, say, where picking one is an action, not a switch.
     property bool marked: false
@@ -106,14 +108,26 @@ MenuItem {
         spacing: Theme.spMd
         // The check column is always there, so checked and unchecked rows
         // start their labels in the same place.
-        Text {
+        Item {
             width: Theme.fsMd
+            height: Math.max(glyphText.implicitHeight, Theme.statusRingSize)
             anchors.verticalCenter: parent.verticalCenter
-            text: item._check ? "✓" : item.glyph
-            color: item._check ? Theme.accentStrong : item.danger ? Theme.danger : Theme.textDim
-            font.family: Theme.fontUi
-            font.pixelSize: Theme.fsMd
-            horizontalAlignment: Text.AlignHCenter
+            Text {
+                id: glyphText
+                anchors.fill: parent
+                visible: item.ring.length === 0
+                text: item._check ? "✓" : item.glyph
+                color: item._check ? Theme.accentStrong : item.danger ? Theme.danger : Theme.textDim
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsMd
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
+            StatusRing {
+                anchors.centerIn: parent
+                visible: item.ring.length > 0
+                category: item.ring.length > 0 ? item.ring : "todo"
+            }
         }
         Text {
             id: labelText

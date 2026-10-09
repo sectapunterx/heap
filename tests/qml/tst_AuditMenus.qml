@@ -269,8 +269,8 @@ TestCase {
         menu.open();
         tryVerify(() => menu.opened);
         const names = ["text-edit-undo", "text-edit-redo", "text-edit-cut", "text-edit-copy",
-                       "text-edit-paste", "text-edit-delete", "text-edit-select-all"];
-        const keys = ["undo", "redo", "cut", "copy", "paste", "delete", "selectAll"];
+                       "text-edit-paste", "text-edit-paste-plain", "text-edit-select-all"];
+        const keys = ["undo", "redo", "cut", "copy", "paste", "pastePlain", "selectAll"];
         for (let i = 0; i < names.length; i++) {
             const it = findChild(menu, names[i]);
             verify(it !== null, names[i]);
@@ -280,7 +280,10 @@ TestCase {
         findChild(menu, "text-edit-select-all").triggered();
         compare(f.selectedText, "hello world");
         verify(findChild(menu, "text-edit-cut").enabled);
-        findChild(menu, "text-edit-delete").triggered();
+        // X-Menus-Other (DG-152): no Delete row; Cut takes the text out.
+        verify(findChild(menu, "text-edit-delete") === null);
+        verify(findChild(menu, "text-edit-copy").hint.length > 0, "the keys are on the right");
+        findChild(menu, "text-edit-cut").triggered();
         compare(f.text, "");
         verify(findChild(menu, "text-edit-undo").enabled);
         menu.close();

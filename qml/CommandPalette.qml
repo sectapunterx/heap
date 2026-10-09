@@ -144,6 +144,17 @@ Popup {
                        body: views[v].query });
         }
         out.push({ kind: "command", commandId: "savedview.save", label: I18n.t("palette.cmd.saveView"), sub: "" });
+        // What left the selection bar, the profile menu and the column menu
+        // for the sheets (DG-025, DG-026, DG-151): still one command away.
+        if (AppController.selectionCount > 0) {
+            out.push({ kind: "command", commandId: "selection.label", label: I18n.t("palette.cmd.selLabel"), sub: "" });
+            out.push({ kind: "command", commandId: "selection.carry", label: I18n.t("palette.cmd.selCarry"), sub: "" });
+        }
+        for (const pc of ["profile.duplicate", "ics.import", "ics.export", "vault.import", "vault.export"])
+            out.push({ kind: "command", commandId: pc, label: I18n.t("palette.cmd." + pc), sub: "" });
+        if (AppController.currentView === "board")
+            for (const cc of ["color", "archive", "doing"])
+                out.push({ kind: "command", commandId: "column:" + cc, label: I18n.t("palette.cmd.column." + cc), sub: "" });
         // Integrations health (APP-164) lives at the top of that section.
         out.push({ kind: "setting", commandId: "settings:integrations", label: I18n.t("palette.cmd.integrationsHealth"),
                    sub: I18n.t("health.hint") });

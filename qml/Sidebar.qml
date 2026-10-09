@@ -51,6 +51,7 @@ Rectangle {
     signal savedViewActivated(string id)
     signal savedViewRenameRequested(string id)
     signal savedViewUpdateRequested(string id)
+    signal savedViewEditRequested(string id)
     signal saveViewRequested()
     readonly property var _savedViews: AppController.savedViews
     readonly property var _savedCounts: AppController.savedViewCounts
@@ -351,36 +352,42 @@ Rectangle {
         objectName: "sidebar-views-menu"
         property string targetId: ""
         property int targetIndex: -1
+        readonly property string targetName: targetIndex >= 0 && targetIndex < root._savedViews.length
+            ? String(root._savedViews[targetIndex].name || "") : ""
+        // X-Menus-Other: "Вид «Заблокировано»", then Open (g N), Edit
+        // query…, Rename (F2); Up / Down (Shift K / J); Delete view.
+        AppMenuHeader {
+            text: I18n.t("siderail.saved.header").arg(savedMenu.targetName)
+        }
         AppMenuItem {
             objectName: "sidebar-view-apply"
-            text: I18n.t("siderail.saved.apply")
+            text: I18n.t("siderail.saved.open")
+            shortcutId: savedMenu.targetIndex >= 0 && savedMenu.targetIndex < 9 ? "savedView." + (savedMenu.targetIndex + 1) + ".alt" : ""
             onTriggered: root.savedViewActivated(savedMenu.targetId)
         }
         AppMenuItem {
-            objectName: "sidebar-view-update"
-            text: I18n.t("siderail.saved.update")
-            onTriggered: root.savedViewUpdateRequested(savedMenu.targetId)
+            objectName: "sidebar-view-edit"
+            text: I18n.t("siderail.saved.editQuery")
+            onTriggered: root.savedViewEditRequested(savedMenu.targetId)
         }
         AppMenuItem {
             objectName: "sidebar-view-rename"
             text: I18n.t("siderail.saved.rename")
+            keyText: "F2"
             onTriggered: root.savedViewRenameRequested(savedMenu.targetId)
-        }
-        AppMenuItem {
-            objectName: "sidebar-view-duplicate"
-            text: I18n.t("siderail.saved.duplicate")
-            onTriggered: AppController.duplicateSavedView(savedMenu.targetId)
         }
         AppMenuSeparator {}
         AppMenuItem {
             objectName: "sidebar-view-up"
             text: I18n.t("siderail.saved.moveUp")
+            keyText: AppController.keyText("Shift+K")
             enabled: savedMenu.targetIndex > 0
             onTriggered: root._moveSavedView(savedMenu.targetId, savedMenu.targetIndex, -1)
         }
         AppMenuItem {
             objectName: "sidebar-view-down"
             text: I18n.t("siderail.saved.moveDown")
+            keyText: AppController.keyText("Shift+J")
             enabled: savedMenu.targetIndex >= 0 && savedMenu.targetIndex < root._savedViews.length - 1
             onTriggered: root._moveSavedView(savedMenu.targetId, savedMenu.targetIndex, 1)
         }
@@ -509,6 +516,9 @@ Rectangle {
         Keys.onPressed: (e) => {
             if (e.key === Qt.Key_F2) {
                 root.savedViewRenameRequested(vr.modelData.id);
+                e.accepted = true;
+            } else if (e.modifiers === Qt.ShiftModifier && (e.key === Qt.Key_K || e.key === Qt.Key_J)) {
+                root._moveSavedView(vr.modelData.id, vr.index, e.key === Qt.Key_K ? -1 : 1);
                 e.accepted = true;
             } else if (e.key === Qt.Key_Menu || (e.key === Qt.Key_F10 && (e.modifiers & Qt.ShiftModifier))) {
                 root._openSavedMenu(vr, vr.modelData.id, vr.index);

@@ -314,15 +314,16 @@ TestCase {
         tc.win.focusActiveView();
     }
 
+    // X-Menus-Other (DG-150): no Duplicate row; a copy is "Сохранить как
+    // вид" on the open view. The menu still deletes the row it was opened on.
     function test_context_menu_duplicate_and_delete() {
         const a = mkView("Alpha", "svprobe");
         mouseClick(railRow(0), 20, 10, Qt.RightButton);
         const menu = railMenu();
         verify(menu !== null);
         tryCompare(menu, "opened", true);
-        const dup = findMenuItem(menu, "sidebar-view-duplicate");
-        verify(dup !== null);
-        dup.triggered();
+        verify(findMenuItem(menu, "sidebar-view-duplicate") === null);
+        AppController.duplicateSavedView(a);
         tryVerify(function () { return AppController.savedViews.length === 2; });
         compare(AppController.savedViews[1].name, "Alpha copy");
         compare(AppController.savedViews[1].query, "svprobe");

@@ -8,8 +8,10 @@ import TodoCpp
 // The active profile at the top of the sidebar (APP-258): a dot and the
 // name; the dot is the profile's colour, and turns the live colour while a
 // sync has been out long enough to notice (APP-186) — a click on it then
-// shows how the integrations are doing. The name opens the profile menu;
-// with eight profiles or more the list is a picker with a search field.
+// shows how the integrations are doing. The name opens the switcher of
+// X-Menus-Other (DG-151): "Найти профиль", the profiles (the active one with
+// its last sync), then Новый профиль, Переименовать текущий, Удалить
+// профиль. Import, export and duplicating moved to the command line.
 Item {
     id: root
 
@@ -29,9 +31,6 @@ Item {
     // The example profile (APP-271) goes from here: the sheets have no
     // banner for it (DG-001), only its name in the sidebar.
     signal removeExampleRequested()
-
-    // A picker with a search field from this many profiles on.
-    readonly property int pickerFrom: 8
 
     implicitHeight: Theme.chipH
     implicitWidth: row.implicitWidth
@@ -74,9 +73,13 @@ Item {
         }
     }
 
-    function openMenu() {
-        if (AppController.profiles.length >= root.pickerFrom) picker.openAt(root);
-        else profileMenu.popup(root, 0, root.height + Theme.spXs);
+    function openMenu() { picker.openAt(root); }
+    // The active profile's last good sync, as the health line words it.
+    function _syncNote() {
+        const h = AppController.integrationHealth();
+        let best = "";
+        for (let i = 0; i < h.length; i++) if (h[i].lastOk && !best) best = String(h[i].lastOk);
+        return best.length > 0 ? I18n.t("sidebar.profile.synced").arg(best) : "";
     }
 
     Row {
@@ -139,63 +142,14 @@ Item {
         onActivated: root.openMenu()
     }
 
-    AppMenu {
-        id: profileMenu
-        objectName: "sidebar-profile-menu"
-        Instantiator {
-            model: AppController.profiles.length < root.pickerFrom ? AppController.profiles : []
-            delegate: AppMenuItem {
-                id: profRow
-                required property var modelData
-                marked: profRow.modelData.id === AppController.activeProfileId
-                text: profRow.modelData.name
-                onTriggered: AppController.activeProfileId = profRow.modelData.id
-            }
-            onObjectAdded: (idx, obj) => profileMenu.insertItem(idx, obj)
-            onObjectRemoved: (idx, obj) => profileMenu.removeItem(obj)
-        }
-        AppMenuSeparator {}
-        AppMenuItem { text: I18n.t("topbar.profile.new"); onTriggered: root.newProfileRequested() }
-        AppMenuItem { text: I18n.t("topbar.profile.rename"); onTriggered: root.renameProfileRequested() }
-        AppMenuItem { text: I18n.t("topbar.profile.duplicate"); onTriggered: root.duplicateProfileRequested() }
-        AppMenuSeparator {}
-        AppMenuItem { text: I18n.t("topbar.profile.import"); onTriggered: root.importJsonRequested() }
-        AppMenuItem { text: I18n.t("topbar.profile.export"); onTriggered: root.exportJsonRequested() }
-        AppMenuSeparator {}
-        AppMenuItem { text: I18n.t("topbar.cal.import"); onTriggered: root.importIcsRequested() }
-        AppMenuItem { text: I18n.t("topbar.cal.export"); onTriggered: root.exportIcsRequested() }
-        AppMenuSeparator {}
-        AppMenuItem { text: I18n.t("topbar.notes.import"); onTriggered: root.importVaultRequested() }
-        AppMenuItem { text: I18n.t("topbar.notes.export"); onTriggered: root.exportVaultRequested() }
-        // Last, apart and in red, and it says which profile goes (DES-9).
-        AppMenuSeparator {}
-        AppMenuItem {
-            objectName: "sidebar-profile-remove-example"
-            visible: AppController.activeProfileId === "lowkey-example"
-            height: visible ? implicitHeight : 0
-            text: I18n.t("example.remove")
-            danger: true
-            onTriggered: root.removeExampleRequested()
-        }
-        AppMenuItem {
-            objectName: "sidebar-profile-delete"
-            visible: AppController.activeProfileId !== "lowkey-example"
-            height: visible ? implicitHeight : 0
-            text: I18n.t("topbar.profile.delete").arg(root.active.name || I18n.t("topbar.profile.fallback"))
-            danger: true
-            enabled: AppController.profiles.length > 1
-            onTriggered: AppController.deleteProfile(AppController.activeProfileId)
-        }
-    }
-
-    // Eight profiles or more: a search field over the list, the actions in
-    // the menu behind "More…".
+    // The switcher: a search field over the list, the actions under it.
     QQC.Popup {
         id: picker
         objectName: "sidebar-profile-picker"
         padding: Theme.spXs
-        width: Theme.px(260)
-        height: Math.min(Theme.px(420), pickCol.implicitHeight + 2 * Theme.spXs)
+        width: Theme.px(272)
+        height: Math.min(Theme.px(480), pickCol.implicitHeight + 2 * Theme.spXs)
+        property string syncNote: ""
         background: PopupSurface {}
         property string filter: ""
         readonly property var matches: {
@@ -209,7 +163,8 @@ Item {
             picker.y = anchor.height + Theme.spXs;
             picker.filter = "";
             search.text = "";
-            pickList.currentIndex = 0;
+            picker.syncNote = root._syncNote();
+            pickList.currentIndex = Math.max(0, picker.matches.findIndex(p => p.id === AppController.activeProfileId));
             picker.open();
             search.forceActiveFocus();
         }
@@ -232,7 +187,8 @@ Item {
                 placeholderTextColor: Theme.textDim
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsMd
-                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                leftPadding: Theme.spMd
+                background: Rectangle { radius: Theme.radiusMd; color: "transparent"; border.color: search.activeFocus ? Theme.focusRing : Theme.border; border.width: 1 }
                 onTextChanged: { picker.filter = text; pickList.currentIndex = 0; }
                 Keys.onDownPressed: pickList.currentIndex = Math.min(pickList.count - 1, pickList.currentIndex + 1)
                 Keys.onUpPressed: pickList.currentIndex = Math.max(0, pickList.currentIndex - 1)
@@ -253,8 +209,13 @@ Item {
                     required property var modelData
                     required property int index
                     width: pickList.width
+                    readonly property bool active: pickRow.modelData.id === AppController.activeProfileId
                     text: pickRow.modelData.name
-                    marked: pickRow.modelData.id === AppController.activeProfileId
+                    font.weight: pickRow.active ? Theme.fwTitle : Theme.fwBody
+                    note: pickRow.active ? picker.syncNote : ""
+                    // Ctrl ] goes to the next profile: its key on that row.
+                    shortcutId: pickRow.index === (picker.matches.findIndex(p => p.id === AppController.activeProfileId) + 1) % Math.max(1, picker.matches.length)
+                                && !pickRow.active && picker.filter.length === 0 ? "profile.next" : ""
                     highlighted: pickRow.index === pickList.currentIndex
                     onTriggered: picker.choose(pickRow.index)
                 }
@@ -268,13 +229,36 @@ Item {
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsSm
             }
+            Rectangle { Layout.fillWidth: true; Layout.topMargin: Theme.spXs; Layout.bottomMargin: Theme.spXs; implicitHeight: 1; color: Theme.border }
             AppMenuItem {
+                objectName: "sidebar-profile-new"
                 Layout.fillWidth: true
-                text: I18n.t("sidebar.profile.more")
-                onTriggered: {
-                    picker.close();
-                    profileMenu.popup(root, 0, root.height + Theme.spXs);
-                }
+                text: I18n.t("sidebar.profile.new")
+                shortcutId: "profile.new"
+                onTriggered: { picker.close(); root.newProfileRequested(); }
+            }
+            AppMenuItem {
+                objectName: "sidebar-profile-rename"
+                Layout.fillWidth: true
+                text: I18n.t("sidebar.profile.renameCurrent")
+                onTriggered: { picker.close(); root.renameProfileRequested(); }
+            }
+            AppMenuItem {
+                objectName: "sidebar-profile-remove-example"
+                Layout.fillWidth: true
+                visible: AppController.activeProfileId === "lowkey-example"
+                text: I18n.t("example.remove")
+                danger: true
+                onTriggered: { picker.close(); root.removeExampleRequested(); }
+            }
+            AppMenuItem {
+                objectName: "sidebar-profile-delete"
+                Layout.fillWidth: true
+                visible: AppController.activeProfileId !== "lowkey-example"
+                text: I18n.t("sidebar.profile.delete")
+                danger: true
+                enabled: AppController.profiles.length > 1
+                onTriggered: { picker.close(); AppController.deleteProfile(AppController.activeProfileId); }
             }
         }
     }

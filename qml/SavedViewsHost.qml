@@ -115,6 +115,14 @@ Item {
         nameDialog.targetId = id;
         nameDialog.openFor("rename", v.name, v.query || "", 0);
     }
+    // "Изменить запрос…" (X-Menus-Other, DG-150): the name and the query
+    // of a view in one dialog; the rest of the view stays as saved.
+    function openEdit(id) {
+        const v = AppController.savedView(id);
+        if (!v.id) return;
+        nameDialog.targetId = id;
+        nameDialog.openFor("edit", v.name, v.query || "", 0);
+    }
     function updateActive() {
         if (root.activeView) AppController.updateSavedView(root.activeId, root.currentState());
     }
@@ -129,6 +137,15 @@ Item {
         onNamed: (name) => {
             if (nameDialog.mode === "rename") {
                 AppController.renameSavedView(nameDialog.targetId, name);
+                return;
+            }
+            if (nameDialog.mode === "edit") {
+                const v = AppController.savedView(nameDialog.targetId);
+                if (!v.id) return;
+                AppController.renameSavedView(v.id, name);
+                AppController.updateSavedView(v.id, { query: nameDialog.query.trim(), priorities: v.priorities, sort: v.sort,
+                                                      archived: v.archived, showDone: v.showDone, view: v.view });
+                if (root.activeId === v.id) root.apply(v.id);
                 return;
             }
             const st = root.currentState();

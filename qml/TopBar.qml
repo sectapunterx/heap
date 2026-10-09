@@ -47,7 +47,20 @@ Rectangle {
     property bool _queryOpened: false
     onLensChanged: _queryOpened = false
     property bool searchShown: section === "tasks"
-                               && (lens !== "calendar" || searchText.length > 0 || _queryOpened)
+    // The calendar sheets have no query line and no count (DG-046). A query
+    // beyond the default "не готово" still shows there: a filter is never
+    // at work out of sight.
+    readonly property bool _beyondDefault: root.searchText.replace(/(^|\s)is:open(?=\s|$)/gi, " ").trim().length > 0
+    readonly property bool queryShown: searchShown && (lens !== "calendar" || root._beyondDefault || root._queryOpened)
+    // The board is one profile's: the sheet names it as a chip (DG-020).
+    property string profileName: ""
+    readonly property bool profileChipShown: lens === "board" && profileName.length > 0
+    signal profileChipClicked()
+    // Quiet (Q-Board / Q-List, DG-021): the conditions are a row of plain
+    // outline chips and "изменить фильтр"; the field opens on that link or
+    // on "/", and folds back when the keyboard leaves it.
+    property bool editing: false
+    readonly property bool _boxed: Style.fills || root.editing
 
     // The whole query: the conditions shown as chips, then what is still
     // being typed (APP-261). Set from outside (a saved view, a link) it is
@@ -117,9 +130,12 @@ Rectangle {
         const v = body.slice(at + 1);
         const keys = { status: "status", priority: "priority", tag: "label", due: "due", deadline: "due",
                        is: "is", mention: "mention" };
-        const key = I18n.t("query.key." + (keys[k] || "other"));
+        // "is:open" is the default "статус не готово" of the sheets (DG-020).
+        const notDone = !neg && k === "is" && v.toLowerCase() === "open";
+        const key = I18n.t("query.key." + (notDone ? "status" : (keys[k] || "other")));
         let value = v;
-        if (k === "is") value = I18n.t("query.is." + v.toLowerCase());
+        if (notDone) value = I18n.t("query.notDone");
+        else if (k === "is") value = I18n.t("query.is." + v.toLowerCase());
         else if (k === "priority") value = v.toUpperCase().split(",").join(", ");
         else if (k === "status") {
             const sts = AppController.statuses;
@@ -136,14 +152,21 @@ Rectangle {
     signal seenBeforeActivated(var hit)
     // Esc on an empty search box, or Return in it: give the keyboard back.
     signal leaveRequested()
+    // Quiet folds the field back into its chips when the keyboard is handed
+    // back (Esc on an empty field, Return) or the lens changes; not on a
+    // plain focus loss, which its own right-click menu causes too.
+    onLeaveRequested: if (searchField.text.length === 0) root.editing = false
+    onViewChanged: if (searchField.text.length === 0) root.editing = false
 
     function focusSearch() {
         root._queryOpened = true;
+        root.editing = true;
         searchField.forceActiveFocus();
         searchField.selectAll();
     }
     function focusEnd() {
         root._queryOpened = true;
+        root.editing = true;
         searchField.forceActiveFocus();
         searchField.cursorPosition = searchField.text.length;
     }
@@ -151,20 +174,21 @@ Rectangle {
     // fresh search with it, and the rest follow into the field.
     function typeAhead(text) {
         root._queryOpened = true;
+        root.editing = true;
         searchField.text = text;
         searchField.forceActiveFocus();
         searchField.cursorPosition = searchField.text.length;
     }
-    implicitHeight: headRow.implicitHeight + (root.searchShown ? queryRow.implicitHeight + Theme.spMd : 0)
-                    + (root._quietNav ? Theme.px(28) + Theme.spMd : 0) + 2 * Theme.spLg
+    implicitHeight: headCol.implicitHeight + headCol.anchors.topMargin + headCol.anchors.bottomMargin
 
     ColumnLayout {
+        id: headCol
         anchors.fill: parent
-        anchors.leftMargin: Theme.sp2xl
-        anchors.rightMargin: Theme.sp2xl
-        anchors.topMargin: Theme.spLg
-        anchors.bottomMargin: Theme.spLg
-        spacing: Theme.spMd
+        anchors.leftMargin: root.section === "tasks" ? Theme.pagePadX : Theme.sp2xl
+        anchors.rightMargin: root.section === "tasks" ? Theme.pagePadX : Theme.sp2xl
+        anchors.topMargin: root.section === "tasks" ? Theme.pagePadTop : Theme.spLg
+        anchors.bottomMargin: root.section === "tasks" ? Theme.px(14) : Theme.spLg
+        spacing: Style.fills ? Theme.px(14) : Theme.spMd
     RowLayout {
         id: headRow
         Layout.fillWidth: true
@@ -194,7 +218,8 @@ Rectangle {
         Rectangle {
             id: optionBtn
             objectName: "view-header-option"
-            visible: !!root.option && root.section === "tasks"
+            // Quiet draws it as a chip in the conditions row (DG-021).
+            visible: !!root.option && root.section === "tasks" && Style.fills
             Layout.alignment: Qt.AlignVCenter
             implicitHeight: Theme.chipH
             implicitWidth: optionRow.implicitWidth + 2 * Theme.spLg
@@ -560,7 +585,7 @@ Rectangle {
         // "14 tasks" under the query.
         Text {
             objectName: "view-header-count"
-            visible: root.searchShown && root.resultCount >= 0
+            visible: root.queryShown && Style.counters && root.resultCount >= 0
             text: I18n.count(Math.max(0, root.resultCount), "query.n.tasks")
             color: Theme.textDim
             font.family: Theme.fontUi
@@ -581,7 +606,7 @@ Rectangle {
         Rectangle {
             id: queryRow
             objectName: "view-header-query"
-            visible: root.searchShown
+            visible: root.queryShown && root._boxed
             Layout.fillWidth: true
             implicitHeight: Math.max(Theme.chipH + 2 * Theme.spSm, queryFlow.implicitHeight + 2 * Theme.spSm)
             radius: Theme.radiusLg
@@ -597,13 +622,20 @@ Rectangle {
                 Icon {
                     objectName: "view-header-query-icon"
                     name: "filter"
-                    color: root.searchIsQuery ? Theme.accentStrong : Theme.textDim
+                    color: Theme.textDim
+                    size: Theme.px(14)
                     Layout.alignment: Qt.AlignVCenter
                 }
                 Flow {
                     id: queryFlow
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignVCenter
+                    spacing: Theme.spSm
+                    // The chips as one group, so the field's width follows
+                    // their width and not its own place in the flow (which
+                    // fed back into itself and wrapped the field).
+                    Row {
+                    id: chipsRow
                     spacing: Theme.spSm
                     Repeater {
                         model: root.conditions
@@ -620,8 +652,19 @@ Rectangle {
                             onRemoved: root.removeCondition(qc.index)
                         }
                     }
+                    // The board's profile (H2-Board): the scope, not a clause
+                    // of the query; a click opens the profile switcher.
+                    PropertyChip {
+                        objectName: "query-chip-profile"
+                        visible: root.profileChipShown
+                        small: true
+                        key: I18n.t("query.key.profile")
+                        value: root.profileName
+                        onClicked: root.profileChipClicked()
+                    }
+                    }
                     Item {
-                        width: Math.max(Theme.px(200), queryFlow.width - x)
+                        width: Math.max(Theme.px(200), queryFlow.width - (chipsRow.width > 0 ? chipsRow.width + queryFlow.spacing : 0))
                         height: Theme.chipHSmall
                         Rectangle {
                             id: searchBox
@@ -640,11 +683,11 @@ Rectangle {
                     objectName: "topbar-search"
                     onActiveFocusChanged: if (!activeFocus && root.searchText.length === 0) root._queryOpened = false
                     Layout.fillWidth: true
-                    placeholderText: I18n.t("topbar.search")
+                    placeholderText: I18n.t("query.placeholder")
                     color: Theme.text
                     placeholderTextColor: Theme.textDim
                     font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsMd
+                    font.pixelSize: Theme.fsSm
                     background: Item {}
                     selectByMouse: true
                     // Esc clears what was typed, and a second Esc (or Return)
@@ -676,7 +719,7 @@ Rectangle {
                 Rectangle {
                     objectName: "search-query-badge"
                     readonly property bool bad: root.searchProblems.length > 0
-                    visible: root.searchIsQuery || bad
+                    visible: bad
                     radius: Theme.radiusSm
                     color: bad ? Theme.withAlpha(Theme.warning, 0.14) : Theme.accentSoft
                     border.color: bad ? Theme.warning : Theme.accent
@@ -692,33 +735,6 @@ Rectangle {
                     QQC.ToolTip.visible: bad && (qBadgeHover.hovered || searchField.activeFocus)
                     QQC.ToolTip.text: I18n.t("topbar.searchUnknown").arg(root.searchProblems.join("  "))
                     HoverHandler { id: qBadgeHover }
-                }
-                // Shortcut hint. It used to read "⌘K" — a macOS glyph on every
-                // platform, and the wrong binding besides: Ctrl+K opens the
-                // command palette, focusing this field is search.focus. Now it
-                // shows the live binding and clicking it does what it says.
-                Rectangle {
-                    visible: kbd.text.length > 0
-                    radius: Theme.radiusSm
-                    border.color: kbdMA.hovered ? Theme.borderStrong : Theme.border
-                    border.width: 1
-                    color: kbdMA.hovered ? Theme.panel3 : "transparent"
-                    width: kbd.implicitWidth + 10; height: 16
-                    Text {
-                        id: kbd; anchors.centerIn: parent
-                        text: AppController.shortcuts.length >= 0 ? AppController.shortcutText("search.focus") : ""
-                        color: kbdMA.hovered ? Theme.text : Theme.textDim
-                        font.family: Theme.fontMono; font.pixelSize: Theme.fsXs
-                    }
-                    // Named, not a Tab stop: the search field right before it
-                    // is where it would take the keyboard.
-                    ClickArea {
-                        id: kbdMA
-                        objectName: "topbar-search-kbd"
-                        activeFocusOnTab: false
-                        label: I18n.t("topbar.searchHint").arg(kbd.text)
-                        onActivated: root.focusSearch()
-                    }
                 }
             }
             // An error pasted into search that this workspace has met
@@ -747,13 +763,63 @@ Rectangle {
                 }
                 Text {
                     objectName: "query-save-view"
-                    visible: root.conditions.length > 0 || searchField.text.length > 0
                     text: I18n.t("query.saveView")
                     color: saveCA.hovered ? Theme.text : Theme.textMuted
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsSm
+                    Layout.alignment: Qt.AlignVCenter
                     ClickArea { id: saveCA; label: parent.text; onActivated: root.saveViewRequested() }
                 }
+            }
+        }
+        // Quiet (Q-Board / Q-List, DG-021): no box — the conditions as
+        // outline chips with their values only, the lens's own option as one
+        // more chip, and "изменить фильтр" to open the field.
+        Flow {
+            id: quietRow
+            objectName: "view-header-query-quiet"
+            visible: root.queryShown && !root._boxed
+            Layout.fillWidth: true
+            Layout.topMargin: Theme.spXs
+            spacing: Theme.spMd
+            Repeater {
+                model: root.conditions
+                delegate: PropertyChip {
+                    id: qq
+                    required property var modelData
+                    required property int index
+                    objectName: "query-quiet-chip-" + qq.index
+                    value: qq.modelData.value
+                    valueColor: qq.modelData.bad ? Theme.warning : Theme.textMuted
+                    onClicked: root.focusEnd()
+                    removable: false
+                }
+            }
+            PropertyChip {
+                objectName: "query-quiet-profile"
+                visible: root.profileChipShown
+                value: root.profileName
+                valueColor: Theme.textMuted
+                onClicked: root.profileChipClicked()
+            }
+            PropertyChip {
+                id: quietOption
+                objectName: "query-quiet-option"
+                visible: !!root.option
+                value: root.option ? String(root.option.value).toLowerCase() : ""
+                valueColor: Theme.textMuted
+                onClicked: optionMenu.popup(quietOption, 0, quietOption.height + Theme.spXs)
+            }
+            Text {
+                objectName: "query-quiet-edit"
+                height: Theme.chipH
+                verticalAlignment: Text.AlignVCenter
+                leftPadding: Theme.spXs
+                text: I18n.t("query.editFilter")
+                color: editCA.hovered ? Theme.textMuted : Theme.textDim
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsMd
+                ClickArea { id: editCA; label: parent.text; shortcutId: "search.focus"; onActivated: root.focusEnd() }
             }
         }
     }

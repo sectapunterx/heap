@@ -18,6 +18,8 @@ Item {
     // task, a pull from the tracker) and drops the undo history.
     property string text: ""
     property string placeholder: ""
+    // The context line of the field's right-click menu (DG-152).
+    property string menuTitle: ""
     property bool readOnly: false
     // How [[targets]] read (APP-269): AppController.wikiTargets(text).
     property var wikiTargets: ({})
@@ -235,7 +237,7 @@ Item {
                 border.color: Theme.border
                 border.width: 1
             }
-            QQC.ContextMenu.menu: TextEditMenu { editor: field }
+            QQC.ContextMenu.menu: TextEditMenu { editor: field; context: root.menuTitle; taskLink: true }
             onTextChanged: if (!root._fieldLoading && root.editing) commitTimer.restart()
             onActiveFocusChanged: if (!activeFocus && !slashMenu.opened) root._leave(true)
 
