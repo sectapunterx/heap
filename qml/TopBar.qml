@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
@@ -35,8 +36,18 @@ Rectangle {
     signal optionPicked(string id)
     // The calendar's zoom (APP-264): day / week / month, keys z d / z w / z m.
     signal zoomSelected(string id)
+    readonly property var zooms: [{ id: "day", label: I18n.t("calzoom.day"), keys: "z d" },
+                                  { id: "week", label: I18n.t("calzoom.week"), keys: "z w" },
+                                  { id: "month", label: I18n.t("calzoom.month"), keys: "z m" }]
+    readonly property bool _quietNav: lens === "calendar" && !Style.fills
     // The task search belongs to the views that list tasks.
+    // The calendar sheets draw no query row (H2/Q-Calendar): there it shows
+    // only while a query holds something or is being typed (Ctrl F, type
+    // to search), so a filter on the grid is never invisible.
+    property bool _queryOpened: false
+    onLensChanged: _queryOpened = false
     property bool searchShown: section === "tasks"
+                               && (lens !== "calendar" || searchText.length > 0 || _queryOpened)
 
     // The whole query: the conditions shown as chips, then what is still
     // being typed (APP-261). Set from outside (a saved view, a link) it is
@@ -127,21 +138,25 @@ Rectangle {
     signal leaveRequested()
 
     function focusSearch() {
+        root._queryOpened = true;
         searchField.forceActiveFocus();
         searchField.selectAll();
     }
     function focusEnd() {
+        root._queryOpened = true;
         searchField.forceActiveFocus();
         searchField.cursorPosition = searchField.text.length;
     }
     // Type to search (APP-117): the first letter typed on the board starts a
     // fresh search with it, and the rest follow into the field.
     function typeAhead(text) {
+        root._queryOpened = true;
         searchField.text = text;
         searchField.forceActiveFocus();
         searchField.cursorPosition = searchField.text.length;
     }
-    implicitHeight: headRow.implicitHeight + (root.searchShown ? queryRow.implicitHeight + Theme.spMd : 0) + 2 * Theme.spLg
+    implicitHeight: headRow.implicitHeight + (root.searchShown ? queryRow.implicitHeight + Theme.spMd : 0)
+                    + (root._quietNav ? Theme.px(28) + Theme.spMd : 0) + 2 * Theme.spLg
 
     ColumnLayout {
         anchors.fill: parent
@@ -229,23 +244,101 @@ Rectangle {
                 }
             }
         }
-        LensTabs {
+        // The calendar's zoom (DG-044): a segmented group after the tabs in
+        // bold (H2-Calendar), lowercase words at the right in quiet.
+        Rectangle {
             objectName: "view-header-zoom"
-            visible: root.lens === "calendar"
-            model: [{ id: "day", label: I18n.t("calzoom.day"), keys: "z d" },
-                    { id: "week", label: I18n.t("calzoom.week"), keys: "z w" },
-                    { id: "month", label: I18n.t("calzoom.month"), keys: "z m" }]
-            current: root.view
-            onSelected: (id) => root.zoomSelected(id)
+            visible: root.lens === "calendar" && Style.fills
+            Layout.alignment: Qt.AlignVCenter
+            implicitWidth: zoomSeg.implicitWidth + 2 * Theme.sp2xs
+            implicitHeight: Theme.chipH
+            radius: Theme.radiusLg
+            color: "transparent"
+            border.width: 1
+            border.color: Theme.buttonLine
+            Row {
+                id: zoomSeg
+                anchors.centerIn: parent
+                spacing: Theme.sp2xs
+                Repeater {
+                    model: root.zooms
+                    delegate: Rectangle {
+                        id: seg
+                        required property var modelData
+                        readonly property bool on: root.view === seg.modelData.id
+                        objectName: "zoom-" + seg.modelData.id
+                        width: segText.implicitWidth + 2 * Theme.spLg
+                        height: Theme.chipH - 2 * Theme.sp2xs - 2
+                        radius: Theme.radiusMd
+                        color: seg.on ? Theme.segmentSelected : (segCA.hovered ? Theme.panel2 : "transparent")
+                        Text {
+                            id: segText
+                            anchors.centerIn: parent
+                            text: seg.modelData.label
+                            color: seg.on ? Theme.segmentSelectedText : Theme.textMuted
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsSm
+                            font.weight: seg.on ? Theme.fwHeading : Theme.fwBody
+                        }
+                        ClickArea {
+                            id: segCA
+                            label: seg.modelData.label
+                            tip: seg.modelData.label + "  " + seg.modelData.keys
+                            role: Accessible.RadioButton
+                            checkable: true
+                            checked: seg.on
+                            onActivated: root.zoomSelected(seg.modelData.id)
+                        }
+                    }
+                }
+            }
         }
 
         Item { Layout.fillWidth: true }
 
         CalendarNav {
             id: calendarNav
-            visible: root.lens === "calendar"
+            visible: root.lens === "calendar" && Style.fills
             Layout.alignment: Qt.AlignVCenter
             zoom: root.view
+        }
+        Row {
+            objectName: "view-header-zoom-words"
+            visible: root.lens === "calendar" && !Style.fills
+            Layout.alignment: Qt.AlignVCenter
+            Repeater {
+                model: root.zooms
+                delegate: Row {
+                    id: word
+                    required property var modelData
+                    required property int index
+                    readonly property bool on: root.view === word.modelData.id
+                    Text {
+                        visible: word.index > 0
+                        text: " · "
+                        color: Theme.textDim
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsMd
+                    }
+                    Text {
+                        objectName: "zoom-" + word.modelData.id
+                        text: word.modelData.label.toLowerCase()
+                        color: word.on || wordCA.hovered ? Theme.text : Theme.textDim
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsMd
+                        font.weight: word.on ? Theme.fwTitle : Theme.fwBody
+                        ClickArea {
+                            id: wordCA
+                            label: word.modelData.label
+                            tip: word.modelData.label + "  " + word.modelData.keys
+                            role: Accessible.RadioButton
+                            checkable: true
+                            checked: word.on
+                            onActivated: root.zoomSelected(word.modelData.id)
+                        }
+                    }
+                }
+            }
         }
 
         // Git focus banner — appears when GitWatcher detects a checkout
@@ -476,6 +569,13 @@ Rectangle {
         }
     }
 
+        // Quiet calendar: "‹ 5 – 11 октября ›" under the title (Q-Calendar).
+        CalendarNav {
+            objectName: "calendar-nav-quiet"
+            visible: root.lens === "calendar" && !Style.fills
+            zoom: root.view
+        }
+
         // The query (APP-261): conditions as chips (× drops one), then the
         // field in the same language as quick capture; "Save as view".
         Rectangle {
@@ -538,6 +638,7 @@ Rectangle {
                     id: searchField
                     ContextMenu.menu: TextEditMenu { editor: searchField }
                     objectName: "topbar-search"
+                    onActiveFocusChanged: if (!activeFocus && root.searchText.length === 0) root._queryOpened = false
                     Layout.fillWidth: true
                     placeholderText: I18n.t("topbar.search")
                     color: Theme.text

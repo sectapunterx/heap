@@ -68,34 +68,51 @@ Row {
         ToolTip.text: I18n.t("common.today") + "  0"
         onClicked: AppController.selectedDate = AppController.today
     }
-    IconButton {
-        objectName: "calendar-prev"
+    // ‹ › (DG-044): boxed in bold (H2-Calendar), bare in quiet (Q-Calendar).
+    component NavArrow: Rectangle {
+        id: arrow
+        property int dir: -1
+        property string zoom: "week"
+        signal stepped(int dir)
         anchors.verticalCenter: parent.verticalCenter
-        width: Theme.px(28)
+        width: Style.fills ? Theme.px(28) : Theme.px(18)
         height: Theme.px(28)
-        glyph: "‹"
-        label: I18n.t("calnav.prev." + root.zoom)
-        restColor: Theme.bg
-        onActivated: root.step(-1)
+        radius: Theme.radiusMd
+        color: Style.fills && arrowCA.hovered ? Theme.panel2 : "transparent"
+        border.width: Style.fills ? 1 : 0
+        border.color: Theme.buttonLine
+        Icon {
+            anchors.centerIn: parent
+            name: arrow.dir < 0 ? "chevron-left" : "chevron-right"
+            size: Theme.px(12)
+            color: arrowCA.hovered ? Theme.text : (Style.fills ? Theme.textMuted : Theme.textDim)
+        }
+        ClickArea {
+            id: arrowCA
+            label: I18n.t((arrow.dir < 0 ? "calnav.prev." : "calnav.next.") + arrow.zoom)
+            onActivated: arrow.stepped(arrow.dir)
+        }
+    }
+    NavArrow {
+        objectName: "calendar-prev"
+        dir: -1
+        zoom: root.zoom
+        onStepped: (dir) => root.step(dir)
     }
     Text {
         objectName: "calendar-range"
         anchors.verticalCenter: parent.verticalCenter
         text: root.label
-        color: Theme.text
+        color: Style.fills ? Theme.text : Theme.textMuted
         font.family: Theme.fontUi
         font.features: Theme.tabularNums
         font.pixelSize: Theme.fsMd
-        font.weight: Theme.fwTitle
+        font.weight: Style.fills ? Theme.fwHeading : Theme.fwBody
     }
-    IconButton {
+    NavArrow {
         objectName: "calendar-next"
-        anchors.verticalCenter: parent.verticalCenter
-        width: Theme.px(28)
-        height: Theme.px(28)
-        glyph: "›"
-        label: I18n.t("calnav.next." + root.zoom)
-        restColor: Theme.bg
-        onActivated: root.step(1)
+        dir: 1
+        zoom: root.zoom
+        onStepped: (dir) => root.step(dir)
     }
 }

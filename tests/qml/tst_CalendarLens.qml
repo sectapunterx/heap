@@ -83,8 +83,10 @@ TestCase {
         verify(l.tasks >= 90, "the planned block counts");
         const label = findChild(lens, "week-load-0");
         verify(label !== null);
-        compare(label.text, lens.calendarView.loadLong(l));
-        verify(label.text.indexOf(I18n.fmtMinutes(l.free)) >= 0, "the free time is said");
+        // The sheets draw no load on the columns (DG-041): it is the day
+        // name's tooltip.
+        compare(label.loadText, lens.calendarView.loadLong(l));
+        verify(label.loadText.indexOf(I18n.fmtMinutes(l.free)) >= 0, "the free time is said");
         // A new block on the day refreshes the header.
         seed("CAL-LOAD2", { scheduledAt: new Date(2031, 2, 12, 14, 0), scheduledHasTime: true, estimateMinutes: 60 });
         const l2 = AppController.dayLoads(tc.wed, 1)[0];
@@ -92,7 +94,7 @@ TestCase {
         // The header row is rebuilt with the day: look the label up again.
         tryVerify(() => {
             const now = findChild(lens, "week-load-0");
-            return !!now && now.text === lens.calendarView.loadLong(l2);
+            return !!now && now.loadText === lens.calendarView.loadLong(l2);
         }, 2000, "the load refreshes");
     }
 
@@ -156,5 +158,52 @@ TestCase {
         const more = findChild(cell, "month-more");
         verify(more.visible, "+N more");
         compare(more._extra, mv.cells[idx].tasks.length + mv.cells[idx].events.length - 3);
+    }
+
+    // DG-045 (X-Menus-Column): a right click on an empty slot opens the
+    // slot's menu at that hour; on a meeting, the meeting's menu.
+    function test_slot_and_meeting_have_their_menus() {
+        const lens = makeLens("day");
+        const grid = lens.calendarView;
+        const area = findChild(grid, "week-create-0");
+        verify(area !== null);
+        mouseClick(area, area.width / 2, 14 * grid.hourH + 2, Qt.RightButton);
+        verify(grid.menuSlot !== null, "the slot menu took the click");
+        compare(grid.menuSlot.hour, 14);
+        verify(sameDay(grid.menuSlot.date, tc.wed));
+        // Nothing was made by the right click.
+        compare(AppController.eventOccurrences(tc.wed, tc.wed).length, grid.days[0].events.length);
+
+        const ev = AppController.newEventDraft(10, tc.wed);
+        ev.title = "menu probe";
+        AppController.saveEvent(ev);
+        try {
+            let opens = [];
+            tryVerify(() => (opens = grid.flatEvents.filter(e => e.id === ev.id)).length === 1, 2000, "the meeting is on the grid");
+            grid.openEventMenu(opens[0]);
+            compare(grid.menuEvent.id, ev.id);
+            verify(!grid._menuSeries, "a single meeting is not a series");
+            // Duration from the menu: the same as stretching its edge.
+            grid.setEventLength(0.5);
+            tryVerify(() => Math.abs(AppController.eventById(ev.id).end - 10.5) < 1e-6, 2000, "the meeting is half an hour");
+            // Duplicate: one more meeting with the same title and time.
+            grid.duplicateEvent();
+            const same = AppController.eventOccurrences(tc.wed, tc.wed).filter(e => e.title === "menu probe");
+            compare(same.length, 2);
+            for (const e of same) if (e.id !== ev.id) AppController.deleteEvent(e.id);
+        } finally {
+            AppController.deleteEvent(ev.id);
+            AppController.clearPendingUndo();
+        }
+    }
+
+    // DG-051: the day zoom's header says the facts, the deadlines follow.
+    function test_the_day_header_line_says_the_facts() {
+        seed("CAL-FACT", { dueAt: new Date(2031, 2, 12), dueHasTime: false, scheduledAt: null });
+        const lens = makeLens("day");
+        const grid = lens.calendarView;
+        tryVerify(() => grid.days[0].tasks.some(t => t.id === "CAL-FACT"), 2000);
+        verify(grid.dayFacts(grid.days[0]).indexOf(I18n.t("cal.dueColon")) >= 0, "the deadline is announced");
+        verify(findChild(grid, "week-due-CAL-FACT") !== null, "and follows as a link");
     }
 }
