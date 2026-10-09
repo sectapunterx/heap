@@ -392,6 +392,8 @@ qt_add_qml_module(heap_core
         qml/TodayView.qml
         qml/AppSwitch.qml
         qml/TaskMenuHost.qml
+        qml/TaskDocument.qml
+        qml/MdBlockEditor.qml
         qml/FilterBar.qml
         qml/KanbanBoard.qml
         qml/TaskCard.qml

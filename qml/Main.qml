@@ -67,7 +67,7 @@ ApplicationWindow {
     // ("PROJ-123") that a mirrored task carries.
     function openTaskById(key) {
         const t = AppController.taskById(AppController.taskIdForBranchMatch(key));
-        if (t && t.id) taskEditor.showFor(Object.assign({}, t));
+        if (t && t.id) win.showTask(t);
         else win.notice(I18n.t("notes.link.noTask").arg(key), "warning");
     }
 
@@ -100,7 +100,7 @@ ApplicationWindow {
                 return;
             }
             const t = AppController.taskById(String(target).trim());
-            if (t && t.id) { taskEditor.showFor(Object.assign({}, t)); return; }
+            if (t && t.id) { win.showTask(t); return; }
             win.notice(I18n.t("notes.link.noNote").arg(target), "warning");
         }
     }
@@ -748,7 +748,7 @@ ApplicationWindow {
                 if (hit.profileId && hit.profileId !== AppController.activeProfileId)
                     AppController.activeProfileId = hit.profileId;
                 const t = AppController.taskById(hit.id);
-                if (t && t.id) taskEditor.showFor(Object.assign({}, t));
+                if (t && t.id) win.showTask(t);
             });
             return;
         }
@@ -806,7 +806,7 @@ ApplicationWindow {
         AppController.currentView = "board";
         if (list.length === 1) {
             const t = AppController.taskById(list[0]);
-            if (t && t.id) taskEditor.showFor(Object.assign({}, t));
+            if (t && t.id) win.showTask(t);
             return;
         }
         topBar.searchText = list.join(" OR ");
@@ -1208,6 +1208,19 @@ ApplicationWindow {
                         }
                     }
                     Component.onCompleted: win.activateCurrentView()
+                    // The task document (APP-265): a panel over the right
+                    // of the view, or the whole width.
+                    TaskDocument {
+                        id: taskDoc
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        width: taskDoc.full ? parent.width
+                             : Math.min(parent.width, Math.max(Theme.px(560), parent.width * 0.58))
+                        z: 60
+                        onClosed: Qt.callLater(win.focusActiveView)
+                        onInternalLinkActivated: (kind, target) => win.followMdLink(kind, target)
+                    }
                     SelectionBar {
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.bottom: parent.bottom
@@ -1223,8 +1236,8 @@ ApplicationWindow {
                         scheduleMap: win._scheduleMap
                         showArchived: win.showArchived
                         sortMode: win.boardSortMode
-                        onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
-                        onCreateInStatus: (s) => taskEditor.showFor(AppController.newTaskDraft(s))
+                        onTaskClicked: (id) => win.showTask(AppController.taskById(id))
+                        onCreateInStatus: (s) => quickCapture.openIn(s)
                     }
                 }
                 Component {
@@ -1239,7 +1252,7 @@ ApplicationWindow {
                         scheduleMap: win._scheduleMap
                         showDone: win.showDoneTimeline
                         showArchived: win.showArchived
-                        onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+                        onTaskClicked: (id) => win.showTask(AppController.taskById(id))
                         onToggleShowDone: win.showDoneTimeline = !win.showDoneTimeline
                     }
                 }
@@ -1249,7 +1262,7 @@ ApplicationWindow {
                         searchText: win.searchText
                         prioritiesFilter: win.prioritiesFilter
                         showArchived: win.showArchived
-                        onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+                        onTaskClicked: (id) => win.showTask(AppController.taskById(id))
                         onEventClicked: (id, occurrence) => occurrence ? eventEditor.showForOccurrence(occurrence) : eventEditor.showForId(id)
                         // A click on an empty slot opens the editor on a draft
                         // rather than saving an untitled event: the user names
@@ -1266,7 +1279,7 @@ ApplicationWindow {
                         searchText: win.searchText
                         prioritiesFilter: win.prioritiesFilter
                         showArchived: win.showArchived
-                        onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+                        onTaskClicked: (id) => win.showTask(AppController.taskById(id))
                         onEventClicked: (id, occurrence) => occurrence ? eventEditor.showForOccurrence(occurrence) : eventEditor.showForId(id)
                     }
                 }
@@ -1275,7 +1288,7 @@ ApplicationWindow {
                     ArchiveView {
                         searchText: win.searchText
                         prioritiesFilter: win.prioritiesFilter
-                        onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+                        onTaskClicked: (id) => win.showTask(AppController.taskById(id))
                     }
                 }
                 Component {
@@ -1412,7 +1425,7 @@ ApplicationWindow {
                             draft.end = endHour;
                             eventEditor.showForDraft(draft);
                         }
-                        onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+                        onTaskClicked: (id) => win.showTask(AppController.taskById(id))
                     }
                     PeopleList {
                         id: peopleList
@@ -1447,7 +1460,7 @@ ApplicationWindow {
         // the popups/editors Main owns. Each _doAction() has paused the tour,
         // so the target surface is visible when we open it.
         onOpenAction: (id) => {
-            if (id === "task-new")            taskEditor.showFor(AppController.newTaskDraft("todo"));
+            if (id === "task-new")            quickCapture.open();
             else if (id === "quick-capture")  quickCapture.open();
             else if (id === "palette")        cmdPalette.open();
             else if (id === "hotkeys")        rail.openHotkeys(rail.hotkeysAnchor);
@@ -1550,7 +1563,7 @@ ApplicationWindow {
         // One toast for what was made (APP-266): "Created ID · when · column",
         // Open / Undo; a task the filters on screen hide says so.
         onCaptured: (title, body, taskId) => win._toastCaptured(title, taskId)
-        onOpenFullRequested: (draft) => taskEditor.showFor(draft)
+        onOpenFullRequested: (draft) => win.showTask(draft)
         onOpenTaskRequested: (id) => win.openTask(id)
         onSeenBeforeActivated: (hit) => {
             quickCapture.close();
@@ -1616,7 +1629,7 @@ ApplicationWindow {
             taskEditor.settleThen(() => {
                 if (profileId && profileId !== AppController.activeProfileId)
                     AppController.activeProfileId = profileId;
-                taskEditor.showFor(Object.assign({}, AppController.taskById(taskId)));
+                win.showTask(AppController.taskById(taskId));
             });
         }
         // "Open" on a meeting / standup reminder (APP-155): that day in the
@@ -1640,6 +1653,20 @@ ApplicationWindow {
             if (v && v.revealItem) v.revealItem(item);
         });
     }
+    // A task opens as a document (APP-265); a draft is made real first, and
+    // one with no title yet still goes to the editor.
+    function showTask(t) {
+        if (!t) return;
+        if (t._isNew) {
+            const d = Object.assign({}, t);
+            if (String(d.title || "").trim().length === 0 || !AppController.saveTask(d)) {
+                taskEditor.showFor(d);
+                return;
+            }
+            t = d;
+        }
+        if (t.id) taskDoc.open(t.id);
+    }
     // The day's hands, for Today and the day panel.
     function openEvent(id, occurrence) {
         if (occurrence) eventEditor.showForOccurrence(occurrence);
@@ -1651,7 +1678,7 @@ ApplicationWindow {
         eventEditor.showForDraft(draft);
     }
     function openTask(id) {
-        taskEditor.showFor(Object.assign({}, AppController.taskById(id)));
+        win.showTask(AppController.taskById(id));
     }
     // The tasks a key acts on: the selection, else the one under the
     // cursor or the pointer in the open view.
@@ -1667,7 +1694,7 @@ ApplicationWindow {
     }
     // D (APP-268): nothing under the key, nothing happens.
     function markDone() {
-        const ids = win._keyTaskIds();
+        const ids = taskDoc.opened && taskDoc.activeFocus ? [taskDoc.taskId] : win._keyTaskIds();
         if (ids.length > 0) AppController.toggleDone(ids);
     }
     function _toastCaptured(title, taskId) {
@@ -1808,7 +1835,7 @@ ApplicationWindow {
     CommandPalette {
         id: cmdPalette
         onCommandRequested: (id) => win.runCommand(id)
-        onOpenTask: (taskId) => taskEditor.showFor(Object.assign({}, AppController.taskById(taskId)))
+        onOpenTask: (taskId) => win.showTask(AppController.taskById(taskId))
         onOpenPerson: (personId) => personEditor.showFor(AppController.personById(personId))
         onNavigateToDoc: (sectionId) => docsBridge.requestedAnchor = "sec-" + sectionId
         onNavigateToSnippets: docsBridge.requestedAnchor = "sec-snippets"
@@ -2327,7 +2354,7 @@ ApplicationWindow {
 
     WeeklyRecapDialog {
         id: weeklyRecap
-        onTaskActivated: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+        onTaskActivated: (id) => win.showTask(AppController.taskById(id))
         onStandupDraftRequested: standupDraft.showNow()
     }
     // The recap opens by itself only where it can be seen (APP-211): the
@@ -2351,7 +2378,7 @@ ApplicationWindow {
     // The day's summary (APP-190): closed, carrying over, timers. Read-only.
     EndOfDayDialog {
         id: endOfDay
-        onTaskActivated: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+        onTaskActivated: (id) => win.showTask(AppController.taskById(id))
     }
     Connections {
         target: AppController

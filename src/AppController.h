@@ -730,6 +730,13 @@ class AppController : public QObject {
 
   // Time tracking (HEAP-78). start/stop the per-task timer (only one runs at a
   // time); elapsedSecondsFor returns the live total incl. the running session.
+  // The task's own notepad (Task.local.notes, APP-237/265): no sync writes
+  // it, so a tracker card's own words live here.
+  Q_INVOKABLE QString taskLocalNotes(const QString& id) const;
+  Q_INVOKABLE void setTaskLocalNotes(const QString& id, const QString& text);
+  // Notes that name the task (its id as a word), newest first:
+  // [{id, title, updated}] — the task document's "Mentioned in" (APP-265).
+  Q_INVOKABLE QVariantList notesMentioningTask(const QString& id) const;
   Q_INVOKABLE void startTaskTimer(const QString& id);
   Q_INVOKABLE void stopTaskTimer(const QString& id);
   Q_INVOKABLE int elapsedSecondsFor(const QString& id) const;

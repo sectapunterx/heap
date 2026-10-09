@@ -42,6 +42,12 @@ Popup {
     property var _rejected: []
     // The column the task goes to (APP-266 chip "Column").
     property string _status: "todo"
+    property string _openStatus: ""
+    // "+" on a column: the input, already pointed at that column.
+    function openIn(statusId) {
+        root._openStatus = statusId || "";
+        root.open();
+    }
     // Several lines came in one paste: asked once, "N tasks or one?".
     property bool _pastedLines: false
     property bool _askLines: false
@@ -441,7 +447,8 @@ Popup {
         _preview = {ok: false};
         _parsed = ({});
         _rejected = [];
-        _status = "todo";
+        _status = _openStatus.length > 0 ? _openStatus : "todo";
+        _openStatus = "";
         _pastedLines = false;
         _askLines = false;
         _prevNewlines = 0;

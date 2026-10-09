@@ -2006,6 +2006,45 @@ QStringList AppController::noteHeadings(const QString& markdown) const {
   return heap::notes::collectHeadings(markdown);
 }
 
+QString AppController::taskLocalNotes(const QString& id) const {
+  const int row = m_tasks.indexOfId(id);
+  return row < 0 ? QString() : m_tasks.items().at(row).local.notes;
+}
+
+void AppController::setTaskLocalNotes(const QString& id, const QString& text) {
+  const int row = m_tasks.indexOfId(id);
+  if(row < 0 || m_tasks.items().at(row).local.notes == text) {
+    return;
+  }
+  const UndoScope scope(this, tr_("task.editUndone").arg(id));
+  Task t = m_tasks.items().at(row);
+  t.local.notes = text;
+  m_tasks.upsert(t);
+  scheduleSave();
+}
+
+QVariantList AppController::notesMentioningTask(const QString& id) const {
+  QVariantList out;
+  if(id.isEmpty()) {
+    return out;
+  }
+  const QRegularExpression word(QStringLiteral("(?<![\\w-])") + QRegularExpression::escape(id) + QStringLiteral("(?![\\w-])"),
+                                QRegularExpression::CaseInsensitiveOption);
+  QVector<const Note*> hits;
+  for(const Note& n : m_notes.items()) {
+    if(word.match(n.body).hasMatch() || word.match(n.title).hasMatch()) {
+      hits.append(&n);
+    }
+  }
+  std::sort(hits.begin(), hits.end(), [](const Note* a, const Note* b) {
+    return a->updated > b->updated;
+  });
+  for(const Note* n : hits) {
+    out.append(QVariantMap{{"id", n->id}, {"title", n->title}, {"updated", n->updated}});
+  }
+  return out;
+}
+
 QVariantList AppController::noteBacklinks(const QString& markdown) const {
   return heap::notes::collectBacklinks(markdown);
 }
