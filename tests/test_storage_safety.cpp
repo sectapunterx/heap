@@ -488,15 +488,17 @@ TEST_F(StorageSafety, UnknownKeysSurviveASave) {
 
 // ── PLAT-8: views ──
 
-TEST_F(StorageSafety, AnUnknownViewLandsOnTheBoardAndIsNeverPersisted) {
+// heap 2 (APP-260): the start screen is Today, so that is where an unknown
+// view lands now.
+TEST_F(StorageSafety, AnUnknownViewLandsOnTodayAndIsNeverPersisted) {
   QJsonObject root = QJsonDocument::fromJson(stateDoc({profileJson("a", {})}, "a")).object();
   root["settings"] = QJsonObject{{"welcomeSeen", true}, {"currentView", "kanban"}};
   writeRaw(statePath(), QJsonDocument(root).toJson());
   AppController app;
-  EXPECT_EQ(app.currentView(), QStringLiteral("board"));
+  EXPECT_EQ(app.currentView(), QStringLiteral("today"));
   app.setCurrentView(QStringLiteral("week"));
   app.setCurrentView(QStringLiteral("nonsense"));
-  EXPECT_EQ(app.currentView(), QStringLiteral("board"));
+  EXPECT_EQ(app.currentView(), QStringLiteral("today"));
 }
 
 // ── PLAT-9: automation covers every profile ──

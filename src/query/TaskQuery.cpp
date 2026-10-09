@@ -295,6 +295,7 @@ TaskQuery TaskQuery::compile(const QString& text, const QDate& today, const QVar
                                         QStringLiteral("archived"),
                                         QStringLiteral("overdue"),
                                         QStringLiteral("recurring"),
+                                        QStringLiteral("undated"),
                                         QStringLiteral("new")};
       for(const QString& v : cl.values) {
         ok = ok && kIs.contains(v);
@@ -382,6 +383,9 @@ bool TaskQuery::clauseMatches(const Clause& c, const Task& t, const QString& hay
         hit = !done && heap::local::effectiveDueAt(t).isValid() && heap::local::effectiveDueAt(t).date() < m_today;
       } else if(v == QLatin1String("recurring")) {
         hit = !t.recurrence.isEmpty();
+      } else if(v == QLatin1String("undated")) {
+        // No plan and no deadline, and not parked for "someday" (APP-260).
+        hit = !done && !t.archived && !t.someday && !t.scheduledAt.isValid() && !heap::local::effectiveDueAt(t).isValid();
       } else if(v == QLatin1String("new")) {
         hit = m_newIds.contains(t.id);
       }

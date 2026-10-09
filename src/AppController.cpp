@@ -46,6 +46,7 @@
 #include "notes/NoteGraph.h"
 #include "notes/NoteLinks.h"
 #include "notify/NotificationCenter.h"
+#include "plan/DayPlan.h"
 #include "platform/Accessibility.h"
 #include "platform/GlobalHotkey.h"
 #include "platform/Paths.h"
@@ -1371,7 +1372,7 @@ QString AppController::tr_(const QString& key) const {
 void AppController::setCurrentView(const QString& requested) {
   // An unknown name (a --view typo, a stale binding) lands on the board rather
   // than on a blank content area that would then be saved and come back.
-  const QString v = heap::views::isKnown(requested) ? requested : QStringLiteral("board");
+  const QString v = heap::views::isKnown(requested) ? requested : QStringLiteral("today");
   if(v == m_currentView) {
     return;
   }
@@ -3967,6 +3968,198 @@ QVariantList AppController::eventOccurrences(const QDate& from, const QDate& to)
     out.append(m);
   }
   return out;
+}
+
+namespace {
+
+QVariantMap blockToVariant(const heap::plan::Block& b) {
+  return {{"kind", b.kind},
+          {"id", b.id},
+          {"title", b.title},
+          {"eventType", b.eventType},
+          {"status", b.status},
+          {"category", b.category},
+          {"attendees", b.attendees},
+          {"occurrence", b.occurrence},
+          {"profileName", b.profileName},
+          {"start", b.start},
+          {"end", b.end},
+          {"past", b.past},
+          {"fromPrevDay", b.fromPrevDay},
+          {"toNextDay", b.toNextDay},
+          {"overlapsWith", b.overlapsWith}};
+}
+
+}  // namespace
+
+QVariantMap AppController::todayData(const QDate& date, bool allProfiles) const {
+  QVariantMap out;
+  const QDateTime now = QDateTime::currentDateTime();
+
+  // Meetings from every profile: the day before too, for one across midnight.
+  QVector<heap::plan::EventIn> events;
+  for(const heap::cal::Occurrence& o : heap::cal::expandEvents(m_events.items(), date.addDays(-1), date)) {
+    heap::plan::EventIn e;
+    e.id = o.event.id;
+    e.title = o.event.title;
+    e.type = o.event.type;
+    e.taskId = o.event.taskId;
+    e.attendees = o.event.attendees;
+    e.date = o.event.date;
+    e.endDate = o.event.endDate;
+    e.start = o.event.start;
+    e.end = o.event.end;
+    e.allDay = o.event.allDay;
+    e.occurrence = o.occurrenceDate.toString(Qt::ISODate);
+    events.append(e);
+  }
+
+  // The tasks: this profile's, or every profile's with its name.
+  struct Src {
+    const Task* task;
+    QString profileName;
+    bool own;
+  };
+
+  QVector<Src> all;
+  for(const Task& t : m_tasks.items()) {
+    all.append({&t, QString(), true});
+  }
+  QVector<Profile> snapshot;
+  if(allProfiles) {
+    snapshot = profilesSnapshot();
+    for(const Profile& p : std::as_const(snapshot)) {
+      if(p.id == m_activeProfileId) {
+        continue;
+      }
+      for(const Task& t : p.tasks) {
+        all.append({&t, p.name, false});
+      }
+    }
+  }
+  const auto category = [this](const Src& s) {
+    return s.own ? statusCategory(s.task->status) : heap::board::defaultCategoryFor(s.task->status);
+  };
+
+  QVector<heap::plan::TaskIn> timed;
+  for(const Src& s : std::as_const(all)) {
+    const Task& t = *s.task;
+    if(t.archived || !t.scheduledHasTime || !t.scheduledAt.isValid()) {
+      continue;
+    }
+    heap::plan::TaskIn in;
+    in.id = t.id;
+    in.title = t.title;
+    in.status = t.status;
+    in.category = category(s);
+    in.scheduledAt = t.scheduledAt;
+    in.minutes = s.own ? taskBlockMinutes(t.id) : (t.estimateMinutes > 0 ? t.estimateMinutes : 60);
+    in.profileName = s.profileName;
+    timed.append(in);
+  }
+
+  const heap::plan::Day day = heap::plan::buildDay(date, now, events, timed, m_workdayStart, m_workdayEnd, isWorkDay(date));
+  out["date"] = day.date;
+  out["workday"] = day.workday;
+  out["workStart"] = day.workStart;
+  out["workEnd"] = day.workEnd;
+  out["fromHour"] = day.fromHour;
+  out["toHour"] = day.toHour;
+  QVariantList allDay;
+  for(const heap::plan::Block& b : day.allDay) {
+    allDay.append(blockToVariant(b));
+  }
+  out["allDay"] = allDay;
+  QVariantList blocks;
+  QStringList inDay;
+  int meetings = static_cast<int>(day.allDay.size());
+  int planned = 0;
+  for(const heap::plan::Block& b : day.blocks) {
+    blocks.append(blockToVariant(b));
+    if(b.kind == QLatin1String("meeting")) {
+      ++meetings;
+    } else {
+      ++planned;
+      inDay << b.id;
+    }
+  }
+  out["blocks"] = blocks;
+  QVariantList free;
+  for(const heap::plan::Gap& g : day.free) {
+    free.append(QVariantMap{{"start", g.start}, {"end", g.end}});
+  }
+  out["free"] = free;
+  out["load"] =
+      QVariantMap{{"meetings", day.load.meetings}, {"tasks", day.load.tasks}, {"free", day.load.free}, {"overWork", day.load.overWork}};
+
+  // In progress, deadlines, overdue, undated.
+  QVariantList inProgress;
+  QVariantList deadlines;
+  QVariantList overdue;
+  int dueToday = 0;
+  int undated = 0;
+  for(const Src& s : std::as_const(all)) {
+    const Task& t = *s.task;
+    const QString cat = category(s);
+    if(t.archived || cat == QLatin1String("done")) {
+      continue;
+    }
+    const QDateTime due = heap::local::effectiveDueAt(t);
+    const bool dueHasTime = heap::local::effectiveDueHasTime(t);
+    if(cat == QLatin1String("prog") || (s.own && isDoingStatus(t.status))) {
+      QVariantMap m{{"id", t.id},
+                    {"title", t.title},
+                    {"status", t.status},
+                    {"category", cat},
+                    {"isTiming", t.timerStartedAt.isValid()},
+                    {"branch", t.branch},
+                    {"profileName", s.profileName}};
+      if(t.id == m_focusedTaskId) {
+        m["repo"] = m_focusedRepoState;
+      }
+      inProgress.append(m);
+    }
+    if(due.isValid() && due.date() < date && date == m_today) {
+      overdue.append(QVariantMap{{"id", t.id}, {"title", t.title}, {"category", cat}, {"due", due}, {"profileName", s.profileName}});
+    }
+    if(due.isValid() && due.date() == date) {
+      ++dueToday;
+    }
+    if(due.isValid() && (due.date() == date || due.date() == date.addDays(1)) && !inDay.contains(t.id)) {
+      deadlines.append(QVariantMap{{"id", t.id},
+                                   {"title", t.title},
+                                   {"status", t.status},
+                                   {"category", cat},
+                                   {"priority", heap::local::effectivePriority(t)},
+                                   {"due", due},
+                                   {"dueHasTime", dueHasTime},
+                                   {"tomorrow", due.date() != date},
+                                   {"profileName", s.profileName}});
+    }
+    if(!t.someday && !due.isValid() && !t.scheduledAt.isValid()) {
+      ++undated;
+    }
+  }
+  out["inProgress"] = inProgress;
+  out["deadlines"] = deadlines;
+  out["overdue"] = overdue;
+  out["undated"] = undated;
+  out["facts"] = QVariantMap{{"meetings", meetings}, {"planned", planned}, {"dueToday", dueToday}};
+
+  // Whom to write: the people list's open asks.
+  QVariantList people;
+  for(const Person& p : m_people.items()) {
+    if(p.state == QLatin1String("todo")) {
+      people.append(QVariantMap{{"id", p.id}, {"name", p.name}, {"question", p.question}, {"color", p.color}});
+    }
+  }
+  out["people"] = people;
+  return out;
+}
+
+QVariantMap AppController::dayLoad(const QDate& date) const {
+  const QVariantMap d = todayData(date, false);
+  return d.value("load").toMap();
 }
 
 QVariantMap AppController::eventSeriesMaster(const QString& masterId) const {
@@ -7385,7 +7578,7 @@ void AppController::resetToFirstRun() {
   //    reseeded demo + UI stay in the user's tongue.
   m_theme = "dark";
   m_density = "comfy";
-  m_currentView = "board";
+  m_currentView = "today";
   m_sectionViews.clear();
   m_workdayStart = 9;
   m_workdayEnd = 19;
@@ -11235,7 +11428,7 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
       // A view this build does not have (a hand edit, an older --view typo
       // that got saved) would leave the content area blank on every launch.
       const QString v = s["currentView"].toString();
-      m_currentView = heap::views::isKnown(v) ? v : QStringLiteral("board");
+      m_currentView = heap::views::isKnown(v) ? v : QStringLiteral("today");
       emit currentViewChanged();
     }
     m_sectionViews.clear();

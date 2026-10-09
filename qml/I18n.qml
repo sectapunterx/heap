@@ -1420,6 +1420,36 @@ QtObject {
             "md.slash.table": "Table",
             "md.slash.quote": "Quote",
             "md.slash.literal": "Just a /",
+            "today.n.meetings": "%1 meeting|%1 meetings",
+            "today.n.planned": "%1 task in the plan|%1 tasks in the plan",
+            "today.n.due": "%1 due today|%1 due today",
+            "today.n.overdue": "%1 overdue|%1 overdue",
+            "today.n.undated": "%1 task without a date|%1 tasks without a date",
+            "today.overdueQuiet": "earlier: %1",
+            "today.nothing": "Nothing planned",
+            "today.dayEmpty": "Nothing planned for the day",
+            "today.dayOff": "day off",
+            "today.backToToday": "back to today (T)",
+            "today.prevDay": "Previous day",
+            "today.nextDay": "Next day",
+            "today.day": "Day",
+            "today.inProgress": "In progress",
+            "today.deadlines": "Deadlines",
+            "today.blocked": "blocked",
+            "today.people": "Whom to write",
+            "today.wrote": "Wrote",
+            "today.allDay": "all day",
+            "today.fromPrev": "from 0:00",
+            "today.untilNext": "until %1",
+            "today.withSelf": "Meeting with yourself",
+            "today.plannedByYou": "planned by you",
+            "today.overlaps": "at the same time as %1",
+            "today.free": "Free %1",
+            "today.endOfDay": "End of the working day at %1",
+            "load.meetings": "meetings %1",
+            "load.tasks": "tasks %1",
+            "load.free": "free %1",
+            "load.over": "+%1 past the working day",
             "capture.when": "when",
             "capture.due": "due",
             "capture.estimate": "estimate",
@@ -3019,6 +3049,36 @@ QtObject {
             "md.slash.table": "Таблица",
             "md.slash.quote": "Цитата",
             "md.slash.literal": "Просто /",
+            "today.n.meetings": "%1 встреча|%1 встречи|%1 встреч",
+            "today.n.planned": "%1 задача в плане|%1 задачи в плане|%1 задач в плане",
+            "today.n.due": "%1 срок истекает сегодня|%1 срока истекают сегодня|%1 сроков истекают сегодня",
+            "today.n.overdue": "%1 просрочена|%1 просрочены|%1 просрочено",
+            "today.n.undated": "%1 задача без даты|%1 задачи без даты|%1 задач без даты",
+            "today.overdueQuiet": "раньше: %1",
+            "today.nothing": "Ничего не запланировано",
+            "today.dayEmpty": "На день ничего не запланировано",
+            "today.dayOff": "выходной",
+            "today.backToToday": "вернуться к сегодня (T)",
+            "today.prevDay": "Предыдущий день",
+            "today.nextDay": "Следующий день",
+            "today.day": "День",
+            "today.inProgress": "Сейчас в работе",
+            "today.deadlines": "Сроки",
+            "today.blocked": "заблокировано",
+            "today.people": "Кому написать",
+            "today.wrote": "Написано",
+            "today.allDay": "весь день",
+            "today.fromPrev": "с 0:00",
+            "today.untilNext": "до %1",
+            "today.withSelf": "Встреча с собой",
+            "today.plannedByYou": "запланировано вами",
+            "today.overlaps": "одновременно с %1",
+            "today.free": "Свободно %1",
+            "today.endOfDay": "Конец рабочего дня в %1",
+            "load.meetings": "встречи %1",
+            "load.tasks": "задачи %1",
+            "load.free": "свободно %1",
+            "load.over": "+%1 сверх рабочего дня",
             "capture.when": "когда",
             "capture.due": "срок",
             "capture.estimate": "оценка",
@@ -3303,6 +3363,19 @@ QtObject {
     function fmtTime(d) {
         if (!d || !d.getTime || isNaN(d.getTime())) return "";
         return Theme.fmtHour(d.getHours() + d.getMinutes() / 60);
+    }
+    // "2 встречи", "5 встреч", "1 meeting": the key holds the forms split by
+    // "|" — ru one|few|many, en one|other — and "%1" for the number.
+    function count(n, key) {
+        const forms = t(key).split("|");
+        let i;
+        if (lang === "ru") {
+            const m10 = n % 10, m100 = n % 100;
+            i = m10 === 1 && m100 !== 11 ? 0 : (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) ? 1 : 2;
+        } else {
+            i = n === 1 ? 0 : 1;
+        }
+        return forms[Math.min(i, forms.length - 1)].replace("%1", n);
     }
     // A length of time: "45 min", "1 h 30 min" / "45 мин", "1 ч 30 мин".
     function fmtMinutes(m) {

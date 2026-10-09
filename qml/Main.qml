@@ -1193,6 +1193,7 @@ ApplicationWindow {
                         function onEventClicked(id, occurrence) { win.openEvent(id, occurrence); }
                         function onCreateRequested(startHour, endHour, day) { win.createEventAt(startHour, endHour, day); }
                         function onTaskClicked(id) { win.openTask(id); }
+                        function onUndatedRequested() { win.showQuery("is:undated", "list"); }
                     }
 
                     // First visit to one of the kept-alive views builds it.
@@ -1666,6 +1667,13 @@ ApplicationWindow {
             t = d;
         }
         if (t.id) taskDoc.open(t.id);
+    }
+    // A query in the Tasks search, on a lens (Today's "N without a date").
+    function showQuery(q, lens) {
+        topBar.searchText = q;
+        win.searchText = q;
+        AppController.openSection("tasks");
+        win.openLens(lens);
     }
     // The day's hands, for Today and the day panel.
     function openEvent(id, occurrence) {
@@ -2242,7 +2250,7 @@ ApplicationWindow {
     component DayKey: Shortcut {
         context: Qt.ApplicationShortcut
         enabled: sequences.length > 0 && !win._viewKeysBlocked
-            && ["board", "timeline", "week", "month", "archive"].indexOf(AppController.currentView) >= 0
+            && ["today", "board", "timeline", "week", "month", "archive"].indexOf(AppController.currentView) >= 0
     }
     DayKey {
         sequences: [_kbd("cal.today")]

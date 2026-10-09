@@ -1083,6 +1083,14 @@ class AppController : public QObject {
   // dates, plus `masterId` and `originalDate` on anything generated, so a click
   // can find the series again.
   Q_INVOKABLE QVariantList eventOccurrences(const QDate& from, const QDate& to) const;
+  // The Today screen's day (APP-260): {date, workday, workStart, workEnd,
+  // fromHour, toHour, allDay[], blocks[], free[], load{meetings, tasks, free,
+  // overWork} (minutes), facts{meetings, planned, dueToday}, inProgress[],
+  // deadlines[], overdue[], people[], undated}. The active profile's tasks
+  // and everyone's meetings; `allProfiles` adds every profile's tasks.
+  Q_INVOKABLE QVariantMap todayData(const QDate& date, bool allProfiles = false) const;
+  // The same day as a pure fact for the calendars (APP-247): load minutes.
+  Q_INVOKABLE QVariantMap dayLoad(const QDate& date) const;
   // The stored event behind an occurrence: the master, or the override that
   // stands in for it. Empty when there is none.
   Q_INVOKABLE QVariantMap eventSeriesMaster(const QString& masterId) const;
@@ -1735,7 +1743,7 @@ class AppController : public QObject {
   QString m_theme = "dark";
   QString m_density = "comfy";
   QString m_language = "en";
-  QString m_currentView = "board";
+  QString m_currentView = "today";  // heap 2: Today is the start screen (APP-260)
   // section -> the view it was last left on (APP-258).
   QHash<QString, QString> m_sectionViews;
   QString m_shellNotice;
