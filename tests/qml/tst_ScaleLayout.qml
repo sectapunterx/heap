@@ -66,55 +66,30 @@ TestCase {
     // Right edge of `it` in `view`'s coordinates.
     function rightIn(it, view) { return it.mapToItem(view, it.width, 0).x; }
 
-    // ── SCALE-1: the side rail ──────────────────────────────────────────
-
-    function test_a_short_rail_says_it_scrolls() {
-        withScale(1.25);
-        AppController.currentView = "board";
-        const rail = make('import TodoCpp; SideRail { height: 360; expanded: true }');
-        const flick = findChild(rail, "rail-scroll");
-        tryVerify(() => flick.contentHeight > flick.height, 2000, "the rail fits after all");
-        const sb = findChild(rail, "rail-scrollbar");
-        verify(sb !== null, "no scrollbar");
-        verify(sb.overflowing);
-        tryCompare(sb.contentItem, "opacity", 1, 2000, "the thumb is hidden at rest");
-        verify(findChild(rail, "scroll-fade-bottom").visible, "the cut edge does not fade");
-        verify(!findChild(rail, "scroll-fade-top").visible, "nothing is above the top yet");
-    }
-
-    function test_a_rail_that_fits_shows_no_cue() {
-        const rail = make('import TodoCpp; SideRail { height: 1600; expanded: true }');
-        const flick = findChild(rail, "rail-scroll");
-        tryVerify(() => flick.height > 0 && flick.contentHeight <= flick.height);
-        const sb = findChild(rail, "rail-scrollbar");
-        verify(!sb.overflowing);
-        compare(sb.contentItem.opacity, 0);
-        verify(!findChild(rail, "scroll-fade-bottom").visible);
-    }
-
-    function test_the_open_view_row_is_scrolled_into_view() {
-        withScale(1.25);
-        AppController.currentView = "board";
-        const rail = make('import TodoCpp; SideRail { height: 360; expanded: true }');
-        const flick = findChild(rail, "rail-scroll");
-        const notes = findChild(rail, "rail-notes");
-        tryVerify(() => flick.contentHeight > flick.height);
-        AppController.currentView = "notes";
-        tryVerify(() => {
-            const y = notes.mapToItem(flick, 0, 0).y;
-            return y >= 0 && y + notes.height <= flick.height;
-        }, 2000, "the Notes row stayed below the fold");
-    }
 
     function test_the_collapsed_rail_holds_its_icon_cell_at_any_scale() {
         for (const s of [1, 1.25, 1.5]) {
             withScale(s);
-            const rail = make('import TodoCpp; SideRail { height: 700; expanded: false }');
+            const rail = make('import TodoCpp; Sidebar { height: 700; expanded: false }');
             tryCompare(rail, "width", rail.collapsedWidth, 1000);
-            const btn = findChild(rail, "rail-notes");
+            const btn = findChild(rail, "sidebar-section-knowledge");
             verify(btn.width >= 36, "at " + s + " the 36px icon cell is cut to " + btn.width);
             rail.destroy();
         }
+    }
+
+    // heap 2 (APP-258): at 150 % the places and Settings stay on screen;
+    // only My views scroll.
+    function test_a_short_sidebar_scrolls_only_my_views() {
+        withScale(1.5);
+        const rail = make('import TodoCpp; Sidebar { height: 420; expanded: true }');
+        const settings = findChild(rail, "sidebar-section-settings");
+        tryVerify(() => settings.height > 0, 1000);
+        verify(settings.mapToItem(rail, 0, 0).y + settings.height <= rail.height, "Settings is cut off");
+        const knowledge = findChild(rail, "sidebar-section-knowledge");
+        verify(knowledge.mapToItem(rail, 0, 0).y >= 0);
+        const label = findChild(knowledge, "sidebar-label");
+        verify(!label.truncated, "\"" + label.text + "\" is cut at 150 %");
     }
 
     // ── SCALE-2: the settings nav ───────────────────────────────────────

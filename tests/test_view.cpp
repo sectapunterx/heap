@@ -110,15 +110,39 @@ QString sequenceOf(AppController* app, const QString& id) {
 
 }  // namespace
 
-TEST_F(ViewFocusTest, ViewShortcutsFollowTheSideRailOrder) {
-  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.board")), QStringLiteral("Ctrl+1"));
-  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.timeline")), QStringLiteral("Ctrl+2"));
-  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.week")), QStringLiteral("Ctrl+3"));
-  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.month")), QStringLiteral("Ctrl+4"));
-  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.archive")), QStringLiteral("Ctrl+5"));
-  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.docs")), QStringLiteral("Ctrl+6"));
-  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.notes")), QStringLiteral("Ctrl+7"));
-  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.settings")), QStringLiteral("Ctrl+8"));
+// heap 2 (APP-258): Ctrl+1..3 are the sidebar's sections, Ctrl+, Settings;
+// the single views are lenses with no key of their own (still bindable).
+TEST_F(ViewFocusTest, SectionShortcutsFollowTheSidebar) {
+  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("section.today")), QStringLiteral("Ctrl+1"));
+  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("section.tasks")), QStringLiteral("Ctrl+2"));
+  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("section.knowledge")), QStringLiteral("Ctrl+3"));
+  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.settings")), QStringLiteral("Ctrl+,"));
+  for(const char* v : {"view.board", "view.timeline", "view.week", "view.month", "view.archive", "view.docs", "view.notes"}) {
+    EXPECT_TRUE(sequenceOf(app_.get(), QString::fromLatin1(v)).isEmpty()) << v;
+  }
+  EXPECT_TRUE(sequenceOf(app_.get(), QStringLiteral("tweaks.open")).isEmpty()) << "Ctrl+, is Settings now";
+}
+
+// Each section opens on the view it was left on; the first time, on its
+// default. A view outside the section is never its "last view".
+TEST_F(ViewFocusTest, SectionsRememberTheirLastView) {
+  app_->setCurrentView(QStringLiteral("today"));
+  EXPECT_EQ(app_->currentSection(), QStringLiteral("today"));
+  app_->openSection(QStringLiteral("tasks"));
+  EXPECT_EQ(app_->currentView(), QStringLiteral("board"));
+  app_->setCurrentView(QStringLiteral("month"));
+  EXPECT_EQ(app_->currentSection(), QStringLiteral("tasks"));
+  app_->openSection(QStringLiteral("knowledge"));
+  EXPECT_EQ(app_->currentView(), QStringLiteral("notes"));
+  app_->setCurrentView(QStringLiteral("docs"));
+  app_->openSection(QStringLiteral("tasks"));
+  EXPECT_EQ(app_->currentView(), QStringLiteral("month"));
+  app_->openSection(QStringLiteral("knowledge"));
+  EXPECT_EQ(app_->currentView(), QStringLiteral("docs"));
+  app_->openSection(QStringLiteral("settings"));
+  EXPECT_EQ(app_->currentView(), QStringLiteral("settings"));
+  app_->openSection(QStringLiteral("nonsense"));
+  EXPECT_EQ(app_->currentView(), QStringLiteral("today"));
 }
 
 // Month is reachable from the rail, so it needs a binding like its neighbours.
@@ -206,9 +230,9 @@ TEST(ShortcutMigration, ALegacyFilesStoredDefaultsDoNotPinTheOldLayout) {
   });
 
   AppController app;
-  EXPECT_EQ(sequenceIn(app, QStringLiteral("view.month")), QStringLiteral("Ctrl+4"));
-  EXPECT_EQ(sequenceIn(app, QStringLiteral("view.docs")), QStringLiteral("Ctrl+6"));
-  EXPECT_EQ(sequenceIn(app, QStringLiteral("view.archive")), QStringLiteral("Ctrl+5"));
+  EXPECT_TRUE(sequenceIn(app, QStringLiteral("view.docs")).isEmpty());
+  EXPECT_TRUE(sequenceIn(app, QStringLiteral("view.notes")).isEmpty());
+  EXPECT_TRUE(sequenceIn(app, QStringLiteral("view.archive")).isEmpty()) << "Ctrl+7 was its old default, not a choice";
 }
 
 TEST(ShortcutMigration, ALegacyFilesRealRebindSurvives) {
@@ -219,7 +243,7 @@ TEST(ShortcutMigration, ALegacyFilesRealRebindSurvives) {
 
   AppController app;
   EXPECT_EQ(sequenceIn(app, QStringLiteral("task.new")), QStringLiteral("Ctrl+Shift+J"));
-  EXPECT_EQ(sequenceIn(app, QStringLiteral("view.docs")), QStringLiteral("Ctrl+6"));
+  EXPECT_TRUE(sequenceIn(app, QStringLiteral("view.docs")).isEmpty());
 }
 
 // A cleared binding is a choice too, and "" never matched a default.
@@ -228,6 +252,62 @@ TEST(ShortcutMigration, ALegacyFilesClearedBindingSurvives) {
 
   AppController app;
   EXPECT_TRUE(sequenceIn(app, QStringLiteral("task.openExternal")).isEmpty());
+}
+
+// ─── heap 2 shell (APP-258) ───────────────────────────────────────────
+// A 0.7 settings file (shortcutsSchema 2): the user's own bindings stay,
+// a new default that collides with one steps aside, and the change is said
+// once.
+
+namespace {
+
+void writeV2StateWithShortcuts(const QJsonObject& entries) {
+  QDir(appDataDir()).removeRecursively();
+  QDir().mkpath(appDataDir());
+  QJsonObject settings;
+  settings["shortcuts"] = entries;
+  settings["shortcutsSchema"] = 2;
+  settings["currentView"] = QStringLiteral("week");
+  QJsonObject root;
+  root["schemaVersion"] = heap::state::kSchemaVersion;
+  root["settings"] = settings;
+  root["profiles"] = QJsonArray{QJsonObject{{"id", "default"}, {"name", "Example"}}};
+  QFile f(appDataDir() + "/state.json");
+  ASSERT_TRUE(f.open(QIODevice::WriteOnly));
+  f.write(QJsonDocument(root).toJson());
+}
+
+}  // namespace
+
+TEST(ShellMigration, AReturningUserIsToldOnceWhatMoved) {
+  writeV2StateWithShortcuts({});
+  {
+    AppController app;
+    EXPECT_FALSE(app.shellNotice().isEmpty());
+    EXPECT_EQ(app.currentView(), QStringLiteral("week")) << "the last screen stays the start screen";
+    EXPECT_EQ(app.currentSection(), QStringLiteral("tasks"));
+    EXPECT_EQ(sequenceIn(app, QStringLiteral("section.today")), QStringLiteral("Ctrl+1"));
+    app.ackShellNotice();
+    EXPECT_TRUE(app.shellNotice().isEmpty());
+    app.flushSave();
+  }
+  AppController again;
+  EXPECT_TRUE(again.shellNotice().isEmpty()) << "said once";
+}
+
+TEST(ShellMigration, TheUsersOwnBindingKeepsItsKey) {
+  writeV2StateWithShortcuts({{QStringLiteral("theme.toggle"), QStringLiteral("Ctrl+2")}});
+  AppController app;
+  EXPECT_EQ(sequenceIn(app, QStringLiteral("theme.toggle")), QStringLiteral("Ctrl+2"));
+  EXPECT_TRUE(sequenceIn(app, QStringLiteral("section.tasks")).isEmpty()) << "the new default steps aside";
+  EXPECT_EQ(sequenceIn(app, QStringLiteral("section.today")), QStringLiteral("Ctrl+1"));
+  EXPECT_TRUE(app.shellNotice().contains(QStringLiteral("Ctrl+2"))) << app.shellNotice().toStdString();
+}
+
+TEST(ShellMigration, ANewInstallHearsNothing) {
+  QDir(appDataDir()).removeRecursively();
+  AppController app;
+  EXPECT_TRUE(app.shellNotice().isEmpty());
 }
 
 int main(int argc, char** argv) {

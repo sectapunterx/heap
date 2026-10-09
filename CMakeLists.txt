@@ -385,7 +385,9 @@ qt_add_qml_module(heap_core
         # ── audit-perf: end ──
         qml/I18n.qml
         qml/TopBar.qml
-        qml/SideRail.qml
+        qml/Sidebar.qml
+        qml/ProfileSwitcher.qml
+        qml/TodayView.qml
         qml/FilterBar.qml
         qml/KanbanBoard.qml
         qml/TaskCard.qml

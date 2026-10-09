@@ -474,7 +474,9 @@ Popup {
                     focus: chip.capturing
                     activeFocusOnTab: true
                     Accessible.role: Accessible.Button
-                    Accessible.name: chip.sequence
+                    // An action with no key still has a name to read out
+                    // (heap 2 left the single views unbound).
+                    Accessible.name: chip.sequence.length > 0 ? chip.sequence : I18n.t("common.notSet")
                     Keys.onPressed: (event) => {
                         // Not recording: this is a button. Enter used to
                         // commit an empty candidate and unbind the action, and

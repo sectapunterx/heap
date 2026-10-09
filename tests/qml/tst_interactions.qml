@@ -47,33 +47,7 @@ TestCase {
         compare(n, 1);
     }
 
-    // SideRail: clicking the Docs button switches the active view.
-    function test_siderail_click_docs() {
-        AppController.currentView = "board";
-        const rail = make('import TodoCpp; SideRail { width: 56; height: 480 }');
-        const btn = findChild(rail, "rail-docs");
-        verify(btn !== null, "rail-docs not found");
-        // At 480px Docs sits below the fold of the rail's scrolling part,
-        // under the saved views; the keyboard reaching it scrolls it in.
-        btn.forceActiveFocus(Qt.TabFocusReason);
-        tryVerify(function () {
-            const y = btn.mapToItem(rail, 0, 0).y;
-            return y >= 0 && y + btn.height <= rail.height;
-        }, 1000, "focusing a rail button scrolls it into view");
-        mouseClick(btn);
-        compare(AppController.currentView, "docs");
-    }
 
-    // SideRail: clicking Blocked jumps to the board + focuses the blocked column.
-    function test_siderail_click_blocked() {
-        AppController.currentView = "notes";
-        const rail = make('import TodoCpp; SideRail { width: 56; height: 480 }');
-        const btn = findChild(rail, "rail-blocked");
-        verify(btn !== null, "rail-blocked not found");
-        mouseClick(btn);
-        compare(AppController.currentView, "board");
-        compare(AppController.focusedStatus, "blocked");
-    }
 
     // DayCalendar: a task scheduled at a clock time renders a block in the grid,
     // and clicking it opens the task. The block shipped as a bare Rectangle, so
@@ -334,14 +308,4 @@ TestCase {
         compare(status.currentIndex, backlogIdx, "ticking Someday must move the status box to Backlog");
     }
 
-    // SideRail: clicking Code Review focuses the review column.
-    function test_siderail_click_review() {
-        AppController.currentView = "week";
-        const rail = make('import TodoCpp; SideRail { width: 56; height: 480 }');
-        const btn = findChild(rail, "rail-review");
-        verify(btn !== null, "rail-review not found");
-        mouseClick(btn);
-        compare(AppController.currentView, "board");
-        compare(AppController.focusedStatus, "review");
-    }
 }

@@ -743,6 +743,36 @@ TEST_F(MigrationTest, V11ToV12LeavesALocalTaskByteIdentical) {
   EXPECT_FALSE(heap::state::migrateState(root, heap::state::kSchemaVersion)) << "a v12 document is never migrated again";
 }
 
+// heap 2 (APP-258): the old sidebar's Focus pair becomes two saved views at
+// the top of "My views" — only where the profile has those columns, and
+// never twice.
+TEST_F(MigrationTest, V11ToV12TurnsFocusIntoSavedViews) {
+  QJsonObject root = QJsonDocument::fromJson(R"({
+  "schemaVersion": 11, "activeProfileId": "a", "events": [], "settings": {"language": "ru"},
+  "profiles": [
+    {"id": "a", "name": "A", "tasks": [],
+     "statuses": [{"id": "todo", "name": "To Do"}, {"id": "blocked", "name": "Blocked"}, {"id": "review", "name": "Review"}],
+     "savedViews": [{"id": "view-urgent", "name": "Срочное", "query": "priority:P0,P1 is:open"}]},
+    {"id": "b", "name": "B", "tasks": [],
+     "statuses": [{"id": "todo", "name": "To Do"}, {"id": "review", "name": "Review"}],
+     "savedViews": [{"id": "mine", "name": "Ревью", "query": "status:review"}]},
+    {"id": "c", "name": "C", "tasks": [], "statuses": [{"id": "todo", "name": "To Do"}]}
+  ]})")
+                         .object();
+  ASSERT_TRUE(heap::state::migrateState(root, 11));
+  const QJsonArray profiles = root["profiles"].toArray();
+  const QJsonArray a = profiles.at(0).toObject()["savedViews"].toArray();
+  ASSERT_EQ(a.size(), 3);
+  EXPECT_EQ(a.at(0).toObject()["query"].toString(), QStringLiteral("status:blocked"));
+  EXPECT_EQ(a.at(0).toObject()["name"].toString(), QStringLiteral("Заблокировано"));
+  EXPECT_EQ(a.at(1).toObject()["query"].toString(), QStringLiteral("status:review"));
+  EXPECT_EQ(a.at(2).toObject()["id"].toString(), QStringLiteral("view-urgent")) << "the user's own views follow, in order";
+  const QJsonArray b = profiles.at(1).toObject()["savedViews"].toArray();
+  ASSERT_EQ(b.size(), 1) << "no Blocked column, and Review is already a view";
+  EXPECT_EQ(b.at(0).toObject()["id"].toString(), QStringLiteral("mine"));
+  EXPECT_FALSE(profiles.at(2).toObject().contains(QStringLiteral("savedViews")));
+}
+
 TEST_F(MigrationTest, OpeningAV11ProfileKeepsUnknownKeysLocalEditsAndACopy) {
   const QByteArray original = v11DocumentWithDivergence("en");
   writeFile(statePath(), original);

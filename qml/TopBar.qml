@@ -4,72 +4,50 @@ import QtQuick.Controls.Basic
 import QtQuick.Controls as QQC
 import TodoCpp
 
+// The header of the content column (heap 2, APP-258): the section's title,
+// its lenses (Tasks: Board / List / Calendar; Knowledge: Notes / Links), the
+// git focus banner and focus mode, and the task search. The profile, "+ Task"
+// and the right panel's toggle that the old top bar carried moved to the
+// sidebar, the "New task" field and the Today screen.
 Rectangle {
     id: root
-    color: Theme.panel
-    height: 48
+    objectName: "view-header"
+    color: Theme.bg
+    implicitHeight: Theme.px(56)
+
+    // The current section and view, handed in by Main.
+    property string section: "tasks"
+    property string view: "board"
+    readonly property string title: section === "today" ? I18n.t("sidebar.today")
+                                  : section === "knowledge" ? I18n.t("sidebar.knowledge")
+                                  : section === "settings" ? I18n.t("sidebar.settings")
+                                  : I18n.t("sidebar.tasks")
+    readonly property var lenses: section === "tasks"
+        ? [{ id: "board", label: I18n.t("lens.board"), keys: "g b" },
+           { id: "list", label: I18n.t("lens.list"), keys: "g l" },
+           { id: "calendar", label: I18n.t("lens.calendar"), keys: "g c" }]
+        : section === "knowledge"
+        ? [{ id: "notes", label: I18n.t("lens.notes"), keys: "" },
+           { id: "docs", label: I18n.t("lens.links"), keys: "" }]
+        : []
+    readonly property string lens: view === "timeline" ? "list"
+                                 : (view === "week" || view === "month") ? "calendar"
+                                 : view
+    signal lensSelected(string id)
+    // The task search belongs to the views that list tasks.
+    property bool searchShown: section === "tasks"
 
     property alias searchText: searchField.text
     // Parse-only, so this costs nothing per keystroke — it never touches the
     // task list, unlike the filtering itself.
     readonly property bool searchIsQuery: AppController.searchIsQuery(searchField.text)
-    // The widest a breadcrumb or the profile name may get before it elides.
-    readonly property int crumbMaxWidth: 150
     // Clauses that mean nothing ("stauts:x", an unknown column, "due:banana"):
     // shown on the badge, so a typo does not read as an empty board.
     readonly property var searchProblems: AppController.searchProblems(searchField.text)
-    signal newTaskRequested()
-    // The sync dot was clicked: show how the integrations are doing.
-    signal syncStatusRequested()
-
-    // ── Sync in flight (APP-186) ──
-    // Bound to the controller; a test can set it by hand.
-    property bool syncing: AppController.syncing
-    // How long a sync runs before the dot says so.
-    readonly property int syncDotDelay: 400
-    // When the current sync started (ms since the epoch), 0 when none runs.
-    property real _syncSince: 0
-    property bool syncDotShown: false
-    // Whether the dot is due at `now` for a sync running since `since`.
-    function syncDotDue(running, since, now) {
-        return running && since > 0 && now - since >= root.syncDotDelay;
-    }
-    onSyncingChanged: {
-        root._syncSince = root.syncing ? Date.now() : 0;
-        root.syncDotShown = false;
-        syncDotTimer.interval = root.syncDotDelay;
-        if (root.syncing) syncDotTimer.restart();
-        else syncDotTimer.stop();
-    }
-    Timer {
-        id: syncDotTimer
-        onTriggered: {
-            const now = Date.now();
-            if (root.syncDotDue(root.syncing, root._syncSince, now)) {
-                root.syncDotShown = true;
-            } else if (root.syncing) {
-                // A coarse timer may wake a little early.
-                syncDotTimer.interval = Math.max(1, root._syncSince + root.syncDotDelay - now);
-                syncDotTimer.restart();
-            }
-        }
-    }
     // The "seen this before" hint under the search was clicked (APP-159).
     signal seenBeforeActivated(var hit)
     // Esc on an empty search box, or Return in it: give the keyboard back.
     signal leaveRequested()
-    signal rightPanelToggleRequested()
-    // Whether the calendar/people column is on screen, for the toggle's look.
-    property bool rightPanelShown: true
-    signal newProfileRequested()
-    signal renameProfileRequested()
-    signal duplicateProfileRequested()
-    signal exportJsonRequested()
-    signal importJsonRequested()
-    signal exportIcsRequested()
-    signal importIcsRequested()
-    signal exportVaultRequested()
-    signal importVaultRequested()
 
     function focusSearch() {
         searchField.forceActiveFocus();
@@ -83,159 +61,29 @@ Rectangle {
         searchField.cursorPosition = searchField.text.length;
     }
 
-    function _activeProfileMap() {
-        const list = AppController.profiles;
-        const id = AppController.activeProfileId;
-        for (let i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
-        return ({ name: "—", color: Theme.accent });
-    }
-
-    Rectangle {
-        anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
-        height: 1; color: Theme.border
-    }
-
     RowLayout {
         anchors.fill: parent
-        // On macOS the window uses a full-size content view, so the traffic-light
-        // buttons overlay the top-left of this bar — inset the content to clear them.
-        anchors.leftMargin: 16 + (Qt.platform.os === "osx" ? 62 : 0)
+        anchors.leftMargin: Theme.sp2xl
         anchors.rightMargin: Theme.sp2xl
-        spacing: Theme.sp2xl
+        spacing: Theme.spXl
 
-        // Brand
-        BrandLogo {
-            Layout.preferredHeight: 18
-            Layout.alignment: Qt.AlignVCenter
-            variant: "wordmark"
-            theme: Theme.dark ? "dark" : "light"
+        Text {
+            objectName: "view-header-title"
+            text: root.title
+            color: Theme.text
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsXl
+            font.weight: Theme.fwHeading
+            Accessible.role: Accessible.Heading
+            Accessible.name: root.title
         }
-
-        // Just the active profile (and its menu). The editable "project /
-        // week / user" crumbs before it said nothing the rest of the window
-        // did not, and pushed the profile toward the middle of the bar.
-        RowLayout {
-            id: crumbs
-            spacing: Theme.spXs
-            // Profile pill — color dot + name + dropdown
-            Rectangle {
-                id: profilePill
-                Layout.preferredHeight: 24
-                Layout.alignment: Qt.AlignVCenter
-                radius: Theme.radiusMd
-                color: profileMA.containsMouse ? Theme.panel2 : Theme.panel3
-                border.color: profileMA.containsMouse ? Theme.borderStrong : Theme.border
-                border.width: 1
-                implicitWidth: pillRow.implicitWidth + 16
-                // Keyboard: Tab to it, Enter / Space / ↓ opens the profile menu.
-                activeFocusOnTab: true
-                Accessible.role: Accessible.ButtonMenu
-                Accessible.name: profilePill.active.name || I18n.t("topbar.profile.fallback")
-                Keys.onSpacePressed: profileMenu.popup(profilePill, 0, profilePill.height + 4)
-                Keys.onReturnPressed: profileMenu.popup(profilePill, 0, profilePill.height + 4)
-                Keys.onDownPressed: profileMenu.popup(profilePill, 0, profilePill.height + 4)
-                FocusRing {}
-
-                property var active: root._activeProfileMap()
-
-                RowLayout {
-                    id: pillRow
-                    anchors.fill: parent
-                    anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spMd
-                    spacing: Theme.spSm
-                    Rectangle {
-                        width: 8; height: 8; radius: 4
-                        color: profilePill.active.color || Theme.accent
-                    }
-                    Text {
-                        text: profilePill.active.name || I18n.t("topbar.profile.fallback")
-                        color: Theme.text
-                        font.family: Theme.fontUi
-                        font.features: Theme.tabularNums
-                        font.pixelSize: Theme.fsMd
-                        font.weight: Theme.fwTitle
-                        // A long profile name pushed "+ Task" and the panel
-                        // toggle off the window.
-                        elide: Text.ElideRight
-                        Layout.maximumWidth: root.crumbMaxWidth
-                    }
-                    Text {
-                        text: "▾"
-                        color: Theme.textDim
-                        font.pixelSize: Theme.fsXs
-                    }
-                }
-                MouseArea {
-                    id: profileMA
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-                    onClicked: profileMenu.popup()
-                }
-
-                AppMenu {
-                    id: profileMenu
-
-                    // Profile rows are inserted dynamically at the top of the
-                    // menu via Instantiator, so they show before the static
-                    // actions in declaration-order.
-                    Instantiator {
-                        id: profilesInst
-                        model: AppController.profiles
-                        delegate: AppMenuItem {
-                            required property var modelData
-                            marked: modelData.id === AppController.activeProfileId
-                            text: modelData.name
-                            onTriggered: AppController.activeProfileId = modelData.id
-                        }
-                        onObjectAdded:   (idx, obj) => profileMenu.insertItem(idx, obj)
-                        onObjectRemoved: (idx, obj) => profileMenu.removeItem(obj)
-                    }
-                    AppMenuSeparator {}
-                    AppMenuItem {
-                        text: I18n.t("topbar.profile.new"); onTriggered: root.newProfileRequested()
-                    }
-                    AppMenuItem {
-                        text: I18n.t("topbar.profile.rename"); onTriggered: root.renameProfileRequested()
-                    }
-                    AppMenuItem {
-                        text: I18n.t("topbar.profile.duplicate"); onTriggered: root.duplicateProfileRequested()
-                    }
-                    AppMenuSeparator {}
-                    AppMenuItem {
-                        text: I18n.t("topbar.profile.import"); onTriggered: root.importJsonRequested()
-                    }
-                    AppMenuItem {
-                        text: I18n.t("topbar.profile.export"); onTriggered: root.exportJsonRequested()
-                    }
-                    AppMenuSeparator {}
-                    AppMenuItem {
-                        text: I18n.t("topbar.cal.import"); onTriggered: root.importIcsRequested()
-                    }
-                    AppMenuItem {
-                        text: I18n.t("topbar.cal.export"); onTriggered: root.exportIcsRequested()
-                    }
-                    AppMenuSeparator {}
-                    AppMenuItem {
-                        text: I18n.t("topbar.notes.import"); onTriggered: root.importVaultRequested()
-                    }
-                    AppMenuItem {
-                        text: I18n.t("topbar.notes.export"); onTriggered: root.exportVaultRequested()
-                    }
-                    // Last, apart and in red, and it says which profile goes
-                    // (design audit DES-9): "Delete active" sat between
-                    // Duplicate and Import looking like any other item.
-                    AppMenuSeparator {}
-                    AppMenuItem {
-                        objectName: "topbar-profile-delete"
-                        text: I18n.t("topbar.profile.delete").arg(profilePill.active.name || I18n.t("topbar.profile.fallback"))
-                        danger: true
-                        enabled: AppController.profiles.length > 1
-                        onTriggered: AppController.deleteProfile(AppController.activeProfileId)
-                    }
-                }
-            }
+        LensTabs {
+            id: lensTabs
+            objectName: "view-header-lenses"
+            visible: root.lenses.length > 0
+            model: root.lenses
+            current: root.lens
+            onSelected: (id) => root.lensSelected(id)
         }
 
         Item { Layout.fillWidth: true }
@@ -461,35 +309,10 @@ Rectangle {
             }
         }
 
-        // A sync is out (APP-186): a quiet dot in the live colour, only once
-        // it has taken long enough to notice — a quick pull shows nothing.
-        // A click opens the integrations' status (APP-164).
-        Item {
-            id: syncDot
-            objectName: "topbar-sync-dot"
-            visible: root.syncDotShown
-            Layout.preferredWidth: 20
-            Layout.preferredHeight: 20
-            Layout.alignment: Qt.AlignVCenter
-            Rectangle {
-                anchors.centerIn: parent
-                width: 8
-                height: 8
-                radius: 4
-                color: syncDotMA.hovered ? Theme.withAlpha(Theme.live, 0.7) : Theme.live
-            }
-            ClickArea {
-                id: syncDotMA
-                objectName: "topbar-sync-dot-area"
-                label: I18n.t("topbar.syncing")
-                tip: I18n.t("topbar.syncing.tip")
-                onActivated: root.syncStatusRequested()
-            }
-        }
-
         // Search: 280px when there is room, down to 160 when there is not.
         Rectangle {
             id: searchBox
+            visible: root.searchShown
             Layout.fillWidth: true
             Layout.preferredWidth: 280
             Layout.maximumWidth: 280
@@ -614,24 +437,5 @@ Rectangle {
             }
         }
 
-        PillButton {
-            objectName: "topbar-new-task"
-            text: I18n.t("topbar.newTask")
-            // A quiet button (APP-198): the accent fill was the brightest
-            // spot on every screen. A filled button is only the one that
-            // confirms a dialog.
-            shortcutId: "task.new"
-            onClicked: root.newTaskRequested()
-        }
-        PillButton {
-            objectName: "topbar-right-panel"
-            text: root.rightPanelShown ? "▸" : "◂"
-            shortcutId: "panel.right"
-            onClicked: root.rightPanelToggleRequested()
-            ToolTip.visible: hovered || visualFocus
-            ToolTip.delay: 400
-            ToolTip.text: I18n.t(root.rightPanelShown ? "topbar.rightPanel.hide" : "topbar.rightPanel.show")
-                          + "  " + AppController.shortcutFor("panel.right")
-        }
     }
 }

@@ -1201,6 +1201,44 @@ void migrateTaskV11ToV12(QJsonObject& task, bool ru) {
   }
 }
 
+// heap 2 (APP-258): the old sidebar's Focus pair (Blocked, In review) jumped
+// to a board column; it is now two ordinary saved views at the top of "My
+// views", for every profile that has those columns and lacks such a view.
+void migrateFocusToSavedViewsV11ToV12(QJsonObject& root, bool ru) {
+  QJsonArray profiles = root.value(QStringLiteral("profiles")).toArray();
+  for(qsizetype i = 0; i < profiles.size(); ++i) {
+    QJsonObject p = profiles[i].toObject();
+    QStringList columns;
+    for(const auto& st : p.value(QStringLiteral("statuses")).toArray()) {
+      columns << st.toObject().value(QStringLiteral("id")).toString();
+    }
+    QJsonArray views = p.value(QStringLiteral("savedViews")).toArray();
+    QStringList queries;
+    QStringList ids;
+    for(const auto& v : views) {
+      queries << heap::savedviews::normalizeQuery(v.toObject().value(QStringLiteral("query")).toString()).toLower();
+      ids << v.toObject().value(QStringLiteral("id")).toString();
+    }
+    QJsonArray front;
+    for(const heap::savedviews::SavedView& v : {heap::savedviews::blockedView(ru), heap::savedviews::reviewView(ru)}) {
+      const QString column = v.query.section(QLatin1Char(':'), 1);
+      if(!columns.contains(column) || queries.contains(v.query) || ids.contains(v.id)) {
+        continue;
+      }
+      front.append(heap::savedviews::toJson(v));
+    }
+    if(front.isEmpty()) {
+      continue;
+    }
+    for(const auto& v : views) {
+      front.append(v);
+    }
+    p[QStringLiteral("savedViews")] = front;
+    profiles[i] = p;
+  }
+  root[QStringLiteral("profiles")] = profiles;
+}
+
 }  // namespace
 
 bool migrateState(QJsonObject& root, int fromVersion) {
@@ -1260,6 +1298,9 @@ bool migrateState(QJsonObject& root, int fromVersion) {
       }
       return out;
     });
+    if(root.value(QStringLiteral("profiles")).isArray()) {
+      migrateFocusToSavedViewsV11ToV12(root, ru);
+    }
   }
 
   root["schemaVersion"] = kSchemaVersion;

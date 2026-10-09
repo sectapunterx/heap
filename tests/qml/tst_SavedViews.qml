@@ -107,7 +107,7 @@ TestCase {
         mouseClick(it);
     }
     function railRow(i) {
-        const list = byName("rail-saved-list");
+        const list = byName("sidebar-views-list");
         verify(list !== null, "no saved view list in the rail");
         // A row added a moment ago is laid out on the next polish.
         tryVerify(function () {
@@ -320,7 +320,7 @@ TestCase {
         const menu = railMenu();
         verify(menu !== null);
         tryCompare(menu, "opened", true);
-        const dup = findMenuItem(menu, "rail-saved-duplicate");
+        const dup = findMenuItem(menu, "sidebar-view-duplicate");
         verify(dup !== null);
         dup.triggered();
         tryVerify(function () { return AppController.savedViews.length === 2; });
@@ -334,16 +334,16 @@ TestCase {
         keyClick(Qt.Key_Menu);
         tryCompare(menu, "opened", true);
         compare(menu.targetIndex, 1);
-        findMenuItem(menu, "rail-saved-delete").triggered();
+        findMenuItem(menu, "sidebar-view-delete").triggered();
         tryVerify(function () { return AppController.savedViews.length === 1; });
         compare(AppController.savedViews[0].id, a, "the copy went, the original stayed");
         if (menu.opened) menu.close();
     }
     function railMenu() {
-        let rail = byName("rail-saved-head");
+        let rail = byName("sidebar-views-head");
         while (rail && rail._savedViews === undefined) rail = rail.parent;
         const d = rail.data;
-        for (let i = 0; i < d.length; i++) if (d[i] && d[i].objectName === "rail-saved-menu") return d[i];
+        for (let i = 0; i < d.length; i++) if (d[i] && d[i].objectName === "sidebar-views-menu") return d[i];
         return null;
     }
     function findMenuItem(menu, name) {
@@ -381,18 +381,16 @@ TestCase {
     function test_rows_are_bookmarks_with_their_digit() {
         mkView("Marked", "svprobe");
         const row = railRow(0);
-        compare(row.glyph, "");
-        verify(String(row.iconSource).indexOf("heap-36-saved-view.svg") >= 0, String(row.iconSource));
-        compare(row.iconText, "1");
-        const t = findChild(row, "rail-icon-text");
-        verify(t !== null && t.visible && t.text === "1");
+        // Folded, the row is the bookmark with its Alt+N digit.
+        const t = findChild(row, "sidebar-view-digit");
+        verify(t !== null && t.text === "1");
     }
 
-    function test_empty_list_offers_saving() {
-        clickLaidOut("rail-saved-empty");
-        tryCompare(tc.host.nameDialog, "opened", true);
-        keyClick(Qt.Key_Escape);
-        tryCompare(tc.host.nameDialog, "opened", false);
+    // heap 2 (APP-258): nothing saved is one grey line, not a button.
+    function test_empty_list_says_where_views_come_from() {
+        const line = byName("sidebar-views-empty");
+        verify(line !== null && line.visible, "no empty line");
+        compare(line.text, I18n.t("sidebar.myViews.empty"));
     }
 
     function test_profile_switch_leaves_the_view() {

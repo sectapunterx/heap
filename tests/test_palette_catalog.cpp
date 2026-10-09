@@ -56,7 +56,7 @@ TEST_F(PaletteCatalogTest, MainRunsEveryCommandThePaletteOffers) {
   ASSERT_GE(from, 0);
   const QString body = main.mid(from, main.indexOf(QStringLiteral("default:"), from) - from);
   // runCommand routes whole families by prefix before its switch.
-  const QStringList routed = {QStringLiteral("view."), QStringLiteral("notes.")};
+  const QStringList routed = {QStringLiteral("view."), QStringLiteral("notes."), QStringLiteral("section.")};
   int offered = 0;
   for(const QVariant& v : app_->shortcuts()) {
     const QString id = v.toMap().value(QStringLiteral("id")).toString();

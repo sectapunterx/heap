@@ -114,8 +114,22 @@
 namespace {
 
 // Bumped when the *meaning* of settings.shortcuts changes. 1 stored every
-// binding; 2 stores only the ones the user rebound.
-constexpr int kShortcutsSchema = 2;
+// binding; 2 stores only the ones the user rebound; 3 is the heap 2 shell
+// (APP-258), where Ctrl+1..3 open the sidebar's sections and Ctrl+, Settings.
+constexpr int kShortcutsSchema = 3;
+
+// The heap 2 defaults that took a key from something else. A user who had
+// bound one of these keys to an action of their own keeps it: the new
+// default steps aside (APP-258).
+const QList<QPair<QString, QString>>& shellDefaults() {
+  static const QList<QPair<QString, QString>> kList = {
+      {QStringLiteral("section.today"), QStringLiteral("Ctrl+1")},
+      {QStringLiteral("section.tasks"), QStringLiteral("Ctrl+2")},
+      {QStringLiteral("section.knowledge"), QStringLiteral("Ctrl+3")},
+      {QStringLiteral("view.settings"), QStringLiteral("Ctrl+,")},
+  };
+  return kList;
+}
 
 // True when `sequence` is exactly what `id` was bound to before the view
 // shortcuts were renumbered to follow the side rail — i.e. a stored default
@@ -583,6 +597,18 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.welcome.replay.desc", {"Replay the first-run tour.", "Пройти тур первого запуска заново."}},
       {"shortcut.task.new.label", {"New task", "Новая задача"}},
       {"shortcut.task.new.desc", {"Create a ticket in the active profile.", "Создать тикет в активном профиле."}},
+      {"shortcut.section.today.label", {"Go to Today", "Перейти в «Сегодня»"}},
+      {"shortcut.section.today.desc", {"The day: meetings, what is due, what you are on.", "День: встречи, сроки, что в работе."}},
+      {"shortcut.section.tasks.label", {"Go to Tasks", "Перейти в «Задачи»"}},
+      {"shortcut.section.tasks.desc",
+       {"Board, list or calendar, on the lens you left.", "Доска, список или календарь — на том виде, где вы остановились."}},
+      {"shortcut.section.knowledge.label", {"Go to Knowledge", "Перейти в «Знания»"}},
+      {"shortcut.section.knowledge.desc", {"Notes and links.", "Заметки и ссылки."}},
+      {"shell.notice.keys",
+       {"lowkey has a new sidebar: Ctrl+1 Today, Ctrl+2 Tasks, Ctrl+3 Knowledge, Ctrl+, Settings. Blocked and In review are in My views.",
+        "В lowkey новый сайдбар: Ctrl+1 «Сегодня», Ctrl+2 «Задачи», Ctrl+3 «Знания», Ctrl+, «Настройки». «Заблокировано» и «На ревью» — в "
+        "«Моих видах»."}},
+      {"shell.notice.kept", {" Your own keys stay: %1.", " Ваши клавиши остались: %1."}},
       {"shortcut.view.board.label", {"Go to Board", "Перейти к доске"}},
       {"shortcut.view.board.desc", {"Kanban of the active profile.", "Канбан активного профиля."}},
       {"shortcut.view.timeline.label", {"Go to Timeline", "Перейти к ленте"}},
@@ -1337,8 +1363,32 @@ void AppController::setCurrentView(const QString& requested) {
     return;
   }
   m_currentView = v;
+  m_sectionViews.insert(heap::views::sectionOf(v), v);
   clearSelection();
   emit currentViewChanged();
+  scheduleSave();
+}
+
+QString AppController::currentSection() const {
+  return heap::views::sectionOf(m_currentView);
+}
+
+QString AppController::sectionView(const QString& section) const {
+  const QString last = m_sectionViews.value(section);
+  return heap::views::isKnown(last) && heap::views::sectionOf(last) == section ? last : heap::views::defaultViewOf(section);
+}
+
+void AppController::openSection(const QString& section) {
+  setCurrentView(sectionView(section));
+}
+
+void AppController::ackShellNotice() {
+  if(m_shellNotice.isEmpty()) {
+    return;
+  }
+  m_shellNotice.clear();
+  emit shellNoticeChanged();
+  // The new shortcuts schema is what keeps it from being said twice.
   scheduleSave();
 }
 
@@ -7091,6 +7141,7 @@ void AppController::resetToFirstRun() {
   m_theme = "dark";
   m_density = "comfy";
   m_currentView = "board";
+  m_sectionViews.clear();
   m_workdayStart = 9;
   m_workdayEnd = 19;
   m_crumbProject.clear();
@@ -10333,6 +10384,7 @@ const QStringList& knownSettingsKeys() {
                                    QStringLiteral("installId"),
                                    QStringLiteral("shortcuts"),
                                    QStringLiteral("shortcutsSchema"),
+                                   QStringLiteral("sectionViews"),
                                    QStringLiteral("app")};
   return keys;
 }
@@ -10531,6 +10583,15 @@ void AppController::saveStateNow() {
   s["density"] = m_density;
   s["language"] = pseudoLocale() ? m_languageUnderPseudo : m_language;
   s["currentView"] = m_currentView;
+  {
+    QJsonObject sv;
+    for(auto it = m_sectionViews.constBegin(); it != m_sectionViews.constEnd(); ++it) {
+      sv[it.key()] = it.value();
+    }
+    if(!sv.isEmpty()) {
+      s["sectionViews"] = sv;
+    }
+  }
   s["workdayStart"] = m_workdayStart;
   s["workdayEnd"] = m_workdayEnd;
   s["crumbProject"] = m_crumbProject;
@@ -10932,6 +10993,15 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
       m_currentView = heap::views::isKnown(v) ? v : QStringLiteral("board");
       emit currentViewChanged();
     }
+    m_sectionViews.clear();
+    const QJsonObject sv = s.value("sectionViews").toObject();
+    for(auto it = sv.constBegin(); it != sv.constEnd(); ++it) {
+      const QString v = it.value().toString();
+      if(heap::views::isKnown(v) && heap::views::sectionOf(v) == it.key()) {
+        m_sectionViews.insert(it.key(), v);
+      }
+    }
+    m_sectionViews.insert(heap::views::sectionOf(m_currentView), m_currentView);
     if(s.contains("workdayStart") || s.contains("workdayEnd")) {
       if(s.contains("workdayStart")) {
         m_workdayStart = s["workdayStart"].toInt(m_workdayStart);
@@ -10968,7 +11038,8 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
       // then is dropped — otherwise the view shortcuts, which have since been
       // renumbered to follow the side rail, would stay pinned to the old
       // layout and leave two views fighting over Ctrl+4.
-      const bool legacy = s.value("shortcutsSchema").toInt(1) < kShortcutsSchema;
+      const int storedSchema = s.value("shortcutsSchema").toInt(1);
+      const bool legacy = storedSchema < 2;
       QVariantMap overrides;
       const QJsonObject shortcutsObj = s["shortcuts"].toObject();
       for(auto it = shortcutsObj.constBegin(); it != shortcutsObj.constEnd(); ++it) {
@@ -10976,6 +11047,9 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
           continue;  // it was the default, not a choice
         }
         overrides.insert(it.key(), it.value().toString());
+      }
+      if(storedSchema < 3) {
+        applyShellShortcutMigration(overrides);
       }
       applyShortcutOverrides(overrides);
     }
@@ -12160,18 +12234,20 @@ void AppController::seedShortcutCatalog() {
   m_shortcuts.clear();
   add("palette.open", "Ctrl+K");
   add("task.new", "Ctrl+N");
-  // Ctrl+1..8 follow the side rail top to bottom. They used to skip Month
-  // entirely (it had no shortcut at all) and then run docs/notes/settings out
-  // of rail order, so the number a user counted off the rail opened a
-  // different view.
-  add("view.board", "Ctrl+1");
-  add("view.timeline", "Ctrl+2");
-  add("view.week", "Ctrl+3");
-  add("view.month", "Ctrl+4");
-  add("view.archive", "Ctrl+5");
-  add("view.docs", "Ctrl+6");
-  add("view.notes", "Ctrl+7");
-  add("view.settings", "Ctrl+8");
+  // heap 2 (APP-258): Ctrl+1..3 are the sidebar's sections top to bottom,
+  // Ctrl+, is Settings. The single views have no key of their own any more
+  // — they are lenses inside Tasks and Knowledge — but stay bindable.
+  add("section.today", "Ctrl+1");
+  add("section.tasks", "Ctrl+2");
+  add("section.knowledge", "Ctrl+3");
+  add("view.board", "");
+  add("view.timeline", "");
+  add("view.week", "");
+  add("view.month", "");
+  add("view.archive", "");
+  add("view.docs", "");
+  add("view.notes", "");
+  add("view.settings", "Ctrl+,");
   // Interface scale (APP-168) from the keyboard, as in a browser. Ctrl++,
   // Ctrl+Shift+= and the numpad keys are fixed aliases (kBuiltinKeys).
   add("zoom.in", "Ctrl+=");
@@ -12181,7 +12257,7 @@ void AppController::seedShortcutCatalog() {
   add("profile.prev", "Ctrl+[");
   add("profile.exportMd", "Ctrl+Shift+E");
   add("profile.weeklyReport", "Ctrl+Shift+W");
-  add("tweaks.open", "Ctrl+,");
+  add("tweaks.open", "");
   add("hotkeys.open", "Ctrl+/");
   add("undo", "Ctrl+Z");
   add("redo", "Ctrl+Shift+Z");
@@ -12317,6 +12393,27 @@ void AppController::onGlobalHotkey(int id) {
     default:
       break;
   }
+}
+
+void AppController::applyShellShortcutMigration(QVariantMap& overrides) {
+  // A returning user's own bindings are theirs: a key they gave an action
+  // keeps that action, and the new default it collides with steps aside.
+  QStringList kept;
+  for(const auto& [id, seq] : shellDefaults()) {
+    for(auto it = overrides.constBegin(); it != overrides.constEnd(); ++it) {
+      if(it.key() != id && normalizeSequence(it.value().toString()) == seq) {
+        if(!overrides.contains(id)) {
+          overrides.insert(id, QString());
+        }
+        kept << seq + QStringLiteral(" ") + tr_(QStringLiteral("shortcut.%1.label").arg(it.key()));
+      }
+    }
+  }
+  m_shellNotice = tr_(QStringLiteral("shell.notice.keys"));
+  if(!kept.isEmpty()) {
+    m_shellNotice += tr_(QStringLiteral("shell.notice.kept")).arg(kept.join(QStringLiteral(", ")));
+  }
+  emit shellNoticeChanged();
 }
 
 int AppController::shortcutIndexOf(const QString& id) const {

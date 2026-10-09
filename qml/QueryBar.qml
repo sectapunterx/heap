@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import TodoCpp
@@ -47,14 +48,15 @@ Item {
             Repeater {
                 model: root.conditions
                 delegate: PropertyChip {
+                    id: cond
                     required property var modelData
                     required property int index
                     small: true
                     removable: true
-                    key: modelData.key
-                    value: modelData.value
-                    onRemoved: root.conditionRemoved(index)
-                    onClicked: root.conditionClicked(index)
+                    key: cond.modelData.key
+                    value: cond.modelData.value
+                    onRemoved: root.conditionRemoved(cond.index)
+                    onClicked: root.conditionClicked(cond.index)
                 }
             }
             TextInput {

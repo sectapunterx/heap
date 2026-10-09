@@ -224,7 +224,8 @@ ApplicationWindow {
                                              || AppController.currentView === "month"
                                              || AppController.currentView === "settings"
     property bool _rightPanelInFoldedView: false
-    readonly property bool rightPanelShown: _narrow ? _rightPanelOnNarrow
+    readonly property bool rightPanelShown: AppController.currentView === "today" ? false
+                                          : _narrow ? _rightPanelOnNarrow
                                           : _panelFoldedView ? _rightPanelInFoldedView
                                           : _rightPanelWanted
     function toggleRightPanel() {
@@ -267,7 +268,8 @@ ApplicationWindow {
     // Left sidebar: labelled (expanded) or the 56px icon rail. The choice is
     // remembered; below _sideRailMinWidth it folds to the rail on its own
     // without overwriting what was chosen, same as the right panel.
-    readonly property int _sideRailMinWidth: 1280
+    // heap 2 (APP-258): the sidebar folds to its icons below ~1100px.
+    readonly property int _sideRailMinWidth: 1100
     property bool _sideRailWanted: _settingsObject().sideRailExpanded !== false
     property bool _sideRailOnNarrow: false
     readonly property bool sideRailExpanded: win.width < _sideRailMinWidth ? _sideRailOnNarrow : _sideRailWanted
@@ -398,6 +400,17 @@ ApplicationWindow {
             Qt.callLater(welcome.open);
         else
             Qt.callLater(win._maybeShowRecap);
+        // Coming from 0.7: say once what the new sidebar moved (APP-258).
+        if (AppController.shellNotice.length > 0)
+            Qt.callLater(win._showShellNotice);
+    }
+    function _showShellNotice() {
+        const msg = AppController.shellNotice;
+        if (msg.length === 0) return;
+        AppController.ackShellNotice();
+        toast.showWithAction(msg, I18n.t("shell.notice.action"), 15, function () {
+            rail.openHotkeys(rail.hotkeysAnchor);
+        });
     }
 
     // Close-to-tray: on platforms that have a tray icon (Windows/macOS via the
@@ -925,36 +938,19 @@ ApplicationWindow {
     GridLayout {
         anchors.fill: parent
         columns: 3
-        rows: 2
+        rows: 1
         columnSpacing: 0
         rowSpacing: 0
 
-        // Top bar spans all columns
-        TopBar {
-            id: topBar
-            // Spans the right panel's column only while it is shown: an
-            // empty spanned column still took its share of the spare width,
-            // so hiding the panel left the board at half the window.
-            Layout.row: 0; Layout.column: 0; Layout.columnSpan: win.rightPanelShown ? 3 : 2
-            Layout.fillWidth: true
-            searchText: win.searchText
-            // Typing reaches the views once the keys pause, not per key: a
-            // keystroke that swaps most rows on a 3k-task board rebinds every
-            // visible card (~100 ms), and a quick "priority:p0" used to pay
-            // that for each intermediate state, including "priority:p" — which
-            // matches nothing. The field itself updates instantly.
-            onSearchTextChanged: searchApply.restart()
-            Timer {
-                id: searchApply
-                interval: 120
-                onTriggered: win.searchText = topBar.searchText
-            }
-            onLeaveRequested: win.focusActiveView()
-            onSeenBeforeActivated: (hit) => win.openSeenBefore(hit)
+        // The heap 2 sidebar (APP-258).
+        Sidebar {
+            id: rail
+            Layout.row: 0; Layout.column: 0
+            Layout.fillHeight: true
+            expanded: win.sideRailExpanded
+            onToggleRequested: win.toggleSideRail()
             onNewTaskRequested: taskEditor.showFor(AppController.newTaskDraft("todo"))
             onSyncStatusRequested: win.runCommand("settings:integrations")
-            rightPanelShown: win.rightPanelShown
-            onRightPanelToggleRequested: win.toggleRightPanel()
             onNewProfileRequested: profileEditor.showCreate()
             onRenameProfileRequested: {
                 const list = AppController.profiles;
@@ -984,15 +980,7 @@ ApplicationWindow {
                 );
                 exportIcsDialog.open();
             }
-        }
 
-        // Side rail
-        SideRail {
-            id: rail
-            Layout.row: 1; Layout.column: 0
-            Layout.fillHeight: true
-            expanded: win.sideRailExpanded
-            onToggleRequested: win.toggleSideRail()
             onOpenTweaks:  (anchor) => win._togglePopover(tweaks, anchor)
             onOpenHotkeys: (anchor) => win._togglePopover(hotkeys, anchor)
             activeSavedViewId: savedViewsHost.activeView ? savedViewsHost.activeId : ""
@@ -1007,7 +995,7 @@ ApplicationWindow {
         Item {
             id: mainColumn
             objectName: "main-column"
-            Layout.row: 1; Layout.column: 1
+            Layout.row: 0; Layout.column: 1
             Layout.fillWidth: true
             Layout.fillHeight: true
             ColumnLayout {
@@ -1066,11 +1054,37 @@ ApplicationWindow {
                     }
                 }
 
+            TopBar {
+                id: topBar
+                Layout.fillWidth: true
+                // The tasks and knowledge sections; Today and Settings carry
+                // their own titles.
+                visible: section === "tasks" || section === "knowledge"
+                section: AppController.currentSection
+                view: AppController.currentView
+                onLensSelected: (id) => win.openLens(id)
+                searchText: win.searchText
+                // Typing reaches the views once the keys pause, not per key: a
+                // keystroke that swaps most rows on a 3k-task board rebinds every
+                // visible card (~100 ms), and a quick "priority:p0" used to pay
+                // that for each intermediate state, including "priority:p" — which
+                // matches nothing. The field itself updates instantly.
+                onSearchTextChanged: searchApply.restart()
+                Timer {
+                    id: searchApply
+                    interval: 120
+                    onTriggered: win.searchText = topBar.searchText
+                }
+                onLeaveRequested: win.focusActiveView()
+                onSeenBeforeActivated: (hit) => win.openSeenBefore(hit)
+            }
+
                 FilterBar {
                     Layout.fillWidth: true
                     // Archive brings its own header and its own counter, and the
                     // fall-through label used to caption it "Docs".
                     visible: AppController.currentView !== "docs"
+                          && AppController.currentView !== "today"
                           && AppController.currentView !== "notes"
                           && AppController.currentView !== "settings"
                           && AppController.currentView !== "archive"
@@ -1154,6 +1168,7 @@ ApplicationWindow {
                         anchors.fill: parent
                         visible: !boardLoader.visible && !notesLoader.visible && !docsLoader.visible
                         sourceComponent: {
+                            if (AppController.currentView === "today") return todayComp;
                             if (AppController.currentView === "timeline") return timelineComp;
                             if (AppController.currentView === "week") return weekComp;
                             if (AppController.currentView === "month") return monthComp;
@@ -1161,6 +1176,15 @@ ApplicationWindow {
                             if (AppController.currentView === "settings") return settingsComp;
                             return null;
                         }
+                    }
+
+                    // Today's day hands its clicks up here, where the editors are.
+                    Connections {
+                        target: viewLoader.item as TodayView
+                        ignoreUnknownSignals: true
+                        function onEventClicked(id, occurrence) { win.openEvent(id, occurrence); }
+                        function onCreateRequested(startHour, endHour, day) { win.createEventAt(startHour, endHour, day); }
+                        function onTaskClicked(id) { win.openTask(id); }
                     }
 
                     // First visit to one of the kept-alive views builds it.
@@ -1194,6 +1218,10 @@ ApplicationWindow {
                         onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
                         onCreateInStatus: (s) => taskEditor.showFor(AppController.newTaskDraft(s))
                     }
+                }
+                Component {
+                    id: todayComp
+                    TodayView {}
                 }
                 Component {
                     id: timelineComp
@@ -1292,7 +1320,7 @@ ApplicationWindow {
         Rectangle {
             objectName: "right-panel"
             visible: win.rightPanelShown
-            Layout.row: 1; Layout.column: 2
+            Layout.row: 0; Layout.column: 2
             Layout.preferredWidth: win.rightPanelWidth
             Layout.minimumWidth: win.rightPanelMinWidth
             Layout.maximumWidth: win.rightPanelMaxWidth
@@ -1600,7 +1628,38 @@ ApplicationWindow {
             if (v && v.revealItem) v.revealItem(item);
         });
     }
+    // The day's hands, for Today and the day panel.
+    function openEvent(id, occurrence) {
+        if (occurrence) eventEditor.showForOccurrence(occurrence);
+        else eventEditor.showForId(id);
+    }
+    function createEventAt(startHour, endHour, day) {
+        const draft = AppController.newEventDraft(startHour, day);
+        draft.end = endHour;
+        eventEditor.showForDraft(draft);
+    }
+    function openTask(id) {
+        taskEditor.showFor(Object.assign({}, AppController.taskById(id)));
+    }
+    // The calendar lens opens on the calendar last used (week or month).
+    property string _calendarView: "week"
+    Connections {
+        target: AppController
+        function onCurrentViewChanged() {
+            const v = AppController.currentView;
+            if (v === "week" || v === "month") win._calendarView = v;
+        }
+    }
+    function openLens(id) {
+        if (id === "list") AppController.currentView = "timeline";
+        else if (id === "calendar") AppController.currentView = win._calendarView;
+        else AppController.currentView = id;
+    }
     function runCommand(id) {
+        if (id.indexOf("section.") === 0) {
+            AppController.openSection(id.slice(8));
+            return;
+        }
         if (id.indexOf("settings:") === 0) {
             const section = id.slice(9);
             AppController.currentView = "settings";
@@ -1784,6 +1843,24 @@ ApplicationWindow {
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: quickCaptureNotes.open()
+    }
+    Shortcut {
+        sequence: win._kbd("section.today")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: AppController.openSection("today")
+    }
+    Shortcut {
+        sequence: win._kbd("section.tasks")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: AppController.openSection("tasks")
+    }
+    Shortcut {
+        sequence: win._kbd("section.knowledge")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: AppController.openSection("knowledge")
     }
     Shortcut {
         sequence: _kbd("view.board")

@@ -446,8 +446,8 @@ TEST_F(AppControllerTest, ResetShortcutRestoresAndSwaps) {
 }
 
 TEST_F(AppControllerTest, ResetShortcutAlreadyDefaultNoop) {
-  app_->resetShortcut(QStringLiteral("view.board"));
-  EXPECT_EQ(app_->shortcutFor(QStringLiteral("view.board")), QString("Ctrl+1"));
+  app_->resetShortcut(QStringLiteral("section.tasks"));
+  EXPECT_EQ(app_->shortcutFor(QStringLiteral("section.tasks")), QString("Ctrl+2"));
   app_->resetShortcut(QStringLiteral("unknown.id"));  // no crash
 }
 

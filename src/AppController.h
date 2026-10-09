@@ -112,6 +112,11 @@ class AppController : public QObject {
   Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)
   Q_PROPERTY(bool pseudoLocale READ pseudoLocale CONSTANT)
   Q_PROPERTY(QString currentView READ currentView WRITE setCurrentView NOTIFY currentViewChanged)
+  // The sidebar place the current view belongs to (APP-258).
+  Q_PROPERTY(QString currentSection READ currentSection NOTIFY currentViewChanged)
+  // What changed in the shell for someone coming from 0.7 (APP-258): said
+  // once, then cleared by ackShellNotice(). Empty for a new install.
+  Q_PROPERTY(QString shellNotice READ shellNotice NOTIFY shellNoticeChanged)
   Q_PROPERTY(QString focusedStatus READ focusedStatus NOTIFY focusedStatusChanged)
 
   Q_PROPERTY(int workdayStart READ workdayStart WRITE setWorkdayStart NOTIFY workdayChanged)
@@ -326,6 +331,20 @@ class AppController : public QObject {
 
   // Jump the Board to a specific status column (sidebar Blocked / Code Review).
   Q_INVOKABLE void focusStatusColumn(const QString& statusId);
+  QString currentSection() const;
+  // Opens a section on the view it was last left on.
+  Q_INVOKABLE void openSection(const QString& section);
+  // The view a section would open on now.
+  Q_INVOKABLE QString sectionView(const QString& section) const;
+
+  QString shellNotice() const {
+    return m_shellNotice;
+  }
+
+  Q_INVOKABLE void ackShellNotice();
+  // The shortcut catalog moved to the heap 2 shell (APP-258); called for a
+  // settings file written before it.
+  void applyShellShortcutMigration(QVariantMap& overrides);
 
   int workdayStart() const {
     return m_workdayStart;
@@ -1531,6 +1550,7 @@ class AppController : public QObject {
   void densityChanged();
   void languageChanged();
   void currentViewChanged();
+  void shellNoticeChanged();
   void focusedStatusChanged();
   void workdayChanged();
   void crumbProjectChanged();
@@ -1686,6 +1706,9 @@ class AppController : public QObject {
   QString m_density = "comfy";
   QString m_language = "en";
   QString m_currentView = "board";
+  // section -> the view it was last left on (APP-258).
+  QHash<QString, QString> m_sectionViews;
+  QString m_shellNotice;
   QString m_focusedStatus;
   int m_workdayStart = 9;
   int m_workdayEnd = 19;

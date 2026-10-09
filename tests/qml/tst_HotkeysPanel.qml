@@ -142,19 +142,19 @@ TestCase {
     // recording binds nothing.
     function test_enter_on_chip_starts_capture_not_unbind() {
         const panel = openPanel();
-        const before = AppController.shortcutFor("view.board");
+        const before = AppController.shortcutFor("section.tasks");
         verify(before.length > 0);
-        tryVerify(function () { return field(panel, "view.board") !== null; }, 2000, "no chip for view.board");
-        const f = field(panel, "view.board");
+        tryVerify(function () { return field(panel, "section.tasks") !== null; }, 2000, "no chip for section.tasks");
+        const f = field(panel, "section.tasks");
         f.forceActiveFocus();
         keyClick(Qt.Key_X);
         compare(panel.capturingId, "", "a letter must not start a capture");
         keyClick(Qt.Key_Return);
-        compare(AppController.shortcutFor("view.board"), before, "Enter unbound the action");
-        compare(panel.capturingId, "view.board", "Enter must start recording");
+        compare(AppController.shortcutFor("section.tasks"), before, "Enter unbound the action");
+        compare(panel.capturingId, "section.tasks", "Enter must start recording");
         keyClick(Qt.Key_Escape);
         compare(panel.capturingId, "");
-        compare(AppController.shortcutFor("view.board"), before);
+        compare(AppController.shortcutFor("section.tasks"), before);
         panel.close();
     }
 

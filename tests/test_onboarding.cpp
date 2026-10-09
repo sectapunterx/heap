@@ -204,8 +204,8 @@ TEST_F(OnboardingTest, ThirdMouseUseSuggestsTheKeyOnceEver) {
     a.noteMouseAction(QStringLiteral("palette.open"));
     EXPECT_EQ(spy.count(), 1);
     // Two uses of another action, carried over the restart.
-    a.noteMouseAction(QStringLiteral("view.week"));
-    a.noteMouseAction(QStringLiteral("view.week"));
+    a.noteMouseAction(QStringLiteral("section.today"));
+    a.noteMouseAction(QStringLiteral("section.today"));
     a.flushSave();
   }
   AppController b;
@@ -214,7 +214,7 @@ TEST_F(OnboardingTest, ThirdMouseUseSuggestsTheKeyOnceEver) {
     b.noteMouseAction(QStringLiteral("palette.open"));
   }
   EXPECT_EQ(spy.count(), 0) << "already suggested before the restart";
-  b.noteMouseAction(QStringLiteral("view.week"));
+  b.noteMouseAction(QStringLiteral("section.today"));
   EXPECT_EQ(spy.count(), 1) << "the third use, counting the two before the restart";
 }
 

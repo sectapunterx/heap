@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls
 import TodoCpp
 
 // "key value" chip (APP-259): a task property in the document header, a
