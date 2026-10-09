@@ -594,7 +594,9 @@ TEST_F(StorageSafety, ADebouncedSaveOfTenThousandTasksDoesNotBlockTheEventLoop) 
   qint64 worst = 0;
   // Long enough for the debounce plus a few full saves on this machine, so a
   // loaded runner (ASan, parallel builds) is not read as "never saved".
-  const qint64 watchMs = std::clamp<qint64>(1500 + 6 * fullMs, 1500, 10000);
+  // The loop stops as soon as the file has it, so a long cap costs nothing
+  // on a fast machine.
+  const qint64 watchMs = 10000;
   bool savedInTheWindow = false;
   while(window.elapsed() < watchMs && !savedInTheWindow) {
     QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
