@@ -348,6 +348,7 @@ qt_add_qml_module(heap_core
         qml/CursorBar.qml
         qml/SectionHeader.qml
         qml/MeetingIcon.qml
+        qml/Icon.qml
         qml/LensTabs.qml
         qml/QueryBar.qml
         qml/Pseudo.js
