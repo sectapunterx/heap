@@ -166,18 +166,12 @@ TestCase {
         AppController.saveEvent(ev);
         try {
             const wv = make('import TodoCpp; WeekView { width: 720; height: 800 }');
-            let keys = [];
-            tryVerify(() => (keys = findAll(wv, "week-due-key", [])).length > 0, 3000, "no due chip");
-            for (const k of keys) {
-                const row = k.parent;
-                let title = null;
-                for (let i = 0; i < row.children.length; i++)
-                    if (row.children[i].objectName === "week-due-title") title = row.children[i];
-                // The key shows only while the title keeps its room.
-                verify(!k.visible || title.width >= Theme.px(64) - 1,
-                       "chip title squeezed to " + title.width + " beside its key");
+            // The deadline row is a flag and the title (DG-041): no key
+            // to squeeze it.
+            let dues = [];
+            tryVerify(() => (dues = findAll(wv, "week-due-title", [])).length > 0, 3000, "no due chip");
+            for (const title of dues)
                 verify(title.width > Theme.px(24), "chip title is gone: " + title.width);
-            }
             let titles = [];
             tryVerify(() => (titles = findAll(wv, "week-event-title", [])).some(x => x.text === ev.title), 3000);
             const et = titles.find(x => x.text === ev.title);

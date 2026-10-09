@@ -1091,8 +1091,13 @@ ApplicationWindow {
                     // view (its chip, update, save as new): their one setting
                     // (sort, grouping) sits beside the lens tabs, the archive
                     // is the query's "is:archived", saving is the header's.
+                    // The calendar zooms too (DG-040): the grid starts right
+                    // under the header; the archive is "is:archived" there.
                     readonly property bool _lensView: AppController.currentView === "board"
                                                       || AppController.currentView === "list"
+                                                      || AppController.currentView === "day"
+                                                      || AppController.currentView === "week"
+                                                      || AppController.currentView === "month"
                     visible: (!_lensView || !!savedViewsHost.activeView)
                           && AppController.currentView !== "today"
                           && AppController.currentView !== "notes"
@@ -1290,7 +1295,7 @@ ApplicationWindow {
                         zoom: AppController.currentView
                         searchText: win.searchText
                         prioritiesFilter: win.prioritiesFilter
-                        showArchived: win.showArchived
+                        showArchived: win.tasksShowArchived
                         onTaskClicked: (id) => win.showTask(AppController.taskById(id))
                         onEventClicked: (id, occurrence) => occurrence ? eventEditor.showForOccurrence(occurrence) : eventEditor.showForId(id)
                         // An empty slot or a dragged stretch opens the editor on
@@ -1302,6 +1307,7 @@ ApplicationWindow {
                             AppController.selectedDate = day;
                             AppController.currentView = "day";
                         }
+                        onTaskCaptureRequested: (text) => quickCapture.openWithText(text)
                     }
                 }
                 Component {

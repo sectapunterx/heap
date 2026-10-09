@@ -99,7 +99,15 @@ Item {
     // Anchor month + visible range. Declarative: recompute on selectedDate /
     // mode / weeksCount / Theme.weekStart changes.
     readonly property date anchorDate: AppController.selectedDate
-    readonly property int rows: mode === "month" ? 6 : Math.max(1, Math.min(8, weeksCount))
+    // As many weeks as the month touches: five for October 2026 (DG-050),
+    // never trailing a week of next month's days.
+    readonly property int rows: {
+        if (mode !== "month") return Math.max(1, Math.min(8, weeksCount));
+        const first = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1);
+        const lead = Math.round((first - startOfWeek(first)) / 86400000);
+        const len = new Date(anchorDate.getFullYear(), anchorDate.getMonth() + 1, 0).getDate();
+        return Math.ceil((lead + len) / 7);
+    }
     readonly property date gridStart: {
         if (mode === "month")
             return startOfWeek(new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1));
@@ -564,19 +572,28 @@ Item {
         // ── Weekday header ────────────────────────────────────────
         RowLayout {
             Layout.fillWidth: true
-            spacing: Theme.spSm
+            Layout.bottomMargin: -Theme.spLg
+            spacing: 0
             Repeater {
                 model: 7
                 delegate: Text {
                     required property int index
                     Layout.fillWidth: true
-                    horizontalAlignment: Text.AlignHCenter
+                    Layout.preferredWidth: 1
+                    leftPadding: Theme.spMd
+                    topPadding: Theme.spSm
+                    bottomPadding: Theme.spSm
+                    horizontalAlignment: Text.AlignLeft
                     // App language, not the system locale: MonthView used to say
                     // "Mon" while the MiniWeek right next to it said "ПН".
                     text: I18n.dayName(new Date(root.gridStart.getFullYear(),
                                                 root.gridStart.getMonth(),
                                                 root.gridStart.getDate() + index).getDay())
-                    color: Theme.textDim; font.pixelSize: Theme.fsXs; font.weight: Theme.fwTitle
+                    color: Theme.textDim; font.pixelSize: Theme.fsXs; font.weight: Theme.fwBody
+                    // The grid's hairlines run through the header too.
+                    Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Theme.border }
+                    Rectangle { visible: parent.index === 0; anchors.left: parent.left; width: 1; height: parent.height; color: Theme.border }
+                    Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: Theme.border }
                 }
             }
         }
@@ -620,8 +637,9 @@ Item {
                     event.accepted = true;
                 }
             }
-            rowSpacing: Theme.spSm
-            columnSpacing: Theme.spSm
+            // A flat hairline grid (DG-050, X-Oth-DayMonth): no gaps, no cards.
+            rowSpacing: 0
+            columnSpacing: 0
             Repeater {
                 id: cellRep
                 // By position, not by the cells array: a new array on every
@@ -641,17 +659,29 @@ Item {
                     readonly property bool _sel: root.isSameDay(dayCell.cell.date, AppController.selectedDate)
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    radius: Theme.radius
-                    // Today: its number in the accent and a hairline of it,
-                    // not a 2px white frame, the brightest thing on the month
-                    // (APP-198). The selected day is told by a soft accent
-                    // fill, so today-and-selected is not a frame either.
-                    color: _sel ? Qt.tint(_inMonth ? Theme.panel : Theme.panel2, Theme.accentSoft)
-                         : _inMonth ? Theme.panel : Theme.panel2
-                    opacity: _inMonth ? 1.0 : 0.55
+                    Layout.preferredWidth: 1
+                    Layout.preferredHeight: 1
+                    // Today is tinted; bold adds the orange line on top.
+                    color: _today ? Theme.withAlpha(Theme.text, 0.025) : "transparent"
                     readonly property bool _dropHere: root.drag !== null && root.dropIndex === dayCell.index
-                    border.color: _dropHere || _sel || _today ? Theme.accent : Theme.border
-                    border.width: _dropHere ? 2 : 1
+                    // Hairlines: right and bottom per cell, left and top on
+                    // the first column and row.
+                    Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Theme.border }
+                    Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.border }
+                    Rectangle { visible: dayCell.index % 7 === 0; width: 1; height: parent.height; color: Theme.border }
+                    Rectangle {
+                        objectName: "month-today-bar"
+                        visible: dayCell._today && Style.fills
+                        width: parent.width; height: 2
+                        color: Theme.signalNow
+                    }
+                    Rectangle {
+                        visible: dayCell._dropHere
+                        anchors.fill: parent
+                        color: "transparent"
+                        border.color: Theme.accent
+                        border.width: 2
+                    }
                     Accessible.role: Accessible.Cell
                     Accessible.name: root.dayLabel(dayCell.cell.date)
                     Accessible.selected: _sel
@@ -672,7 +702,7 @@ Item {
                     // cell, and the clip took the "+N" - the busiest day was
                     // the one that said nothing about what it hid (VISU-12).
                     // When not everything fits, a line is kept for "+N".
-                    readonly property int _rowH: 20 + Theme.sp2xs
+                    readonly property int _rowH: Theme.px(18) + Theme.sp2xs
                     readonly property int _avail: height - 2 * Theme.spXs - dayNum.implicitHeight - Theme.sp2xs
                     readonly property int _total: cell.tasks.length + cell.events.length
                     readonly property int _slots: Math.min(root.maxPerDay < _total ? root.maxPerDay : _total,
@@ -714,16 +744,24 @@ Item {
 
                     ColumnLayout {
                         anchors.fill: parent
-                        anchors.margins: Theme.spXs
+                        anchors.leftMargin: Theme.spMd
+                        anchors.rightMargin: Theme.spMd
+                        anchors.topMargin: Theme.spSm
+                        anchors.bottomMargin: Theme.spXs
                         spacing: Theme.sp2xs
 
-                        // Day number.
+                        // Day number: grey, today bright (orange in bold),
+                        // the neighbouring months faint.
                         Text {
                             id: dayNum
+                            objectName: "month-day-number"
                             text: cell.date.getDate()
-                            color: _today ? Theme.accentStrong : Theme.text
+                            color: _today ? (Style.urgency ? Theme.signalNow : Theme.text)
+                                 : _inMonth ? Theme.textDim : Theme.withAlpha(Theme.textDim, 0.4)
+                            font.family: Theme.fontUi
+                            font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsSm
-                            font.weight: _today ? Theme.fwTitle : Theme.fwBody
+                            font.weight: _today ? Theme.fwHeading : Theme.fwBody
                         }
 
                         // Chips — first few tasks, then events, then overflow.
@@ -740,16 +778,32 @@ Item {
                                     visible: root.cursorVisible && dayCell._sel && root.cursorKey === "task:" + dayCell.cell.tasks[taskChip.index].id
                                 }
                                 Layout.fillWidth: true
-                                implicitHeight: 20
+                                implicitHeight: Theme.px(18)
                                 radius: Theme.radiusXs
-                                // A line with its sign, not a coloured box,
-                                // in the lens: ⚑ a deadline, ○ a planned day.
-                                color: root.chrome ? Theme.withAlpha(root.priColor(cell.tasks[index].priority), 0.22) : "transparent"
+                                // A line with its sign, not a coloured box
+                                // (DG-050): a flag for a deadline, the status
+                                // ring for a planned day.
+                                color: chipMA.containsMouse ? Theme.panel2 : "transparent"
                                 Row {
-                                    anchors.fill: parent; anchors.leftMargin: Theme.spXs; anchors.rightMargin: Theme.spXs; spacing: Theme.spXs
-                                    // Priority by shape too (APP-185).
-                                    Text { id: priMark; objectName: "month-priority"; anchors.verticalCenter: parent.verticalCenter; text: Theme.priorityMark(cell.tasks[index].priority); color: root.priColor(cell.tasks[index].priority); font.pixelSize: Theme.fsXs }
-                                    Text { anchors.verticalCenter: parent.verticalCenter; width: parent.width - priMark.width - Theme.spXs; elide: Text.ElideRight; text: (cell.tasks[index].scheduled ? (root.chrome ? "◷ " : "○ ") : (root.chrome ? "" : "⚑ ")) + cell.tasks[index].title; color: Theme.text; font.pixelSize: Theme.fsXs }
+                                    anchors.fill: parent; spacing: Theme.spXs
+                                    Item {
+                                        id: taskSign
+                                        width: Theme.px(10); height: parent.height
+                                        Icon {
+                                            anchors.centerIn: parent
+                                            visible: !dayCell.cell.tasks[taskChip.index].scheduled
+                                            name: "flag"
+                                            size: Theme.px(10)
+                                            color: Theme.textDim
+                                        }
+                                        StatusRing {
+                                            anchors.centerIn: parent
+                                            visible: !!dayCell.cell.tasks[taskChip.index].scheduled
+                                            category: AppController.statusCategory(dayCell.cell.tasks[taskChip.index].status || "")
+                                            size: Theme.px(9)
+                                        }
+                                    }
+                                    Text { anchors.verticalCenter: parent.verticalCenter; width: parent.width - taskSign.width - Theme.spXs; elide: Text.ElideRight; text: dayCell.cell.tasks[taskChip.index].title; color: Theme.textMuted; font.family: Theme.fontUi; font.pixelSize: Theme.fsXs }
                                 }
                                 readonly property var task: dayCell.cell.tasks[taskChip.index]
                                 objectName: "month-task-" + taskChip.task.id
@@ -820,22 +874,30 @@ Item {
                                              && root.cursorKey.indexOf("event:" + dayCell.cell.events[eventChip.index].id) === 0
                                 }
                                 Layout.fillWidth: true
-                                implicitHeight: 20
+                                implicitHeight: Theme.px(18)
                                 radius: Theme.radiusXs
-                                color: root.chrome ? Theme.accentSoft : "transparent"
+                                color: evCA.hovered ? Theme.panel2 : "transparent"
+                                // A meeting is the calendar glyph and its
+                                // title (DG-050); the time is in the tooltip.
                                 Row {
-                                    anchors.fill: parent; anchors.leftMargin: Theme.spXs; anchors.rightMargin: Theme.spXs; spacing: Theme.spXs
-                                    Rectangle { width: 4; height: 4; radius: 2; anchors.verticalCenter: parent.verticalCenter; color: Theme.accent }
+                                    anchors.fill: parent; spacing: Theme.spXs
+                                    Item {
+                                        id: evSign
+                                        width: Theme.px(10); height: parent.height
+                                        MeetingIcon { anchors.centerIn: parent; size: Theme.px(10); ink: Theme.textDim }
+                                    }
                                     Text {
-                                        anchors.verticalCenter: parent.verticalCenter; width: parent.width - 8; elide: Text.ElideRight
-                                        // The time first: a month cell is read as "what is when".
-                                        text: (cell.events[index].allDay ? "" : Theme.fmtHour(cell.events[index].start) + " ") + cell.events[index].title
-                                        color: Theme.text; font.pixelSize: Theme.fsXs
+                                        anchors.verticalCenter: parent.verticalCenter; width: parent.width - evSign.width - Theme.spXs; elide: Text.ElideRight
+                                        text: dayCell.cell.events[eventChip.index].title
+                                        color: Theme.textMuted; font.family: Theme.fontUi; font.pixelSize: Theme.fsXs
                                     }
                                 }
                                 ClickArea {
+                                    id: evCA
                                     label: dayCell.cell.events[eventChip.index].title
-                                    showTip: false
+                                    tip: dayCell.cell.events[eventChip.index].allDay ? ""
+                                         : Theme.fmtHour(dayCell.cell.events[eventChip.index].start) + "–" + Theme.fmtHour(dayCell.cell.events[eventChip.index].end)
+                                    showTip: tip.length > 0
                                     onActivated: root.eventClicked(dayCell.cell.events[eventChip.index].id, dayCell.cell.events[eventChip.index])
                                 }
                             }
@@ -849,7 +911,8 @@ Item {
                             readonly property int _extra: dayCell._total - dayCell._tasksShown - dayCell._eventsShown
                             visible: _extra > 0
                             text: root.chrome ? "+" + _extra : I18n.t("cal.moreN").arg(_extra)
-                            color: moreMA.hovered ? Theme.accentStrong : Theme.textDim
+                            color: moreMA.hovered ? Theme.text : Theme.textDim
+                            font.family: Theme.fontUi
                             font.pixelSize: Theme.fsXs
                             ClickArea {
                                 id: moreMA
