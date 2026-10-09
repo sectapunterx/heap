@@ -15,8 +15,9 @@ import TodoCpp
 //   Timers running            1
 //     APP-15  Cache tuning           since 14:00
 //
-// It only shows: nothing is moved, rescheduled or stopped. A task in the list
-// opens in the editor.
+// Nothing is moved, rescheduled or stopped on its own. A leftover has its
+// buttons — tomorrow, the next free window, someday, no date (APP-248) — for
+// the person to press or ignore. A task in the list opens in the editor.
 Dialog {
     id: root
     objectName: "end-of-day"
@@ -38,6 +39,13 @@ Dialog {
     readonly property bool empty: root.sections.every(s => s.rows.length === 0)
 
     signal taskActivated(string id)
+
+    // A leftover carried on by hand; the list is read again, so it leaves
+    // the "carries over" section once it has a new day.
+    function carry(id, mode) {
+        AppController.carryTasks([id], mode);
+        root.summary = AppController.endOfDaySummary();
+    }
 
     function showNow() {
         root.summary = AppController.endOfDaySummary();
@@ -97,6 +105,12 @@ Dialog {
                                 font.features: Theme.tabularNums
                             }
                         }
+                        Text {
+                            visible: sec.modelData.key === "carryOver"
+                            text: I18n.t("eod.carryHint")
+                            color: Theme.textDim
+                            font.pixelSize: Theme.fsXs
+                        }
 
                         Repeater {
                             model: sec.modelData.rows
@@ -105,12 +119,17 @@ Dialog {
                                 required property var modelData
                                 objectName: "end-of-day-task-" + modelData.id
                                 Layout.fillWidth: true
+                                readonly property bool carry: sec.modelData.key === "carryOver"
                                 implicitHeight: taskLine.implicitHeight + Theme.spSm * 2
+                                                + (taskRow.carry ? carryRow.implicitHeight + Theme.spXs : 0)
                                 radius: Theme.radiusMd
                                 color: taskMA.hovered ? Theme.panel3 : "transparent"
                                 RowLayout {
                                     id: taskLine
-                                    anchors.fill: parent
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    anchors.topMargin: Theme.spSm
                                     anchors.leftMargin: Theme.spXl
                                     anchors.rightMargin: Theme.spMd
                                     spacing: Theme.spMd
@@ -139,8 +158,38 @@ Dialog {
                                         font.features: Theme.tabularNums
                                     }
                                 }
+                                // What to do with a leftover is the person's call
+                                // (APP-248): each button acts on this task only,
+                                // with an undo toast; leaving it is fine too.
+                                Flow {
+                                    id: carryRow
+                                    objectName: "end-of-day-carry-" + taskRow.modelData.id
+                                    visible: taskRow.carry
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.top: taskLine.bottom
+                                    anchors.topMargin: Theme.spXs
+                                    anchors.leftMargin: Theme.spXl
+                                    spacing: Theme.spXs
+                                    z: 2
+                                    Repeater {
+                                        model: taskRow.carry ? ["tomorrow", "window", "someday", "clear"] : []
+                                        delegate: PillButton {
+                                            required property string modelData
+                                            objectName: "end-of-day-carry-" + modelData
+                                            text: I18n.t("carry.btn." + modelData)
+                                            onClicked: root.carry(taskRow.modelData.id, modelData)
+                                        }
+                                    }
+                                }
                                 ClickArea {
                                     id: taskMA
+                                    // Over the line, not the carry buttons under it.
+                                    anchors.fill: undefined
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    height: taskLine.implicitHeight + Theme.spSm * 2
                                     objectName: "end-of-day-task-area-" + taskRow.modelData.id
                                     label: taskRow.modelData.id + " " + taskRow.modelData.title
                                     showTip: false

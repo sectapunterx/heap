@@ -39,6 +39,14 @@ Item {
     // every occurrence of a series carries the master's id and only the
     // occurrence map says which date was clicked.
     signal eventClicked(string id, var occurrence)
+    // Inside the calendar lens (APP-264): the header carries the range, the
+    // tray the tasks without a date, and "+N more" zooms into the day.
+    property bool chrome: true
+    property string armedTaskId: ""
+    signal armedUsed()
+    signal dayRequested(date day)
+    // Heap 2 month: at most three things a day, then "+N more" (APP-264).
+    readonly property int maxPerDay: root.chrome ? 99 : 3
 
     // View state.
     property string mode: "month"   // "month" | "weeks"
@@ -310,6 +318,7 @@ Item {
         // ── Header ────────────────────────────────────────────────
         RowLayout {
             Layout.fillWidth: true
+            visible: root.chrome
             spacing: Theme.spMd
 
             // prev / next
@@ -519,9 +528,10 @@ Item {
                     readonly property int _rowH: 20 + Theme.sp2xs
                     readonly property int _avail: height - 2 * Theme.spXs - dayNum.implicitHeight - Theme.sp2xs
                     readonly property int _total: cell.tasks.length + cell.events.length
-                    readonly property int _slots: _total * _rowH <= _avail
+                    readonly property int _slots: Math.min(root.maxPerDay < _total ? root.maxPerDay : _total,
+                        _total * _rowH <= _avail
                         ? _total
-                        : Math.max(0, Math.floor((_avail - moreText.implicitHeight - Theme.sp2xs) / _rowH))
+                        : Math.max(0, Math.floor((_avail - moreText.implicitHeight - Theme.sp2xs) / _rowH)))
                     // Events keep up to half the slots, the tasks take the rest
                     // (3 + 2 on a cell with room for five, as before).
                     readonly property int _eventsShown: Math.min(cell.events.length,
@@ -533,7 +543,26 @@ Item {
                     MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: AppController.selectedDate = dayCell.cell.date
+                        onClicked: {
+                            // A task picked in the tray is planned for this day.
+                            if (root.armedTaskId) {
+                                AppController.rescheduleTask(root.armedTaskId, "scheduled", dayCell.cell.date, false);
+                                root.armedUsed();
+                                return;
+                            }
+                            AppController.selectedDate = dayCell.cell.date;
+                        }
+                    }
+                    // A task dragged from the tray lands on the day, as a date.
+                    DropArea {
+                        objectName: "month-drop-" + dayCell.index
+                        anchors.fill: parent
+                        onDropped: (drop) => {
+                            const src = drop.source;
+                            if (!src || !src.taskId) return;
+                            AppController.rescheduleTask(String(src.taskId), "scheduled", dayCell.cell.date, false);
+                            drop.accept(Qt.MoveAction);
+                        }
                     }
 
                     ColumnLayout {
@@ -562,12 +591,14 @@ Item {
                                 Layout.fillWidth: true
                                 implicitHeight: 20
                                 radius: Theme.radiusXs
-                                color: Theme.withAlpha(root.priColor(cell.tasks[index].priority), 0.22)
+                                // A line with its sign, not a coloured box,
+                                // in the lens: ⚑ a deadline, ○ a planned day.
+                                color: root.chrome ? Theme.withAlpha(root.priColor(cell.tasks[index].priority), 0.22) : "transparent"
                                 Row {
                                     anchors.fill: parent; anchors.leftMargin: Theme.spXs; anchors.rightMargin: Theme.spXs; spacing: Theme.spXs
                                     // Priority by shape too (APP-185).
                                     Text { id: priMark; objectName: "month-priority"; anchors.verticalCenter: parent.verticalCenter; text: Theme.priorityMark(cell.tasks[index].priority); color: root.priColor(cell.tasks[index].priority); font.pixelSize: Theme.fsXs }
-                                    Text { anchors.verticalCenter: parent.verticalCenter; width: parent.width - priMark.width - Theme.spXs; elide: Text.ElideRight; text: (cell.tasks[index].scheduled ? "◷ " : "") + cell.tasks[index].title; color: Theme.text; font.pixelSize: Theme.fsXs }
+                                    Text { anchors.verticalCenter: parent.verticalCenter; width: parent.width - priMark.width - Theme.spXs; elide: Text.ElideRight; text: (cell.tasks[index].scheduled ? (root.chrome ? "◷ " : "○ ") : (root.chrome ? "" : "⚑ ")) + cell.tasks[index].title; color: Theme.text; font.pixelSize: Theme.fsXs }
                                 }
                                 readonly property var task: dayCell.cell.tasks[taskChip.index]
                                 objectName: "month-task-" + taskChip.task.id
@@ -635,7 +666,7 @@ Item {
                                 Layout.fillWidth: true
                                 implicitHeight: 20
                                 radius: Theme.radiusXs
-                                color: Theme.accentSoft
+                                color: root.chrome ? Theme.accentSoft : "transparent"
                                 Row {
                                     anchors.fill: parent; anchors.leftMargin: Theme.spXs; anchors.rightMargin: Theme.spXs; spacing: Theme.spXs
                                     Rectangle { width: 4; height: 4; radius: 2; anchors.verticalCenter: parent.verticalCenter; color: Theme.accent }
@@ -661,13 +692,16 @@ Item {
                             objectName: "month-more"
                             readonly property int _extra: dayCell._total - dayCell._tasksShown - dayCell._eventsShown
                             visible: _extra > 0
-                            text: "+" + _extra
+                            text: root.chrome ? "+" + _extra : I18n.t("cal.moreN").arg(_extra)
                             color: moreMA.hovered ? Theme.accentStrong : Theme.textDim
                             font.pixelSize: Theme.fsXs
                             ClickArea {
                                 id: moreMA
                                 label: I18n.t("cal.moreOnDay").arg(moreText._extra)
-                                onActivated: AppController.selectedDate = dayCell.cell.date
+                                onActivated: {
+                                    AppController.selectedDate = dayCell.cell.date;
+                                    if (!root.chrome) root.dayRequested(dayCell.cell.date);
+                                }
                             }
                         }
                         Item { Layout.fillHeight: true }

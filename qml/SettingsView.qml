@@ -130,6 +130,7 @@ Item {
             deadlineReminders: true, deadlineLeadHours: 24,
             standupReminder: true, meetingLead: 5, meetingReminders: true,
             blockedDailyDigest: false,
+            taskBlockReminders: false, taskBlockLead: 0,
             soundOnPing: false, desktopNotif: true,
             quietHours: true, quietFrom: "19:00", quietTo: "09:00"
         },
@@ -1776,6 +1777,36 @@ Item {
                     value: root.settings.notifications
                            ? (root.settings.notifications.meetingLead ?? 5) : 5
                     onMoved: (value) => root.set("notifications", "meetingLead", value)
+                }
+                // The start of a planned task (APP-256): off unless switched on.
+                // Reads and writes the settings JSON directly, like the sound
+                // card (this view reloads on the change): no unqualified root.
+                SwitchRow {
+                    id: blockRow
+                    objectName: "settings-task-block-reminders"
+                    readonly property var notif: {
+                        try { return (JSON.parse(AppController.appSettingsJson || "{}") || {}).notifications || ({}); } catch (e) { return ({}); }
+                    }
+                    function setNotif(key, value) {
+                        let s = {};
+                        try { s = JSON.parse(AppController.appSettingsJson || "{}") || {}; } catch (e) { s = {}; }
+                        const next = Object.assign({}, s.notifications);
+                        next[key] = value;
+                        s.notifications = next;
+                        AppController.appSettingsJson = JSON.stringify(s);
+                    }
+                    label: I18n.t("settings.notif.taskBlock")
+                    hint: I18n.t("settings.notif.taskBlock.hint")
+                    checked: blockRow.notif.taskBlockReminders === true
+                    onToggled: (checked) => blockRow.setNotif("taskBlockReminders", checked)
+                }
+                SliderRow {
+                    objectName: "settings-task-block-lead"
+                    visible: blockRow.notif.taskBlockReminders === true
+                    label: I18n.t("settings.notif.taskBlockLead")
+                    unit: " " + I18n.t("common.minutes"); min: 0; max: 5; step: 5
+                    value: blockRow.notif.taskBlockLead ?? 0
+                    onMoved: (value) => blockRow.setNotif("taskBlockLead", value)
                 }
                 // The two snooze buttons on a reminder (APP-155).
                 SliderRow {

@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
@@ -6,6 +7,8 @@ import TodoCpp
 Rectangle {
     id: bar
     visible: AppController.selectionCount > 0
+    // Carries the selection on (APP-248): "tomorrow", "window", "someday", "clear".
+    function carry(mode) { AppController.carryTasks(AppController.selectedTaskIds, mode); }
     opacity: visible ? 1 : 0
     Behavior on opacity {
         NumberAnimation {
@@ -47,6 +50,13 @@ Rectangle {
             text: I18n.t("selection.bar.priority")
             onClicked: priorityMenu.popup()
         }
+        // Carry the whole selection on (APP-248): tomorrow, the next free
+        // windows one after another, someday, or no date.
+        PillButton {
+            objectName: "sel-carry"
+            text: I18n.t("carry.menu")
+            onClicked: carryMenu.popup()
+        }
         PillButton {
             id: labelBtn
             objectName: "sel-label"
@@ -81,6 +91,20 @@ Rectangle {
                 required property string modelData
                 text: modelData
                 onTriggered: AppController.setSelectedTasksPriority(modelData)
+            }
+        }
+    }
+
+    AppMenu {
+        id: carryMenu
+        objectName: "sel-carry-menu"
+        Repeater {
+            model: ["tomorrow", "window", "someday", "clear"]
+            AppMenuItem {
+                required property string modelData
+                objectName: "sel-carry-" + modelData
+                text: I18n.t("carry." + modelData)
+                onTriggered: bar.carry(modelData)
             }
         }
     }

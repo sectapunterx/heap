@@ -60,7 +60,10 @@ ApplicationWindow {
         if (v === "board") return boardLoader.item;
         if (v === "notes") return notesLoader.item;
         if (v === "docs") return docsLoader.item;
-        return viewLoader.item;
+        // The calendar lens wraps its grid (APP-264): the keys act on the grid.
+        const it = viewLoader.item;
+        if (it && it.objectName === "calendar-view") return it["calendarView"];
+        return it;
     }
 
     // A #TICKET clicked in a note or doc page: the heap id, or a tracker key
@@ -220,7 +223,8 @@ ApplicationWindow {
     // against: the panel's day grid next to them was a second calendar and
     // 420px less of the first. It stays folded there unless asked for, and
     // asking lasts until the app closes.
-    readonly property bool _panelFoldedView: AppController.currentView === "week"
+    readonly property bool _panelFoldedView: AppController.currentView === "day"
+                                             || AppController.currentView === "week"
                                              || AppController.currentView === "month"
                                              || AppController.currentView === "settings"
     property bool _rightPanelInFoldedView: false
@@ -906,6 +910,40 @@ ApplicationWindow {
                 AppController.undoSettingsReset()
             });
         }
+        // "Next free window" found no room (APP-253): said as a fact, with
+        // the next working day's window and this evening as choices. Nothing
+        // is planned until one is pressed.
+        function onFreeWindowMissing(taskId, title, date, nextDate, nextStart, lateStart) {
+            const today = AppController.today;
+            const isToday = date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth()
+                         && date.getDate() === today.getDate();
+            const dayName = I18n.fmtDate(date, "weekdayDay");
+            const msg = isToday ? I18n.t("freewin.none").arg(taskId) : I18n.t("freewin.noneOn").arg(taskId).arg(dayName);
+            const acts = [];
+            if (nextStart >= 0 && nextDate && nextDate.getFullYear) {
+                const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+                const isTomorrow = nextDate.getFullYear() === tomorrow.getFullYear() && nextDate.getMonth() === tomorrow.getMonth()
+                                && nextDate.getDate() === tomorrow.getDate();
+                const label = isTomorrow ? I18n.t("freewin.tomorrowAt").arg(Theme.fmtHour(nextStart))
+                                         : I18n.t("freewin.dayAt").arg(I18n.fmtDate(nextDate, "weekdayDay")).arg(Theme.fmtHour(nextStart));
+                acts.push({ label: label, fn: function () { AppController.placeTaskAt(taskId, nextDate, nextStart) } });
+            }
+            if (lateStart >= 0) {
+                const late = isToday ? I18n.t("freewin.lateToday").arg(Theme.fmtHour(lateStart))
+                                     : I18n.t("freewin.lateOn").arg(dayName).arg(Theme.fmtHour(lateStart));
+                acts.push({ label: late, fn: function () { AppController.placeTaskAt(taskId, date, lateStart) } });
+            }
+            if (acts.length > 0) toast.showWithActions(msg, acts, 12);
+            else toast.show(msg, "info");
+        }
+        // The start of a planned task block (APP-256, opt-in): its buttons.
+        function onReminderToast(notificationId, msg) {
+            toast.showWithActions(msg, [
+                { label: I18n.t("reminder.open"), fn: function () { AppController.reminderAction(notificationId, "open") } },
+                { label: I18n.t("reminder.snooze15"), fn: function () { AppController.reminderAction(notificationId, "snooze15") } },
+                { label: I18n.t("reminder.window"), fn: function () { AppController.reminderAction(notificationId, "nextWindow") } }
+            ], 15);
+        }
         function onUndoableToast(msg, secs) {
             // Undo takes back the action this toast names — not whatever was
             // done last, which after a silent reorder is something else.
@@ -1071,6 +1109,7 @@ ApplicationWindow {
                 section: AppController.currentSection
                 view: AppController.currentView
                 onLensSelected: (id) => win.openLens(id)
+                onZoomSelected: (id) => AppController.currentView = id
                 // The header writes its own query as chips are added and
                 // removed, so a binding would break on the first one: follow
                 // the window's query instead (a saved view, a link, a reset).
@@ -1112,6 +1151,7 @@ ApplicationWindow {
                           && AppController.currentView !== "settings"
                           && AppController.currentView !== "archive"
                     viewLabel: AppController.currentView === "timeline" ? I18n.t("siderail.timeline")
+                             : AppController.currentView === "day" ? I18n.t("calzoom.day")
                              : AppController.currentView === "week" ? I18n.t("siderail.week")
                              : AppController.currentView === "month" ? I18n.t("siderail.month")
                              : I18n.t("siderail.board")
@@ -1193,8 +1233,7 @@ ApplicationWindow {
                         sourceComponent: {
                             if (AppController.currentView === "today") return todayComp;
                             if (AppController.currentView === "timeline") return timelineComp;
-                            if (AppController.currentView === "week") return weekComp;
-                            if (AppController.currentView === "month") return monthComp;
+                            if (["day", "week", "month"].indexOf(AppController.currentView) >= 0) return calendarComp;
                             if (AppController.currentView === "archive") return archiveComp;
                             if (AppController.currentView === "settings") return settingsComp;
                             return null;
@@ -1272,31 +1311,29 @@ ApplicationWindow {
                         onToggleShowDone: win.showDoneTimeline = !win.showDoneTimeline
                     }
                 }
+                // The Calendar lens (APP-264): Day / Week / Month as one zoom,
+                // with the "Without a date" tray. The zoom follows the view id,
+                // so the grid is kept across Day <-> Week.
                 Component {
-                    id: weekComp
-                    WeekView {
+                    id: calendarComp
+                    CalendarView {
+                        zoom: AppController.currentView
                         searchText: win.searchText
                         prioritiesFilter: win.prioritiesFilter
                         showArchived: win.showArchived
                         onTaskClicked: (id) => win.showTask(AppController.taskById(id))
                         onEventClicked: (id, occurrence) => occurrence ? eventEditor.showForOccurrence(occurrence) : eventEditor.showForId(id)
-                        // A click on an empty slot opens the editor on a draft
-                        // rather than saving an untitled event: the user names
-                        // it before it exists.
-                        onCreateRequested: (hour, day) => {
-                            const draft = AppController.newEventDraft(hour, day);
+                        // An empty slot or a dragged stretch opens the editor on
+                        // a draft: the meeting is named before it exists.
+                        onCreateRequested: (startHour, endHour, day) => {
+                            const draft = AppController.newEventDraft(startHour, day);
+                            draft.end = endHour;
                             eventEditor.showForDraft(draft);
                         }
-                    }
-                }
-                Component {
-                    id: monthComp
-                    MonthView {
-                        searchText: win.searchText
-                        prioritiesFilter: win.prioritiesFilter
-                        showArchived: win.showArchived
-                        onTaskClicked: (id) => win.showTask(AppController.taskById(id))
-                        onEventClicked: (id, occurrence) => occurrence ? eventEditor.showForOccurrence(occurrence) : eventEditor.showForId(id)
+                        onDayRequested: (day) => {
+                            AppController.selectedDate = day;
+                            AppController.currentView = "day";
+                        }
                     }
                 }
                 Component {
@@ -1739,7 +1776,7 @@ ApplicationWindow {
         target: AppController
         function onCurrentViewChanged() {
             const v = AppController.currentView;
-            if (v === "week" || v === "month") win._calendarView = v;
+            if (v === "day" || v === "week" || v === "month") win._calendarView = v;
         }
     }
     function openLens(id) {
@@ -2197,6 +2234,7 @@ ApplicationWindow {
         enabled: sequence.length > 0 && !win._viewKeysBlocked
             && (AppController.currentView === "board"
                 || AppController.currentView === "timeline"
+                || AppController.currentView === "day"
                 || AppController.currentView === "week"
                 || AppController.currentView === "archive")
         onActivated: {
@@ -2254,7 +2292,7 @@ ApplicationWindow {
     component CalKey: Shortcut {
         context: Qt.ApplicationShortcut
         enabled: sequences.length > 0 && !win._viewKeysBlocked
-            && (AppController.currentView === "week" || AppController.currentView === "month")
+            && ["day", "week", "month"].indexOf(AppController.currentView) >= 0
     }
 
     // The day panel follows the selected date in every view it sits beside,
@@ -2265,7 +2303,7 @@ ApplicationWindow {
     component DayKey: Shortcut {
         context: Qt.ApplicationShortcut
         enabled: sequences.length > 0 && !win._viewKeysBlocked
-            && ["today", "board", "timeline", "week", "month", "archive"].indexOf(AppController.currentView) >= 0
+            && ["today", "board", "timeline", "day", "week", "month", "archive"].indexOf(AppController.currentView) >= 0
     }
     DayKey {
         sequences: [_kbd("cal.today")]
@@ -2309,12 +2347,39 @@ ApplicationWindow {
         sequences: [_kbd("cal.next")]
         onActivated: { const v = win.activeViewItem(); if (v && v.step) v.step(1); }
     }
+    // The calendar lens' own keys (keymap.md, APP-264): [ ] a period, 0
+    // today, z d / z w / z m the zoom. Fixed until the catalogue takes them
+    // (APP-272); they stand down like every other view key.
+    CalKey {
+        sequences: ["["]
+        onActivated: { const v = win.activeViewItem(); if (v && v.step) v.step(-1); }
+    }
+    CalKey {
+        sequences: ["]"]
+        onActivated: { const v = win.activeViewItem(); if (v && v.step) v.step(1); }
+    }
+    CalKey {
+        sequences: ["0"]
+        onActivated: AppController.selectedDate = AppController.today
+    }
+    CalKey {
+        sequences: ["Z,D"]
+        onActivated: AppController.currentView = "day"
+    }
+    CalKey {
+        sequences: ["Z,W"]
+        onActivated: AppController.currentView = "week"
+    }
+    CalKey {
+        sequences: ["Z,M"]
+        onActivated: AppController.currentView = "month"
+    }
     // What a drag does in Week, Month and Timeline, from the keyboard
     // (APP-249): the task that has the keyboard (or the pointer) moves a day,
     // a week, or a grid step. Ctrl+arrows are the board's own card moves;
     // these are live only in the three views that drag dates.
     readonly property bool _moveKeysOn: !win._viewKeysBlocked
-        && ["week", "month", "timeline"].indexOf(AppController.currentView) >= 0
+        && ["day", "week", "month", "timeline"].indexOf(AppController.currentView) >= 0
     function _moveViewTask(days, steps) {
         const v = win.activeViewItem();
         if (!v) return;
@@ -2527,6 +2592,7 @@ ApplicationWindow {
             && (AppController.currentView === "board"
                 || AppController.currentView === "archive"
                 || AppController.currentView === "timeline"
+                || AppController.currentView === "day"
                 || AppController.currentView === "week")
         onActivated: {
             // One selected card is unambiguous. Otherwise act on whatever the

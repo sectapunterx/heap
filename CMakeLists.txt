@@ -195,6 +195,7 @@ qt_add_library(heap_core STATIC
     src/chrono/ChronoParser.cpp
     src/capture/CaptureParse.cpp
     src/plan/DayPlan.cpp
+    src/plan/FreeWindow.cpp
     src/capture/SpanHighlighter.cpp
     src/git/BranchTaskMatcher.cpp
     src/git/BranchTaskResolve.cpp
@@ -249,6 +250,7 @@ qt_add_library(heap_core STATIC
     src/storage/Attachments.cpp
     src/AppControllerAttachments.cpp
     src/AppControllerPresence.cpp
+    src/AppControllerCalendar.cpp
     # ── audit-know: end ──
     # ── audit-ux: begin ──
     # ── audit-ux: end ──
@@ -402,6 +404,9 @@ qt_add_qml_module(heap_core
         qml/ArchiveView.qml
         qml/TimelineView.qml
         qml/WeekView.qml
+        qml/CalendarView.qml
+        qml/CalendarNav.qml
+        qml/UndatedTray.qml
         qml/MonthView.qml
         qml/DocsView.qml
         qml/DocsEditor.qml

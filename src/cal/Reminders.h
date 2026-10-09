@@ -85,6 +85,36 @@ inline QVector<DueReminder> dueMeetingReminders(const QVector<CalEvent>& occurre
   return out;
 }
 
+// The start of a planned task block (APP-256), opt-in: a task with a time
+// ("when") is due to be announced from `lead` minutes before it to a little
+// after it starts. The key carries the planned instant, so moving the task
+// re-arms it, and a restart or a wake from sleep does not repeat it (the
+// sent keys are kept on disk).
+struct BlockCall {
+  bool due = false;
+  int minutesLeft = 0;  // rounded up; 0 once it has started
+  QString key;
+};
+
+inline QString taskBlockReminderKey(const QString& taskId, const QDateTime& startsAt) {
+  return QStringLiteral("blk:%1@%2").arg(taskId, startsAt.toString(Qt::ISODate));
+}
+
+inline BlockCall taskBlockReminder(const QString& taskId, const QDateTime& startsAt, const QDateTime& now, int lead) {
+  BlockCall out;
+  if(!startsAt.isValid() || !now.isValid()) {
+    return out;
+  }
+  const qint64 secs = now.secsTo(startsAt);
+  if(secs > 60LL * qMax(0, lead) || -secs > 60LL * kReminderGraceMinutes) {
+    return out;
+  }
+  out.due = true;
+  out.minutesLeft = secs <= 0 ? 0 : static_cast<int>((secs + 59) / 60);
+  out.key = taskBlockReminderKey(taskId, startsAt);
+  return out;
+}
+
 // A deadline reminder: whether it is due, and what to say.
 struct DeadlineCall {
   bool due = false;

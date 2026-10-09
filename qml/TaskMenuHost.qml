@@ -35,6 +35,7 @@ Item {
     readonly property bool menuOpen: !!(host.menu && host.menu.visible)
         || !!(host.statusList && host.statusList.visible)
         || !!(host.priorityList && host.priorityList.visible)
+        || !!(host.carryList && host.carryList.visible)
 
     // From the keyboard: at the item, on its first action.
     function openMenu() {
@@ -73,6 +74,14 @@ Item {
     // The status and priority lists are built the same way, on first use.
     property var statusList: null
     property var priorityList: null
+    property var carryList: null
+    function carryMenu() {
+        if (!host.carryList) {
+            host.carryList = carryMenuComponent.createObject(host.anchorItem || host);
+            host.carryList.back.connect(() => host.backToMenu("carry"));
+        }
+        return host.carryList;
+    }
     function statusMenu() {
         if (!host.statusList) {
             host.statusList = statusMenuComponent.createObject(host.anchorItem || host);
@@ -94,10 +103,13 @@ Item {
     // The status or priority list at the card, on the task's current value,
     // so an Enter straight away changes nothing.
     function openSubMenu(which) {
-        const sub = which === "status" ? host.statusMenu() : host.priorityMenu();
+        const sub = which === "status" ? host.statusMenu()
+                  : which === "carry" ? host.carryMenu() : host.priorityMenu();
         sub.popup(host.anchorItem, Theme.spLg, Math.min(host.anchorItem ? host.anchorItem.height : 0, 28));
         let cur = -1;
-        if (host._t && which === "status")
+        if (which === "carry")
+            cur = 0;
+        else if (host._t && which === "status")
             cur = AppController.statuses.findIndex(st => st.id === host._t.status);
         else if (host._t)
             cur = ["P0", "P1", "P2", "P3"].indexOf(host._t.priority);
@@ -106,14 +118,15 @@ Item {
     // Left in a list: the card menu again, on the row the list came from.
     function backToMenu(which) {
         host.openMenu();
-        const name = which === "status" ? "tc-menu-status" : "tc-menu-priority";
+        const name = which === "status" ? "tc-menu-status"
+                   : which === "carry" ? "tc-menu-carry" : "tc-menu-priority";
         for (let i = 0; i < host.menu.count; i++) {
             const it = host.menu.itemAt(i);
             if (it && it.objectName === name) { host.menu.currentIndex = i; break; }
         }
     }
     function releaseMenu() {
-        for (const k of ["menu", "statusList", "priorityList"]) {
+        for (const k of ["menu", "statusList", "priorityList", "carryList"]) {
             if (!host[k]) continue;
             host[k].destroy();
             host[k] = null;
@@ -167,6 +180,14 @@ Item {
             // The next free slot of the selected day, at the block's real
             // length (the estimate, else the focus-block setting).
             onTriggered: if (host._t) AppController.scheduleTaskAtNextFreeSlot(host._t.id, AppController.selectedDate)
+        }
+        // Carrying it on by hand (APP-248): only "when" moves, never the
+        // deadline, and only on this click.
+        AppMenuItem {
+            objectName: "tc-menu-carry"
+            text: I18n.t("carry.menu"); opensList: true
+            enabled: !host._isDone
+            onTriggered: taskMenu._openNext = "carry"
         }
         AppMenuItem {
             objectName: "tc-menu-due"
@@ -295,6 +316,26 @@ Item {
                 object["triggered"].connect(() => statusMenu.picked(object["modelData"].id));
             }
             onObjectRemoved: (index, object) => statusMenu.removeItem(object)
+        }
+    }
+    }
+
+    Component {
+        id: carryMenuComponent
+    AppMenu {
+        id: carryMenu
+        objectName: "tc-carry-menu"
+        backOnLeft: true
+        Instantiator {
+            model: ["tomorrow", "window", "someday", "clear"]
+            delegate: AppMenuItem {
+                required property string modelData
+                objectName: "tc-carry-" + modelData
+                text: I18n.t("carry." + modelData)
+                onTriggered: AppController.carryTasks([host.taskId], modelData)
+            }
+            onObjectAdded: (index, object) => carryMenu.insertItem(index, object)
+            onObjectRemoved: (index, object) => carryMenu.removeItem(object)
         }
     }
     }
