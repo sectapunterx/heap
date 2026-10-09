@@ -437,8 +437,10 @@ TEST_F(CliHeadlessTest, AddParsesLikeQuickCaptureAndSaves) {
   EXPECT_EQ(t.priority, QStringLiteral("P1"));
   ASSERT_EQ(t.labels.size(), 1);
   EXPECT_EQ(t.labels.at(0).id, QStringLiteral("backend"));
-  EXPECT_EQ(t.dueAt, QDateTime(QDate(2026, 10, 7), QTime(14, 0)));
-  EXPECT_TRUE(t.dueHasTime);
+  // A date with no deadline word is when it is done, not a deadline (APP-245).
+  EXPECT_EQ(t.scheduledAt, QDateTime(QDate(2026, 10, 7), QTime(14, 0)));
+  EXPECT_TRUE(t.scheduledHasTime);
+  EXPECT_FALSE(t.dueAt.isValid());
   EXPECT_TRUE(t.statusChangedAt.isValid());
 }
 

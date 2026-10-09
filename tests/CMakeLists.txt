@@ -50,6 +50,8 @@ set(HEAP_QUERY_SOURCES
 
 add_executable(heap_chrono_tests
     test_chrono_parser.cpp
+    test_capture_parse.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/capture/CaptureParse.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoTokenizer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_en.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_ru.cpp

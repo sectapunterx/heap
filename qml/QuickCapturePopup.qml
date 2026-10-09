@@ -85,15 +85,19 @@ Popup {
         const raw = inputField.text;
         const meta = _extractMeta(raw);
         _meta = meta;
-        const r = AppController.parseDateTime(meta.title, new Date());
-        _preview = r || {ok: false};
-        if (_preview.ok && _preview.consumed && _preview.consumed.length > 0) {
-            const left  = meta.title.substr(0, _preview.startOffset).trim();
-            const right = meta.title.substr(_preview.endOffset).trim();
-            _title = (left + " " + right).replace(/\s+/g, " ").trim();
-        } else {
-            _title = meta.title.trim();
-        }
+        // When and the deadline apart (APP-245): "в пн, до пт" is two dates.
+        const p = AppController.captureParse(raw, new Date());
+        const when = p.when && p.when.getTime && !isNaN(p.when.getTime()) ? p.when : null;
+        const due = p.due && p.due.getTime && !isNaN(p.due.getTime()) ? p.due : null;
+        _preview = {
+            ok: when !== null || due !== null,
+            // The meeting / focus block goes at "when"; a deadline alone books nothing.
+            start: when, hasTime: when !== null && p.whenHasTime,
+            end: p.whenEnd,
+            due: due, dueHasTime: due !== null && p.dueHasTime,
+            estimate: p.estimateMinutes
+        };
+        _title = p.title;
     }
 
     // Detect intent from free-text. Returns "focus" | "sync" | "ticket" | "none".
@@ -183,17 +187,21 @@ Popup {
     //   ev    the booked event, for a meeting
     function _summary(kind, draft, ev) {
         const lines = [I18n.t("quick.quote").arg(draft.title)];
+        const plan = Object.assign({}, draft);  // when: plan.scheduledAt
         let title;
         if (kind === "meeting") {
             title = I18n.t("quick.done.meeting." + ev.type);
-            lines.push(root._cap(root._when(draft.dueAt, false)) + ", "
+            lines.push(root._cap(root._when(plan.scheduledAt, false)) + ", "
                        + AppController.eventHourLabel(ev.start) + "–" + AppController.eventHourLabel(ev.end));
             if (ev.attendees) lines.push(I18n.t("quick.done.with").arg(ev.attendees));
         } else if (kind === "focus") {
             title = I18n.t("quick.done.focus");
-            lines.push(root._cap(root._when(draft.dueAt, true)));
+            lines.push(root._cap(root._when(plan.scheduledAt, true)));
         } else {
             title = I18n.t("quick.done.task").arg(root._statusName(draft.status));
+            // When and the deadline, each named (APP-245).
+            if (plan.scheduledAt && plan.scheduledAt.getTime && !isNaN(plan.scheduledAt.getTime()))
+                lines.push(I18n.t("quick.done.when").arg(root._when(plan.scheduledAt, plan.scheduledHasTime)));
             if (draft.dueAt && draft.dueAt.getTime && !isNaN(draft.dueAt.getTime()))
                 lines.push(I18n.t("quick.done.due").arg(root._when(draft.dueAt, draft.dueHasTime)));
             if (kind === "untimedMeeting") lines.push(I18n.t("quick.done.noTime"));
@@ -310,7 +318,7 @@ Popup {
         //  - "focus"           → the task's own scheduled time is the block
         //  - "sync"/"созвон"   → meeting on calendar (right column with созвоны)
         //  - none of the above → no calendar entry even if a time was parsed
-        const noTime = !(_preview && _preview.ok && _preview.hasTime && _preview.start);
+        const noTime = !(_preview && _preview.start && _preview.hasTime);
         // Reuse the kind we already computed for the contact-ping check.
         const kind = kindEarly;
         if (noTime) {
@@ -499,27 +507,27 @@ Popup {
                 Layout.fillWidth: true
                 elide: Text.ElideRight
             }
-            Rectangle {
-                visible: root._preview && root._preview.ok
-                radius: Theme.radiusLg
-                color: Theme.panel2
-                border.color: Theme.accent
-                border.width: 1
-                implicitHeight: previewChip.implicitHeight + 6
-                implicitWidth: previewChip.implicitWidth + 16
-                Text {
-                    id: previewChip
-                    anchors.centerIn: parent
-                    color: Theme.text
-                    font.pixelSize: Theme.fsSm
-                    text: {
-                        if (!root._preview || !root._preview.ok) return "";
-                        const d = root._preview.start;
-                        if (!d) return "";
-                        return root._preview.hasTime ? I18n.fmtDateTime(d, "weekdayDayYear")
-                                                     : I18n.fmtDate(d, "weekdayDayYear");
-                    }
-                }
+            // "When" and "Due" apart, each named (APP-245).
+            PropertyChip {
+                objectName: "qc-when"
+                visible: !!(root._preview && root._preview.start)
+                small: true
+                key: I18n.t("capture.when")
+                value: visible ? root._when(root._preview.start, root._preview.hasTime) : ""
+            }
+            PropertyChip {
+                objectName: "qc-due"
+                visible: !!(root._preview && root._preview.due)
+                small: true
+                key: I18n.t("capture.due")
+                value: visible ? root._when(root._preview.due, root._preview.dueHasTime) : ""
+            }
+            PropertyChip {
+                objectName: "qc-estimate"
+                visible: !!(root._preview && root._preview.estimate > 0)
+                small: true
+                key: I18n.t("capture.estimate")
+                value: visible ? I18n.fmtMinutes(root._preview.estimate) : ""
             }
         }
 

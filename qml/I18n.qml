@@ -548,6 +548,7 @@ QtObject {
             "quick.done.meeting.oneone": "1:1 added to the calendar",
             "quick.done.meeting.sync": "Team sync added to the calendar",
             "quick.done.due": "Due: %1",
+            "quick.done.when": "When: %1",
             "quick.done.with": "With: %1",
             "quick.done.noTime": "No time given, so it is not on the calendar",
             "quick.done.repeat": "Repeats: %1",
@@ -1342,6 +1343,9 @@ QtObject {
             "kanban.collapse": "Fold column",
             "board.empty.archivedTitle": "Everything here is archived",
             "board.empty.archivedHint": "Archived tasks live in the Archive view (%1). Add a task with %2.",
+            "capture.when": "when",
+            "capture.due": "due",
+            "capture.estimate": "estimate",
             "sidebar.today": "Today",
             "sidebar.tasks": "Tasks",
             "sidebar.knowledge": "Knowledge",
@@ -2086,6 +2090,7 @@ QtObject {
             "quick.done.meeting.oneone": "1:1 добавлен в календарь",
             "quick.done.meeting.sync": "Синк добавлен в календарь",
             "quick.done.due": "Срок: %1",
+            "quick.done.when": "Когда: %1",
             "quick.done.with": "Участники: %1",
             "quick.done.noTime": "Время не указано — в календарь не поставлено",
             "quick.done.repeat": "Повтор: %1",
@@ -2860,6 +2865,9 @@ QtObject {
             "kanban.collapse": "Свернуть колонку",
             "board.empty.archivedTitle": "Всё здесь в архиве",
             "board.empty.archivedHint": "Архивные задачи — в разделе «Архив» (%1). Новая задача — %2.",
+            "capture.when": "когда",
+            "capture.due": "срок",
+            "capture.estimate": "оценка",
             "sidebar.today": "Сегодня",
             "sidebar.tasks": "Задачи",
             "sidebar.knowledge": "Знания",
@@ -3141,6 +3149,14 @@ QtObject {
     function fmtTime(d) {
         if (!d || !d.getTime || isNaN(d.getTime())) return "";
         return Theme.fmtHour(d.getHours() + d.getMinutes() / 60);
+    }
+    // A length of time: "45 min", "1 h 30 min" / "45 мин", "1 ч 30 мин".
+    function fmtMinutes(m) {
+        const n = Math.max(0, Math.round(Number(m) || 0));
+        const h = Math.floor(n / 60), r = n % 60;
+        const H = lang === "ru" ? "ч" : "h", M = lang === "ru" ? "мин" : "min";
+        if (h === 0) return r + " " + M;
+        return r === 0 ? h + " " + H : h + " " + H + " " + r + " " + M;
     }
     // "Oct 6, 15:15" / "6 окт., 15:15".
     function fmtDateTime(d, style) {

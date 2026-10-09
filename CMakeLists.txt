@@ -193,6 +193,7 @@ qt_add_library(heap_core STATIC
     src/chrono/ChronoLocale_en.cpp
     src/chrono/ChronoLocale_ru.cpp
     src/chrono/ChronoParser.cpp
+    src/capture/CaptureParse.cpp
     src/git/BranchTaskMatcher.cpp
     src/git/BranchTaskResolve.cpp
     src/git/GitWatcher.cpp

@@ -617,7 +617,16 @@ class AppController : public QObject {
   // title, "// description", priority, #labels and the date the text names
   // (cut out of the title, read against `reference`, now when invalid). The
   // popup and `heap add` both save this, so they cannot read text apart.
-  Q_INVOKABLE QVariantMap quickTaskDraft(const QString& raw, const QDateTime& reference = QDateTime()) const;
+  Q_INVOKABLE QVariantMap quickTaskDraft(const QString& raw,
+                                         const QDateTime& reference = QDateTime(),
+                                         const QStringList& rejected = {}) const;
+  // One line of task input read the way quickTaskDraft reads it (APP-245):
+  // {title, when, whenHasTime, due, dueHasTime, estimateMinutes, recurrence,
+  //  spans: [{start, end, kind, text}]} — offsets into `raw` after the meta
+  // (priority, #labels, "// …") is taken out, i.e. into `head`.
+  Q_INVOKABLE QVariantMap captureParse(const QString& raw,
+                                       const QDateTime& reference = QDateTime(),
+                                       const QStringList& rejected = {}) const;
   // Reusable task/checklist templates (HEAP-77). taskTemplates lists the
   // built-ins ({name, title, desc}); createTaskFromTemplate drops a pre-filled
   // task (checklist in the description) onto the board.

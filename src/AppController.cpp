@@ -16,6 +16,7 @@
 #include "cal/Occurrences.h"
 #include "cal/OutlookDesktop.h"
 #include "cal/Reminders.h"
+#include "capture/CaptureParse.h"
 #include "chrono/ChronoParser.h"
 #include "diag/FrameLog.h"
 #include "diag/IssueReport.h"
@@ -2913,7 +2914,33 @@ QVariantMap AppController::newQuickTaskDraft(const QString& ticketKey) const {
   return m;
 }
 
-QVariantMap AppController::quickTaskDraft(const QString& raw, const QDateTime& reference) const {
+QVariantMap AppController::captureParse(const QString& raw, const QDateTime& reference, const QStringList& rejected) const {
+  const heap::text::TaskMeta meta = heap::text::extractMeta(raw);
+  QVariantMap out;
+  heap::capture::Parsed p;
+  if(m_chrono) {
+    p = heap::capture::parse(meta.title, *m_chrono, reference.isValid() ? reference : QDateTime::currentDateTime(), rejected);
+  } else {
+    p.title = meta.title.simplified();
+  }
+  out["title"] = p.title;
+  out["source"] = meta.title;
+  out["when"] = p.when;
+  out["whenHasTime"] = p.whenHasTime;
+  out["whenEnd"] = p.whenEnd;
+  out["due"] = p.due;
+  out["dueHasTime"] = p.dueHasTime;
+  out["estimateMinutes"] = p.estimateMinutes;
+  out["recurrence"] = p.recurrence;
+  QVariantList spans;
+  for(const heap::capture::Span& s : p.spans) {
+    spans.append(QVariantMap{{"start", s.start}, {"end", s.end}, {"kind", s.kind}, {"text", s.text}});
+  }
+  out["spans"] = spans;
+  return out;
+}
+
+QVariantMap AppController::quickTaskDraft(const QString& raw, const QDateTime& reference, const QStringList& rejected) const {
   // A ticket key another task already holds cannot be the new task's id
   // (newQuickTaskDraft falls back to the prefix), so it stays in the title:
   // "APP-101 follow up with QA" used to lose its only link to the ticket
@@ -2925,18 +2952,16 @@ QVariantMap AppController::quickTaskDraft(const QString& raw, const QDateTime& r
   QVariantMap draft = newQuickTaskDraft(meta.ticketKey);
   draft["_isNew"] = true;
 
-  // The date words the parser read are cut out of the title.
-  heap::chrono::ParseResult when;
+  // The date words and the estimate are cut out of the title. A date after
+  // a deadline word ("до пятницы", "due fri") is the deadline; any other is
+  // when the task is done (APP-245). One date is no longer both.
+  heap::capture::Parsed parsed;
   if(m_chrono) {
-    when = m_chrono->parse(meta.title, reference.isValid() ? reference : QDateTime::currentDateTime());
+    parsed = heap::capture::parse(meta.title, *m_chrono, reference.isValid() ? reference : QDateTime::currentDateTime(), rejected);
+  } else {
+    parsed.title = meta.title.simplified();
   }
-  QString title = meta.title.trimmed();
-  if(when.ok && !when.consumed.isEmpty() && when.startOffset >= 0 && when.endOffset >= when.startOffset) {
-    const QString left = meta.title.left(when.startOffset).trimmed();
-    const QString right = meta.title.mid(when.endOffset).trimmed();
-    title = (left + QChar(' ') + right).simplified();
-  }
-  draft["title"] = title;
+  draft["title"] = parsed.title;
   if(!meta.priority.isEmpty()) {
     draft["priority"] = meta.priority;
   }
@@ -2946,18 +2971,23 @@ QVariantMap AppController::quickTaskDraft(const QString& raw, const QDateTime& r
   if(!meta.desc.isEmpty()) {
     draft["desc"] = meta.desc;
   }
-  // The parsed datetime lands on the task itself — including the clock time,
+  // The parsed datetimes land on the task itself — including the clock time,
   // which used to survive only as a side calendar block (HEAP-115).
-  if(when.ok && when.start.isValid()) {
-    draft["scheduledAt"] = when.start;
-    draft["dueAt"] = when.start;
-    draft["scheduledHasTime"] = when.hasTime;
-    draft["dueHasTime"] = when.hasTime;
+  if(parsed.when.isValid()) {
+    draft["scheduledAt"] = parsed.when;
+    draft["scheduledHasTime"] = parsed.whenHasTime;
+  }
+  if(parsed.due.isValid()) {
+    draft["dueAt"] = parsed.due;
+    draft["dueHasTime"] = parsed.dueHasTime;
+  }
+  if(parsed.estimateMinutes > 0) {
+    draft["estimateMinutes"] = parsed.estimateMinutes;
   }
   // A parsed recurrence ("every weekday…") makes completing the task
   // regenerate it (HEAP-77).
-  if(when.ok && !when.recurrence.isEmpty()) {
-    draft["recurrence"] = when.recurrence;
+  if(!parsed.recurrence.isEmpty()) {
+    draft["recurrence"] = parsed.recurrence;
   }
   return draft;
 }

@@ -236,6 +236,25 @@ TestCase {
         AppController.deleteTask(got.taskId);
     }
 
+    // APP-245: "when" and the deadline are two dates; one date is not both.
+    function test_quickcapture_when_and_due_are_two_dates() {
+        const got = tc._capture("two-dates probe tomorrow, due in 3 days");
+        const t = AppController.taskById(got.taskId);
+        compare(t.title, "two-dates probe");
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const days = (d) => Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - today) / 86400000);
+        compare(days(t.scheduledAt), 1, "when");
+        compare(days(t.dueAt), 3, "due");
+        verify(got.body.indexOf(I18n.t("quick.done.when").arg("").trim()) >= 0, got.body);
+        verify(got.body.indexOf(I18n.t("quick.done.due").arg("").trim()) >= 0, got.body);
+        AppController.deleteTask(got.taskId);
+
+        const only = tc._capture("one-date probe tomorrow");
+        const o = AppController.taskById(only.taskId);
+        verify(!o.dueAt || isNaN(o.dueAt.getTime()), "a date with no deadline word set a deadline");
+        AppController.deleteTask(only.taskId);
+    }
+
     function test_quickcapture_ticket_key_becomes_the_id() {
         AppController.deleteTask("QCP-4242");
         const got = tc._capture("QCP-4242 fix the capture probe");
