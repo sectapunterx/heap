@@ -71,8 +71,8 @@ TestCase {
         if (Qt.platform.os !== "osx") {
             compare(sb.prettyKeys(AppController.shortcutFor("section.today")), "Ctrl 1");
             compare(sb.prettyKeys("Ctrl+,"), "Ctrl ,");
+            compare(sb.prettyKeys("Ctrl+Shift+B"), "Ctrl Shift B");
         }
-        compare(sb.prettyKeys("Ctrl+Shift+B"), "Ctrl Shift B");
     }
 
     function test_exactly_one_row_is_active() {
