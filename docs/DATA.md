@@ -65,6 +65,40 @@ tasks is one copy; a stored file is read-only and never changes.
 still in `attachments/` unless the cleanup removed them since. To back up
 everything, copy the whole data folder.
 
+### What you keep on top of a tracker issue (`local`)
+
+A task may carry a `local` object: everything you keep on top of the task
+that no sync ever writes (schema **v12**, 0.8.0; [ADR 0001](adr/0001-task-local-layer.md)).
+A pull, taking the tracker's side of a conflict, an issue that went upstream
+or out of scope, reconnecting an integration and an import all leave it as it
+was. A task with nothing local has no key.
+
+```json
+"local": {
+  "notes": "tried a smaller pool — did not help",
+  "checklist": [{ "id": "c1", "text": "repro", "level": 1, "done": true, "autoDone": false, "cardId": "" }],
+  "myPriority": "P0", "myPriorityBase": "P2",
+  "myDueAt": "2026-10-15T12:00:00.000", "myDueHasTime": true, "myDueBase": "2026-10-20T00:00:00.000",
+  "tags": [{ "id": "after-release", "color": "#b1a7f0" }],
+  "related": [{ "id": "r1", "kind": "related", "target": "https://gitlab.example/a/-/merge_requests/17", "profileId": "" }],
+  "commentDraft": "Reproduced, see notes."
+}
+```
+
+- On a tracker card the task's own `priority` and `dueAt` stay the tracker's;
+  a priority or due date you pick lands in `myPriority` / `myDueAt`, and
+  `…Base` remembers what the tracker said then. Everything that plans by
+  priority or date reads yours first. On a local task there is only one value,
+  in the task's own fields.
+- Opening a v11 file moves a tracker card's local edits there: a priority, due
+  date or labels that differed from the tracker's go to `myPriority`,
+  `myDueAt` and `tags`, and an edited title or description goes to `notes`
+  under a "My version… (before 0.8.0)" heading, with the tracker's text back in
+  the task. Nothing is dropped. The file before the move is kept in `backups/`
+  as `state-premigration-v11-<time>.json`.
+- Taking the tracker's side of a title or description conflict puts your text
+  in `notes` instead of dropping it.
+
 ### Saved views
 
 A profile may carry `savedViews`, the sidebar's saved views in their order. The

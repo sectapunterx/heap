@@ -10,6 +10,7 @@
 #include "cal/Occurrences.h"
 #include "cal/Reminders.h"
 #include "git/GitWatcher.h"
+#include "local/Effective.h"
 #include "notify/NotificationCenter.h"
 #include "safety/ErrorSignature.h"
 #include "safety/Immersion.h"
@@ -182,7 +183,7 @@ QVector<heap::safety::DayTask> AppController::dayTasks() const {
                 .archived = t.archived || !active,
                 .closedAt = done ? t.statusChangedAt : QDateTime(),
                 .scheduledAt = t.scheduledAt,
-                .dueAt = t.dueAt,
+                .dueAt = heap::local::effectiveDueAt(t),
                 .timerStartedAt = t.timerStartedAt});
   };
   for(const Task& t : m_tasks.items()) {

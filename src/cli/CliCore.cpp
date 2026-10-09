@@ -4,6 +4,7 @@
 #include "cli/CliCore.h"
 #include "git/BranchTaskMatcher.h"
 #include "git/BranchTaskResolve.h"
+#include "local/Effective.h"
 
 #include <QCommandLineOption>
 #include <QCommandLineParser>
@@ -597,8 +598,8 @@ QVector<int> todayTasks(const ProfileData& p, const QDate& today) {
       continue;
     }
     const bool doing = isDoingStatus(p.statuses, t.status);
-    const bool planned =
-        !t.someday && ((t.scheduledAt.isValid() && t.scheduledAt.date() == today) || (t.dueAt.isValid() && t.dueAt.date() == today));
+    const bool planned = !t.someday && ((t.scheduledAt.isValid() && t.scheduledAt.date() == today) ||
+                                        (heap::local::effectiveDueAt(t).isValid() && heap::local::effectiveDueAt(t).date() == today));
     if(doing || planned) {
       rows << static_cast<int>(i);
     }
@@ -615,11 +616,11 @@ QJsonObject taskJson(const ProfileData& p, const Task& t, const QDateTime& now) 
   o.insert(QStringLiteral("title"), t.title);
   o.insert(QStringLiteral("status"), t.status);
   o.insert(QStringLiteral("statusName"), statusName(p.statuses, t.status));
-  o.insert(QStringLiteral("priority"), t.priority);
+  o.insert(QStringLiteral("priority"), heap::local::effectivePriority(t));
   o.insert(QStringLiteral("profile"), p.id);
   o.insert(QStringLiteral("profileName"), p.name);
   const QString scheduled = isoOrEmpty(t.scheduledAt, t.scheduledHasTime);
-  const QString due = isoOrEmpty(t.dueAt, t.dueHasTime);
+  const QString due = isoOrEmpty(heap::local::effectiveDueAt(t), heap::local::effectiveDueHasTime(t));
   o.insert(QStringLiteral("scheduledAt"), scheduled.isEmpty() ? QJsonValue() : QJsonValue(scheduled));
   o.insert(QStringLiteral("dueAt"), due.isEmpty() ? QJsonValue() : QJsonValue(due));
   QJsonArray labels;
@@ -653,9 +654,9 @@ QString taskLines(const ProfileData& p, const QVector<int>& rows) {
     const Task& t = p.tasks.at(r);
     QString line = t.id.leftJustified(idWidth) + QStringLiteral("  ") +
                    (QChar('[') + statusName(p.statuses, t.status) + QChar(']')).leftJustified(statusWidth) + QStringLiteral("  ") +
-                   t.priority.leftJustified(2) + QStringLiteral("  ") + t.title;
-    if(t.dueAt.isValid()) {
-      line += QStringLiteral("  (due %1)").arg(humanWhen(t.dueAt, t.dueHasTime));
+                   heap::local::effectivePriority(t).leftJustified(2) + QStringLiteral("  ") + t.title;
+    if(heap::local::effectiveDueAt(t).isValid()) {
+      line += QStringLiteral("  (due %1)").arg(humanWhen(heap::local::effectiveDueAt(t), heap::local::effectiveDueHasTime(t)));
     } else if(t.scheduledAt.isValid()) {
       line += QStringLiteral("  (%1)").arg(humanWhen(t.scheduledAt, t.scheduledHasTime));
     }
@@ -671,7 +672,7 @@ QString formatNow(const QString& format, const ProfileData& p, const Task& t, co
       {QStringLiteral("{id}"), t.id},
       {QStringLiteral("{title}"), t.title},
       {QStringLiteral("{status}"), statusName(p.statuses, t.status)},
-      {QStringLiteral("{priority}"), t.priority},
+      {QStringLiteral("{priority}"), heap::local::effectivePriority(t)},
       {QStringLiteral("{profile}"), p.name.isEmpty() ? p.id : p.name},
       {QStringLiteral("{source}"), source},
       {QStringLiteral("{elapsed}"), humanDuration(trackedSecondsAt(t, now))},

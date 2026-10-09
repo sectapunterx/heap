@@ -604,11 +604,13 @@ QByteArray v10DocumentWithAttachment() {
 }
 }  // namespace
 
+// v10 → v11 has no rung, and v11 → v12 touches only tracker cards: a local
+// task walks the whole remaining ladder unchanged.
 TEST_F(MigrationTest, V10ToV11ChangesNothingButTheVersion) {
   QJsonObject root = QJsonDocument::fromJson(v10DocumentWithAttachment()).object();
   const QJsonArray before = root["profiles"].toArray();
   ASSERT_TRUE(heap::state::migrateState(root, 10));
-  EXPECT_EQ(root["schemaVersion"].toInt(), 11);
+  EXPECT_EQ(root["schemaVersion"].toInt(), heap::state::kSchemaVersion);
   EXPECT_EQ(root["profiles"].toArray(), before);
 }
 
@@ -633,4 +635,166 @@ TEST_F(MigrationTest, OpeningAV10ProfileUpgradesItKeepingFilesViewsAndACopy) {
   QFile f(backupDir() + "/" + kept.first());
   ASSERT_TRUE(f.open(QIODevice::ReadOnly));
   EXPECT_EQ(f.readAll(), original);
+}
+
+// ── v11 → v12: the local layer (APP-244) ──
+//
+// A tracker card whose local edits sat in the tracker fields gets them moved
+// into `local`, and the tracker fields get the tracker's values back, so the
+// next pull can no longer take them. Owner's rule: the upgrade loses nothing.
+
+namespace {
+
+// One tracker card with every kind of local divergence, one with empty
+// tracker values (older than three-way merge), one local task, and an unknown
+// key on a task that a v11 sibling build could have written.
+QByteArray v11DocumentWithDivergence(const char* language) {
+  QByteArray doc = R"({
+  "schemaVersion": 11,
+  "activeProfileId": "default",
+  "events": [],
+  "settings": {"language": "LANG"},
+  "profiles": [{
+    "id": "default", "name": "Example", "color": "#5cc2dd", "createdAt": "2026-01-01T00:00:00",
+    "people": [],
+    "statuses": [{"id": "todo", "name": "To Do", "color": "#888888"}],
+    "tasks": [
+      {"id": "J-1", "title": "My title", "desc": "my own notes on it", "priority": "P0", "status": "todo",
+       "statusChangedAt": "2026-07-01T09:00:00", "archived": false,
+       "dueAt": "2026-07-10T15:00:00.000", "dueHasTime": true,
+       "labels": [{"id": "backend", "color": "#111111"}, {"id": "after-release", "color": "#b1a7f0"}],
+       "externalId": "PROJ-1", "externalUrl": "https://jira.invalid/browse/PROJ-1", "externalProvider": "jira",
+       "externalMeta": {"remoteTitle": "Tracker title", "remoteBody": "tracker body", "remotePriority": "P2",
+                        "remoteDueAt": "2026-07-15T00:00:00.000", "remoteLabels": ["backend"],
+                        "conflicts": ["title", "body", "status"]},
+       "futureKeyFromASiblingBuild": {"keep": true}},
+      {"id": "J-2", "title": "old card", "desc": "edited", "priority": "P1", "status": "todo",
+       "statusChangedAt": "2026-07-01T09:00:00", "archived": false,
+       "labels": [{"id": "mine", "color": ""}],
+       "externalId": "PROJ-2", "externalUrl": "https://jira.invalid/browse/PROJ-2", "externalProvider": "jira",
+       "externalMeta": {"author": "ann"}},
+      {"id": "T-1", "title": "local", "desc": "local text", "priority": "P3", "status": "todo",
+       "statusChangedAt": "2026-07-01T09:00:00", "archived": false,
+       "labels": [{"id": "x", "color": ""}]}
+    ]
+  }]
+})";
+  doc.replace("LANG", language);
+  return doc;
+}
+
+QJsonObject taskJson(const QJsonObject& root, int index) {
+  return root["profiles"].toArray().at(0).toObject()["tasks"].toArray().at(index).toObject();
+}
+
+}  // namespace
+
+TEST_F(MigrationTest, V11ToV12MovesATrackerCardsLocalEditsIntoLocal) {
+  QJsonObject root = QJsonDocument::fromJson(v11DocumentWithDivergence("en")).object();
+  ASSERT_TRUE(heap::state::migrateState(root, 11));
+  EXPECT_EQ(root["schemaVersion"].toInt(), 12);
+
+  const QJsonObject t = taskJson(root, 0);
+  const Task back = heap::state::taskFromJson(t);
+  // The tracker fields hold the tracker's values again.
+  EXPECT_EQ(back.priority, QString("P2"));
+  EXPECT_EQ(back.dueAt, QDateTime(QDate(2026, 7, 15), QTime(0, 0)));
+  EXPECT_FALSE(back.dueHasTime);
+  EXPECT_EQ(back.title, QString("Tracker title"));
+  EXPECT_EQ(back.desc, QString("tracker body"));
+  ASSERT_EQ(back.labels.size(), 1);
+  EXPECT_EQ(back.labels.at(0).id, QString("backend"));
+  // Mine sit in `local`, nothing lost.
+  EXPECT_EQ(back.local.myPriority, QString("P0"));
+  EXPECT_EQ(back.local.myPriorityBase, QString("P2"));
+  EXPECT_EQ(back.local.myDueAt, QDateTime(QDate(2026, 7, 10), QTime(15, 0)));
+  EXPECT_TRUE(back.local.myDueHasTime);
+  EXPECT_EQ(back.local.myDueBase, QDateTime(QDate(2026, 7, 15), QTime(0, 0)));
+  ASSERT_EQ(back.local.tags.size(), 1);
+  EXPECT_EQ(back.local.tags.at(0), (LocalTag{QStringLiteral("after-release"), QStringLiteral("#b1a7f0")}));
+  EXPECT_TRUE(back.local.notes.contains(QStringLiteral("My title (before 0.8.0): My title")));
+  EXPECT_TRUE(back.local.notes.contains(QStringLiteral("my own notes on it")));
+  // The conflicts the local side no longer needs are gone; status stays.
+  EXPECT_EQ(back.externalMeta.conflicts, QStringList{QStringLiteral("status")});
+  // An unknown key survives the rung.
+  EXPECT_TRUE(t.contains(QStringLiteral("futureKeyFromASiblingBuild")));
+}
+
+TEST_F(MigrationTest, V11ToV12WritesNotesHeadersInTheAppLanguage) {
+  QJsonObject root = QJsonDocument::fromJson(v11DocumentWithDivergence("ru")).object();
+  ASSERT_TRUE(heap::state::migrateState(root, 11));
+  const Task back = heap::state::taskFromJson(taskJson(root, 0));
+  EXPECT_TRUE(back.local.notes.contains(QStringLiteral("Моя версия описания (до 0.8.0)")));
+  EXPECT_TRUE(back.local.notes.contains(QStringLiteral("Мой заголовок (до 0.8.0): My title")));
+}
+
+TEST_F(MigrationTest, V11ToV12MovesNothingWhenTheTrackerValueIsEmpty) {
+  QJsonObject root = QJsonDocument::fromJson(v11DocumentWithDivergence("en")).object();
+  const QJsonObject before = taskJson(root, 1);
+  ASSERT_TRUE(heap::state::migrateState(root, 11));
+  EXPECT_EQ(taskJson(root, 1), before);
+}
+
+TEST_F(MigrationTest, V11ToV12LeavesALocalTaskByteIdentical) {
+  QJsonObject root = QJsonDocument::fromJson(v11DocumentWithDivergence("en")).object();
+  const QJsonObject before = taskJson(root, 2);
+  ASSERT_TRUE(heap::state::migrateState(root, 11));
+  EXPECT_EQ(taskJson(root, 2), before);
+  EXPECT_FALSE(heap::state::migrateState(root, heap::state::kSchemaVersion)) << "a v12 document is never migrated again";
+}
+
+TEST_F(MigrationTest, OpeningAV11ProfileKeepsUnknownKeysLocalEditsAndACopy) {
+  const QByteArray original = v11DocumentWithDivergence("en");
+  writeFile(statePath(), original);
+  {
+    AppController app;
+    const Task* t = taskById(app, QStringLiteral("J-1"));
+    ASSERT_NE(t, nullptr);
+    EXPECT_EQ(t->local.myPriority, QString("P0"));
+    EXPECT_TRUE(t->extra.contains(QStringLiteral("futureKeyFromASiblingBuild"))) << "v11 pass-through is kept (APP-244)";
+    app.flushSave();
+  }
+  const QJsonObject root = readJson(statePath());
+  EXPECT_EQ(root.value("schemaVersion").toInt(), heap::state::kSchemaVersion);
+  const QJsonObject t = taskJson(root, 0);
+  EXPECT_TRUE(t.contains(QStringLiteral("futureKeyFromASiblingBuild")));
+  EXPECT_EQ(t["local"].toObject()["myPriority"].toString(), QString("P0"));
+  const QStringList kept = QDir(backupDir()).entryList({"state-premigration-v11-*.json"}, QDir::Files);
+  ASSERT_EQ(kept.size(), 1);
+  QFile f(backupDir() + "/" + kept.first());
+  ASSERT_TRUE(f.open(QIODevice::ReadOnly));
+  EXPECT_EQ(f.readAll(), original);
+}
+
+// After 0.8.0 the same rule holds at runtime: taking the tracker's version of
+// a title or description puts mine in the notepad instead of dropping it.
+TEST_F(MigrationTest, TakingTheTrackersTextKeepsMineInTheNotepad) {
+  QJsonObject root = QJsonDocument::fromJson(v11DocumentWithDivergence("en")).object();
+  ASSERT_TRUE(heap::state::migrateState(root, 11));
+  // A fresh conflict on a v12 card, after the migration.
+  QJsonArray profiles = root["profiles"].toArray();
+  QJsonObject profile = profiles.at(0).toObject();
+  QJsonArray tasks = profile["tasks"].toArray();
+  QJsonObject card = tasks.at(0).toObject();
+  card["desc"] = QStringLiteral("edited again here");
+  card["title"] = QStringLiteral("Renamed here");
+  QJsonObject meta = card["externalMeta"].toObject();
+  meta["conflicts"] = QJsonArray{QStringLiteral("title"), QStringLiteral("body")};
+  card["externalMeta"] = meta;
+  card.remove(QStringLiteral("local"));
+  tasks[0] = card;
+  profile["tasks"] = tasks;
+  profiles[0] = profile;
+  root["profiles"] = profiles;
+  writeFile(statePath(), QJsonDocument(root).toJson());
+
+  AppController app;
+  app.resolveTrackerConflict(QStringLiteral("J-1"), /*useTracker=*/true);
+  const Task* t = taskById(app, QStringLiteral("J-1"));
+  ASSERT_NE(t, nullptr);
+  EXPECT_EQ(t->desc, QString("tracker body"));
+  EXPECT_EQ(t->title, QString("Tracker title"));
+  EXPECT_TRUE(t->local.notes.contains(QStringLiteral("edited again here")));
+  EXPECT_TRUE(t->local.notes.contains(QStringLiteral("My title: Renamed here")));
+  EXPECT_TRUE(t->externalMeta.conflicts.isEmpty());
 }

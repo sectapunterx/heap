@@ -1,3 +1,4 @@
+#include "local/Effective.h"
 #include "views/SavedViewMatch.h"
 
 namespace heap::savedviews {
@@ -20,7 +21,7 @@ bool accepts(const CompiledView& c, const Task& t, const QString& haystack) {
   if(c.hideDone && t.status == QLatin1String("done")) {
     return false;
   }
-  if(!c.priorities.isEmpty() && !c.priorities.contains(t.priority)) {
+  if(!c.priorities.isEmpty() && !c.priorities.contains(heap::local::effectivePriority(t))) {
     return false;
   }
   if(!c.freeText.isEmpty() && !haystack.contains(c.freeText)) {

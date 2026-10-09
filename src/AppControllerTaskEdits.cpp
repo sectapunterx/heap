@@ -4,6 +4,7 @@
 
 #include "AppController.h"
 
+#include "local/Effective.h"
 #include "query/TaskQuery.h"
 
 #include <QRegularExpression>
@@ -23,10 +24,10 @@ bool AppController::setPriorityOf(const QString& id, const QString& priority) {
     return false;
   }
   Task t = m_tasks.items().at(row);
-  if(t.priority == priority) {
+  if(heap::local::effectivePriority(t) == priority) {
     return false;
   }
-  t.priority = priority;
+  heap::local::setMyPriority(t, priority);  // a tracker card's is mine (APP-238)
   m_tasks.upsert(t);
   return true;
 }
@@ -116,7 +117,7 @@ bool AppController::passesFilter_(
   if((t.archived && !showArchived) || (hideDone && t.status == QStringLiteral("done"))) {
     return false;
   }
-  if(!priorities.isEmpty() && !priorities.contains(t.priority)) {
+  if(!priorities.isEmpty() && !priorities.contains(heap::local::effectivePriority(t))) {
     return false;
   }
   const QString free = q.freeText();

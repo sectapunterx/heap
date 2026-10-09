@@ -386,6 +386,12 @@ heap_add_appcontroller_test(heap_int_audit_tests test_int_audit.cpp)
 # New tickets on the board, the sync flag and the event log (APP-180/186/187).
 heap_add_appcontroller_test(heap_sync_visibility_tests test_sync_visibility.cpp)
 # Tracker writes are opt-in per tracker, and checked before they go (APP-243/204).
+# The local layer (ADR 0001, APP-244): no sync path touches Task.local.
+heap_add_appcontroller_test(heap_local_layer_tests test_local_layer.cpp)
+# Upgrading 0.7.x (schema 11) to 0.8.0 loses no key (APP-244).
+heap_add_appcontroller_test(heap_upgrade_lossless_tests test_upgrade_lossless.cpp)
+target_compile_definitions(heap_upgrade_lossless_tests PRIVATE
+        HEAP_STATE_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/state")
 heap_add_appcontroller_test(heap_tracker_writes_tests test_tracker_writes.cpp)
 target_compile_definitions(heap_tracker_writes_tests PRIVATE
         HEAP_STATE_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/state")
@@ -784,6 +790,7 @@ add_executable(heap_sync_tests
         test_sync_serializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/sync/SyncSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/sync/SyncSerializer.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/TaskLocal.cpp
 )
 
 target_include_directories(heap_sync_tests PRIVATE
@@ -935,6 +942,7 @@ add_executable(heap_roundtrip_tests
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/sync/SyncSerializer.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/TaskLocal.cpp
 )
 set_target_properties(heap_roundtrip_tests PROPERTIES AUTOMOC ON)
 target_include_directories(heap_roundtrip_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)

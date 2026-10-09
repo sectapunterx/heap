@@ -26,7 +26,7 @@ static_assert(heap::meta::fieldCount<Attachment>() == 4,
               "Attachment gained or lost a field. Update attachmentsToJson/attachmentsFromJson here AND in "
               "src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<Task>() == 27,
+static_assert(heap::meta::fieldCount<Task>() == 28,
               "Task gained or lost a field. Update taskToJson/taskFromJson here AND in "
               "src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -324,6 +324,10 @@ QJsonObject taskToJson(const Task& t) {
   if(!t.attachments.isEmpty()) {
     o["attachments"] = attachmentsToJson(t.attachments);
   }
+  // The local layer (schema v12, APP-244) — omitted while empty.
+  if(!heap::local::isEmpty(t.local)) {
+    o["local"] = heap::local::toJson(t.local, /*compact=*/true);
+  }
   return o;
 }
 
@@ -375,6 +379,7 @@ Task taskFromJson(const QJsonObject& o) {
   t.rank = o["rank"].toDouble(0.0);
   t.links = linksFromJson(o["links"].toArray());
   t.attachments = attachmentsFromJson(o["attachments"].toArray());
+  t.local = heap::local::fromJson(o["local"].toObject());
   static const QStringList kKnown = {QStringLiteral("id"),
                                      QStringLiteral("title"),
                                      QStringLiteral("desc"),
@@ -401,6 +406,7 @@ Task taskFromJson(const QJsonObject& o) {
                                      QStringLiteral("rank"),
                                      QStringLiteral("links"),
                                      QStringLiteral("attachments"),
+                                     QStringLiteral("local"),
                                      // Read, never written: schema ≤ 3 and ≤ 9.
                                      QStringLiteral("deadline"),
                                      QStringLiteral("hasTime")};
@@ -1063,6 +1069,112 @@ void migrateNotesV7ToV8(QJsonObject& root) {
   }
 }
 
+// v11→v12 (APP-244, owner's call 2026-10-08): a tracker card's local edits
+// used to live in the tracker fields, where the next pull could take them.
+// Each one moves into `local`, and the tracker field gets the tracker's value
+// back. An empty tracker value (a card older than three-way merge) is not a
+// divergence: nothing moves. `ru` picks the language of the notes headers.
+void migrateTaskV11ToV12(QJsonObject& task, bool ru) {
+  if(task.value(QStringLiteral("externalId")).toString().isEmpty() || !task.value(QStringLiteral("externalMeta")).isObject()) {
+    return;
+  }
+  QJsonObject meta = task.value(QStringLiteral("externalMeta")).toObject();
+  QJsonObject local = task.value(QStringLiteral("local")).toObject();
+  QStringList conflicts;
+  for(const auto& v : meta.value(QStringLiteral("conflicts")).toArray()) {
+    conflicts.append(v.toString());
+  }
+  QStringList notes;
+  if(!local.value(QStringLiteral("notes")).toString().isEmpty()) {
+    notes.append(local.value(QStringLiteral("notes")).toString());
+  }
+
+  const QString remotePriority = meta.value(QStringLiteral("remotePriority")).toString();
+  const QString priority = task.value(QStringLiteral("priority")).toString();
+  if(!remotePriority.isEmpty() && !priority.isEmpty() && priority != remotePriority) {
+    local["myPriority"] = priority;
+    local["myPriorityBase"] = remotePriority;
+    task["priority"] = remotePriority;
+    conflicts.removeAll(QStringLiteral("priority"));
+  }
+
+  const QDateTime remoteDue = dtFromStr(meta.value(QStringLiteral("remoteDueAt")).toString());
+  const QDateTime due = dtFromStr(task.value(QStringLiteral("dueAt")).toString());
+  if(remoteDue.isValid() && due.isValid() && due != remoteDue) {
+    local["myDueAt"] = dtToStr(due);
+    if(task.value(QStringLiteral("dueHasTime")).toBool(false)) {
+      local["myDueHasTime"] = true;
+    }
+    local["myDueBase"] = dtToStr(remoteDue);
+    task["dueAt"] = dtToStr(remoteDue);
+    // The pull sets the clock flag from the tracker; a tracker due date sent
+    // at exactly midnight is a bare date.
+    if(remoteDue.time() == QTime(0, 0)) {
+      task.remove("dueHasTime");
+    } else {
+      task["dueHasTime"] = true;
+    }
+  }
+
+  const QJsonArray remoteLabels = meta.value(QStringLiteral("remoteLabels")).toArray();
+  if(!remoteLabels.isEmpty() && task.value(QStringLiteral("labels")).isArray()) {
+    QStringList remote;
+    for(const auto& v : remoteLabels) {
+      remote.append(v.toString());
+    }
+    QJsonArray keep;
+    QJsonArray tags = local.value(QStringLiteral("tags")).toArray();
+    for(const auto& v : task.value(QStringLiteral("labels")).toArray()) {
+      const QJsonObject label = v.toObject();
+      if(remote.contains(label.value(QStringLiteral("id")).toString())) {
+        keep.append(label);
+      } else {
+        tags.append(label);  // same {id, color} shape as a local tag
+      }
+    }
+    if(keep.isEmpty()) {
+      task.remove("labels");
+    } else {
+      task["labels"] = keep;
+    }
+    if(!tags.isEmpty()) {
+      local["tags"] = tags;
+    }
+  }
+
+  const QString remoteTitle = meta.value(QStringLiteral("remoteTitle")).toString();
+  const QString title = task.value(QStringLiteral("title")).toString();
+  if(!remoteTitle.isEmpty() && title != remoteTitle) {
+    notes.append((ru ? QStringLiteral("Мой заголовок (до 0.8.0): ") : QStringLiteral("My title (before 0.8.0): ")) + title);
+    task["title"] = remoteTitle;
+    conflicts.removeAll(QStringLiteral("title"));
+  }
+  const QString remoteBody = meta.value(QStringLiteral("remoteBody")).toString();
+  const QString desc = task.value(QStringLiteral("desc")).toString();
+  if(!remoteBody.isEmpty() && desc != remoteBody) {
+    if(!desc.trimmed().isEmpty()) {
+      notes.append((ru ? QStringLiteral("## Моя версия описания (до 0.8.0)\n\n")
+                       : QStringLiteral("## My version of the description (before 0.8.0)\n\n")) +
+                   desc);
+    }
+    task["desc"] = remoteBody;
+    conflicts.removeAll(QStringLiteral("body"));
+  }
+
+  if(!notes.isEmpty()) {
+    local["notes"] = notes.join(QStringLiteral("\n\n"));
+  }
+  if(conflicts.isEmpty()) {
+    meta.remove("conflicts");
+  } else {
+    meta["conflicts"] = QJsonArray::fromStringList(conflicts);
+  }
+  task["externalMeta"] = meta;
+  if(!local.isEmpty()) {
+    task["local"] = local;
+  }
+}
+
 }  // namespace
 
 bool migrateState(QJsonObject& root, int fromVersion) {
@@ -1108,6 +1220,21 @@ bool migrateState(QJsonObject& root, int fromVersion) {
   // keys mean when absent. The bump exists for the other direction — 0.5.3
   // reads v10, does not know `attachments`, and saved every task without it
   // (PLAT-15); v11 sends it into its newer-schema read-only mode instead.
+  //
+  // v11 -> v12 added Task.local and moves a tracker card's local divergence
+  // into it, so the next pull can no longer take it (APP-244).
+  if(fromVersion < 12) {
+    const bool ru = root.value(QStringLiteral("settings")).toObject().value(QStringLiteral("language")).toString() == QStringLiteral("ru");
+    forEachTaskArray(root, [ru](const QJsonArray& tasks) {
+      QJsonArray out;
+      for(const auto& v : tasks) {
+        QJsonObject t = v.toObject();
+        migrateTaskV11ToV12(t, ru);
+        out.append(t);
+      }
+      return out;
+    });
+  }
 
   root["schemaVersion"] = kSchemaVersion;
   return true;

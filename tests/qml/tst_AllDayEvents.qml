@@ -243,10 +243,16 @@ TestCase {
 
     // A bar spanning three days is three columns wide, not one.
     function test_a_multi_day_bar_spans_its_columns() {
+        // A Monday, so the three days never cross the week's edge: a bar that
+        // runs into the next week is clipped to this one, and that depended
+        // on which weekday "today + 541" happened to fall on.
         const first = probeDay(541);
+        first.setDate(first.getDate() - (first.getDay() + 6) % 7);
+        const last = new Date(first);
+        last.setDate(first.getDate() + 2);
         clearDay(first);
         const shortId = addEvent(first, { allDay: true, title: "one day" });
-        const longId = addEvent(first, { allDay: true, endDate: probeDay(543), title: "three days" });
+        const longId = addEvent(first, { allDay: true, endDate: last, title: "three days" });
 
         const wv = makeWeek(first);
         const one = findChild(wv, "allday-" + shortId);

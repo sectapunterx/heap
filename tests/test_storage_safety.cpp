@@ -877,11 +877,14 @@ TEST_F(StorageSafety, UnknownKeysOfTasksEventsPeopleAndColumnsSurviveASave) {
   EXPECT_EQ(sev["futureEvent"].toInt(), 7);
 }
 
+// Below kPassThroughSince an unknown key is one a later version retired. A v11
+// document's keys are kept on the way to v12 (APP-244: the upgrade loses
+// nothing), so the oldest schema that still drops them is the one before.
 TEST_F(StorageSafety, UnknownTaskKeysOfAnOlderSchemaAreNotCarried) {
   QJsonObject task = taskJson("T-1", "todo");
   task["retiredKey"] = true;
   QJsonObject root = QJsonDocument::fromJson(stateDoc({profileJson("a", {task})}, "a")).object();
-  root["schemaVersion"] = heap::state::kSchemaVersion - 1;
+  root["schemaVersion"] = heap::state::kPassThroughSince - 1;
   writeRaw(statePath(), QJsonDocument(root).toJson());
   {
     AppController app;

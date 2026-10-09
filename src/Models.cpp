@@ -2,6 +2,7 @@
 #include "TaskDefer.h"
 
 #include "integrations/SyncState.h"
+#include "local/Effective.h"
 
 #include <QRegularExpression>
 
@@ -224,13 +225,13 @@ QVariant TaskModel::data(const QModelIndex& idx, int role) const {
     case DescRole:
       return t.desc;
     case PriorityRole:
-      return t.priority;
+      return heap::local::effectivePriority(t);
     case StatusRole:
       return t.status;
     case DeadlineRole:
       // Kept a QDate: every calendar/timeline view does whole-day arithmetic on
       // it. The clock component lives on DueAtRole / ScheduledAtRole.
-      return t.dueAt.isValid() ? t.dueAt.date() : QDate();
+      return heap::local::effectiveDueAt(t).isValid() ? heap::local::effectiveDueAt(t).date() : QDate();
     case BranchRole:
       return t.branch;
     case StatusChangedAtRole:
@@ -264,10 +265,10 @@ QVariant TaskModel::data(const QModelIndex& idx, int role) const {
     case ScheduledAtRole:
       return t.scheduledAt;
     case DueAtRole:
-      return t.dueAt;
+      return heap::local::effectiveDueAt(t);
     case HasTimeRole:
     case DueHasTimeRole:
-      return t.dueHasTime;
+      return heap::local::effectiveDueHasTime(t);
     case ScheduledHasTimeRole:
       return t.scheduledHasTime;
     case EstimateMinutesRole:

@@ -97,6 +97,22 @@ Task makeFullTask() {
                               5000000123LL,
                               QStringLiteral("image/png")},
                    Attachment{QStringLiteral("fedcba9876543210fedcba9876543210"), QStringLiteral("Makefile"), 42, QString()}};
+  // Schema v12: the local layer (APP-244), every field set.
+  t.local.notes = QStringLiteral("tried a smaller pool:\n```sh\nmake bench\n```");
+  t.local.checklist = {LocalCheckItem{QStringLiteral("c1"), QStringLiteral("repro"), 1, true, false, QString()},
+                       LocalCheckItem{QStringLiteral("c2"), QStringLiteral("fix"), 3, true, true, QStringLiteral("HEAP-107")}};
+  t.local.myPriority = QStringLiteral("P1");
+  t.local.myDueAt = QDateTime(QDate(2026, 7, 12), QTime(10, 0, 0, 500));
+  t.local.myDueHasTime = true;
+  t.local.myPriorityBase = QStringLiteral("P2");
+  t.local.myDueBase = QDateTime(QDate(2026, 7, 15), QTime(0, 0));
+  t.local.tags = {LocalTag{QStringLiteral("after-release"), QStringLiteral("#b1a7f0")}, LocalTag{QStringLiteral("quick"), QString()}};
+  t.local.related = {
+      LocalLink{
+          QStringLiteral("r1"), QStringLiteral("related"), QStringLiteral("https://gitlab.example/a/b/-/merge_requests/17"), QString()},
+      LocalLink{QStringLiteral("r2"), QStringLiteral("related"), QStringLiteral("APP-12"), QStringLiteral("work")}};
+  t.local.commentDraft = QStringLiteral("Reproduced on 0.8.0, see notes.");
+  t.local.extra = QJsonObject{{QStringLiteral("futureLocalField"), true}};
   // A key a newer build wrote: it has to come back out as itself (PLAT-15).
   t.extra = QJsonObject{{QStringLiteral("futureTaskField"), QJsonObject{{QStringLiteral("n"), 1}}}};
   return t;
@@ -234,6 +250,32 @@ class Gen {
                                       pick(0, 1 << 30),
                                       boolean() ? QStringLiteral("application/pdf") : QString()});
     }
+    // The local layer (APP-244): sometimes empty, which state.json omits.
+    if(boolean()) {
+      t.local.notes = text();
+      const int items = pick(0, 3);
+      for(int i = 0; i < items; ++i) {
+        const bool done = boolean();
+        t.local.checklist.append(
+            LocalCheckItem{QStringLiteral("c") + QString::number(i), text(), pick(1, 4), done, done && boolean(), QString()});
+      }
+      if(boolean()) {
+        t.local.myPriority = QStringLiteral("P") + QString::number(pick(0, 3));
+        t.local.myPriorityBase = QStringLiteral("P") + QString::number(pick(0, 3));
+      }
+      if(boolean()) {
+        t.local.myDueAt = QDateTime(QDate(2026, pick(1, 12), pick(1, 28)), QTime(pick(0, 23), pick(0, 59)));
+        t.local.myDueHasTime = boolean();
+      }
+      if(boolean()) {
+        t.local.tags.append(LocalTag{text() + QStringLiteral("x"), boolean() ? QStringLiteral("#123456") : QString()});
+      }
+      if(boolean()) {
+        t.local.related.append(
+            LocalLink{QStringLiteral("r1"), QStringLiteral("related"), QStringLiteral("T-") + QString::number(pick(1, 9)), QString()});
+      }
+      t.local.commentDraft = boolean() ? text() : QString();
+    }
     return t;
   }
 
@@ -285,7 +327,8 @@ constexpr int kCases = 1000;
 // Mirrors the static_asserts inside both serializers. If the struct grows and
 // only one serializer is updated, that serializer's own static_assert fires.
 TEST(FieldCountGuard, TaskAndEventArityIsPinned) {
-  EXPECT_EQ(heap::meta::fieldCount<Task>(), 27u);
+  EXPECT_EQ(heap::meta::fieldCount<Task>(), 28u);
+  EXPECT_EQ(heap::meta::fieldCount<TaskLocal>(), 11u);
   EXPECT_EQ(heap::meta::fieldCount<Attachment>(), 4u);
   EXPECT_EQ(heap::meta::fieldCount<CalEvent>(), 22u);
 }

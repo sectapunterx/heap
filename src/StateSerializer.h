@@ -25,7 +25,10 @@ namespace heap::state {
 //   v11 Task.attachments and Profile.savedViews (no rung: absent = none). The
 //       bump is what sends a v10 build into its read-only mode instead of
 //       saving every task without its files (PLAT-15)
-inline constexpr int kSchemaVersion = 11;
+//   v12 Task.local — what the developer keeps on top of a tracker issue (ADR
+//       0001, APP-244). The rung moves a tracker card's local divergence
+//       (priority, due date, extra labels, edited description/title) there
+inline constexpr int kSchemaVersion = 12;
 
 // The key of a column's map (Profile::statuses) that holds the column keys
 // this build does not read, as a QVariantMap, so they survive a save.
@@ -90,6 +93,9 @@ Profile profileFromJson(const QJsonObject& o, QVector<CalEvent>* outLegacyEvents
 // task, person and column in it, or on every event. Pass-through is for the
 // schema this build writes: in an older document an unknown key is one a later
 // version retired, not one a sibling build added.
+// The oldest schema whose unknown keys are still kept: a v11 document's keys
+// survive the move to v12 (APP-244), since the upgrade promises to lose nothing.
+inline constexpr int kPassThroughSince = 11;
 void dropPassThrough(Profile& p);
 void dropPassThrough(QVector<CalEvent>& events);
 

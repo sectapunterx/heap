@@ -13,6 +13,7 @@
 #include "git/BranchTaskMatcher.h"
 #include "integrations/AutoSync.h"
 #include "integrations/IntegrationTypes.h"
+#include "local/Effective.h"
 #include "views/UiScale.h"
 
 #include <QApplication>
@@ -1464,7 +1465,8 @@ TEST_F(AppControllerTest, ALocallyEditedDeadlineSurvivesTheNextSync) {
   // The tracker still says the 15th; the user's own date has to win.
   app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
   const Task& t = app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("github-9")));
-  EXPECT_EQ(t.dueAt, QDateTime(QDate(2026, 9, 1), QTime(18, 0)));
+  EXPECT_EQ(heap::local::effectiveDueAt(t), QDateTime(QDate(2026, 9, 1), QTime(18, 0)));
+  EXPECT_EQ(t.dueAt, issue.dueAt) << "the tracker's field stays the tracker's (APP-238)";
 }
 
 TEST_F(AppControllerTest, ADeadlineRemovedUpstreamClearsOnlyWhenSyncOwned) {
@@ -1486,7 +1488,7 @@ TEST_F(AppControllerTest, ADeadlineRemovedUpstreamClearsOnlyWhenSyncOwned) {
   draft["dueAt"] = QDateTime(QDate(2026, 9, 1), QTime(18, 0));
   app_->saveTask(draft);
   app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {other});
-  EXPECT_EQ(app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("github-10"))).dueAt,
+  EXPECT_EQ(heap::local::effectiveDueAt(app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("github-10")))),
             QDateTime(QDate(2026, 9, 1), QTime(18, 0)));
 }
 
@@ -1498,11 +1500,11 @@ TEST_F(AppControllerTest, ASnoozedDeadlineIsNotSnappedBackBySync) {
   app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
 
   app_->snoozeDeadline(QStringLiteral("github-9"), 60);
-  const QDateTime snoozed = app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("github-9"))).dueAt;
+  const QDateTime snoozed = heap::local::effectiveDueAt(app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("github-9"))));
   ASSERT_NE(snoozed, issue.dueAt);
 
   app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
-  EXPECT_EQ(app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("github-9"))).dueAt, snoozed);
+  EXPECT_EQ(heap::local::effectiveDueAt(app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("github-9")))), snoozed);
 }
 
 // The editor rewrites labels from comma text, which drops every colour. The

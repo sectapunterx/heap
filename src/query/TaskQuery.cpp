@@ -1,4 +1,5 @@
 #include "chrono/ChronoParser.h"
+#include "local/Effective.h"
 #include "query/TaskQuery.h"
 
 #include <QDateTime>
@@ -348,7 +349,7 @@ bool TaskQuery::clauseMatches(const Clause& c, const Task& t, const QString& hay
     return c.statusIds.contains(t.status) || c.statusIds.contains(t.status.toLower());
   }
   if(c.field == QLatin1String("priority")) {
-    return c.values.contains(t.priority.toLower());
+    return c.values.contains(heap::local::effectivePriority(t).toLower());
   }
   if(c.field == QLatin1String("tag")) {
     for(const Label& l : t.labels) {
@@ -378,7 +379,7 @@ bool TaskQuery::clauseMatches(const Clause& c, const Task& t, const QString& hay
       } else if(v == QLatin1String("archived")) {
         hit = t.archived;
       } else if(v == QLatin1String("overdue")) {
-        hit = !done && t.dueAt.isValid() && t.dueAt.date() < m_today;
+        hit = !done && heap::local::effectiveDueAt(t).isValid() && heap::local::effectiveDueAt(t).date() < m_today;
       } else if(v == QLatin1String("recurring")) {
         hit = !t.recurrence.isEmpty();
       } else if(v == QLatin1String("new")) {
@@ -391,7 +392,7 @@ bool TaskQuery::clauseMatches(const Clause& c, const Task& t, const QString& hay
     return false;
   }
   if(c.field == QLatin1String("deadline")) {
-    const QDate due = t.dueAt.isValid() ? t.dueAt.date() : QDate();
+    const QDate due = heap::local::effectiveDueAt(t).isValid() ? heap::local::effectiveDueAt(t).date() : QDate();
     if(c.special == QLatin1String("none")) {
       return !due.isValid();
     }

@@ -1,5 +1,7 @@
 #include "TaskFilterProxy.h"
 
+#include "local/Effective.h"
+
 #include <QDate>
 #include <QDateTime>
 
@@ -258,7 +260,7 @@ bool TaskFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex& sourceP
     if(m_archivedOnly ? !t.archived : (!m_showArchived && t.archived)) {
       return false;
     }
-    if(!m_priorities.isEmpty() && !m_priorities.contains(t.priority)) {
+    if(!m_priorities.isEmpty() && !m_priorities.contains(heap::local::effectivePriority(t))) {
       return false;
     }
     // The model's cached haystack (see SearchTextRole), not a concatenation

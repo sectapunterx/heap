@@ -186,6 +186,8 @@ qt_add_library(heap_core STATIC
     src/RecoveryLog.cpp
     src/SampleData.cpp
     src/StateSerializer.cpp
+    # The task's local layer (ADR 0001, APP-244).
+    src/local/TaskLocal.cpp
     src/CodeHighlighter.cpp
     src/chrono/ChronoTokenizer.cpp
     src/chrono/ChronoLocale_en.cpp
@@ -641,6 +643,7 @@ if(WIN32)
         src/platform/SingleInstance.cpp
         src/storage/StateIO.cpp
         src/StateSerializer.cpp
+        src/local/TaskLocal.cpp
         src/Models.cpp
     )
     set_target_properties(heap-cli PROPERTIES AUTOMOC ON)

@@ -37,6 +37,7 @@
 #include "integrations/StatusMap.h"
 #include "integrations/SyncState.h"
 #include "integrations/TrackerMerge.h"
+#include "local/Effective.h"
 #include "markdown/MdHtml.h"
 #include "markdown/MdOutline.h"
 #include "notes/MdVault.h"
@@ -2039,7 +2040,8 @@ void AppController::moveTaskRanked(const QString& id, const QString& newStatus, 
   const UndoScope scope(this, tr_("task.moveUndone").arg(taskId));
   // Capture before any upsert can invalidate the `t` reference (HEAP-77).
   const QString recurrence = t.recurrence;
-  const QDate recurBase = t.dueAt.isValid() ? t.dueAt.date() : t.scheduledAt.date();
+  const QDateTime recurDue = heap::local::effectiveDueAt(t);
+  const QDate recurBase = recurDue.isValid() ? recurDue.date() : t.scheduledAt.date();
   m_tasks.setStatus(id, newStatus, {}, rank);
   completionSoundOnMove_(prevStatus, newStatus);
 
@@ -3167,6 +3169,21 @@ bool AppController::saveTask(const QVariantMap& draft) {
       t.rank = prev.rank;
       t.links = prev.links;
       t.extra = prev.extra;  // keys a newer build wrote (PLAT-15)
+      // The editor does not carry the local layer (APP-244): any save used
+      // to rebuild the task without it. Keep it, then route the priority and
+      // due date the editor showed (the effective ones) through it, so a
+      // tracker card's tracker fields stay the tracker's.
+      t.local = prev.local;
+      if(!t.externalId.isEmpty()) {
+        const QString chosenPriority = t.priority;
+        const QDateTime chosenDue = t.dueAt;
+        const bool chosenDueHasTime = t.dueHasTime;
+        t.priority = prev.priority;
+        t.dueAt = prev.dueAt;
+        t.dueHasTime = prev.dueHasTime;
+        heap::local::setMyPriority(t, chosenPriority);
+        heap::local::setMyDue(t, chosenDue, chosenDueHasTime);
+      }
       // A label sent as plain text keeps the colour it already had.
       for(Label& l : t.labels) {
         if(!l.color.isEmpty()) {
@@ -5321,7 +5338,9 @@ QVariantList AppController::calendarTasks(const QDate& from, const QDate& to, bo
     if(t.archived && !includeArchived) {
       continue;
     }
-    const QDate due = t.dueAt.isValid() ? t.dueAt.date() : QDate();
+    const QDateTime dueAt = heap::local::effectiveDueAt(t);
+    const bool dueHasTime = heap::local::effectiveDueHasTime(t);
+    const QDate due = dueAt.isValid() ? dueAt.date() : QDate();
     const QDate sched = t.scheduledAt.isValid() ? t.scheduledAt.date() : QDate();
     const bool dueIn = due.isValid() && due >= from && due <= to;
     const bool schedIn = sched.isValid() && sched >= from && sched <= to;
@@ -5333,13 +5352,13 @@ QVariantList AppController::calendarTasks(const QDate& from, const QDate& to, bo
     m["id"] = t.id;
     m["title"] = t.title;
     m["desc"] = t.desc;
-    m["priority"] = t.priority;
+    m["priority"] = heap::local::effectivePriority(t);
     m["status"] = t.status;
     m["deadline"] = due.isValid() ? QVariant(due) : QVariant();
-    m["dueAt"] = t.dueAt;
+    m["dueAt"] = dueAt;
     m["scheduledAt"] = t.scheduledAt;
-    m["hasTime"] = t.dueHasTime;
-    m["dueHasTime"] = t.dueHasTime;
+    m["hasTime"] = dueHasTime;
+    m["dueHasTime"] = dueHasTime;
     m["scheduledHasTime"] = t.scheduledHasTime;
     m["archived"] = t.archived;
     m["estimateMinutes"] = t.estimateMinutes;
@@ -5469,15 +5488,22 @@ bool AppController::rescheduleTask(const QString& taskId, const QString& field, 
     nextHasTime = hasTime;
     next = QDateTime(when.date(), hasTime ? QTime(when.time().hour(), when.time().minute()) : QTime(0, 0));
   }
+  const bool mine = due && !t.externalId.isEmpty();  // a tracker card's date is mine (APP-238)
   QDateTime& slot = due ? t.dueAt : t.scheduledAt;
   bool& slotHasTime = due ? t.dueHasTime : t.scheduledHasTime;
-  if(slot == next && slotHasTime == nextHasTime) {
+  const QDateTime current = mine ? heap::local::effectiveDueAt(t) : slot;
+  const bool currentHasTime = mine ? heap::local::effectiveDueHasTime(t) : slotHasTime;
+  if(current == next && currentHasTime == nextHasTime) {
     return false;
   }
   const UndoScope scope(this, tr_(due ? "undo.deadline" : "undo.schedule").arg(t.id));
-  const QDateTime was = slot;
-  slot = next;
-  slotHasTime = nextHasTime;
+  const QDateTime was = current;
+  if(mine) {
+    heap::local::setMyDue(t, next, nextHasTime);
+  } else {
+    slot = next;
+    slotHasTime = nextHasTime;
+  }
   m_tasks.upsert(t);
   if(!due && nextHasTime) {
     moveLinkedFocusBlocks(t.id, was, next);
@@ -6374,12 +6400,12 @@ QVariantMap AppController::taskById(const QString& id) const {
   m["id"] = t.id;
   m["title"] = t.title;
   m["desc"] = t.desc;
-  m["priority"] = t.priority;
+  m["priority"] = heap::local::effectivePriority(t);
   m["status"] = t.status;
   m["scheduledAt"] = t.scheduledAt;
-  m["dueAt"] = t.dueAt;
+  m["dueAt"] = heap::local::effectiveDueAt(t);
   m["scheduledHasTime"] = t.scheduledHasTime;
-  m["dueHasTime"] = t.dueHasTime;
+  m["dueHasTime"] = heap::local::effectiveDueHasTime(t);
   m["branch"] = t.branch;
   m["archived"] = t.archived;
   m["trackedSeconds"] = t.trackedSeconds;
@@ -6612,16 +6638,17 @@ void AppController::copyActiveProfileMarkdownToClipboard() {
 
   const auto renderTask = [](const Task& t) {
     QString line = QStringLiteral("- ");
-    if(!t.priority.isEmpty()) {
-      line += QStringLiteral("**[") + t.priority + QStringLiteral("]** ");
+    if(!heap::local::effectivePriority(t).isEmpty()) {
+      line += QStringLiteral("**[") + heap::local::effectivePriority(t) + QStringLiteral("]** ");
     }
     if(!t.id.isEmpty()) {
       line += QStringLiteral("`") + t.id + QStringLiteral("` ");
     }
     line += t.title;
     QStringList meta;
-    if(t.dueAt.isValid()) {
-      meta << QStringLiteral("deadline: ") + (t.dueHasTime ? t.dueAt.toString(Qt::ISODate) : t.dueAt.date().toString(Qt::ISODate));
+    if(const QDateTime dueAt = heap::local::effectiveDueAt(t); dueAt.isValid()) {
+      meta << QStringLiteral("deadline: ") +
+                  (heap::local::effectiveDueHasTime(t) ? dueAt.toString(Qt::ISODate) : dueAt.date().toString(Qt::ISODate));
     }
     if(!t.branch.isEmpty()) {
       meta << QStringLiteral("branch: ") + t.branch;
@@ -6812,7 +6839,7 @@ QVariantMap AppController::weeklyRecapFor(const QDate& today) const {
     if(!tasks.contains(key)) {
       keys.append(key);
     }
-    tasks[key].append(QVariantMap{{"id", t.id}, {"title", t.title}, {"priority", t.priority}});
+    tasks[key].append(QVariantMap{{"id", t.id}, {"title", t.title}, {"priority", heap::local::effectivePriority(t)}});
   }
   std::stable_sort(keys.begin(), keys.end(), [&](const auto& a, const auto& b) {
     return std::pair(colOf(a.first), colOf(a.second)) < std::pair(colOf(b.first), colOf(b.second));
@@ -9680,11 +9707,21 @@ namespace {
 // One side of one conflicting field (APP-163). Returns true when the choice
 // means the card's status has to go to the tracker now: keeping my status is
 // keeping it *and sending it*, since the tracker still says otherwise.
-bool applyConflictChoice(Task& t, const QString& field, bool useTracker) {
+// Taking the tracker's title or description no longer throws mine away: it
+// goes to the card's notepad (APP-244, owner's rule — sync never drops a
+// local edit). `ru` picks the header's language.
+bool applyConflictChoice(Task& t, const QString& field, bool useTracker, bool ru) {
   if(useTracker) {
     if(field == QStringLiteral("title") && !t.externalMeta.title.isEmpty()) {
+      if(t.title != t.externalMeta.title) {
+        heap::local::appendNote(t.local, (ru ? QStringLiteral("Мой заголовок: ") : QStringLiteral("My title: ")) + t.title);
+      }
       t.title = t.externalMeta.title;
     } else if(field == QStringLiteral("body")) {
+      if(t.desc != t.externalMeta.body && !t.desc.trimmed().isEmpty()) {
+        heap::local::appendNote(
+            t.local, (ru ? QStringLiteral("## Моя версия описания\n\n") : QStringLiteral("## My version of the description\n\n")) + t.desc);
+      }
       t.desc = t.externalMeta.body;
     } else if(field == QStringLiteral("priority") && !t.externalMeta.priority.isEmpty()) {
       t.priority = t.externalMeta.priority;
@@ -9725,7 +9762,7 @@ void AppController::resolveTrackerConflictFields(const QString& taskId, const QS
   {
     const UndoScope scope(this, tr_("task.editUndone").arg(taskId));
     for(const QString& f : pending) {
-      send = applyConflictChoice(t, f, useTracker) || send;
+      send = applyConflictChoice(t, f, useTracker, m_language == QStringLiteral("ru")) || send;
     }
     if(send && !trackerWriteEnabled(t.externalProvider)) {
       // Nothing is written to this tracker: keeping mine keeps it here only,
@@ -10928,7 +10965,7 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
       // into the global pool tagged with the source profile id.
       QVector<CalEvent> legacy;
       Profile p = heap::state::profileFromJson(it.toObject(), schema < 3 ? &legacy : nullptr);
-      if(schema != heap::state::kSchemaVersion) {
+      if(schema < heap::state::kPassThroughSince) {
         heap::state::dropPassThrough(p);  // pass-through is for the version this build writes
       }
       // Two profiles under one id cannot both be addressed; the second one
@@ -10955,7 +10992,7 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
     if(schema >= 3 && root.contains("events")) {
       globalEvents = heap::state::eventsFromJson(root["events"].toArray());
     }
-    if(schema != heap::state::kSchemaVersion) {
+    if(schema < heap::state::kPassThroughSince) {
       heap::state::dropPassThrough(globalEvents);
     }
   } else {
@@ -13190,19 +13227,20 @@ void AppController::runAutomationAt(const QDateTime& now) {
     // for every task.
     const qint64 lastDueDay = leadHours / 24 + 2;
     const auto consider = [&](const QString& profileId, const Task& t) {
-      if(t.archived || !t.dueAt.isValid() || t.status == QLatin1String("done")) {
+      const QDateTime dueAt = heap::local::effectiveDueAt(t);
+      if(t.archived || !dueAt.isValid() || t.status == QLatin1String("done")) {
         return;
       }
-      const qint64 days = today.daysTo(t.dueAt.date());
+      const qint64 days = today.daysTo(dueAt.date());
       if(days < -2 || days > lastDueDay) {
         return;
       }
       // A task due at a parsed clock time fires then; a bare due date keeps the
       // old end-of-day horizon.
-      const QDateTime deadlineAt = t.dueHasTime ? t.dueAt : QDateTime(t.dueAt.date(), QTime(23, 59));
+      const QDateTime deadlineAt = heap::local::effectiveDueHasTime(t) ? dueAt : QDateTime(dueAt.date(), QTime(23, 59));
       heap::cal::DeadlineCall call = heap::cal::deadlineReminder(t.id, deadlineAt, now, leadHours);
       if(call.due && !reminderSent(call.key)) {
-        dueTasks.append({profileId, t.id, t.title, t.priority, std::move(call)});
+        dueTasks.append({profileId, t.id, t.title, heap::local::effectivePriority(t), std::move(call)});
       }
     };
     for(const Task& t : m_tasks.items()) {
@@ -13756,14 +13794,16 @@ void AppController::snoozeDeadline(const QString& taskId, int seconds) {
     return;
   }
   Task t = m_tasks.items().at(row);
-  if(!t.dueAt.isValid()) {
+  const QDateTime dueAt = heap::local::effectiveDueAt(t);
+  if(!dueAt.isValid()) {
     return;
   }
   const UndoScope scope(this, tr_("undo.snooze").arg(taskId));
   // Reminders are date-grained — bump to the next day so the dl: sentinel
-  // for "today" stops firing. The clock time rides along.
+  // for "today" stops firing. The clock time rides along. On a tracker card
+  // the snoozed date is mine; the tracker's stays (APP-238).
   const int days = (seconds + 86399) / 86400;
-  t.dueAt = t.dueAt.addDays(days);
+  heap::local::setMyDue(t, dueAt.addDays(days), heap::local::effectiveDueHasTime(t));
   if(t.scheduledAt.isValid()) {
     t.scheduledAt = t.scheduledAt.addDays(days);
   }

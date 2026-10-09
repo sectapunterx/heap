@@ -1,5 +1,6 @@
 #pragma once
 
+#include "local/TaskLocal.h"
 #include "safety/WaitingOn.h"
 #include "views/SavedView.h"
 
@@ -160,6 +161,10 @@ struct Task {
   QVector<TaskLink> links;
   // Files attached to the task, in the order they were attached.
   QVector<Attachment> attachments;
+  // What the developer keeps on top of the task, which no sync path writes
+  // (ADR 0001, APP-244). Read priority and due date through
+  // heap::local::effectivePriority/effectiveDue, never straight from here.
+  TaskLocal local;
   // Keys of the task object this build does not read, carried through a save
   // untouched (PLAT-15), the way Profile::extra is. Only filled for a document
   // at the current schema.

@@ -23,7 +23,7 @@ static_assert(heap::meta::fieldCount<Attachment>() == 4,
               "Attachment gained or lost a field. Update attachmentsToJson/attachmentsFromJson here AND in "
               "src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<Task>() == 27,
+static_assert(heap::meta::fieldCount<Task>() == 28,
               "Task gained or lost a field. Update taskToJson/taskFromJson here AND in "
               "src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -211,6 +211,9 @@ QJsonObject SyncSerializer::taskToJson(const Task& t) {
   meta[QStringLiteral("conflicts")] = QJsonArray::fromStringList(t.externalMeta.conflicts);
   meta[QStringLiteral("pushQueued")] = t.externalMeta.pushQueued;
   o[QStringLiteral("externalMeta")] = meta;
+  // The local layer (APP-244): every key, like the rest of this form. Its
+  // checklist, tags and links carry ids, so JsonMerger merges them per item.
+  o[QStringLiteral("local")] = heap::local::toJson(t.local, /*compact=*/false);
   return o;
 }
 
@@ -280,6 +283,7 @@ Task SyncSerializer::taskFromJson(const QJsonObject& o) {
   t.rank = o.value(QStringLiteral("rank")).toDouble();
   t.links = linksFromJson(o.value(QStringLiteral("links")).toArray());
   t.attachments = attachmentsFromJson(o.value(QStringLiteral("attachments")).toArray());
+  t.local = heap::local::fromJson(o.value(QStringLiteral("local")).toObject());
   static const QStringList kKnown = {QStringLiteral("id"),
                                      QStringLiteral("title"),
                                      QStringLiteral("desc"),
@@ -306,6 +310,7 @@ Task SyncSerializer::taskFromJson(const QJsonObject& o) {
                                      QStringLiteral("links"),
                                      QStringLiteral("attachments"),
                                      QStringLiteral("externalMeta"),
+                                     QStringLiteral("local"),
                                      // Read, never written.
                                      QStringLiteral("hasTime"),
                                      QStringLiteral("deadline")};
