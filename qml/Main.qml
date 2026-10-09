@@ -520,9 +520,9 @@ ApplicationWindow {
     // stand down then: Qt only protects a focused text field, so a picker's
     // type-ahead or a read-only Text would otherwise swallow the keystroke or
     // let the shortcut fire over the dialog (HEAP-117).
-    readonly property bool _overlayOpen: taskEditor.opened || eventEditor.opened
-        || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
-        || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
+    readonly property bool _overlayOpen: taskEditor.opened || AppController.immersion
+        || personEditor.opened || profileEditor.opened || welcome.opened
+        || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened || eventCapture.opened
         || hotkeys.opened || cheatSheet.opened || closeAsk.opened || goToDatePopup.opened
         || weeklyRecap.opened || standupDraft.opened || timeMachine.opened || eventLog.opened || endOfDay.opened
 
@@ -656,9 +656,9 @@ ApplicationWindow {
     // behind a modal: Ctrl+3 used to switch the view under an open task
     // editor, Ctrl+K opened the palette over the welcome tour. The side-rail
     // popovers are not modal and keep them.
-    readonly property bool _modalOpen: taskEditor.opened || eventEditor.opened
-        || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
-        || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened || cheatSheet.opened
+    readonly property bool _modalOpen: taskEditor.opened || AppController.immersion
+        || personEditor.opened || profileEditor.opened || welcome.opened
+        || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened || eventCapture.opened || cheatSheet.opened
         || closeAsk.opened || goToDatePopup.opened || eventLog.opened
         || (_focusInPopup && !_focusInPopover) || _dimmerShown
     readonly property bool _globalKeysOn: !hotkeys.isCapturing && !_modalOpen
@@ -854,9 +854,8 @@ ApplicationWindow {
                 // A toast with an action is in the event log too (APP-225).
                 AppController.logEvent("info", msg);
                 toast.showWithAction(msg, I18n.t("immersion.showHeld"), 15, function () { AppController.releaseImmersionHeld() });
-            } else {
-                toast.show(msg, "info");
             }
+            // Nothing held: nothing to say (DG-132).
         }
         function onSafetyOpenTasksRequested(taskIds) {
             win._summon();
@@ -1240,6 +1239,19 @@ ApplicationWindow {
                         z: 60
                         onClosed: Qt.callLater(win.focusActiveView)
                         onInternalLinkActivated: (kind, target) => win.followMdLink(kind, target)
+                        onOpenedChanged: if (taskDoc.opened) eventEditor.close()
+                    }
+                    // A meeting (DG-120): the same panel, saving on its own.
+                    EventEditor {
+                        id: eventEditor
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        width: Math.min(parent.width, Theme.px(480))
+                        z: 61
+                        onOpenedChanged: if (eventEditor.opened) taskDoc.close()
+                        onClosed: Qt.callLater(win.focusActiveView)
+                        onTaskRequested: (id) => win.openTask(id)
                     }
                     SelectionBar {
                         restoring: win._archiveQuery
@@ -1284,9 +1296,7 @@ ApplicationWindow {
                         // An empty slot or a dragged stretch opens the editor on
                         // a draft: the meeting is named before it exists.
                         onCreateRequested: (startHour, endHour, day) => {
-                            const draft = AppController.newEventDraft(startHour, day);
-                            draft.end = endHour;
-                            eventEditor.showForDraft(draft);
+                            eventCapture.openAt({ date: day, start: startHour, end: endHour });
                         }
                         onDayRequested: (day) => {
                             AppController.selectedDate = day;
@@ -1339,8 +1349,6 @@ ApplicationWindow {
         objectName: "task-editor"
         onSeenBeforeActivated: (hit) => win.openSeenBefore(hit)
     }
-    EventEditor   { id: eventEditor }
-    PersonEditor  { id: personEditor }
     PeopleDialog {
         id: peopleDialog
         onEditRequested: (id) => personEditor.showFor(AppController.personById(id))
@@ -1350,6 +1358,12 @@ ApplicationWindow {
         id: personPicker
         onDraftRequested: (draft) => personEditor.showFor(draft)
     }
+    // A new meeting from one line (DG-120); it opens in the panel once made.
+    EventCapture {
+        id: eventCapture
+        onCreated: (id) => eventEditor.showForId(id)
+    }
+    PersonEditor  { id: personEditor }
     ProfileEditor { id: profileEditor }
     WelcomePopup {
         id: welcome
@@ -1645,9 +1659,7 @@ ApplicationWindow {
         else eventEditor.showForId(id);
     }
     function createEventAt(startHour, endHour, day) {
-        const draft = AppController.newEventDraft(startHour, day);
-        draft.end = endHour;
-        eventEditor.showForDraft(draft);
+        eventCapture.openAt({ date: day, start: startHour, end: endHour });
     }
     function openTask(id) {
         win.showTask(AppController.taskById(id));
@@ -1776,7 +1788,7 @@ ApplicationWindow {
         case "people.open":          peopleDialog.showFor(""); break;
         case "rail.toggle":          win.toggleSideRail(); break;
         case "theme.toggle":         AppController.theme = (Theme.slot === "dark" ? "light" : "dark"); break;
-        case "person.new":           personPicker.open_(); break;
+        case "person.new":           personEditor.showFor(AppController.newPersonDraft()); break;
         case "profile.new":          profileEditor.showCreate(); break;
         case "profile.next":         win._cycleProfile(1); break;
         case "profile.prev":         win._cycleProfile(-1); break;
@@ -1790,7 +1802,7 @@ ApplicationWindow {
         case "hotkeys.edit":         rail.openHotkeys(rail.hotkeysAnchor); break;
         case "palette.commands":     cmdPalette.openWith(">"); break;
         case "search.focus":         win._focusSearch(); break;
-        case "event.new":            eventEditor.showForDraft(AppController.newEventDraft(9, AppController.selectedDate)); break;
+        case "event.new":            eventCapture.openAt(null); break;
         case "welcome.replay":       AppController.replayWelcome(); break;
         case "recap.open":           weeklyRecap.showNow(); break;
         case "focus.immersion":      win.toggleImmersion(); break;
@@ -2191,7 +2203,7 @@ ApplicationWindow {
         case "cal.zoomDay": call("setZoom", "day"); return;
         case "cal.newEvent": {
             const day = AppController.selectedDate;
-            eventEditor.showForDraft(AppController.newEventDraft(AppController.nextFreeSlot(day, 1), day));
+            eventCapture.openAt({ date: day });
             return;
         }
         case "cal.taskEarlier": win._moveViewTask(-1, 0); return;
@@ -2334,7 +2346,7 @@ ApplicationWindow {
         sequence: _kbd("person.new")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: personPicker.open_()
+        onActivated: personEditor.showFor(AppController.newPersonDraft())
     }
     Shortcut {
         sequence: _kbd("profile.new")
@@ -2367,7 +2379,8 @@ ApplicationWindow {
     Shortcut {
         sequence: win._kbd("focus.immersion")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && win._globalKeysOn && !!(AppController.safety && AppController.safety.immersion)
+        enabled: sequence.length > 0 && (win._globalKeysOn || AppController.immersion)
+                 && !!(AppController.safety && AppController.safety.immersion)
         onActivated: win.toggleImmersion()
     }
     // The 0.6 tools (APP-192): no key by default; live once one is bound in
@@ -2605,8 +2618,7 @@ ApplicationWindow {
         enabled: sequences.length > 0 && win._globalKeysOn && !win._overlayOpen
         onActivated: {
             const day = AppController.selectedDate;
-            const draft = AppController.newEventDraft(AppController.nextFreeSlot(day, 1), day);
-            eventEditor.showForDraft(draft);
+            eventCapture.openAt({ date: day });
         }
     }
     CalKey {
@@ -2714,6 +2726,10 @@ ApplicationWindow {
         id: weeklyRecap
         onTaskActivated: (id) => win.showTask(AppController.taskById(id))
         onStandupDraftRequested: standupDraft.showNow()
+        onNextWeekRequested: (day) => {
+            AppController.selectedDate = day;
+            AppController.currentView = "week";
+        }
     }
     // The recap opens by itself only where it can be seen (APP-211): the
     // window on screen and in front, nothing open over it. A week that
@@ -3133,6 +3149,13 @@ ApplicationWindow {
     // the overlay above it, so a toast never covers Quick Capture or a
     // dialog's buttons.
     // The cheat sheet (APP-272): every key by area, with a search.
+    // Focus mode on screen (DG-132): one task over everything.
+    ImmersionView {
+        id: immersionView
+        anchors.fill: parent
+        // Under the toasts (z 100): meetings still remind.
+        z: 95
+    }
     KeyCheatSheet {
         id: cheatSheet
         onEditRequested: Qt.callLater(function () { rail.openHotkeys(rail.hotkeysAnchor); })

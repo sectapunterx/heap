@@ -66,12 +66,15 @@ TestCase {
         d.open();
         tryCompare(d, "opened", true);
         verify(!d.empty);
-        for (const key of ["closed", "carryOver", "timers"]) {
+        for (const key of ["carryOver", "timers"]) {
             const sec = findChild(d.contentItem, "end-of-day-" + key);
             verify(sec !== null && sec.visible, key + " section shown");
         }
+        // Closed today is a count in the facts line, not a list (DG-124).
+        const facts = findChild(d.contentItem, "end-of-day-facts");
+        verify(facts.text.indexOf(I18n.t("eod.fact.closed").arg(s.closed.length)) === 0, facts.text);
         verify(findChild(d.contentItem, "end-of-day-task-" + carry) !== null);
-        verify(!findChild(d.contentItem, "end-of-day-empty").visible);
+        verify(findChild(d.contentItem, "end-of-day-timer-" + timed) !== null);
 
         // It only reads.
         compare(AppController.taskById(carry).status, "todo");
@@ -87,13 +90,13 @@ TestCase {
         d.open();
         tryCompare(d, "opened", true);
         verify(d.empty);
-        verify(findChild(d.contentItem, "end-of-day-empty").visible);
+        compare(findChild(d.contentItem, "end-of-day-facts").text, I18n.t("eod.empty"));
         d.close();
     }
 
     function test_a_task_opens_and_the_summary_closes() {
         const d = make();
-        d.summary = { date: new Date(), closed: [{ id: "APP-1", title: "one" }], carryOver: [], timers: [] };
+        d.summary = { date: new Date(), closed: [], carryOver: [{ id: "APP-1", title: "one" }], timers: [] };
         let opened = "";
         d.taskActivated.connect(id => opened = id);
         d.open();

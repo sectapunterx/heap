@@ -48,7 +48,7 @@ TestCase {
             { tag: "QuickCaptureNotesPopup", qml: "QuickCaptureNotesPopup { }" },
             { tag: "WelcomePopup", qml: "WelcomePopup { }" },
             { tag: "TaskEditor", qml: "TaskEditor { }", fn: "task" },
-            { tag: "EventEditor", qml: "EventEditor { }", fn: "event" },
+            { tag: "EventCapture", qml: "EventCapture { }" },
         ];
     }
 
@@ -73,7 +73,6 @@ TestCase {
     function test_a_press_inside_keeps_the_dialog_open_data() {
         return [
             { tag: "TaskEditor", qml: "TaskEditor { }", fn: "task" },
-            { tag: "EventEditor", qml: "EventEditor { }", fn: "event" },
             { tag: "WelcomePopup", qml: "WelcomePopup { }" },
             { tag: "QuickCaptureNotesPopup", qml: "QuickCaptureNotesPopup { }" },
         ];
@@ -114,17 +113,6 @@ TestCase {
         ed.close();
     }
 
-    function test_a_press_beside_an_edited_event_asks_first() {
-        const ed = _make("EventEditor { }");
-        ed.showForDraft(AppController.newEventDraft(10, new Date()));
-        tryCompare(ed, "opened", true);
-        findChild(ed, "event-title").text = "half typed";
-        _pressBeside();
-        verify(ed.opened, "the edited event closed without asking");
-        verify(ed._confirmDiscard);
-        ed.close();
-    }
-
     function test_a_press_beside_a_note_with_text_asks_first() {
         const qc = _make("QuickCaptureNotesPopup { }");
         qc.open();
@@ -134,21 +122,5 @@ TestCase {
         _pressBeside();
         verify(qc.opened, "the note was dropped without asking");
         qc.close();
-    }
-
-    // A date picker opened from the editor is on top: a press beside both
-    // closes the picker and leaves the editor open.
-    function test_a_press_beside_a_picker_closes_only_the_picker() {
-        const ed = _make("EventEditor { }");
-        ed.showForDraft(AppController.newEventDraft(10, new Date()));
-        tryCompare(ed, "opened", true);
-        const picker = findChild(ed, "event-date-picker");
-        verify(picker !== null);
-        picker.openAt(new Date(), findChild(ed, "event-date-pick"));
-        tryCompare(picker, "opened", true);
-        _pressBeside();
-        tryCompare(picker, "visible", false);
-        verify(ed.opened, "the editor closed with the picker");
-        ed.close();
     }
 }

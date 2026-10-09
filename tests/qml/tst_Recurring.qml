@@ -170,7 +170,7 @@ TestCase {
 
         verify(ed.repeating, "an occurrence of a series is repeating");
         // The rule lives on the master; a generated instance carries none.
-        compare(ed.customRule, "FREQ=WEEKLY");
+        compare(ed.rule, "FREQ=WEEKLY");
         ed.close();
     }
 
@@ -214,7 +214,8 @@ TestCase {
                                date: probeDay(830), rrule: odd, masterId: "m",
                                occurrenceDate: probeDay(830) });
 
-        compare(ed.customRule, odd, "the rule survives being displayed");
+        compare(ed.rule, odd, "the rule survives being displayed");
+        compare(ed.repeatKindOf(odd), "custom");
         ed.close();
     }
 }

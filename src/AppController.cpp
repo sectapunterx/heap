@@ -981,6 +981,10 @@ AppController::AppController(QObject* parent) :
           [this](const QString&, const QString& title, const QString& body, const QStringList& taskIds) {
             logEvent(QStringLiteral("info"), title.isEmpty() ? body : title + QStringLiteral(" · ") + body, taskIds);
           });
+  // A reminder that was shown, for the log's "reminders" tab (DG-122).
+  connect(this, &AppController::reminderToast, this, [this](const QString&, const QString& message) {
+    logEvent(QStringLiteral("reminder"), message);
+  });
   connect(this, &AppController::updateAvailable, this, [this](const QString& version, const QString&) {
     logEvent(QStringLiteral("info"), tr_("update.available").arg(version), {}, QStringLiteral("settings:about"));
   });
@@ -8031,6 +8035,29 @@ QVariantMap AppController::weeklyRecapFor(const QDate& today) const {
                               {"tasks", tasks.value(key)}});
   }
   return QVariantMap{{"weekStart", lastWeek.toString(Qt::ISODate)}, {"weekEnd", thisWeek.toString(Qt::ISODate)}, {"groups", groups}};
+}
+
+QVariantMap AppController::weekFacts(const QDate& day) const {
+  const QDate start = heap::recap::weekStart(day.isValid() ? day : QDate::currentDate());
+  const QDate end = start.addDays(7);
+  QVector<const Task*> closed;
+  for(const Task& t : m_tasks.items()) {
+    if(t.status == QStringLiteral("done") && t.statusChangedAt.isValid() && t.statusChangedAt.date() >= start &&
+       t.statusChangedAt.date() < end) {
+      closed.push_back(&t);
+    }
+  }
+  std::stable_sort(closed.begin(), closed.end(), [](const Task* a, const Task* b) {
+    return a->statusChangedAt < b->statusChangedAt;
+  });
+  QVariantList rows;
+  QVariantList perDay{0, 0, 0, 0, 0, 0, 0};
+  for(const Task* t : closed) {
+    rows.append(QVariantMap{{"id", t->id}, {"title", t->title}, {"closedAt", t->statusChangedAt}});
+    const auto i = static_cast<qsizetype>(start.daysTo(t->statusChangedAt.date()));
+    perDay[i] = perDay.at(i).toInt() + 1;
+  }
+  return QVariantMap{{"weekStart", start}, {"weekEnd", end.addDays(-1)}, {"closed", rows}, {"perDay", perDay}};
 }
 
 void AppController::copyWeeklyReportToClipboard() {

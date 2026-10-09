@@ -107,13 +107,13 @@ Item {
     function openSave() {
         const s = root.currentState();
         nameDialog.targetId = "";
-        nameDialog.openFor("save", root.suggestName(s), root.describe(s));
+        nameDialog.openFor("save", root.suggestName(s), s.query || "", AppController.savedViews.length + 1);
     }
     function openRename(id) {
         const v = AppController.savedView(id);
         if (!v.id) return;
         nameDialog.targetId = id;
-        nameDialog.openFor("rename", v.name, root.describe(v));
+        nameDialog.openFor("rename", v.name, v.query || "", 0);
     }
     function updateActive() {
         if (root.activeView) AppController.updateSavedView(root.activeId, root.currentState());
@@ -126,12 +126,14 @@ Item {
     SavedViewNameDialog {
         id: nameDialog
         property string targetId: ""
-        onAccepted: (name) => {
+        onNamed: (name) => {
             if (nameDialog.mode === "rename") {
                 AppController.renameSavedView(nameDialog.targetId, name);
                 return;
             }
-            const id = AppController.saveView(name, root.currentState());
+            const st = root.currentState();
+            st.query = nameDialog.query.trim();
+            const id = AppController.saveView(name, st);
             if (id.length > 0) root.activeId = id;
         }
     }

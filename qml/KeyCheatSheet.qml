@@ -17,8 +17,8 @@ Popup {
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     anchors.centerIn: Overlay.overlay
-    width: Math.min(Overlay.overlay ? Overlay.overlay.width - 2 * Theme.sp3xl : 1240, 1240)
-    height: Math.min(Overlay.overlay ? Overlay.overlay.height - 2 * Theme.sp3xl : 900, 900)
+    width: Math.min(Overlay.overlay ? Overlay.overlay.width - 2 * Theme.sp2xl : 1240, 1240)
+    height: Math.min(Overlay.overlay ? Overlay.overlay.height - 2 * Theme.spXl : 960, 960)
     padding: 0
     Overlay.modal: ModalScrim {}
     background: ModalSurface {}
@@ -32,22 +32,21 @@ Popup {
     // read from the catalogue each time. `label` is an I18n key; without one
     // the row is called what the catalogue calls its first id. `range` writes
     // a run of keys as "1…4".
+    // The sheet's areas and rows, in X-Keys order. `col` is the column the
+    // area stands in (four columns, read top to bottom).
     readonly property var groups: [
-        { id: "move", rows: [
+        { id: "move", col: 0, rows: [
             { label: "keys.row.upDown", ids: ["board.cursorDown", "board.cursorUp"] },
             { label: "keys.row.leftRight", ids: ["board.cursorLeft", "board.cursorRight"] },
             { label: "keys.row.firstLast", ids: ["cursor.first", "cursor.last"] },
             { label: "keys.row.halfPage", ids: ["cursor.pageDown", "cursor.pageUp"] },
             { label: "keys.row.period", ids: ["cal.prev", "cal.next"] },
             { label: "keys.row.today", ids: ["cal.today"] },
-            { label: "keys.row.dayStep", ids: ["cal.prevDay", "cal.nextDay"] },
             { label: "keys.row.jumps", ids: ["nav.back", "nav.forward"] },
-            { label: "keys.row.region", ids: ["region.next", "region.prev"] },
-            { label: "keys.row.open", ids: ["board.open"] }
+            { label: "keys.row.regionNext", ids: ["region.next"] }
         ] },
-        { id: "go", rows: [
+        { id: "go", col: 1, rows: [
             { label: "keys.row.goToday", ids: ["section.today.alt", "section.today"] },
-            { label: "keys.row.goTasks", ids: ["section.tasks"] },
             { label: "keys.row.goBoard", ids: ["view.board"] },
             { label: "keys.row.goList", ids: ["view.timeline"] },
             { label: "keys.row.goCalendar", ids: ["view.calendar"] },
@@ -55,67 +54,51 @@ Popup {
             { label: "keys.row.goView", range: true, ids: ["savedView.1.alt", "savedView.2.alt", "savedView.3.alt",
                 "savedView.4.alt", "savedView.5.alt", "savedView.6.alt", "savedView.7.alt", "savedView.8.alt",
                 "savedView.9.alt"] },
-            { label: "keys.row.goViewCtrl", range: true, ids: ["savedView.1", "savedView.2", "savedView.3",
-                "savedView.4", "savedView.5", "savedView.6", "savedView.7", "savedView.8", "savedView.9"] },
-            { label: "keys.row.goTracker", ids: ["task.openExternal"] },
-            { label: "keys.row.goSettings", ids: ["view.settings"] },
-            { ids: ["view.archive"] },
-            { ids: ["view.docs"] },
-            { ids: ["view.notes"] }
+            { label: "keys.row.goTracker", ids: ["task.openExternal"] }
         ] },
-        { id: "task", rows: [
+        { id: "task", col: 2, rows: [
+            { label: "keys.row.open", ids: ["board.open"] },
             { label: "keys.row.done", note: "keys.row.done.note", ids: ["task.done"] },
             { label: "keys.row.newBelowAbove", ids: ["task.newBelow", "task.newAbove"] },
-            { ids: ["task.rename"] },
-            { ids: ["task.schedule"] },
-            { ids: ["task.due"] },
+            { label: "keys.row.rename", ids: ["task.rename", "notes.rename"] },
+            { label: "keys.row.schedule", ids: ["task.schedule"] },
+            { label: "keys.row.due", ids: ["task.due"] },
             { label: "keys.row.priority", range: true, ids: ["task.priority0", "task.priority1", "task.priority2", "task.priority3"] },
-            { ids: ["task.timer"] },
+            { label: "keys.row.timer", ids: ["task.timer"] },
             { label: "keys.row.archive", ids: ["board.archive"] },
             { label: "keys.row.menu", ids: ["board.cardMenu"] },
-            { label: "keys.row.delete", ids: ["selection.deleteSel"] },
-            { ids: ["task.new"] }
+            { label: "keys.row.delete", ids: ["selection.deleteSel"] }
         ] },
-        { id: "moveTask", rows: [
+        { id: "moveTask", col: 3, rows: [
             { label: "keys.row.moveColumn", ids: ["board.moveLeft", "board.moveRight"] },
             { label: "keys.row.moveUpDown", ids: ["board.moveDown", "board.moveUp"] },
-            { label: "keys.row.moveDay", ids: ["cal.taskEarlier", "cal.taskLater"] },
-            { label: "keys.row.moveWeek", ids: ["cal.taskEarlierWeek", "cal.taskLaterWeek"] },
-            { label: "keys.row.moveTime", ids: ["cal.taskTimeEarlier", "cal.taskTimeLater"] },
-            { label: "keys.row.length", ids: ["cal.longer", "cal.shorter"] }
+            { label: "keys.row.blockLength", ids: ["cal.longer", "cal.shorter"] }
         ] },
-        { id: "copy", rows: [
-            { ids: ["task.copyId"] },
-            { ids: ["task.copyBranch"] },
-            { ids: ["task.copyLink"] },
-            { ids: ["task.createBranch"] }
+        { id: "copy", col: 0, rows: [
+            { label: "keys.row.copyId", ids: ["task.copyId"] },
+            { label: "keys.row.copyBranch", ids: ["task.copyBranch"] },
+            { label: "keys.row.copyLink", ids: ["task.copyLink"] },
+            { label: "keys.row.createBranch", ids: ["task.createBranch"] }
         ] },
-        { id: "select", rows: [
+        { id: "select", col: 1, rows: [
             { label: "keys.row.select", ids: ["selection.toggle", "board.toggleSelect"] },
-            { ids: ["selection.range"] },
+            { label: "keys.row.range", ids: ["selection.range"] },
             { label: "keys.row.selectAll", ids: ["selection.selectAll"] },
-            { label: "keys.row.clear", ids: ["selection.clearSel"] },
-            { label: "keys.row.selectUpDown", ids: ["board.selectDown", "board.selectUp"] },
-            { label: "keys.row.selectColumn", ids: ["board.selectColumnLeft", "board.selectColumnRight"] }
+            { label: "keys.row.clear", ids: ["selection.clearSel"] }
         ] },
-        { id: "view", rows: [
+        { id: "view", col: 2, rows: [
             { label: "keys.row.zoom", ids: ["cal.zoomDay", "view.week", "view.month"] },
             { label: "keys.row.fold", ids: ["board.collapseColumn"] },
-            { ids: ["rail.toggle"] },
-            { label: "keys.row.scale", ids: ["zoom.in", "zoom.out", "zoom.reset"] },
-            { ids: ["theme.toggle"] },
-            { ids: ["focus.immersion"] }
+            { label: "keys.row.sidebar", ids: ["rail.toggle"] }
         ] },
-        { id: "find", rows: [
-            { ids: ["search.focus.alt", "search.focus", "search.focus.alt2"] },
-            { ids: ["palette.commands"] },
-            { ids: ["palette.open", "palette.open.alt"] },
-            { ids: ["quick-capture"] },
-            { ids: ["quick-capture-notes"] },
-            { label: "keys.row.undoRedo", ids: ["undo.alt", "undo", "redo.alt", "redo"] },
-            { ids: ["hotkeys.open.alt", "hotkeys.open"] },
-            { ids: ["hotkeys.edit"] },
-            { ids: ["log.open"] }
+        { id: "find", col: 3, rows: [
+            { label: "keys.row.filter", ids: ["search.focus.alt"] },
+            { label: "keys.row.command", ids: ["palette.commands"] },
+            { label: "keys.row.commandLine", ids: ["palette.open"] },
+            { label: "keys.row.newTask", ids: ["task.new"] },
+            { label: "keys.row.anywhere", ids: ["quick-capture"] },
+            { label: "keys.row.undoRedo", ids: ["undo.alt", "redo.alt"] },
+            { label: "keys.row.goSettings", ids: ["view.settings"] }
         ] }
     ]
     // What the old keys do now (APP-281 A4).
@@ -127,8 +110,9 @@ Popup {
         { label: "keys.changed.date", was: "keys.changed.date.was", ids: ["palette.commands"] }
     ]
 
-    // Every catalogue id the curated groups do not show, so nothing in the
-    // catalogue is missing from the sheet: the notes, the profiles, the tools.
+    // Every catalogue id the areas do not show. Not an area of its own (the
+    // sheet has none): these rows come up only under a search, so a key
+    // that exists can always be found.
     readonly property var otherRows: {
         const shown = {};
         for (const g of root.groups)
@@ -187,19 +171,26 @@ Popup {
             if (v.length > 0 && keys.indexOf(v) >= 0) return true;
         return false;
     }
-    function _filtered(rows, q) { return rows.filter(r => root.matches(r, q)); }
+    function _filtered(rows, q) { return rows.filter(r => root.keysOf(r).length > 0 && root.matches(r, q)); }
+    readonly property var _shownGroups: {
+        const q = search.text.trim();
+        const out = root.groups.map(g => Object.assign({}, g));
+        out.push({ id: "changed", col: 0, rows: root.changedRows });
+        if (q.length > 0) out.push({ id: "other", col: 3, rows: root.otherRows });
+        return out;
+    }
 
     onAboutToShow: search.text = ""
     onOpened: search.forceActiveFocus()
 
     contentItem: ColumnLayout {
-        spacing: Theme.spXl
+        spacing: Theme.spLg
 
         ColumnLayout {
             Layout.fillWidth: true
-            Layout.leftMargin: Theme.sp3xl
-            Layout.rightMargin: Theme.sp3xl
-            Layout.topMargin: Theme.sp3xl
+            Layout.leftMargin: Theme.sp2xl
+            Layout.rightMargin: Theme.sp2xl
+            Layout.topMargin: Theme.sp2xl
             spacing: Theme.spMd
             Text {
                 text: I18n.t("keys.sheet.title")
@@ -242,105 +233,106 @@ Popup {
             id: flick
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.leftMargin: Theme.sp3xl
-            Layout.rightMargin: Theme.sp3xl
+            Layout.leftMargin: Theme.sp2xl
+            Layout.rightMargin: Theme.sp2xl
             clip: true
             contentWidth: width
-            contentHeight: grid.implicitHeight
+            contentHeight: cols.implicitHeight
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ThinScrollBar {}
 
-            GridLayout {
-                id: grid
+            // Four columns, each a stack of its areas (X-Keys); fewer on a
+            // narrow window, the areas then flow column by column.
+            RowLayout {
+                id: cols
                 width: flick.width
-                columns: Math.max(1, Math.floor(flick.width / Theme.px(300)))
-                columnSpacing: Theme.sp3xl
-                rowSpacing: Theme.sp3xl
-
+                spacing: Theme.sp2xl
+                readonly property int n: Math.max(1, Math.min(4, Math.floor((flick.width + Theme.sp2xl) / Theme.px(260))))
                 Repeater {
-                    model: root.groups.concat([{ id: "other", rows: root.otherRows },
-                                               { id: "changed", rows: root.changedRows }])
+                    model: cols.n
                     delegate: ColumnLayout {
-                        id: group
-                        required property var modelData
-                        readonly property var shownRows: root._filtered(group.modelData.rows, search.text)
-                        objectName: "key-sheet-group-" + group.modelData.id
-                        visible: group.shownRows.length > 0
-                        Layout.fillWidth: true
+                        id: column
+                        required property int index
                         Layout.alignment: Qt.AlignTop
-                        Layout.preferredWidth: Theme.px(300)
-                        spacing: 0
-                        Text {
-                            Layout.bottomMargin: Theme.spMd
-                            text: I18n.t("keys.group." + group.modelData.id)
-                            color: Theme.textDim
-                            font.family: Theme.fontUi
-                            font.pixelSize: Theme.fsSm
-                        }
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: 1
+                        spacing: Theme.spXl
                         Repeater {
-                            model: group.shownRows
-                            delegate: Item {
-                                id: row
+                            model: root._shownGroups.filter(g => g.col % cols.n === column.index)
+                            delegate: ColumnLayout {
+                                id: group
                                 required property var modelData
-                                readonly property var keys: AppController.shortcuts.length >= 0 ? root.keysOf(row.modelData) : []
-                                objectName: "key-sheet-row-" + row.modelData.ids[0]
+                                readonly property var shownRows: root._filtered(group.modelData.rows, search.text)
+                                objectName: "key-sheet-group-" + group.modelData.id
+                                visible: group.shownRows.length > 0
                                 Layout.fillWidth: true
-                                implicitHeight: Math.max(rowLabel.implicitHeight, keyRow.implicitHeight) + 2 * Theme.spSm
+                                spacing: 0
                                 Text {
-                                    id: rowLabel
-                                    anchors.left: parent.left
-                                    anchors.right: keyRow.left
-                                    anchors.rightMargin: Theme.spMd
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: root._label(row.modelData)
-                                          + (row.modelData.note ? "  <font color=\"" + Theme.textDim + "\">" + I18n.t(row.modelData.note) + "</font>" : "")
-                                          + (row.modelData.was ? "  <font color=\"" + Theme.textDim + "\">" + I18n.t(row.modelData.was) + "</font>" : "")
-                                    textFormat: Text.StyledText
-                                    wrapMode: Text.WordWrap
-                                    color: Theme.text
+                                    Layout.bottomMargin: Theme.spSm
+                                    text: I18n.t("keys.group." + group.modelData.id)
+                                    color: Theme.textMuted
                                     font.family: Theme.fontUi
-                                    font.pixelSize: Theme.fsMd
+                                    font.pixelSize: Theme.fsSm
                                 }
-                                Row {
-                                    id: keyRow
-                                    anchors.right: parent.right
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    spacing: Theme.spXs
-                                    Repeater {
-                                        model: row.keys
-                                        delegate: Rectangle {
-                                            id: cap
-                                            required property string modelData
-                                            implicitWidth: capText.implicitWidth + 2 * Theme.spSm
-                                            implicitHeight: capText.implicitHeight + Theme.spXs
-                                            radius: Theme.radiusSm
-                                            color: "transparent"
-                                            border.color: Theme.border
-                                            border.width: 1
-                                            Text {
-                                                id: capText
-                                                anchors.centerIn: parent
-                                                text: cap.modelData
-                                                color: Theme.text
-                                                font.family: Theme.fontMono
-                                                font.pixelSize: Theme.fsXs
+                                Repeater {
+                                    model: group.shownRows
+                                    delegate: Item {
+                                        id: row
+                                        required property var modelData
+                                        readonly property var keys: AppController.shortcuts.length >= 0 ? root.keysOf(row.modelData) : []
+                                        objectName: "key-sheet-row-" + row.modelData.ids[0]
+                                        Layout.fillWidth: true
+                                        implicitHeight: Math.max(rowLabel.implicitHeight, keyRow.implicitHeight) + 2 * Theme.spXs
+                                        Text {
+                                            id: rowLabel
+                                            anchors.left: parent.left
+                                            anchors.right: keyRow.left
+                                            anchors.rightMargin: Theme.spMd
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: root._label(row.modelData)
+                                                  + (row.modelData.note ? "  <font color=\"" + Theme.textMuted + "\">" + I18n.t(row.modelData.note) + "</font>" : "")
+                                                  + (row.modelData.was ? "  <font color=\"" + Theme.textMuted + "\">" + I18n.t(row.modelData.was) + "</font>" : "")
+                                            textFormat: Text.StyledText
+                                            wrapMode: Text.WordWrap
+                                            color: Theme.text
+                                            font.family: Theme.fontUi
+                                            font.pixelSize: Theme.fsMd
+                                        }
+                                        Row {
+                                            id: keyRow
+                                            anchors.right: parent.right
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            spacing: Theme.spXs
+                                            Repeater {
+                                                model: row.keys
+                                                delegate: Rectangle {
+                                                    id: cap
+                                                    required property string modelData
+                                                    implicitWidth: capText.implicitWidth + 2 * Theme.spSm
+                                                    implicitHeight: Theme.chipHSmall
+                                                    radius: Theme.radiusSm
+                                                    color: "transparent"
+                                                    border.color: Theme.border
+                                                    border.width: 1
+                                                    Text {
+                                                        id: capText
+                                                        anchors.centerIn: parent
+                                                        text: cap.modelData
+                                                        color: Theme.text
+                                                        font.family: Theme.fontMono
+                                                        font.pixelSize: Theme.fsXs
+                                                    }
+                                                }
                                             }
                                         }
+                                        Rectangle {
+                                            anchors.left: parent.left
+                                            anchors.right: parent.right
+                                            anchors.bottom: parent.bottom
+                                            height: 1
+                                            color: Theme.border
+                                        }
                                     }
-                                    Text {
-                                        visible: row.keys.length === 0
-                                        text: I18n.t("common.notSet")
-                                        color: Theme.textDim
-                                        font.family: Theme.fontUi
-                                        font.pixelSize: Theme.fsXs
-                                    }
-                                }
-                                Rectangle {
-                                    anchors.left: parent.left
-                                    anchors.right: parent.right
-                                    anchors.bottom: parent.bottom
-                                    height: 1
-                                    color: Theme.border
                                 }
                             }
                         }
@@ -351,9 +343,9 @@ Popup {
 
         RowLayout {
             Layout.fillWidth: true
-            Layout.leftMargin: Theme.sp3xl
-            Layout.rightMargin: Theme.sp3xl
-            Layout.bottomMargin: Theme.sp2xl
+            Layout.leftMargin: Theme.sp2xl
+            Layout.rightMargin: Theme.sp2xl
+            Layout.bottomMargin: Theme.spXl
             spacing: Theme.spXl
             Text {
                 objectName: "key-sheet-edit"

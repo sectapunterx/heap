@@ -472,6 +472,11 @@ qt_add_qml_module(heap_core
         qml/DocsStarter.js
         qml/Mention.js
         qml/Attendees.js
+        qml/EventRule.js
+        qml/EventCapture.qml
+        qml/ImmersionView.qml
+        qml/SmallDialog.qml
+        qml/DialogField.qml
         qml/NotesListPane.qml
         qml/MdEditorPane.qml
         qml/PlusGlyph.qml

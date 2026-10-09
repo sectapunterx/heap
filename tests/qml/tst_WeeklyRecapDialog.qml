@@ -153,7 +153,6 @@ TestCase {
         tryVerify(() => d.opened);
         d.recap = { weekStart: "2026-09-28", weekEnd: "2026-10-05", groups: [] };
         compare(d.taskCount, 0);
-        verify(findChild(d.contentItem, "recap-group-backlog-prog") === null);
         d.close();
         tryVerify(() => !d.visible);
         compare(d.seenWeek, "2026-10-05");
@@ -175,27 +174,50 @@ TestCase {
         verify(!d.isDue(new Date(2026, 9, 5), tc.sample));
     }
 
-    function test_it_lists_each_move_and_its_tasks() {
+    // DG-123: the facts of a week — the closed list, a bar per day, the
+    // first three titles and "and N more".
+    readonly property var facts: ({
+        weekStart: new Date(2026, 9, 5), weekEnd: new Date(2026, 9, 11),
+        perDay: [2, 1, 0, 3, 2, 0, 0],
+        closed: [ { id: "APP-1", title: "one" }, { id: "APP-2", title: "two" }, { id: "APP-3", title: "three" },
+                  { id: "APP-4", title: "four" }, { id: "APP-5", title: "five" } ]
+    })
+    function test_it_shows_the_week_facts() {
         const d = make();
-        d.recap = tc.sample;
         d.open();
         tryVerify(() => d.opened);
-        compare(d.taskCount, 3);
-        verify(findChild(d.contentItem, "recap-group-backlog-prog") !== null);
-        verify(findChild(d.contentItem, "recap-group-prog-done") !== null);
-        verify(findChild(d.contentItem, "recap-task-APP-2") !== null);
+        d.facts = tc.facts;
+        d.meetingMinutes = 660;
+        compare(findChild(d.contentItem, "recap-facts").text,
+                I18n.count(5, "recap.closedN") + " · " + I18n.t("recap.meetings").arg(I18n.fmtMinutes(660)));
+        compare(d.dayRows.length, 5, "Monday to Friday, no empty weekend");
+        verify(findChild(d.contentItem, "recap-task-APP-3") !== null);
+        compare(findChild(d.contentItem, "recap-task-APP-4"), null, "only the first three");
+        compare(findChild(d.contentItem, "recap-more").text, I18n.t("recap.more").arg(2));
+        verify(d.markdown().indexOf("- APP-5 five") >= 0);
+        if (I18n.lang === "ru") compare(d.rangeText(), "5 – 11 октября");
         d.close();
     }
 
     function test_a_task_opens_and_the_recap_closes() {
         const d = make();
-        d.recap = tc.sample;
         d.open();
         tryVerify(() => d.opened);
+        d.facts = tc.facts;
         let got = "";
         d.taskActivated.connect((id) => { got = id; });
         findChild(d.contentItem, "recap-task-area-APP-3").activated();
         compare(got, "APP-3");
         tryVerify(() => !d.visible);
+    }
+
+    function test_brackets_step_through_weeks() {
+        const d = make();
+        d.open();
+        tryVerify(() => d.opened);
+        const a = d.facts.weekStart;
+        d.stepWeek(-1);
+        compare(Math.round((a.getTime() - d.facts.weekStart.getTime()) / 86400000), 7);
+        d.close();
     }
 }

@@ -55,13 +55,21 @@ TestCase {
         d.showNow();
         tryCompare(d, "opened", true);
         compare(d.keepDays, 30);
-        const pill = findChild(d.contentItem, "time-machine-days-90");
-        verify(pill !== null);
-        mouseClick(pill);
+        // Retention sits under the list, behind one quiet line (DG-121).
+        const keep = findChild(d.contentItem, "time-machine-keep");
+        mouseClick(keep);
+        const menu = findChild(d.contentItem, "time-machine-keep-menu");
+        verify(menu !== null);
+        tryVerify(() => menu.opened);
+        const days90 = menu.itemAt(2);
+        compare(days90.objectName, "time-machine-days-90");
+        days90.triggered();
         compare(JSON.parse(AppController.appSettingsJson).data.historyDays, 90);
         compare(d.keepDays, 90);
-        const cap = findChild(d.contentItem, "time-machine-cap-500");
-        mouseClick(cap);
+        menu.close();
+        const cap = menu.itemAt(6);
+        compare(cap.objectName, "time-machine-cap-500");
+        cap.triggered();
         compare(JSON.parse(AppController.appSettingsJson).data.historyMaxMb, 500);
         d.close();
     }
@@ -78,8 +86,10 @@ TestCase {
                       missing: [{ kind: "task", id: "APP-9", title: "Gone", profileId: "work", profileName: "Work",
                                   profileExists: true }],
                       changed: [] };
-        tryVerify(() => findChild(d.contentItem, "time-machine-missing-APP-9") !== null);
-        verify(findChild(d.contentItem, "time-machine-profile-copy-work") !== null);
+        // The diff names the task that would come back, as a link.
+        tryVerify(() => { const v = findChild(d.contentItem, "time-machine-diff-value-0"); return v && v.text.indexOf("APP-9") >= 0; });
+        verify(findChild(d.contentItem, "time-machine-copy") !== null);
+        verify(findChild(d.contentItem, "time-machine-reveal") !== null);
         verify(findChild(d.contentItem, "time-machine-snap-0") !== null);
         d.close();
     }

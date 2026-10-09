@@ -1565,6 +1565,11 @@ class AppController : public QObject {
   Q_INVOKABLE QVariantMap weeklyRecap() const;
   // The same for the week before the one `today` falls in.
   Q_INVOKABLE QVariantMap weeklyRecapFor(const QDate& today) const;
+  // The facts of the week `day` falls in, for the recap (DG-123):
+  // { weekStart, weekEnd (Monday, Sunday), closed: [{ id, title, closedAt }]
+  // oldest first, perDay: [7 counts, Monday first] } - the active profile's
+  // tasks marked done in that week.
+  Q_INVOKABLE QVariantMap weekFacts(const QDate& day) const;
 
   // Every recorded move of the active profile, oldest first.
   QVector<StatusChange> statusLog() const {
@@ -1610,6 +1615,8 @@ class AppController : public QObject {
   // The whole state goes back to the snapshot. The state it replaces is
   // snapshotted first (tag "pre"), so a restore is itself restorable.
   Q_INVOKABLE bool restoreSnapshot(const QString& name);
+  // The snapshot's file, shown in the file manager (DG-121 "Show file").
+  Q_INVOKABLE bool revealSnapshot(const QString& name) const;
   // The snapshot's profile `profileId` comes back as a new profile, "<name>
   // (restored HH:MM)", beside the current one. Returns the new id, "" on failure.
   Q_INVOKABLE QString restoreSnapshotProfile(const QString& name, const QString& profileId);
@@ -2718,6 +2725,9 @@ class AppController : public QObject {
   Q_PROPERTY(bool immersion READ immersion NOTIFY immersionChanged)
   Q_PROPERTY(QDateTime immersionStartedAt READ immersionStartedAt NOTIFY immersionChanged)
   Q_PROPERTY(QString immersionTaskId READ immersionTaskId NOTIFY immersionChanged)
+  // How many notifications wait for the end of focus mode (the immersion
+  // screen's "3 события подождут", DG-132).
+  Q_PROPERTY(int immersionHeldCount READ immersionHeldCountInt NOTIFY immersionChanged)
 
   bool immersion() const {
     return m_immersionStartedAt.isValid();
@@ -2733,6 +2743,10 @@ class AppController : public QObject {
 
   qsizetype immersionHeldCount() const {
     return m_immersionHeld.size();
+  }
+
+  int immersionHeldCountInt() const {
+    return static_cast<int>(m_immersionHeld.size());
   }
 
   Q_INVOKABLE void startImmersion(const QString& preferredTaskId = QString());

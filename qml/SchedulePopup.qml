@@ -108,10 +108,12 @@ Popup {
 
     contentItem: ColumnLayout {
         spacing: Theme.spSm
+        // The card it is opened from carries the title; a selection says
+        // how many it sets.
         Text {
+            visible: root.taskIds.length > 1
             Layout.fillWidth: true
-            text: root.taskIds.length > 1 ? I18n.count(root.taskIds.length, "schedule.nTasks")
-                : (root._task && root._task.title ? root._task.title : "")
+            text: I18n.count(root.taskIds.length, "schedule.nTasks")
             color: Theme.textDim
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsSm
@@ -127,16 +129,15 @@ Popup {
             id: input
             objectName: "schedule-input"
             Layout.fillWidth: true
-            placeholderText: root.due ? I18n.t("schedule.placeholder.due") : I18n.t("schedule.placeholder.when")
             color: Theme.text
-            placeholderTextColor: Theme.textDim
-            font.family: Theme.fontMono
+            font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
+            font.weight: Theme.fwTitle
             selectByMouse: true
             background: Rectangle {
                 radius: Theme.radiusMd
-                color: Theme.panel2
-                border.color: input.activeFocus ? Theme.focusRing : Theme.fieldBorder
+                color: "transparent"
+                border.color: input.activeFocus ? Theme.borderStrong : Theme.fieldBorder
                 border.width: 1
             }
             Accessible.name: root.due ? I18n.t("schedule.label.due") : I18n.t("schedule.label.when")
@@ -151,13 +152,14 @@ Popup {
             Layout.fillWidth: true
             text: root.resultText()
             wrapMode: Text.Wrap
-            color: root.parsed.state === "unknown" ? Theme.textDim : Theme.text
+            color: root.parsed.state === "unknown" || root.parsed.state === "empty" ? Theme.textMuted : Theme.text
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsSm
         }
         Text {
             Layout.fillWidth: true
-            text: root.parsed.state === "unknown" ? I18n.t("schedule.keys.unknown") : I18n.t("schedule.keys")
+            text: root.parsed.state === "unknown" ? I18n.t("schedule.keys.unknown")
+                : root.due ? I18n.t("schedule.keys.due") : I18n.t("schedule.keys")
             color: Theme.textDim
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsXs
