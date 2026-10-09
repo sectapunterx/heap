@@ -540,6 +540,9 @@ class TaskModel : public QAbstractListModel {
   // keys present in \p info are updated; others stay as-is. Emits
   // dataChanged for the matching row across all git roles.
   void setGitInfoForId(const QString& id, const QVariantMap& info);
+  // The PR facts the task document shows (DG-061): prState, prNumber, prUrl,
+  // prChecks ("passing" | "failing" | "pending" | ""). Empty when none.
+  QVariantMap gitFactsFor(const QString& id) const;
   void clearAllGitInfo();
 
   // Told about every single-task change made through setStatus / upsert /
@@ -609,6 +612,7 @@ class TaskModel : public QAbstractListModel {
     QString prUrl;
     QString prMove;
     QString prMoveReason;
+    QString prChecks;
     int prNumber = 0;
     int ahead = 0;
     int behind = 0;

@@ -38,15 +38,32 @@ ColumnLayout {
     }
     function focusAdd() { addField.forceActiveFocus(); }
 
+    // Drawn as part of the body (DG-062, H2-Task): a "План" heading in the
+    // body's type, the steps as checkbox rows, nothing else at rest. Hidden
+    // whole while there are no steps, until "+ свойство → План" asks for it.
+    property bool adding: false
+    readonly property bool _shown: root.items.length > 0 || root.adding || root.textMode || addField.activeFocus
+    visible: root._shown
+    function startAdding() { root.adding = true; Qt.callLater(root.focusAdd); }
+    HoverHandler { id: listHover }
+
     RowLayout {
         Layout.fillWidth: true
-        spacing: Theme.spMd
-        SectionHeader {
-            title: I18n.t("local.checklist")
-            note: root.items.length > 0 ? root.doneCount + "/" + root.items.length : ""
+        Layout.topMargin: Theme.spLg
+        Layout.bottomMargin: Theme.spXs
+        spacing: Theme.spLg
+        Text {
+            objectName: "cl-heading"
+            text: I18n.t("local.checklist")
+            color: Theme.text
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.typeStep(2)
+            font.weight: Style.fills ? Theme.fwHeading : Theme.fwTitle
         }
+        // Edit the steps as text: offered on hover, not drawn at rest.
         Text {
             objectName: "cl-text-mode"
+            visible: root.textMode || listHover.hovered || tmCA.activeFocus
             text: root.textMode ? I18n.t("local.checklist.asList") : I18n.t("local.checklist.asText")
             color: tmCA.hovered ? Theme.text : Theme.textDim
             font.family: Theme.fontUi
@@ -62,9 +79,9 @@ ColumnLayout {
                 }
             }
         }
+        Item { Layout.fillWidth: true }
     }
 
-    // ── the list ──
     Repeater {
         id: rows
         model: root.textMode ? [] : root.items
@@ -84,20 +101,17 @@ ColumnLayout {
         Layout.fillWidth: true
         wrapMode: TextEdit.Wrap
         textFormat: TextEdit.PlainText
-        placeholderText: I18n.t("local.checklist.addPh")
+        // No box (the sheet draws none): the next step's line, which says
+        // what it is only when pointed at or typed in.
+        placeholderText: addField.activeFocus || listHover.hovered ? I18n.t("local.checklist.addPh") : ""
         placeholderTextColor: Theme.textDim
         color: Theme.text
         font.family: Theme.fontUi
-        font.pixelSize: Theme.fsSm
-        leftPadding: Theme.spSm
+        font.pixelSize: Theme.fsLg
+        leftPadding: Theme.iconSize + Theme.spMd + Theme.spXs
         topPadding: Theme.spXs
         bottomPadding: Theme.spXs
-        background: Rectangle {
-            radius: Theme.radiusMd
-            color: "transparent"
-            border.width: 1
-            border.color: addField.activeFocus ? Theme.focusRing : Theme.border
-        }
+        background: Item {}
         function submit() {
             if (addField.text.trim().length === 0) return;
             const id = AppController.addChecklistItems(root.taskId, root._insertAfter, addField.text, root._insertLevel);
@@ -106,12 +120,12 @@ ColumnLayout {
         }
         Keys.onReturnPressed: (e) => { if (e.modifiers & Qt.ShiftModifier) { e.accepted = false; return; } addField.submit(); }
         Keys.onEnterPressed: addField.submit()
-        Keys.onEscapePressed: { root._insertAfter = ""; addField.text = ""; }
+        Keys.onEscapePressed: { root._insertAfter = ""; addField.text = ""; root.adding = false; }
         Keys.onUpPressed: (e) => {
             if (addField.text.length === 0 && root.items.length > 0) root.focusItem(root.items[root.items.length - 1].id);
             else e.accepted = false;
         }
-        onActiveFocusChanged: if (!activeFocus) { root._insertAfter = ""; root._insertLevel = 1; }
+        onActiveFocusChanged: if (!activeFocus) { root._insertAfter = ""; root._insertLevel = 1; root.adding = false; }
     }
 
     // ── the list as text ──
@@ -170,7 +184,7 @@ ColumnLayout {
         readonly property bool editing: root._editId === row.itemId
         objectName: "cl-item-" + row.index
         Layout.fillWidth: true
-        implicitHeight: Math.max(Theme.chipHSmall, rowLine.implicitHeight)
+        implicitHeight: Math.max(Theme.chipH, rowLine.implicitHeight + Theme.spXs)
         activeFocusOnTab: true
 
         Component.onCompleted: if (root._focusId === row.itemId) Qt.callLater(() => row.forceActiveFocus())
@@ -231,7 +245,7 @@ ColumnLayout {
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             anchors.leftMargin: Theme.spXl * (row.modelData.level - 1) + Theme.spXs
-            spacing: Theme.spSm
+            spacing: Theme.spMd
 
             CheckMark {
                 objectName: row.modelData.done ? (row.modelData.autoDone ? "cl-check-auto" : "cl-check-manual") : "cl-check-open"
@@ -253,9 +267,9 @@ ColumnLayout {
                 text: row.modelData.text
                 textFormat: Text.PlainText
                 wrapMode: Text.Wrap
-                color: row.modelData.done ? Theme.textDim : Theme.text
+                color: row.modelData.done ? Theme.textMuted : Theme.text
                 font.family: Theme.fontUi
-                font.pixelSize: Theme.fsSm
+                font.pixelSize: Theme.fsLg
                 font.strikeout: row.modelData.done
                 TapHandler {
                     onTapped: row.forceActiveFocus()
@@ -269,7 +283,7 @@ ColumnLayout {
                 Layout.fillWidth: true
                 color: Theme.text
                 font.family: Theme.fontUi
-                font.pixelSize: Theme.fsSm
+                font.pixelSize: Theme.fsLg
                 padding: 0
                 leftPadding: Theme.spXs
                 background: Rectangle { radius: Theme.radiusSm; color: Theme.panel2; border.width: 1; border.color: Theme.focusRing }
@@ -327,22 +341,28 @@ ColumnLayout {
         Canvas {
             id: canvas
             anchors.fill: parent
-            property color ink: cm.done ? Theme.textMuted : Theme.borderStrong
+            // A ticked box is filled with the accent (H2-Task / Q-Task).
+            property color ink: cm.done ? Theme.accent : Theme.borderStrong
+            property color tick: Theme.bg
             onInkChanged: requestPaint()
+            onTickChanged: requestPaint()
             onPaint: {
                 const ctx = getContext("2d");
                 ctx.reset();
                 ctx.lineWidth = 1;
                 ctx.strokeStyle = canvas.ink;
+                ctx.fillStyle = canvas.ink;
                 const w = width, h = height;
                 ctx.beginPath();
                 if (cm.auto) {
                     ctx.arc(w / 2, h / 2, w / 2 - 0.5, 0, Math.PI * 2);
                 } else {
-                    ctx.roundedRect(0.5, 0.5, w - 1, h - 1, Theme.radiusSm, Theme.radiusSm);
+                    ctx.roundedRect(0.5, 0.5, w - 1, h - 1, Theme.radiusSm - 1, Theme.radiusSm - 1);
                 }
-                ctx.stroke();
+                if (cm.done) ctx.fill(); else ctx.stroke();
                 if (cm.done) {
+                    ctx.lineWidth = 1.6;
+                    ctx.strokeStyle = canvas.tick;
                     ctx.beginPath();
                     ctx.moveTo(w * 0.25, h * 0.52);
                     ctx.lineTo(w * 0.43, h * 0.7);

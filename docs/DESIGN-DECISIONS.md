@@ -159,3 +159,52 @@ progressive disclosure, content priority, state preservation). One entry each.
 - **DG-126 · Person = name + what to ask.** The handle is made from the name. Role, state and colour stay as stored (they come from imports and the Today rail). The contacts picker no longer opens from `person.new`. It stays only as the waiting-on picker inside the legacy TaskEditor.
 - **DG-133 · Only the sheet's areas.** The cheat sheet shows the nine X-Keys areas, and rows with no key are hidden. Every other catalogue key still turns up under a search, so a key that exists can always be found. "Сдвинуть колонку Ctrl Shift H/L" is left out: there is no such binding, and Ctrl Shift L is the log.
 - **DG-132 · The focus screen sits under the toasts.** Meeting reminders still show over it. D marks the task done and ends the session. Leaving with nothing held back shows no toast.
+
+## Document group (wave 2)
+
+- **DG-060 · Panel first, full on Enter.** The sheets name the document "панель справа" (X-Ntf-OS,
+  X-Dlg-Event) and draw it full in H2-Task / Q-Task. It opens as the panel, so the board or list
+  it came from stays in sight (state-preservation); Enter or the expand icon makes it replace the
+  whole content area, the Tasks header and the query row included, with the sheet's widths
+  (780 px of text + a 300 px meta column; 760 + 280 quiet) and empty space after them. Esc goes
+  back to the same task in the view. The bottom Готово takes the place of the panel's small
+  head Готово when the panel is too narrow for the meta column.
+- **DG-061 · The local layer keeps a place without showing at rest.** Progressive disclosure, and
+  every extra stays one click from "+ свойство":
+  - My checklist is the body's "План" (DG-062); hidden while it is empty, "+ свойство → План"
+    starts it.
+  - Связи show in the meta column only while a task has any, under "Упоминается в"; "+ свойство
+    → Связь с задачей" adds one, the row's own "+ связать / ждёт / блокирует" shows on hover.
+  - Сессии stay folded under Время ("2 сессии ›").
+  - My tags are a chip like any property (shown when set, added from "+ свойство").
+  - The comment draft (tracker cards only) sits in the body's tail under the plan, folded to one
+    line until it is opened, as before.
+  - "Удалить задачу" left the document; delete stays in the task menu (right-click) and on the
+    card's Delete key, and Ctrl Z brings it back.
+- **DG-061 · CI from what gh/glab already say.** The PR row shows the number and the rollup the
+  git watcher already fetches ("passing / failing / pending" → CI ✓ / ✗ / ⏱ in bold, "CI прошёл /
+  упал / идёт" in quiet). No PR known, no row. История is the task's own history log (APP-165), the
+  three newest entries said shortly ("сегодня 14:58 · → В работе", "вчера · срок 9 окт",
+  "2 окт · создана из Jira"); with no entries yet, the last column change.
+- **DG-063 · "Сохранено" says the state, not an event.** It is shown at rest (the sheet draws it
+  at rest), and reads "сохраняю…" while the typing has not been written yet.
+- **DG-065 · Quiet Готово.** A small outline button right under История, no key (quiet hides
+  keys); the timer is a text line plus a "пауза / запустить таймер" text link.
+- **DG-080/082 · Bold chips are tinted by their signal.** Blocked and P0 on red, P1 on amber, as
+  H2-Command draws "статус Заблокировано"; any other chip is the neutral outline. Quiet: outline
+  only, values in lower case.
+- **DG-081 · Only matches by name.** A doc, note or person whose only hit is a word in its body
+  is not listed beside a query any more; the full text stays one Enter away in Knowledge search.
+- **DG-082/083 · "?" toggle removed.** Bold always draws the "Один язык везде" card beside the line
+  when it fits (it hides when the window is too narrow, and for anyone who hid it before);
+  quiet never draws it and puts the language in its footer line. Bold offers "Открыть как доску
+  g b" with the filter (the list is Ctrl ↵ in the footer); quiet offers "Открыть списком Ctrl ↵".
+  Quiet group names follow the count: "Задача / С ней" for one, "Задачи / С ними" for more.
+- **DG-130 · "Ещё и встреча" is a chip.** The sheet has no switch and no buttons. The meeting is
+  offered as a chip among the parsed chips ("встреча нет"), only while the text has a time, and a
+  click makes it "встреча в календаре" — the same language as the other chips, and nothing is
+  ever put in the calendar without that click. Создать/Отмена are gone: Enter creates, Esc closes;
+  Tab (open the task document) and Ctrl Shift Enter (create and keep open) still work and are
+  listed in the cheat sheet. "в Example ▾" opens the profile list; picking one switches the app to
+  it, and the task lands there.
+- **DG-003 · ⤢ / ⤡** in the document are the `expand` / `collapse` line icons.

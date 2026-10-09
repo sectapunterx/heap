@@ -416,6 +416,17 @@ void TaskModel::reset(QVector<Task> items) {
   endResetModel();
 }
 
+QVariantMap TaskModel::gitFactsFor(const QString& id) const {
+  const auto it = m_git.constFind(id);
+  if(it == m_git.constEnd()) {
+    return {};
+  }
+  return {{QStringLiteral("prState"), it->prState},
+          {QStringLiteral("prNumber"), it->prNumber},
+          {QStringLiteral("prUrl"), it->prUrl},
+          {QStringLiteral("prChecks"), it->prChecks}};
+}
+
 void TaskModel::setGitInfoForId(const QString& id, const QVariantMap& info) {
   const int row = indexOfId(id);
   if(row < 0) {
@@ -430,6 +441,9 @@ void TaskModel::setGitInfoForId(const QString& id, const QVariantMap& info) {
   }
   if(info.contains(QStringLiteral("prUrl"))) {
     g.prUrl = info.value(QStringLiteral("prUrl")).toString();
+  }
+  if(info.contains(QStringLiteral("prChecks"))) {
+    g.prChecks = info.value(QStringLiteral("prChecks")).toString();
   }
   if(info.contains(QStringLiteral("prMove"))) {
     g.prMove = info.value(QStringLiteral("prMove")).toString();
