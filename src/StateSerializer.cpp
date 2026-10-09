@@ -1,6 +1,8 @@
 #include "FieldCount.h"
 #include "StateSerializer.h"
 
+#include "board/ColumnCategory.h"
+
 #include <QColor>
 #include <QHash>
 #include <QJsonDocument>
@@ -702,6 +704,13 @@ QJsonArray statusesToJson(const QVariantList& xs) {
     if(m.contains(QStringLiteral("archiveDays"))) {
       o["archiveDays"] = qMax(0, m.value("archiveDays").toInt());
     }
+    // The column's stage (schema v12, APP-259), always written; and, until the
+    // user confirms it, that it was assigned rather than picked.
+    const QString category = m.value(QStringLiteral("category")).toString();
+    o["category"] = heap::board::isColumnCategory(category) ? category : heap::board::defaultCategoryFor(o["id"].toString());
+    if(m.value(QStringLiteral("categoryGuessed")).toBool()) {
+      o["categoryGuessed"] = true;
+    }
     a.append(o);
   }
   return a;
@@ -719,8 +728,25 @@ QVariantList statusesFromJson(const QJsonArray& a) {
     if(o.contains("archiveDays")) {
       m["archiveDays"] = qMax(0, o["archiveDays"].toInt(0));
     }
-    static const QStringList kKnown = {
-        QStringLiteral("id"), QStringLiteral("name"), QStringLiteral("color"), QStringLiteral("wip"), QStringLiteral("archiveDays")};
+    // A column from before stages (schema ≤ 11, or an old export) gets its
+    // stage here: a built-in id is its own, anything else "todo", flagged so
+    // the user is asked once to check (APP-259). Never guessed from the name.
+    const QString category = o["category"].toString();
+    if(heap::board::isColumnCategory(category)) {
+      m["category"] = category;
+      m["categoryGuessed"] = o["categoryGuessed"].toBool(false);
+    } else {
+      const QString id = m["id"].toString();
+      m["category"] = heap::board::defaultCategoryFor(id);
+      m["categoryGuessed"] = !heap::board::isColumnCategory(id);
+    }
+    static const QStringList kKnown = {QStringLiteral("id"),
+                                       QStringLiteral("name"),
+                                       QStringLiteral("color"),
+                                       QStringLiteral("wip"),
+                                       QStringLiteral("archiveDays"),
+                                       QStringLiteral("category"),
+                                       QStringLiteral("categoryGuessed")};
     const QJsonObject extra = unknownKeys(o, kKnown);
     if(!extra.isEmpty()) {
       m[QLatin1String(kStatusExtraKey)] = extra.toVariantMap();

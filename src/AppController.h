@@ -1176,6 +1176,13 @@ class AppController : public QObject {
   Q_INVOKABLE void addStatus(const QString& name, const QString& color = QString());
   Q_INVOKABLE void renameStatus(const QString& id, const QString& name);
   Q_INVOKABLE void setStatusColor(const QString& id, const QString& color);
+  // A column's stage (APP-259): backlog / todo / prog / half / blocked /
+  // review / done. It is the shape of the status mark and where Done goes.
+  Q_INVOKABLE QString statusCategory(const QString& id) const;
+  Q_INVOKABLE void setStatusCategory(const QString& id, const QString& category);
+  // Columns whose stage was assigned by the upgrade, not picked: shown once
+  // so the user can check them.
+  Q_INVOKABLE QStringList columnsWithGuessedCategory() const;
   // Advisory limit on how many cards a column should hold. 0 = none.
   Q_INVOKABLE void setStatusWipLimit(const QString& id, int limit);
   // Auto-archive per column (APP-122): a card that has sat in the column for

@@ -20,11 +20,12 @@ QJsonObject appearanceOf(const QString& json) {
 
 }  // namespace
 
-TEST(FirstRunAppearance, DefaultsToSoftContrastWithMotion) {
+TEST(FirstRunAppearance, DefaultsToNormalContrastWithMotion) {
   const QJsonObject a = appearanceOf(heap::platform::firstRunAppearanceJson({}));
   EXPECT_EQ(a.value(QStringLiteral("darkPreset")).toString(), QStringLiteral("heap-ink"));
   EXPECT_EQ(a.value(QStringLiteral("lightPreset")).toString(), QStringLiteral("heap-light"));
-  EXPECT_EQ(a.value(QStringLiteral("contrast")).toString(), QStringLiteral("soft"));
+  // heap 2 (APP-259): the mockup's palette as drawn, not washed out by soft.
+  EXPECT_EQ(a.value(QStringLiteral("contrast")).toString(), QStringLiteral("normal"));
   EXPECT_FALSE(a.contains(QStringLiteral("reducedMotion")));
   EXPECT_FALSE(a.contains(QStringLiteral("highContrast")));
 }

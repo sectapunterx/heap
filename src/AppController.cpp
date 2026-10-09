@@ -6,6 +6,7 @@
 #include "TaskDefer.h"
 #include "ViewNames.h"
 
+#include "board/ColumnCategory.h"
 #include "board/Rank.h"
 #include "cal/EventClamp.h"
 #include "cal/EventSpan.h"
@@ -6207,6 +6208,9 @@ void AppController::addStatus(const QString& name, const QString& color) {
   m["id"] = id;
   m["name"] = name;
   m["color"] = QColor(color.isEmpty() ? QStringLiteral("#5cc2dd") : color);
+  // A new column is "to do" until the user picks its stage (APP-259).
+  m["category"] = QStringLiteral("todo");
+  m["categoryGuessed"] = false;
   const UndoScope scope(this, tr_("undo.column").arg(name));
   m_statuses.append(m);
   emit statusesChanged();
@@ -6336,6 +6340,43 @@ void AppController::setStatusColor(const QString& id, const QString& color) {
   m_statuses[i] = m;
   emit statusesChanged();
   scheduleSave();
+}
+
+QString AppController::statusCategory(const QString& id) const {
+  const int i = statusIndexOf(id);
+  if(i < 0) {
+    return QStringLiteral("todo");
+  }
+  const QString c = m_statuses[i].toMap().value(QStringLiteral("category")).toString();
+  return heap::board::isColumnCategory(c) ? c : heap::board::defaultCategoryFor(id);
+}
+
+void AppController::setStatusCategory(const QString& id, const QString& category) {
+  const int i = statusIndexOf(id);
+  if(i < 0 || !heap::board::isColumnCategory(category)) {
+    return;
+  }
+  QVariantMap m = m_statuses[i].toMap();
+  if(m.value(QStringLiteral("category")).toString() == category && !m.value(QStringLiteral("categoryGuessed")).toBool()) {
+    return;
+  }
+  const UndoScope scope(this, tr_("undo.column").arg(m.value("name").toString()));
+  m[QStringLiteral("category")] = category;
+  m[QStringLiteral("categoryGuessed")] = false;  // picked, so no longer to check
+  m_statuses[i] = m;
+  emit statusesChanged();
+  scheduleSave();
+}
+
+QStringList AppController::columnsWithGuessedCategory() const {
+  QStringList out;
+  for(const QVariant& v : m_statuses) {
+    const QVariantMap m = v.toMap();
+    if(m.value(QStringLiteral("categoryGuessed")).toBool()) {
+      out.append(m.value(QStringLiteral("name")).toString());
+    }
+  }
+  return out;
 }
 
 void AppController::moveStatus(const QString& id, int newIndex) {
@@ -7115,7 +7156,7 @@ void AppController::resetSettingsToDefaults() {
     }
   }
   // A new install's look, not the built-in fallback (heap. dark, normal).
-  QJsonObject appearance{{"darkPreset", "heap-ink"}, {"lightPreset", "heap-light"}, {"contrast", "soft"}};
+  QJsonObject appearance{{"darkPreset", "heap-ink"}, {"lightPreset", "heap-light"}, {"contrast", "normal"}};
   const QJsonObject oldAppearance = current.value("appearance").toObject();
   if(oldAppearance.contains("customThemes")) {
     appearance["customThemes"] = oldAppearance.value("customThemes");  // the user's own work

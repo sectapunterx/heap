@@ -54,7 +54,7 @@ TestCase {
         compare(ts.appearance.darkPreset, "heap-light");
         compare(ts.appearance.lightPreset, undefined);
         compare(Theme.activePresetId, "heap-light");
-        compare(String(Theme.bg), "#f3f5f8");
+        compare(String(Theme.bg), "#f7f8fa");
     }
 
     // APP-119: the picker groups themes by contrast. Every built-in names its

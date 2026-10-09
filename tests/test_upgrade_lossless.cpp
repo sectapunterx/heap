@@ -92,12 +92,42 @@ bool movedIntoLocal(const QString& key, const QJsonValue& was, const QJsonObject
   return key == QLatin1String("externalMeta");  // its `conflicts` may shrink
 }
 
+bool idArray(const QJsonValue& v) {
+  if(!v.isArray() || v.toArray().isEmpty()) {
+    return false;
+  }
+  for(const auto& e : v.toArray()) {
+    if(!e.isObject() || e.toObject().value("id").toString().isEmpty()) {
+      return false;
+    }
+  }
+  return true;
+}
+
 // Each key of `before` is in `after` with the same value; a tracker card may
-// have moved its local divergence into `local`.
+// have moved its local divergence into `local`. Objects and arrays of id'd
+// objects (columns, people) are compared key by key, so a key v12 adds to
+// them (a column's stage) is not a loss.
 void expectKept(const QJsonObject& before, const QJsonObject& after, const QString& where, bool trackerCard) {
   for(auto it = before.begin(); it != before.end(); ++it) {
     const QJsonValue now = after.value(it.key());
     if(now == it.value()) {
+      continue;
+    }
+    if(it.value().isObject() && now.isObject()) {
+      expectKept(it.value().toObject(), now.toObject(), where + "/" + it.key(), false);
+      continue;
+    }
+    if(idArray(it.value()) && idArray(now)) {
+      const QJsonObject was = byId(it.value().toArray());
+      const QJsonObject is = byId(now.toArray());
+      for(auto e = was.begin(); e != was.end(); ++e) {
+        if(!is.contains(e.key())) {
+          ADD_FAILURE() << where.toStdString() << "/" << it.key().toStdString() << "/" << e.key().toStdString() << " is gone";
+          continue;
+        }
+        expectKept(e.value().toObject(), is.value(e.key()).toObject(), where + "/" + it.key() + "/" + e.key(), false);
+      }
       continue;
     }
     // An empty value the reader fills in (a blank statusChangedAt becomes

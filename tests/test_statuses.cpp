@@ -112,12 +112,11 @@ TEST_F(StatusTest, AddStatusRejectsAnEmptyName) {
 }
 
 TEST_F(StatusTest, AddStatusGivesACollidingNameItsOwnId) {
-  app_->addStatus(QStringLiteral("Review"), QString());
-  app_->addStatus(QStringLiteral("Review"), QString());
-
+  // A name that is free but slugs to a built-in id ("blocked").
+  app_->addStatus(QStringLiteral("Blocked!"), QString());
   const QStringList ids = statusIds();
-  EXPECT_EQ(ids.count(QStringLiteral("review")), 1);
-  EXPECT_TRUE(ids.contains(QStringLiteral("review-2"))) << ids.join(QStringLiteral(",")).toStdString();
+  EXPECT_EQ(ids.count(QStringLiteral("blocked")), 1);
+  EXPECT_TRUE(ids.contains(QStringLiteral("blocked-2"))) << ids.join(QStringLiteral(",")).toStdString();
 }
 
 // A name that slugs away to nothing still has to produce a usable id.

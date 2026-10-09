@@ -368,6 +368,31 @@ TEST(FieldCountGuard, SyncSerializerEmitsAKeyForEveryEventField) {
 
 // APP-122: a column's auto-archive days survive a save, 0 included; a
 // column that never had one stays without the key.
+// A column's stage (schema v12, APP-259) survives a save; one from before
+// stages gets its own: a built-in id is its stage, any other column "todo",
+// flagged for the user to check — never guessed from the name.
+TEST(RoundTrip, ColumnStageSurvivesAndOldColumnsGetOne) {
+  QVariantMap picked{{"id", "qa"}, {"name", "QA"}, {"color", "#8a8e98"}, {"category", "review"}, {"categoryGuessed", false}};
+  const QVariantList back = heap::state::statusesFromJson(heap::state::statusesToJson({picked}));
+  ASSERT_EQ(back.size(), 1);
+  EXPECT_EQ(back.at(0).toMap().value("category").toString(), QString("review"));
+  EXPECT_FALSE(back.at(0).toMap().value("categoryGuessed").toBool());
+
+  QJsonArray legacy;
+  legacy.append(QJsonObject{{"id", "prog"}, {"name", "Doing"}, {"color", "#5aa9e6"}});
+  legacy.append(QJsonObject{{"id", "waiting-for-qa"}, {"name", "Done-ish"}, {"color", "#5aa9e6"}});
+  const QVariantList old = heap::state::statusesFromJson(legacy);
+  EXPECT_EQ(old.at(0).toMap().value("category").toString(), QString("prog"));
+  EXPECT_FALSE(old.at(0).toMap().value("categoryGuessed").toBool());
+  EXPECT_EQ(old.at(1).toMap().value("category").toString(), QString("todo")) << "not guessed from a name that says done";
+  EXPECT_TRUE(old.at(1).toMap().value("categoryGuessed").toBool());
+  // and written back with the stage, still flagged until the user picks one
+  const QJsonArray saved = heap::state::statusesToJson(old);
+  EXPECT_EQ(saved.at(1).toObject().value("category").toString(), QString("todo"));
+  EXPECT_TRUE(saved.at(1).toObject().value("categoryGuessed").toBool());
+  EXPECT_FALSE(saved.at(0).toObject().contains("categoryGuessed"));
+}
+
 TEST(RoundTrip, ColumnArchiveDaysSurvive) {
   QVariantMap obsolete{{"id", "obsolete"}, {"name", "Obsolete"}, {"color", "#8a8e98"}, {"archiveDays", 14}};
   QVariantMap never{{"id", "later"}, {"name", "Later"}, {"color", "#8a8e98"}, {"archiveDays", 0}};

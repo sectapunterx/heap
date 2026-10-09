@@ -300,6 +300,7 @@ qt_add_library(heap_core STATIC
 
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 set_source_files_properties(qml/Brand.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(qml/Style.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 set_source_files_properties(qml/I18n.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 set_source_files_properties(qml/IntegrationActivity.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
@@ -324,6 +325,16 @@ qt_add_qml_module(heap_core
         qml/Main.qml
         qml/Theme.qml
         qml/ThemePresets.js
+        # heap 2 design system (APP-259) and the two styles (APP-275)
+        qml/Style.qml
+        qml/StatusRing.qml
+        qml/PropertyChip.qml
+        qml/KeyHint.qml
+        qml/CursorBar.qml
+        qml/SectionHeader.qml
+        qml/MeetingIcon.qml
+        qml/LensTabs.qml
+        qml/QueryBar.qml
         qml/Pseudo.js
         # ── audit-plat: begin ──
         qml/StorageBanner.qml

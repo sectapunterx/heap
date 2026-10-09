@@ -51,15 +51,15 @@ TEST_F(OnboardingTest, FreshInstallShowsWelcomeAndFlagsDemo) {
   EXPECT_TRUE(app.demoActive());
 }
 
-// A new user starts on heap. ink / heap. light with soft contrast, written into the
+// A new user starts on lowkey / lowkey light with normal contrast (heap 2), written into the
 // settings so the built-in fallback (heap. dark) still holds for everyone who
 // has never opened Appearance.
-TEST_F(OnboardingTest, FreshInstallStartsOnInkWithSoftContrast) {
+TEST_F(OnboardingTest, FreshInstallStartsOnLowkeyWithNormalContrast) {
   AppController app;
   const QJsonObject appearance = QJsonDocument::fromJson(app.appSettingsJson().toUtf8()).object()["appearance"].toObject();
   EXPECT_EQ(appearance["darkPreset"].toString(), QStringLiteral("heap-ink"));
   EXPECT_EQ(appearance["lightPreset"].toString(), QStringLiteral("heap-light"));
-  EXPECT_EQ(appearance["contrast"].toString(), QStringLiteral("soft"));
+  EXPECT_EQ(appearance["contrast"].toString(), QStringLiteral("normal"));
 }
 
 // ...and an install that already has settings keeps its own.
