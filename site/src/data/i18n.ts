@@ -16,13 +16,13 @@ export const dataPaths = [
 export const trackers = ['GitHub', 'GitLab', 'Jira', 'Trello', 'Gitea', 'Forgejo', 'Redmine', 'Todoist', 'Asana', 'ClickUp', 'Sentry', 'Bitbucket', 'Mattermost'];
 
 const ru = {
-  htmlTitle: 'Рабочий день разработчика в одном окне — lowkey',
+  htmlTitle: 'lowkey — рабочий день разработчика в одном окне',
   description: 'Quiet by default. Задачи из трекеров, встречи и заметки в одном тихом окне. С клавиатуры и офлайн.',
   selfName: 'Русский',
   skip: 'К содержимому',
-  brandLabel: 'Наверх',
+  brandLabel: 'lowkey, наверх',
   navLabel: 'Разделы',
-  nav: { try: 'Попробовать', git: 'Git', trust: 'Данные', faq: 'Вопросы' },
+  nav: { try: 'Попробовать', day: 'Как это выглядит', trust: 'Данные', faq: 'Вопросы' },
   search: { button: 'Поиск', label: 'Поиск по сайту', placeholder: 'Найти на странице…', empty: 'Ничего не нашлось', hint: '↑↓ выбрать · Enter перейти · Esc закрыть' },
   download: 'Скачать',
   downloadApp: 'Скачать lowkey',
@@ -31,7 +31,7 @@ const ru = {
     sub: 'Рабочий день разработчика в одном окне',
     try: 'Попробовать прямо здесь',
     facts: ['Без регистрации', 'Работает офлайн', 'Windows, macOS, Linux'],
-    shot: 'Экран «Сегодня»: встречи и задачи на день',
+    shot: 'lowkey: экран «Сегодня» — встречи и задачи на день',
   },
   noise: {
     pings: [
@@ -51,7 +51,7 @@ const ru = {
     a: 'Восемь вкладок, чтобы понять, что делать сейчас?',
     b: 'Одно окно.<br />Ничего лишнего.',
     pa: 'Трекер, календарь, почта, заметки, мессенджер — у каждого свои уведомления и свои счётчики.',
-    pb: 'Задачи из трекеров и встречи из календаря собраны в одну ленту на день.',
+    pb: 'Задачи из трекеров и встречи из календаря lowkey собирает в одну ленту на день. Цветом отмечено только срочное.',
     calmHead: 'Сегодня',
     calmFacts: '1 встреча · 2 задачи',
     rows: [['cal', 'Дейлик', '09:30'], ['ring', 'Ревью #482', 'GitHub'], ['ring half', 'Rate limit для логина', 'Jira']],
@@ -59,7 +59,7 @@ const ru = {
   demo: {
     kicker: 'Попробуйте',
     h: 'Запишите задачу так, как сказали бы вслух',
-    p: 'Дату, время, тег и приоритет приложение поймёт само. Потом закройте всё — клавишей d или кликом по кружку.',
+    p: 'Дату, время, тег и приоритет lowkey поймёт сам. Потом закройте всё — клавишей d или кликом по кружку.',
     title: 'Сегодня',
     input: 'Новая задача',
     placeholder: 'Например: ревью PR завтра 15:00 #api p1',
@@ -70,10 +70,10 @@ const ru = {
   day: {
     kicker: 'Один день с lowkey',
     moments: [
-      { t: '09:00', h: 'Открыли — и сразу ясно, что сейчас', p: 'Встречи и задачи на день одной лентой на экране «Сегодня».' },
+      { t: '09:00', h: 'Открыли — и сразу ясно, что сейчас', p: 'Встречи и задачи на день одной лентой. Что идёт сейчас и что горит сегодня — видно сразу.' },
       { t: '10:30', h: 'Встречи рядом с задачами', p: 'Неделя календаря и задачи в одном виде. Перетащили задачу на время — она запланирована.' },
-      { t: '12:40', h: 'Мысль пришла — записали за секунду', p: 'Ctrl Shift Space из любой программы, даже когда окно свёрнуто: «починить логин завтра 15:00». Дата распознаётся из слов. Для заметки — Ctrl Shift N.' },
-      { t: '14:00', h: 'Задача открывается документом', p: 'Свойства сверху, текст и чек-лист ниже. Сохраняется само. Готово — одна клавиша d.' },
+      { t: '12:40', h: 'Мысль пришла — записали за секунду', p: 'Ctrl Shift Space из любой программы, даже когда lowkey свёрнут: «починить логин завтра 15:00». Дата распознаётся из слов. Для заметки — Ctrl Shift N.' },
+      { t: '14:00', h: 'Задача открывается документом', p: 'Свойства сверху, текст и чек-лист ниже. Сохраняется само. Готово — одна клавиша D.' },
       { t: '17:30', h: 'Знания рядом с задачами', p: 'Заметки и доки в одном разделе. #APP-112 в тексте заметки становится ссылкой с названием задачи.' },
     ],
   },
@@ -95,14 +95,14 @@ const ru = {
     h: 'Всё — с клавиатуры',
     p: 'Клавиши как в Vim: j и k по спискам, d — готово, g — перейти, y — скопировать. Считаются по физической клавише, поэтому работают и в русской раскладке. Любое сочетание можно переназначить. Нажмите любую.',
     cards: [
-      ['Вниз и вверх', 'По списку, колонке доски и ленте «Сегодня»'],
+      ['Вниз и вверх', 'По любому списку, доске и календарю'],
       ['Готово', 'На готовой задаче — вернуть. Ctrl Z отменяет'],
       ['Запланировать', 'Дата словами: «пт 11:00»'],
       ['Разделы', 'Сегодня, Задачи, Знания'],
       ['Перейти', 'g b — доска, g l — список, g c — календарь, g t — сегодня'],
       ['Скопировать номер', 'y b — имя ветки, y l — ссылку в трекере'],
       ['Командная строка', 'Найти, отфильтровать, выполнить'],
-      ['Быстрый ввод', 'Из любой программы, даже когда окно свёрнуто'],
+      ['Быстрый ввод', 'Из любой программы, даже когда lowkey свёрнут'],
       ['Шпаргалка', 'Все клавиши на одном экране'],
     ],
     note: 'Одиночные буквы действуют на задачу под курсором и только когда вы не печатаете; сочетания с Ctrl работают везде. На этом сайте: Ctrl K или / — поиск, g g — наверх.',
@@ -119,7 +119,7 @@ const ru = {
   },
   tool: {
     kicker: 'Как сделано',
-    h: 'Сделано как инструмент, а не сервис',
+    h: 'Сделано как инструмент',
     cards: [
       ['Qt 6 · C++20', 'Нативное приложение', 'Без браузера внутри. AppImage для Linux везёт свой Qt, ставить ничего не нужно.'],
       ['0 служб', 'Ничего в фоне', 'Работает, пока открыто окно или значок в трее. Автозапуск при входе в систему — только если включите.'],
@@ -133,7 +133,7 @@ const ru = {
     cards: [
       ['Офлайн', 'Задачи, встречи и заметки хранятся в одном файле state.json. Сеть нужна только для проверки обновлений и того, что вы подключили сами.'],
       ['Без регистрации', 'Скачали, открыли, работаете. Ни аккаунта, ни почты.'],
-      ['По умолчанию только чтение', 'В трекеры ничего не пишется. Запись статуса включается для каждого трекера отдельно: «Менять статус в Jira при перемещении карточки». Заголовки, описания и комментарии не пишутся никогда.'],
+      ['Трекеры — только чтение', 'В трекеры ничего не пишется. Запись статуса включается для каждого трекера отдельно: «Менять статус в Jira при перемещении карточки». Заголовки, описания и комментарии не пишутся никогда.'],
       ['Ничего не теряется', 'Резервные копии по расписанию (по умолчанию раз в день, хранятся последние 20) и машина времени: снимки каждый час за двое суток и каждый день за месяц.'],
     ],
     whereH: 'Где лежат данные',
@@ -147,17 +147,17 @@ const ru = {
     schema: 'схема',
     exampleNote: 'У карточек из трекера есть ещё слой local: ваши заметки, чек-лист, теги и даты. Синхронизация его не перезаписывает.',
     netH: 'Что приложение отправляет само',
-    netP: 'Полный список. Чего здесь нет, то приложение не отправляет. Аналитики и отчётов об ошибках нет.',
+    netP: 'Полный список. Чего здесь нет, то lowkey не отправляет. Аналитики и отчётов об ошибках нет.',
     net: [
       ['Проверка обновлений', 'при запуске · выключается в Настройки → О программе', 'Спрашивает GitHub, есть ли новая версия. О вас и ваших данных ничего не передаёт. Скачивает обновление, только когда вы нажали «Обновить», и сверяет файл с контрольными суммами релиза.'],
       ['Трекеры', 'только подключённые', 'Забирают ваши задачи — вручную или по таймеру, если вы его задали. Статус пишется обратно только туда, где вы включили запись.'],
-      ['Вход через браузер', 'когда нажимаете «Подключить»', 'Браузер открывает страницу входа самого трекера. Пароль приложение не видит.'],
+      ['Вход через браузер', 'когда нажимаете «Подключить»', 'Браузер открывает страницу входа самого трекера. Пароль lowkey не видит.'],
       ['Календари по ссылке', 'только если подписались', 'Скачивает файл .ics по ссылке, которую вы добавили, по умолчанию раз в 15 минут.'],
       ['Состояние PR', 'только для добавленных репозиториев', 'Примерно раз в минуту запускает ваш gh или glab. Выключается в Настройки → Git.'],
       ['Mattermost', 'только если подключён', 'Читает список людей из ваших каналов, чтобы предложить их в @упоминаниях. Ничего не публикует.'],
       ['Картинки в заметках', 'только по вашему клику', 'Изображения из интернета в заметке загружаются, когда вы попросили их показать.'],
     ],
-    marquee: 'Подключается к',
+    marquee: 'Поддерживаемые трекеры',
     signIn: 'Вход через браузер: GitHub, GitLab, Sentry, Jira, Trello, Todoist, Asana, ClickUp, Bitbucket. Gitea и Forgejo — токен или вход через браузер с вашим OAuth-приложением. Redmine — API-ключ. Mattermost — токен или логин; сам пароль не сохраняется.',
   },
   faq: {
@@ -214,13 +214,13 @@ const ru = {
 };
 
 const en: typeof ru = {
-  htmlTitle: 'A developer’s workday in one window — lowkey',
+  htmlTitle: 'lowkey — a developer’s workday in one window',
   description: 'Quiet by default. Tracker tasks, meetings and notes in one quiet window. Keyboard-first and offline.',
   selfName: 'English',
   skip: 'Skip to content',
-  brandLabel: 'Back to top',
+  brandLabel: 'lowkey, back to top',
   navLabel: 'Sections',
-  nav: { try: 'Try it', git: 'Git', trust: 'Your data', faq: 'FAQ' },
+  nav: { try: 'Try it', day: 'How it looks', trust: 'Your data', faq: 'FAQ' },
   search: { button: 'Search', label: 'Search this site', placeholder: 'Find on this page…', empty: 'Nothing found', hint: '↑↓ choose · Enter go · Esc close' },
   download: 'Download',
   downloadApp: 'Download lowkey',
@@ -229,7 +229,7 @@ const en: typeof ru = {
     sub: 'A developer’s workday in one window',
     try: 'Try it right here',
     facts: ['No sign-up', 'Works offline', 'Windows, macOS, Linux'],
-    shot: 'The Today screen: meetings and tasks for the day',
+    shot: 'lowkey: the Today screen — meetings and tasks for the day',
   },
   noise: {
     pings: [
@@ -249,7 +249,7 @@ const en: typeof ru = {
     a: 'Eight tabs just to know what to do next?',
     b: 'One window.<br />Nothing extra.',
     pa: 'Tracker, calendar, mail, notes, chat — each with its own notifications and its own counters.',
-    pb: 'Tasks from your trackers and meetings from your calendar, gathered into one feed for the day.',
+    pb: 'Tasks from your trackers and meetings from your calendar, gathered into one feed for the day. Colour marks only what’s urgent.',
     calmHead: 'Today',
     calmFacts: '1 meeting · 2 tasks',
     rows: [['cal', 'Daily', '09:30'], ['ring', 'Review #482', 'GitHub'], ['ring half', 'Login rate limit', 'Jira']],
@@ -268,16 +268,16 @@ const en: typeof ru = {
   day: {
     kicker: 'A day with lowkey',
     moments: [
-      { t: '09:00', h: 'Open it and know what’s next', p: 'Meetings and tasks for the day in one feed on the Today screen.' },
+      { t: '09:00', h: 'Open it and know what’s next', p: 'Meetings and tasks for the day in one feed. What’s on now and what’s due today stand out at once.' },
       { t: '10:30', h: 'Meetings next to tasks', p: 'A calendar week and your tasks in one view. Drag a task onto a time slot — it’s scheduled.' },
-      { t: '12:40', h: 'A thought comes — captured in a second', p: 'Ctrl Shift Space from any app, even with the window minimized: “fix login tomorrow 15:00”. The date is read from the words. For a note — Ctrl Shift N.' },
-      { t: '14:00', h: 'A task opens as a document', p: 'Properties on top, text and checklist below. It saves itself. Done is one key: d.' },
+      { t: '12:40', h: 'A thought comes — captured in a second', p: 'Ctrl Shift Space from any app, even with lowkey minimized: “fix login tomorrow 15:00”. The date is read from the words. For a note — Ctrl Shift N.' },
+      { t: '14:00', h: 'A task opens as a document', p: 'Properties on top, text and checklist below. It saves itself. Done is one key: D.' },
       { t: '17:30', h: 'Knowledge next to tasks', p: 'Notes and docs in one section. #APP-112 in a note becomes a link with the task’s title.' },
     ],
   },
   git: {
     kicker: 'Git',
-    h: 'Switched the branch — the right task is already highlighted',
+    h: 'Switch the branch — the task is already marked',
     p: 'Add your repositories in Settings → Git. The branch is read from .git/HEAD: when its name carries a task id like APP-112, that task shows at the top of the window, and the PR state comes from your own gh or glab. No bindings, no plugins.',
     run: 'Run the command',
     repo: '~/src/acme-web',
@@ -293,14 +293,14 @@ const en: typeof ru = {
     h: 'Everything from the keyboard',
     p: 'Keys as in Vim: j and k through lists, d for done, g to go, y to copy. They follow the physical key, so they work in any keyboard layout, and any shortcut can be rebound. Press one.',
     cards: [
-      ['Down and up', 'Through a list, a board column and the Today feed'],
+      ['Down and up', 'Through any list, board and calendar'],
       ['Done', 'On a done task, brings it back. Ctrl Z undoes it'],
       ['Schedule', 'Date in words: “fri 11:00”'],
       ['Sections', 'Today, Tasks, Knowledge'],
       ['Go to', 'g b — board, g l — list, g c — calendar, g t — today'],
       ['Copy the id', 'y b — the branch name, y l — the tracker link'],
       ['Command line', 'Find, filter, run'],
-      ['Quick capture', 'From any app, even with the window minimized'],
+      ['Quick capture', 'From any app, even with lowkey minimized'],
       ['Cheat sheet', 'Every key on one screen'],
     ],
     note: 'Single letters act on the task under the cursor and only while you aren’t typing; Ctrl shortcuts work everywhere. On this site: Ctrl K or / searches, g g goes to the top.',
@@ -317,7 +317,7 @@ const en: typeof ru = {
   },
   tool: {
     kicker: 'How it’s built',
-    h: 'Built like a tool, not a service',
+    h: 'Built like a tool',
     cards: [
       ['Qt 6 · C++20', 'Native app', 'No browser inside. The Linux AppImage carries its own Qt, nothing else to install.'],
       ['0 services', 'Nothing in the background', 'Runs while its window or tray icon is open. Starting at login only if you turn it on.'],
@@ -331,7 +331,7 @@ const en: typeof ru = {
     cards: [
       ['Offline', 'Tasks, meetings and notes live in one file, state.json. The network is used only for the update check and for what you connect yourself.'],
       ['No sign-up', 'Download, open, work. No account, no email.'],
-      ['Read-only by default', 'Nothing is written to your trackers. Status write-back is turned on per tracker: “Change the status in Jira when I move a card”. Titles, descriptions and comments are never written.'],
+      ['Trackers are read-only', 'Nothing is written to your trackers. Status write-back is turned on per tracker: “Change the status in Jira when I move a card”. Titles, descriptions and comments are never written.'],
       ['Nothing gets lost', 'Scheduled backups (daily by default, the last 20 kept) and a time machine: hourly snapshots for two days, daily ones for a month.'],
     ],
     whereH: 'Where your data lives',
@@ -345,17 +345,17 @@ const en: typeof ru = {
     schema: 'schema',
     exampleNote: 'Cards from a tracker also carry a local layer: your own notes, checklist, tags and dates. A sync never overwrites it.',
     netH: 'What the app sends on its own',
-    netP: 'The complete list. If it isn’t here, the app doesn’t send it. No analytics, no crash reports.',
+    netP: 'The complete list. If it isn’t here, lowkey doesn’t send it. No analytics, no crash reports.',
     net: [
       ['Update check', 'on start · off in Settings → About', 'Asks GitHub whether a newer version exists. Sends nothing about you or your data. Downloads the update only when you click Update, and checks it against the release’s checksums.'],
       ['Trackers', 'only the ones you connect', 'Pull your tasks — by hand, or on a timer if you set one. A status is written back only where you turned write-back on.'],
-      ['Browser sign-in', 'when you click Connect', 'Your browser opens the tracker’s own sign-in page. The app never sees your password.'],
+      ['Browser sign-in', 'when you click Connect', 'Your browser opens the tracker’s own sign-in page. lowkey never sees your password.'],
       ['Calendar links', 'only if you subscribe', 'Downloads the .ics file at the link you added, every 15 minutes by default.'],
       ['PR state', 'only for repositories you add', 'Runs your own gh or glab about once a minute. Off in Settings → Git.'],
       ['Mattermost', 'only if connected', 'Reads the people in your channels to offer them as @mentions. Posts nothing.'],
       ['Pictures in notes', 'only when you click', 'Images from the web in a note load when you ask to show them.'],
     ],
-    marquee: 'Connects to',
+    marquee: 'Supported trackers',
     signIn: 'Browser sign-in: GitHub, GitLab, Sentry, Jira, Trello, Todoist, Asana, ClickUp, Bitbucket. Gitea and Forgejo: a token, or browser sign-in through your own OAuth app. Redmine: an API key. Mattermost: a token or your login; the password itself is not stored.',
   },
   faq: {

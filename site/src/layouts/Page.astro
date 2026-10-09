@@ -58,7 +58,7 @@ const canonical = new URL(here, Astro.site).href;
       <a class="brand" href={home ? '#top' : homeHref} data-scroll={home ? '#top' : undefined} aria-label={t.brandLabel} set:html={wordmark} />
       <nav class="nav-links" aria-label={t.navLabel}>
         <a href={sec('try')} data-scroll={home ? '#try' : undefined}>{t.nav.try}</a>
-        <a href={sec('git')} data-scroll={home ? '#git' : undefined}>{t.nav.git}</a>
+        <a href={sec('day')} data-scroll={home ? '#day' : undefined}>{t.nav.day}</a>
         <a href={sec('trust')} data-scroll={home ? '#trust' : undefined}>{t.nav.trust}</a>
         <a href={sec('faq')} data-scroll={home ? '#faq' : undefined}>{t.nav.faq}</a>
       </nav>
