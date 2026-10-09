@@ -1,0 +1,164 @@
+<style>
+:host{margin:0;background:#0c0e11}
+a{color:#e9edf2;text-decoration-color:#4a525d;text-underline-offset:3px}a:hover{color:#ffffff}
+button{font-family:inherit}
+</style>
+<div style="width: 100%; min-height: 900px; display: flex; flex-wrap: wrap; background: #0c0e11; color: #e9edf2; font-family: 'Golos Text', sans-serif; font-size: 13px">
+<nav aria-label="Sections" style="flex: 0 0 208px; box-sizing: border-box; background: #0f1216; border-right: 1px solid #1f252d; padding: 16px 12px; display: flex; flex-direction: column; gap: 2px">
+<div style="display: flex; align-items: center; gap: 8px; padding: 0 6px 14px">
+<span style="font-weight: 500; font-size: 18px; letter-spacing: -0.035em"><span style="border-bottom: 0.075em solid #b1a7f0; padding-bottom: 0.06em">low</span>key</span>
+<span style="flex: 1"></span>
+<button style="display: flex; align-items: center; gap: 6px; background: transparent; border: 0; color: #c4ccd6; font-size: 12px; padding: 4px 6px"><span style="width: 6px; height: 6px; border-radius: 3px; background: #6fcf97"></span>Example</button>
+</div>
+<button style="display: flex; align-items: center; gap: 8px; background: #14181d; border: 1px solid #232a33; color: #8f99a6; border-radius: 8px; padding: 8px 10px; margin-bottom: 14px; font-size: 13px; text-align: left">
+<span style="flex: 1">New task…</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 11px">Ctrl N</span>
+</button>
+<a style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #c4ccd6;"><span style="flex: 1">Today</span><span style="font-size: 11px; color: #8f99a6; font-family: 'JetBrains Mono', monospace">Ctrl 1</span></a>
+<a style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; background: linear-gradient(#b1a7f0, #b1a7f0) no-repeat left 8px bottom 2px / 18px 2px; color: #ffffff; font-weight: 600;"><span style="flex: 1">Tasks</span><span style="font-size: 11px; color: #8f99a6; font-family: 'JetBrains Mono', monospace">Ctrl 2</span></a>
+<a style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #c4ccd6;"><span style="flex: 1">Knowledge</span><span style="font-size: 11px; color: #8f99a6; font-family: 'JetBrains Mono', monospace">Ctrl 3</span></a>
+<div style="padding: 16px 8px 6px; font-size: 11px; color: #8f99a6">My views</div>
+<a style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #c4ccd6;"><span style="flex: 1">Blocked</span><span style="font-size: 11px; color: #8f99a6; font-family: 'JetBrains Mono', monospace">1</span></a>
+<a style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #c4ccd6;"><span style="flex: 1">In review</span><span style="font-size: 11px; color: #8f99a6; font-family: 'JetBrains Mono', monospace">2</span></a>
+<a style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #c4ccd6;"><span style="flex: 1">Urgent</span><span style="font-size: 11px; color: #8f99a6; font-family: 'JetBrains Mono', monospace">7</span></a>
+<a style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #c4ccd6;"><span style="flex: 1">This week</span><span style="font-size: 11px; color: #8f99a6; font-family: 'JetBrains Mono', monospace">6</span></a>
+<div style="flex: 1"></div>
+<a style="display: flex; padding: 7px 8px; border-radius: 7px; color: #c4ccd6; text-decoration: none"><span style="flex: 1">Settings</span><span style="font-size: 11px; color: #8f99a6; font-family: 'JetBrains Mono', monospace">Ctrl ,</span></a>
+</nav>
+<main style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column">
+<header style="padding: 22px 28px 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 16px">
+<h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em">Tasks</h1>
+<div role="tablist" aria-label="View" style="display: flex; gap: 2px; background: #14181d; border-radius: 9px; padding: 3px">
+<a role="tab" style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #c4ccd6;">Board <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8f99a6">g b</span></a>
+<a role="tab" style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #c4ccd6;">List <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8f99a6">g l</span></a>
+<a role="tab" style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #ffffff; font-weight: 600; box-shadow: inset 0 -2px 0 #b1a7f0;">Calendar <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8f99a6">g c</span></a>
+</div>
+<div role="group" aria-label="Zoom" style="display: flex; gap: 2px; border: 1px solid #232a33; border-radius: 9px; padding: 2px">
+<button style="background: transparent; border: 0; color: #c4ccd6; border-radius: 6px; padding: 5px 10px; font-size: 12px">Day</button>
+<button style="background: #1f252d; border: 0; color: #ffffff; border-radius: 6px; padding: 5px 10px; font-size: 12px; font-weight: 600">Week</button>
+<button style="background: transparent; border: 0; color: #c4ccd6; border-radius: 6px; padding: 5px 10px; font-size: 12px">Month</button>
+</div>
+<span style="flex: 1"></span>
+<button aria-label="Previous week" style="background: transparent; border: 1px solid #232a33; color: #c4ccd6; border-radius: 8px; padding: 6px 10px">‹</button>
+<span style="font-weight: 600">October 5 – 11</span>
+<button aria-label="Next week" style="background: transparent; border: 1px solid #232a33; color: #c4ccd6; border-radius: 8px; padding: 6px 10px">›</button>
+</header>
+<div style="flex: 1; display: flex; flex-wrap: wrap; gap: 0; min-height: 0">
+<div style="flex: 999 1 560px; min-width: 0; overflow-x: auto; padding-left: 16px">
+<div style="min-width: 700px; display: grid; grid-template-columns: 48px repeat(7, minmax(0, 1fr))">
+<div></div>
+<div style="padding: 8px 6px; border-bottom: 1px solid #1f252d; "><span style="color: #8f99a6; font-size: 11px">Mon</span> <b style="font-size: 16px; font-weight: 600">5</b></div>
+<div style="padding: 8px 6px; border-bottom: 1px solid #1f252d; "><span style="color: #8f99a6; font-size: 11px">Tue</span> <b style="font-size: 16px; font-weight: 600">6</b></div>
+<div style="padding: 8px 6px; border-bottom: 1px solid #1f252d; "><span style="color: #8f99a6; font-size: 11px">Wed</span> <b style="font-size: 16px; font-weight: 600">7</b></div>
+<div style="padding: 8px 6px; border-bottom: 1px solid #1f252d; box-shadow: inset 0 2px 0 #f2a65a;"><span style="color: #8f99a6; font-size: 11px">Thu</span> <b style="font-size: 16px; font-weight: 600">8</b></div>
+<div style="padding: 8px 6px; border-bottom: 1px solid #1f252d; "><span style="color: #8f99a6; font-size: 11px">Fri</span> <b style="font-size: 16px; font-weight: 600">9</b></div>
+<div style="padding: 8px 6px; border-bottom: 1px solid #1f252d; "><span style="color: #8f99a6; font-size: 11px">Sat</span> <b style="font-size: 16px; font-weight: 600">10</b></div>
+<div style="padding: 8px 6px; border-bottom: 1px solid #1f252d; "><span style="color: #8f99a6; font-size: 11px">Sun</span> <b style="font-size: 16px; font-weight: 600">11</b></div>
+<div></div>
+<div style="padding: 4px 3px; min-height: 30px; display: flex; flex-direction: column; gap: 3px">
+</div>
+<div style="padding: 4px 3px; min-height: 30px; display: flex; flex-direction: column; gap: 3px">
+</div>
+<div style="padding: 4px 3px; min-height: 30px; display: flex; flex-direction: column; gap: 3px">
+</div>
+<div style="padding: 4px 3px; min-height: 30px; display: flex; flex-direction: column; gap: 3px">
+<div style="font-size: 11px; color: #f2a65a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">⚑ Checkout</div>
+</div>
+<div style="padding: 4px 3px; min-height: 30px; display: flex; flex-direction: column; gap: 3px">
+<div style="font-size: 11px; color: #f2a65a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">⚑ Login limit bypass</div>
+</div>
+<div style="padding: 4px 3px; min-height: 30px; display: flex; flex-direction: column; gap: 3px">
+<div style="font-size: 11px; color: #f2a65a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">⚑ Dashboard</div>
+<div style="font-size: 11px; color: #f2a65a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">⚑ Previews: cache</div>
+</div>
+<div style="padding: 4px 3px; min-height: 30px; display: flex; flex-direction: column; gap: 3px">
+<div style="font-size: 11px; color: #f2a65a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">⚑ CSV export</div>
+</div>
+<div style="position: relative; height: 550px">
+<div style="position: absolute; right: 8px; top: -6px; font-size: 10px; color: #8f99a6; font-family: JetBrains Mono, monospace">09</div>
+<div style="position: absolute; right: 8px; top: 44px; font-size: 10px; color: #8f99a6; font-family: JetBrains Mono, monospace">10</div>
+<div style="position: absolute; right: 8px; top: 94px; font-size: 10px; color: #8f99a6; font-family: JetBrains Mono, monospace">11</div>
+<div style="position: absolute; right: 8px; top: 144px; font-size: 10px; color: #8f99a6; font-family: JetBrains Mono, monospace">12</div>
+<div style="position: absolute; right: 8px; top: 194px; font-size: 10px; color: #8f99a6; font-family: JetBrains Mono, monospace">13</div>
+<div style="position: absolute; right: 8px; top: 244px; font-size: 10px; color: #8f99a6; font-family: JetBrains Mono, monospace">14</div>
+<div style="position: absolute; right: 8px; top: 294px; font-size: 10px; color: #8f99a6; font-family: JetBrains Mono, monospace">15</div>
+<div style="position: absolute; right: 8px; top: 344px; font-size: 10px; color: #8f99a6; font-family: JetBrains Mono, monospace">16</div>
+<div style="position: absolute; right: 8px; top: 394px; font-size: 10px; color: #8f99a6; font-family: JetBrains Mono, monospace">17</div>
+<div style="position: absolute; right: 8px; top: 444px; font-size: 10px; color: #8f99a6; font-family: JetBrains Mono, monospace">18</div>
+<div style="position: absolute; right: 8px; top: 494px; font-size: 10px; color: #8f99a6; font-family: JetBrains Mono, monospace">19</div>
+</div>
+<div style="position: relative; height: 550px; border-left: 1px solid #161a20; background-image: repeating-linear-gradient(to bottom, #14181d 0, #14181d 1px, transparent 1px, transparent 50px);">
+<div style="display: flex; align-items: center; gap: 6px; padding: 0 7px; position: absolute; left: 3px; right: 3px; top: 50px; height: 22px; box-sizing: border-box; border-radius: 7px; overflow: hidden; background: #172131; box-shadow: inset 3px 0 0 #7aa7ff;">
+<div style="font-size: 10px; color: #c4ccd6; flex-shrink: 0;">10:00</div>
+<div style="font-weight: 600; font-size: 12px; line-height: 1.25; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Daily</div>
+</div>
+</div>
+<div style="position: relative; height: 550px; border-left: 1px solid #161a20; background-image: repeating-linear-gradient(to bottom, #14181d 0, #14181d 1px, transparent 1px, transparent 50px);">
+<div style="display: flex; align-items: center; gap: 6px; padding: 0 7px; position: absolute; left: 3px; right: 3px; top: 50px; height: 22px; box-sizing: border-box; border-radius: 7px; overflow: hidden; background: #172131; box-shadow: inset 3px 0 0 #7aa7ff;">
+<div style="font-size: 10px; color: #c4ccd6; flex-shrink: 0;">10:00</div>
+<div style="font-weight: 600; font-size: 12px; line-height: 1.25; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Daily</div>
+</div>
+<div style="padding: 3px 7px; position: absolute; left: 3px; right: 3px; top: 250px; height: 97px; box-sizing: border-box; border-radius: 7px; overflow: hidden; border: 1.5px solid #c4ccd6; background: #0c0e11;">
+<div style="font-size: 10px; color: #c4ccd6; flex-shrink: 0;">14:00</div>
+<div style="font-weight: 600; font-size: 12px; line-height: 1.25;">Webhook refactor</div>
+</div>
+</div>
+<div style="position: relative; height: 550px; border-left: 1px solid #161a20; background-image: repeating-linear-gradient(to bottom, #14181d 0, #14181d 1px, transparent 1px, transparent 50px);">
+<div style="display: flex; align-items: center; gap: 6px; padding: 0 7px; position: absolute; left: 3px; right: 3px; top: 50px; height: 22px; box-sizing: border-box; border-radius: 7px; overflow: hidden; background: #172131; box-shadow: inset 3px 0 0 #7aa7ff;">
+<div style="font-size: 10px; color: #c4ccd6; flex-shrink: 0;">10:00</div>
+<div style="font-weight: 600; font-size: 12px; line-height: 1.25; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Daily</div>
+</div>
+</div>
+<div style="position: relative; height: 550px; border-left: 1px solid #161a20; background-image: repeating-linear-gradient(to bottom, #14181d 0, #14181d 1px, transparent 1px, transparent 50px); background-color: #10141a;">
+<div style="display: flex; align-items: center; gap: 6px; padding: 0 7px; position: absolute; left: 3px; right: 3px; top: 50px; height: 22px; box-sizing: border-box; border-radius: 7px; overflow: hidden; background: #172131; box-shadow: inset 3px 0 0 #7aa7ff;">
+<div style="font-size: 10px; color: #c4ccd6; flex-shrink: 0;">10:00</div>
+<div style="font-weight: 600; font-size: 12px; line-height: 1.25; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Daily</div>
+</div>
+<div style="padding: 3px 7px; position: absolute; left: 3px; right: 3px; top: 200px; height: 97px; box-sizing: border-box; border-radius: 7px; overflow: hidden; background: #172131; box-shadow: inset 3px 0 0 #7aa7ff;">
+<div style="font-size: 10px; color: #c4ccd6; flex-shrink: 0;">13:00</div>
+<div style="font-weight: 600; font-size: 12px; line-height: 1.25;">Focus block</div>
+</div>
+<div style="padding: 3px 7px; position: absolute; left: 3px; right: 3px; top: 300px; height: 47px; box-sizing: border-box; border-radius: 7px; overflow: hidden; border: 1.5px solid #c4ccd6; background: #0c0e11;">
+<div style="font-size: 10px; color: #c4ccd6; flex-shrink: 0;">15:00</div>
+<div style="font-weight: 600; font-size: 12px; line-height: 1.25;">Checkout: timeout</div>
+</div>
+<div style="padding: 3px 7px; position: absolute; left: 3px; right: 3px; top: 400px; height: 72px; box-sizing: border-box; border-radius: 7px; overflow: hidden; border: 1.5px solid #c4ccd6; background: #0c0e11;">
+<div style="font-size: 10px; color: #c4ccd6; flex-shrink: 0;">17:00</div>
+<div style="font-weight: 600; font-size: 12px; line-height: 1.25;">Login limit bypass</div>
+</div>
+<div style="position: absolute; left: 0; right: 0; top: 350px; height: 2px; background: #f2a65a"></div>
+</div>
+<div style="position: relative; height: 550px; border-left: 1px solid #161a20; background-image: repeating-linear-gradient(to bottom, #14181d 0, #14181d 1px, transparent 1px, transparent 50px);">
+<div style="display: flex; align-items: center; gap: 6px; padding: 0 7px; position: absolute; left: 3px; right: 3px; top: 100px; height: 22px; box-sizing: border-box; border-radius: 7px; overflow: hidden; background: #172131; box-shadow: inset 3px 0 0 #7aa7ff;">
+<div style="font-size: 10px; color: #c4ccd6; flex-shrink: 0;">11:00</div>
+<div style="font-weight: 600; font-size: 12px; line-height: 1.25; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">1:1 with Oleg</div>
+</div>
+<div style="display: flex; align-items: center; gap: 6px; padding: 0 7px; position: absolute; left: 3px; right: 3px; top: 300px; height: 22px; box-sizing: border-box; border-radius: 7px; overflow: hidden; border: 1.5px solid #c4ccd6; background: #0c0e11;">
+<div style="font-size: 10px; color: #c4ccd6; flex-shrink: 0;">15:00</div>
+<div style="font-weight: 600; font-size: 12px; line-height: 1.25; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Call with Masha</div>
+</div>
+</div>
+<div style="position: relative; height: 550px; border-left: 1px solid #161a20; background-image: repeating-linear-gradient(to bottom, #14181d 0, #14181d 1px, transparent 1px, transparent 50px);">
+</div>
+<div style="position: relative; height: 550px; border-left: 1px solid #161a20; background-image: repeating-linear-gradient(to bottom, #14181d 0, #14181d 1px, transparent 1px, transparent 50px);">
+</div>
+</div>
+</div>
+<aside aria-label="No date" style="flex: 1 1 240px; max-width: 260px; box-sizing: border-box; padding: 4px 20px 20px">
+<div style="font-weight: 600">No date <span style="color: #8f99a6; font-weight: 400">3</span></div>
+<div style="font-size: 12px; color: #8f99a6; margin: 4px 0 12px; line-height: 1.45">Drag onto an hour, or select and press <b style="font-family: 'JetBrains Mono', monospace; color: #c4ccd6">s</b></div>
+<div style="display: flex; gap: 8px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid #161a20">
+<span style="width: 12px; height: 12px; border-radius: 6px; box-sizing: border-box; border: 1.5px solid #c4ccd6; margin-top: 2px; flex-shrink: 0"></span>
+<span style="line-height: 1.35">Logging improvements</span>
+</div>
+<div style="display: flex; gap: 8px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid #161a20">
+<span style="width: 12px; height: 12px; border-radius: 6px; box-sizing: border-box; border: 1.5px solid #c4ccd6; margin-top: 2px; flex-shrink: 0"></span>
+<span style="line-height: 1.35">Export: empty report</span>
+</div>
+<div style="display: flex; gap: 8px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid #161a20">
+<span style="width: 12px; height: 12px; border-radius: 6px; box-sizing: border-box; border: 1.5px solid #c4ccd6; margin-top: 2px; flex-shrink: 0"></span>
+<span style="line-height: 1.35">Search cache tuning</span>
+</div>
+</aside>
+</div>
+</main>
+</div>

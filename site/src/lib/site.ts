@@ -1,7 +1,11 @@
+// The one place the GitHub repository is named. The repository is still sectapunterx/heap until
+// the owner renames it (APP-280); change REPO here and every download link, the releases API and
+// the source links follow. The Pages base (/heap/) lives in astro.config.mjs.
 export const REPO = 'sectapunterx/heap';
 export const GITHUB_URL = `https://github.com/${REPO}`;
 export const RELEASES_URL = `${GITHUB_URL}/releases`;
-export const ISSUES_URL = `${GITHUB_URL}/issues`;
+export const LATEST_URL = `${RELEASES_URL}/latest`;
+export const LICENSE_URL = `${GITHUB_URL}/blob/master/LICENSE`;
 
 /** Prefix a site-relative path with the deploy base (`/heap/`), keeping the trailing slash policy. */
 export function url(path = ''): string {
@@ -12,18 +16,3 @@ export function url(path = ''): string {
   const needsSlash = pathname !== '' && !pathname.endsWith('/') && !/\.[a-z0-9]+$/i.test(pathname);
   return `${base}/${pathname}${needsSlash ? '/' : ''}${hash ? `#${hash}` : ''}`;
 }
-
-export interface NavItem {
-  id: string;
-  label: string;
-  href: string;
-}
-
-export const NAV: NavItem[] = [
-  { id: 'features', label: 'Features', href: 'features' },
-  { id: 'demo', label: 'Try it', href: 'demo' },
-  { id: 'compare', label: 'Compare', href: 'compare' },
-  { id: 'privacy', label: 'Privacy', href: 'privacy' },
-  { id: 'docs', label: 'Docs', href: 'docs' },
-  { id: 'changelog', label: 'Changelog', href: 'changelog' },
-];

@@ -1,12 +1,13 @@
 name: Site
 
-# The website lives in site/ (Astro + React islands) and is published to GitHub
-# Pages. It reads the repository's docs/*.md, the screenshots in
-# docs/assets/img/screens and the brand assets, and pulls release data from the
-# GitHub API at build time — so it rebuilds when any of those change and after
-# the Release workflow finishes (the download page and changelog follow each
-# release). That hook is workflow_run, not `release: published`: the release is
-# created with GITHUB_TOKEN, which never triggers other workflows, and a
+# The website lives in site/ (Astro, GSAP, Lenis; ru + en) and is published to
+# GitHub Pages. Besides its own files it reads the newest state fixture and the
+# schema version (tests/fixtures/state, src/StateSerializer.h) for the state.json
+# example, the Scoop bucket (bucket/) to decide whether to offer Scoop, and
+# release data from the GitHub API at build time — so it rebuilds when any of
+# those change and after the Release workflow finishes (the download sizes follow
+# each release). That hook is workflow_run, not `release: published`: the release
+# is created with GITHUB_TOKEN, which never triggers other workflows, and a
 # workflow_run build runs on master — the only branch the github-pages
 # environment deploys from. Pull requests build and test without deploying.
 
@@ -15,14 +16,16 @@ on:
     branches: [master]
     paths:
       - 'site/**'
-      - 'docs/**'
-      - 'design/brand-export/**'
+      - 'tests/fixtures/state/**'
+      - 'src/StateSerializer.h'
+      - 'bucket/**'
       - '.github/workflows/pages.yml'
   pull_request:
     paths:
       - 'site/**'
-      - 'docs/**'
-      - 'design/brand-export/**'
+      - 'tests/fixtures/state/**'
+      - 'src/StateSerializer.h'
+      - 'bucket/**'
       - '.github/workflows/pages.yml'
   workflow_run:
     workflows: [Release]

@@ -10,7 +10,7 @@ export const OS_LABEL: Record<DesktopOS, string> = {
 /**
  * Best guess at the visitor's platform from the user agent and, where the
  * browser has it, `navigator.userAgentData.platform`. Phones and tablets come
- * back as `mobile`: heap. has nothing to install there.
+ * back as `mobile`: lowkey has nothing to install there.
  */
 export function detectOS(userAgent: string, platform = ''): DetectedOS {
   const ua = userAgent.toLowerCase();
