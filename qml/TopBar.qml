@@ -33,6 +33,9 @@ Rectangle {
                                  : (view === "week" || view === "month") ? "calendar"
                                  : view
     signal lensSelected(string id)
+    // The lens's own setting, shown beside the tabs (see optionBtn).
+    property var option: null
+    signal optionPicked(string id)
     // The task search belongs to the views that list tasks.
     property bool searchShown: section === "tasks"
 
@@ -170,6 +173,62 @@ Rectangle {
             model: root.lenses
             current: root.lens
             onSelected: (id) => root.lensSelected(id)
+        }
+        // The lens's own setting beside the tabs (H2-List): "Group: by date"
+        // on the list, the sort on the board. { label, value, current,
+        // items: [{ id, label }] } from Main; a pick comes back as optionPicked.
+        Rectangle {
+            id: optionBtn
+            objectName: "view-header-option"
+            visible: !!root.option && root.section === "tasks"
+            Layout.alignment: Qt.AlignVCenter
+            implicitHeight: Theme.chipH
+            implicitWidth: optionRow.implicitWidth + 2 * Theme.spLg
+            radius: Theme.radiusMd
+            color: optionArea.hovered || optionMenu.visible ? Theme.surfaceCardHover : Theme.chipBg
+            border.width: 1
+            border.color: Theme.chipBorder
+            Row {
+                id: optionRow
+                anchors.centerIn: parent
+                spacing: Theme.spXs
+                Text {
+                    text: root.option ? root.option.label + ":" : ""
+                    color: Theme.textMuted
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
+                }
+                Text {
+                    objectName: "view-header-option-value"
+                    text: root.option ? root.option.value : ""
+                    color: Theme.text
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
+                }
+            }
+            ClickArea {
+                id: optionArea
+                label: root.option ? root.option.label + " " + root.option.value : ""
+                showTip: false
+                onActivated: optionMenu.popup(optionBtn, 0, optionBtn.height + Theme.spXs)
+            }
+            AppMenu {
+                id: optionMenu
+                objectName: "view-header-option-menu"
+                Instantiator {
+                    model: root.option ? root.option.items : []
+                    delegate: AppMenuItem {
+                        required property var modelData
+                        objectName: "view-header-option-" + modelData.id
+                        text: modelData.label
+                        checkable: true
+                        checked: !!root.option && root.option.current === modelData.id
+                        onTriggered: root.optionPicked(modelData.id)
+                    }
+                    onObjectAdded: (index, object) => optionMenu.insertItem(index, object)
+                    onObjectRemoved: (index, object) => optionMenu.removeItem(object)
+                }
+            }
         }
 
         Item { Layout.fillWidth: true }

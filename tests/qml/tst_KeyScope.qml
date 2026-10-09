@@ -239,9 +239,12 @@ TestCase {
         tc.win.focusActiveView();
         keyClick(Qt.Key_D);
         tryVerify(function () { return AppController.taskById(id).status === AppController.doneColumn(); }, 1000, "D did not make it done");
-        b.cursorTaskId = id;
+        // Done is folded on the heap 2 board (APP-262), so the cursor cannot
+        // follow the card there: the second D acts on it selected.
+        AppController.setSelectedTaskIds([id]);
         keyClick(Qt.Key_D);
         tryVerify(function () { return AppController.taskById(id).status === was; }, 1000, "a second D did not put it back");
+        AppController.clearSelection();
         AppController.clearPendingUndo();
     }
 

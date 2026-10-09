@@ -80,6 +80,15 @@ target_include_directories(heap_day_plan_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DI
 target_link_libraries(heap_day_plan_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
 add_test(NAME heap_day_plan_tests COMMAND heap_day_plan_tests)
 
+# The groups of the Tasks → List lens (APP-263): a pure function.
+add_executable(heap_task_list_groups_tests
+    test_task_list_groups.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/views/TaskListGroups.cpp
+)
+target_include_directories(heap_task_list_groups_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_task_list_groups_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
+add_test(NAME heap_task_list_groups_tests COMMAND heap_task_list_groups_tests)
+
 # Vendored md4c — proves the static library builds and links everywhere, that
 # the GFM extension flags heap relies on are really enabled, and that text
 # callbacks hand back slices of the caller's buffer. No Qt needed.

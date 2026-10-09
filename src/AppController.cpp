@@ -603,6 +603,22 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.task.done.desc",
        {"The task under the cursor, or the selected ones, to Done; again puts it back.",
         "Задача под курсором или выбранные — в «Готово»; повторно — обратно."}},
+      {"shortcut.task.schedule.label", {"Schedule", "Запланировать"}},
+      {"shortcut.task.schedule.desc",
+       {"The task under the cursor, or the selected ones, into the next free slot of the selected day.",
+        "Задача под курсором или выбранные — в ближайшее свободное окно выбранного дня."}},
+      {"shortcut.task.priority.p0.label", {"Priority P0", "Приоритет P0"}},
+      {"shortcut.task.priority.p0.desc",
+       {"Board and list: P0 for the task under the cursor or the selection.", "Доска и список: P0 задаче под курсором или выбранным."}},
+      {"shortcut.task.priority.p1.label", {"Priority P1", "Приоритет P1"}},
+      {"shortcut.task.priority.p1.desc",
+       {"Board and list: P1 for the task under the cursor or the selection.", "Доска и список: P1 задаче под курсором или выбранным."}},
+      {"shortcut.task.priority.p2.label", {"Priority P2", "Приоритет P2"}},
+      {"shortcut.task.priority.p2.desc",
+       {"Board and list: P2 for the task under the cursor or the selection.", "Доска и список: P2 задаче под курсором или выбранным."}},
+      {"shortcut.task.priority.p3.label", {"Priority P3", "Приоритет P3"}},
+      {"shortcut.task.priority.p3.desc",
+       {"Board and list: P3 for the task under the cursor or the selection.", "Доска и список: P3 задаче под курсором или выбранным."}},
       {"task.doneUndone", {"Done undone", "«Готово» отменено"}},
       {"task.reopenUndone", {"Reopen undone", "Возврат отменён"}},
       {"task.done.one", {"Done: %1", "Готово: %1"}},
@@ -12674,6 +12690,14 @@ void AppController::seedShortcutCatalog() {
   add("task.new", "Ctrl+N");
   // Done in one key (APP-268, keymap.md "d").
   add("task.done", "D");
+  // Board and List (APP-262/263, keymap.md): s schedules into the next free
+  // slot, 1–4 set the priority — on the selection, else the task under the
+  // cursor.
+  add("task.schedule", "S");
+  add("task.priority.p0", "1");
+  add("task.priority.p1", "2");
+  add("task.priority.p2", "3");
+  add("task.priority.p3", "4");
   // heap 2 (APP-258): Ctrl+1..3 are the sidebar's sections top to bottom,
   // Ctrl+, is Settings. The single views have no key of their own any more
   // — they are lenses inside Tasks and Knowledge — but stay bindable.

@@ -781,6 +781,15 @@ class AppController : public QObject {
   Q_INVOKABLE bool taskInCurrentFilter(const QString& id) const;
   Q_INVOKABLE QVariantMap filteredCounts(
       const QString& search, const QStringList& priorities, bool showArchived, bool hideDone = false, const QVariant& rev = {}) const;
+  // Tasks → List (APP-263): the rows of the list, in drawing order — a
+  // {kind: "group", key, value, count, from, to, groupId, name?, category?}
+  // before its {kind: "task", id, key, title, category, priority, label, when,
+  // whenHasTime, due, dueHasTime, …}. groupBy: date | status | priority |
+  // profile ("profile" lists every profile's tasks through the same query).
+  Q_INVOKABLE QVariantList taskListRows(const QString& query,
+                                        const QStringList& priorities,
+                                        bool showArchived,
+                                        const QString& groupBy) const;
 
   QStringList blockedStuckIds() const {
     return m_blockedStuckIds.values();

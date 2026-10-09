@@ -23,6 +23,8 @@ Rectangle {
     property int blockedCount: 0
     property int reviewCount: 0
     property bool showArchived: false
+    // Board and List (APP-262/263) take the archive as a query condition.
+    property bool showArchivedToggle: true
     property string viewLabel: "Board"
     // Only the board orders its columns; the other views carry their own
     // ordering, so the control hides rather than lying about what it does.
@@ -310,6 +312,7 @@ Rectangle {
 
         Rectangle {
             objectName: "archived-toggle"
+            visible: root.showArchivedToggle
             radius: Theme.radiusPill
             color: root.showArchived ? Theme.accentSoft : (archMA.containsMouse ? Theme.panel3 : Theme.panel2)
             border.color: root.showArchived ? Theme.accent : (archMA.containsMouse ? Theme.borderStrong : Theme.border)

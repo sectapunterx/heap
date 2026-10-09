@@ -83,8 +83,9 @@ TestCase {
         tryCompare(AppController, "currentView", "settings");
         keyClick(Qt.Key_2, Qt.ControlModifier);
         tryCompare(AppController, "currentView", "week", 1000, "Tasks reopens on the calendar lens");
+        // The List lens is its own view now (APP-263), not the timeline.
         tc.win.openLens("list");
-        compare(AppController.currentView, "timeline");
+        compare(AppController.currentView, "list");
         tc.win.openLens("board");
         compare(AppController.currentView, "board");
         tryCompare(AppController, "currentSection", "tasks");
