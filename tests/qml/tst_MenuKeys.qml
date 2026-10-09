@@ -104,7 +104,8 @@ TestCase {
         compare(schedule.hint, "s");
         compare(menu.itemAt(rowNamed(menu, "tc-menu-copyid")).hint, "y y");
         compare(menu.itemAt(rowNamed(menu, "tc-menu-done")).hint, "d");
-        compare(menu.itemAt(rowNamed(menu, "tc-menu-edit")).hint, "Enter", "Enter, not Return");
+        compare(menu.itemAt(rowNamed(menu, "tc-menu-edit")).hint, AppController.keyText("Return"), "written the platform way");
+        if (Qt.platform.os !== "osx") compare(menu.itemAt(rowNamed(menu, "tc-menu-edit")).hint, "Enter", "Enter, not Return");
         verify(AppController.setShortcut("task.schedule", "Ctrl+Alt+S"));
         compare(schedule.hint, AppController.keyText("Ctrl+Alt+S"));
         menu.close();

@@ -15,7 +15,9 @@ class SpanHighlighter : public QSyntaxHighlighter {
   Q_OBJECT
   QML_ELEMENT
 
-  Q_PROPERTY(QQuickTextDocument* target READ target WRITE setTarget NOTIFY targetChanged)
+  // Typed QObject* for QML: qmllint on CI (Qt 6.9) has no type for
+  // QQuickTextDocument and counts every binding to it as a finding.
+  Q_PROPERTY(QObject* target READ targetObject WRITE setTargetObject NOTIFY targetChanged)
   Q_PROPERTY(QVariantList spans READ spans WRITE setSpans NOTIFY spansChanged)
   Q_PROPERTY(QVariantMap colors READ colors WRITE setColors NOTIFY colorsChanged)
 
@@ -27,6 +29,14 @@ class SpanHighlighter : public QSyntaxHighlighter {
   }
 
   void setTarget(QQuickTextDocument* t);
+
+  QObject* targetObject() const {
+    return m_target;
+  }
+
+  void setTargetObject(QObject* t) {
+    setTarget(qobject_cast<QQuickTextDocument*>(t));
+  }
 
   QVariantList spans() const {
     return m_spans;
