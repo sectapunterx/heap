@@ -6,10 +6,18 @@ import TodoCpp
 import "Reschedule.js" as Resched
 
 // Today (heap 2, APP-260): the start screen. The date and one line of facts;
-// the day by the hours — meetings filled, tasks outlined with their status,
-// the free windows as facts, the line of "now", the end of the working day;
-// on the side what is in progress, what is due, whom to write, and how many
-// tasks have no date. It shows; lowkey places nothing by itself.
+// the day by the hours — meetings and tasks with their status, the line of
+// "now"; on the side what is in progress, what is due, whom to write, and how
+// many tasks have no date. It shows; lowkey places nothing by itself.
+//
+// Two drawings of the same day (DG-010…015):
+//   bold  (H2-Today)       the eyebrow, "День", meeting cards with a bar,
+//                          outlined task cards, the free windows as facts,
+//                          the side as cards and lists with a footer link;
+//   quiet (H2-Today-Calm)  plain rows with an icon, a thin grey now-line,
+//                          the side as small text blocks, people folded.
+// A small window (X-Oth-Small, DG-008) draws one-line rows and puts the
+// side under the day in three columns, in both styles.
 //
 // The day shown is AppController.selectedDate, so Alt+←/→ and the arrows in
 // the header move it, and T (cal.today) brings it back.
@@ -44,6 +52,13 @@ FocusScope {
         return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
     }
 
+    // A small window (X-Oth-Small, DG-008): the side goes under the day, its
+    // blocks side by side in three columns, the rows one line each.
+    readonly property bool stacked: Window.width > 0 && Window.width < Theme.compactWindowWidth
+    // The quiet drawing of the day and of the side (DG-012, DG-013).
+    readonly property bool plain: Style.plainRows || root.stacked
+    readonly property bool cards: Style.sideCards && !root.stacked
+
     // Rebuilt when tasks, meetings or people change; the minute ticks too.
     property int _rev: 0
     Connections { target: AppController.tasks; function onDataChanged() { root._rev++; } function onRowsInserted() { root._rev++; } function onRowsRemoved() { root._rev++; } function onModelReset() { root._rev++; } }
@@ -63,12 +78,13 @@ FocusScope {
     }
 
     // ── text ──
+    // One line of facts, only the parts that are not zero (DG-010).
     function _facts() {
         const f = root.dayData.facts || {};
         const parts = [];
         if (f.meetings > 0) parts.push(I18n.count(f.meetings, "today.n.meetings"));
         if (f.planned > 0) parts.push(I18n.count(f.planned, "today.n.planned"));
-        if (f.dueToday > 0) parts.push(I18n.count(f.dueToday, "today.n.due"));
+        if (f.dueToday > 0) parts.push(I18n.count(f.dueToday, root.plain || !Style.fills ? "today.n.dueShort" : "today.n.due"));
         return parts.join(" · ");
     }
     function _hm(h) {
@@ -76,6 +92,31 @@ FocusScope {
         return Theme.fmtHour(hh + mm / 60);
     }
     function _len(a, b) { return I18n.fmtMinutes(Math.round((b - a) * 60)); }
+    function _timer(id) {
+        const s = root._rev >= 0 ? AppController.elapsedSecondsFor(id) : 0;
+        const m = Math.floor(s / 60);
+        return Math.floor(m / 60) + ":" + String(m % 60).padStart(2, "0");
+    }
+    // The caption under a row of the day.
+    function _sub(kind: string, b: var): string {
+        const parts = [];
+        const meeting = kind !== "task";
+        if (root.plain) {
+            // "встреча · 30 мин · Zoom", "APP-105 · 1 ч"
+            if (meeting) parts.push(b.eventType === "focus" ? I18n.t("today.q.withSelf") : I18n.t("today.q.meeting"));
+            else parts.push(b.id);
+            if (kind !== "allday") parts.push(root._len(b.start || 0, b.end || 0));
+        } else {
+            if (meeting) parts.push(b.eventType === "focus" ? I18n.t("today.withSelf") : I18n.t("event.kind.meeting"));
+            else parts.push(b.id, I18n.t("today.plannedByYou"));
+        }
+        // A focus block is "with yourself"; its people field is a note.
+        if (meeting && b.attendees && b.eventType !== "focus") parts.push(b.attendees);
+        if (b.profileName) parts.push(b.profileName);
+        if (b.toNextDay) parts.push(I18n.t("today.untilNext").arg(root._hm(b.end % 24)));
+        if ((b.overlapsWith || []).length > 0) parts.push(I18n.t("today.overlaps").arg(b.overlapsWith.join(", ")));
+        return parts.join(" · ");
+    }
 
     // The day as rows: all-day above, then by time with the free windows,
     // "now" and the end of the working day put in their places.
@@ -93,6 +134,22 @@ FocusScope {
         out.sort((a, b) => a.start - b.start || order[a.kind] - order[b.kind]);
         return out;
     }
+    readonly property bool dayEmpty: !root.dayData.blocks || (root.dayData.blocks.length === 0 && (root.dayData.allDay || []).length === 0)
+
+    // The one in-progress task the bold card shows (DG-014): the one with
+    // the timer, else the one whose branch is checked out, else the first.
+    readonly property var inProgress: root.dayData.inProgress || []
+    readonly property int _leadIdx: {
+        const ip = root.inProgress;
+        for (let i = 0; i < ip.length; i++) if (ip[i].isTiming) return i;
+        for (let i = 0; i < ip.length; i++) if (ip[i].repo) return i;
+        return ip.length > 0 ? 0 : -1;
+    }
+    readonly property var lead: root._leadIdx >= 0 ? root.inProgress[root._leadIdx] : null
+    readonly property var otherInProgress: root.inProgress.filter((t, i) => i !== root._leadIdx)
+    // Quiet keeps only today's deadlines (H2-Today-Calm "Срок сегодня").
+    readonly property var deadlines: (root.dayData.deadlines || []).filter(t => root.cards || !t.tomorrow)
+    readonly property var people: Style.todayExtras === "hidden" ? [] : (root.dayData.people || [])
 
     Keys.onPressed: (e) => {
         if (e.modifiers & Qt.AltModifier && (e.key === Qt.Key_Left || e.key === Qt.Key_Right)) return;
@@ -223,377 +280,487 @@ FocusScope {
         onOpenRequested: root.taskClicked(menuHost.taskId)
     }
 
-    // A small window (X-Oth-Small, DG-008): the side goes under the day, its
-    // blocks side by side in three columns.
-    readonly property bool stacked: Window.width > 0 && Window.width < Theme.compactWindowWidth
-
-    GridLayout {
+    ColumnLayout {
         anchors.fill: parent
-        anchors.leftMargin: Theme.sp3xl
-        anchors.rightMargin: Theme.sp3xl
-        anchors.topMargin: Theme.sp2xl
-        columns: root.stacked ? 1 : 2
-        rowSpacing: Theme.sp2xl
-        columnSpacing: Theme.sp3xl
+        anchors.leftMargin: root.plain && !root.stacked ? Theme.sp3xl + Theme.spLg : Theme.sp3xl
+        anchors.rightMargin: root.plain && !root.stacked ? Theme.sp3xl + Theme.spLg : Theme.sp3xl
+        anchors.topMargin: root.plain && !root.stacked ? Theme.sp3xl + Theme.spMd : Theme.sp2xl
+        spacing: 0
 
-        // ── the day ──
-        ColumnLayout {
+        // ── the header: the date, the facts, the day's arrows on the right ──
+        RowLayout {
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            spacing: Theme.spXs
+            Layout.bottomMargin: root.plain ? Theme.sp2xl : Theme.sp2xl
+            spacing: Theme.spMd
 
-            RowLayout {
+            ColumnLayout {
                 Layout.fillWidth: true
-                spacing: Theme.spMd
+                spacing: Theme.spXs
+                // The eyebrow: "Сегодня" in bold; quiet shows it only for
+                // another day or a day off, where it says something.
+                RowLayout {
+                    visible: (!root.plain && !root.stacked) || !root.isToday || root.dayData.workday === false
+                    spacing: Theme.spMd
+                    Text {
+                        objectName: "today-label"
+                        text: root.isToday ? I18n.t("sidebar.today")
+                             : root.dayData.workday === false ? I18n.t("today.dayOff") : I18n.fmtDate(root.day, "longWeekday")
+                        color: Theme.textDim
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsMd
+                    }
+                    Text {
+                        objectName: "today-dayoff"
+                        visible: root.isToday && root.dayData.workday === false
+                        text: "· " + I18n.t("today.dayOff")
+                        color: Theme.textDim
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsMd
+                    }
+                }
                 Text {
-                    objectName: "today-label"
-                    text: root.isToday ? I18n.t("sidebar.today")
-                         : root.dayData.workday === false ? I18n.t("today.dayOff") : I18n.fmtDate(root.day, "longWeekday")
-                    color: Theme.textDim
+                    objectName: "today-date"
+                    text: {
+                        const s = I18n.fmtDate(root.day, "longWeekday");
+                        return s.charAt(0).toUpperCase() + s.slice(1);
+                    }
+                    color: Theme.text
                     font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsSm
+                    font.pixelSize: Theme.fs2xl
+                    font.weight: root.plain ? Theme.fwTitle : Theme.fwHeading
+                    Accessible.role: Accessible.Heading
+                    Accessible.name: text
                 }
+                // One line of facts (DG-010); on the first run, quiet says
+                // "пока пусто" and bold says nothing (Q-First / H2-First).
                 Text {
-                    objectName: "today-dayoff"
-                    visible: root.isToday && root.dayData.workday === false
-                    text: "· " + I18n.t("today.dayOff")
-                    color: Theme.textDim
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsSm
-                }
-                Item { Layout.fillWidth: true }
-                Text {
-                    objectName: "today-back"
-                    visible: !root.isToday
-                    text: I18n.t("today.backToToday")
-                    color: Theme.textMuted
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsSm
-                    font.underline: backCA.hovered
-                    ClickArea { id: backCA; label: parent.text; shortcutId: "cal.today"; onActivated: AppController.selectedDate = AppController.today }
-                }
-                NavBtn { objectName: "today-prev"; glyph: "‹"; label: I18n.t("today.prevDay"); shortcutId: "cal.prevDay"; onActivated: root._step(-1) }
-                NavBtn { objectName: "today-next"; glyph: "›"; label: I18n.t("today.nextDay"); shortcutId: "cal.nextDay"; onActivated: root._step(1) }
-            }
-            Text {
-                objectName: "today-date"
-                text: {
-                    const s = I18n.fmtDate(root.day, "longWeekday");
-                    return s.charAt(0).toUpperCase() + s.slice(1);
-                }
-                color: Theme.text
-                font.family: Theme.fontUi
-                font.pixelSize: Theme.fs2xl
-                font.weight: Theme.fwHeading
-                Accessible.role: Accessible.Heading
-                Accessible.name: text
-            }
-            // Only the parts that are not zero; nothing at all says so.
-            Text {
-                objectName: "today-facts"
-                visible: !root.firstRun
-                Layout.fillWidth: true
-                text: root._facts().length > 0 ? root._facts() : I18n.t("today.nothing")
-                color: Style.factsLine ? Theme.textMuted : Theme.textDim
-                font.family: Theme.fontUi
-                font.pixelSize: Theme.fsMd
-                wrapMode: Text.WordWrap
-            }
-            // The load of the day (APP-247): facts, no advice.
-            Text {
-                objectName: "today-load"
-                Layout.fillWidth: true
-                Layout.bottomMargin: Theme.spXl
-                readonly property var l: root.dayData.load || {}
-                visible: !root.firstRun && root.dayData.workday === true && (l.meetings > 0 || l.tasks > 0)
-                text: {
-                    const parts = [];
-                    if (l.meetings > 0) parts.push(I18n.t("load.meetings").arg(I18n.fmtMinutes(l.meetings)));
-                    if (l.tasks > 0) parts.push(I18n.t("load.tasks").arg(I18n.fmtMinutes(l.tasks)));
-                    parts.push(I18n.t("load.free").arg(I18n.fmtMinutes(l.free || 0)));
-                    if (l.overWork > 0) parts.push(I18n.t("load.over").arg(I18n.fmtMinutes(l.overWork)));
-                    return parts.join(" · ");
-                }
-                color: Theme.textDim
-                font.family: Theme.fontUi
-                font.pixelSize: Theme.fsSm
-            }
-
-            FirstRunHero {
-                id: firstRunHero
-                visible: root.firstRun
-                Layout.fillWidth: true
-                Layout.topMargin: Theme.sp3xl * 2
-                onCreated: (id) => root.firstTaskCreated(id)
-                onConnectRequested: root.connectRequested()
-                onImportRequested: root.importRequested()
-                onExampleRequested: root.exampleRequested()
-            }
-            Item { visible: root.firstRun; Layout.fillHeight: true }
-
-            SectionHeader { visible: !root.firstRun; title: I18n.t("today.day") }
-
-            ListView {
-                id: dayList
-                objectName: "today-day"
-                visible: !root.firstRun
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.topMargin: Theme.spSm
-                clip: true
-                spacing: Theme.spSm
-                boundsBehavior: Flickable.StopAtBounds
-                model: root.rows
-                QQC.ScrollBar.vertical: ThinScrollBar {}
-                delegate: DayRow {}
-                // Opened, it shows "now", not 09:00.
-                onCountChanged: Qt.callLater(root._revealNow)
-                Text {
-                    objectName: "today-empty"
-                    visible: dayList.count === 0 || (root.dayData.blocks && root.dayData.blocks.length === 0 && (root.dayData.allDay || []).length === 0)
-                    anchors.top: parent.top
-                    anchors.topMargin: Theme.spSm
-                    text: I18n.t("today.dayEmpty")
-                    color: Theme.textDim
+                    objectName: "today-facts"
+                    visible: !root.firstRun || root.plain
+                    Layout.fillWidth: true
+                    Layout.topMargin: Theme.spXs
+                    text: root.firstRun ? I18n.t("first.emptySub")
+                        : root._facts().length > 0 ? root._facts() : I18n.t("today.nothing")
+                    color: root.plain || !Style.factsLine ? Theme.textDim : Theme.textMuted
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsMd
-                    z: -1
+                    wrapMode: Text.WordWrap
                 }
+            }
+            Text {
+                objectName: "today-back"
+                Layout.alignment: Qt.AlignBottom
+                visible: !root.isToday
+                text: I18n.t("today.backToToday")
+                color: Theme.textMuted
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsSm
+                font.underline: backCA.hovered
+                ClickArea { id: backCA; label: parent.text; shortcutId: "cal.today"; onActivated: AppController.selectedDate = AppController.today }
+            }
+            // ‹ › at the far right (DG-011): boxed in bold, bare in quiet;
+            // not on the first run and not in a small window, where the
+            // keys still move the day.
+            Row {
+                Layout.alignment: root.plain ? Qt.AlignTop : Qt.AlignBottom
+                visible: !root.firstRun && !root.stacked
+                spacing: root.plain ? Theme.spXs : Theme.spSm
+                NavBtn { objectName: "today-prev"; icon: "chevron-left"; label: I18n.t("today.prevDay"); shortcutId: "cal.prevDay"; onActivated: root._step(-1) }
+                NavBtn { objectName: "today-next"; icon: "chevron-right"; label: I18n.t("today.nextDay"); shortcutId: "cal.nextDay"; onActivated: root._step(1) }
             }
         }
 
-        // ── the side ──
-        Flickable {
-            objectName: "today-side"
+        FirstRunHero {
+            id: firstRunHero
+            visible: root.firstRun
+            Layout.fillWidth: true
+            Layout.topMargin: root.plain ? Theme.px(150) : Theme.px(90)
+            onCreated: (id) => root.firstTaskCreated(id)
+            onConnectRequested: root.connectRequested()
+            onImportRequested: root.importRequested()
+            onExampleRequested: root.exampleRequested()
+        }
+        Item { visible: root.firstRun; Layout.fillHeight: true }
+
+        GridLayout {
             visible: !root.firstRun
-            Layout.preferredWidth: root.stacked ? -1 : Math.min(Theme.px(470), root.width * 0.38)
-            Layout.fillWidth: root.stacked
+            Layout.fillWidth: true
             Layout.fillHeight: !root.stacked
-            Layout.preferredHeight: root.stacked ? Math.min(side.implicitHeight, root.height * 0.45) : -1
-            Layout.bottomMargin: root.stacked ? Theme.sp2xl : 0
-            contentHeight: side.implicitHeight
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
+            columns: root.stacked ? 1 : 3
+            rowSpacing: Theme.sp2xl
+            columnSpacing: root.plain ? Theme.sp3xl + Theme.spXl : Theme.sp3xl
+
+            // ── the day ──
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: !root.stacked
+                Layout.maximumWidth: root.plain && !root.stacked ? Theme.px(680) : -1
+                Layout.preferredWidth: root.plain && !root.stacked ? Theme.px(680) : -1
+                Layout.preferredHeight: root.stacked ? dayList.contentHeight + Theme.spSm : -1
+                spacing: 0
+
+                SectionHeader {
+                    visible: !root.plain
+                    title: I18n.t("today.day")
+                    titleColor: Theme.textDim
+                }
+
+                ListView {
+                    id: dayList
+                    objectName: "today-day"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.topMargin: root.plain ? 0 : Theme.spMd
+                    clip: true
+                    spacing: root.plain ? 0 : Theme.spSm
+                    interactive: !root.stacked
+                    boundsBehavior: Flickable.StopAtBounds
+                    model: root.rows
+                    QQC.ScrollBar.vertical: ThinScrollBar {}
+                    delegate: DayRow {}
+                    // Opened, it shows "now", not 09:00.
+                    onCountChanged: Qt.callLater(root._revealNow)
+                    // A free day (X-Err-Empty): the facts line already says
+                    // "Ничего не запланировано"; here only where the undated
+                    // tasks are.
+                    Text {
+                        objectName: "today-empty"
+                        visible: root.dayEmpty && (root.dayData.undated || 0) > 0
+                        anchors.top: parent.top
+                        anchors.topMargin: Theme.spSm
+                        z: -1
+                        text: I18n.t("today.emptyUndated").arg(root.dayData.undated || 0)
+                        color: Theme.textDim
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsMd
+                        font.underline: emptyUndCA.hovered
+                        ClickArea { id: emptyUndCA; label: parent.text; role: Accessible.Link; onActivated: root.undatedRequested() }
+                    }
+                }
+            }
+
             // A hairline between the day and the side once it is under it.
             Rectangle {
                 visible: root.stacked
-                width: parent.width
-                height: 1
+                Layout.fillWidth: true
+                implicitHeight: 1
                 color: Theme.border
             }
-            GridLayout {
-                id: side
-                width: parent.width
-                y: root.stacked ? Theme.sp2xl : 0
-                columns: root.stacked ? 3 : 1
-                rowSpacing: Theme.sp2xl
-                columnSpacing: Theme.sp3xl
 
-                // In progress; hidden when nothing is.
-                ColumnLayout {
-                    objectName: "today-inprogress"
-                    Layout.alignment: Qt.AlignTop
-                    Layout.preferredWidth: root.stacked ? Theme.px(100) : -1
-                    Layout.fillWidth: true
-                    visible: (root.dayData.inProgress || []).length > 0
-                    spacing: Theme.spSm
-                    SectionHeader { title: I18n.t("today.inProgress") }
-                    Repeater {
-                        model: root.dayData.inProgress || []
-                        delegate: Rectangle {
-                            id: ip
-                            required property var modelData
+            // ── the side ──
+            Flickable {
+                objectName: "today-side"
+                Layout.alignment: Qt.AlignTop
+                Layout.preferredWidth: root.stacked ? -1
+                                     : root.plain ? Math.min(Theme.px(320), root.width * 0.3)
+                                     : Math.min(Theme.px(470), root.width * 0.38)
+                Layout.fillWidth: root.stacked
+                Layout.fillHeight: !root.stacked
+                Layout.preferredHeight: root.stacked ? side.implicitHeight : -1
+                Layout.topMargin: root.plain && !root.stacked ? Theme.spSm : 0
+                contentHeight: side.implicitHeight
+                clip: true
+                interactive: !root.stacked
+                boundsBehavior: Flickable.StopAtBounds
+                GridLayout {
+                    id: side
+                    width: parent.width
+                    columns: root.stacked ? 3 : 1
+                    rowSpacing: root.plain ? Theme.sp2xl : Theme.sp2xl + Theme.spSm
+                    columnSpacing: Theme.sp3xl
+
+                    // In progress; hidden when nothing is (DG-013, DG-014).
+                    ColumnLayout {
+                        objectName: "today-inprogress"
+                        Layout.alignment: Qt.AlignTop
+                        Layout.preferredWidth: root.stacked ? Theme.px(100) : -1
+                        Layout.fillWidth: true
+                        visible: root.inProgress.length > 0
+                        spacing: root.cards ? Theme.spMd : Theme.spSm
+                        SideHead { text: I18n.t(root.cards ? "today.inProgress" : "today.q.inProgress") }
+
+                        // Bold: one card, the task with its key, PR / CI and
+                        // the timer.
+                        Rectangle {
+                            id: leadCard
+                            objectName: "today-lead"
+                            visible: root.cards && !!root.lead
                             Layout.fillWidth: true
-                            implicitHeight: ipCol.implicitHeight + 2 * Theme.spLg
-                            radius: Theme.radiusLg
-                            color: Style.chipFill ? Theme.surfaceCard : "transparent"
-                            border.color: Theme.border
-                            border.width: Style.chipFill ? 0 : 1
+                            readonly property var t: root.lead || ({})
+                            readonly property var pr: leadCard.t.repo && leadCard.t.repo.pr ? leadCard.t.repo.pr : null
+                            implicitHeight: leadCol.implicitHeight + 2 * Theme.spLg
+                            radius: Theme.radiusXl
+                            color: Theme.surfaceCard
                             ColumnLayout {
-                                id: ipCol
+                                id: leadCol
                                 anchors.fill: parent
-                                anchors.margins: Theme.spLg
-                                spacing: Theme.spXs
+                                anchors.leftMargin: Theme.spXl
+                                anchors.rightMargin: Theme.spXl
+                                anchors.topMargin: Theme.spLg
+                                anchors.bottomMargin: Theme.spLg
+                                spacing: Theme.spMd
                                 RowLayout {
                                     spacing: Theme.spMd
-                                    StatusRing { category: ip.modelData.category }
+                                    StatusRing { category: leadCard.t.category || "prog" }
                                     Text {
                                         Layout.fillWidth: true
-                                        text: ip.modelData.title
+                                        text: leadCard.t.title || ""
                                         elide: Text.ElideRight
                                         color: Theme.text
                                         font.family: Theme.fontUi
-                                        font.pixelSize: Theme.fsMd
-                                        font.weight: Theme.fwTitle
+                                        font.pixelSize: Theme.fsLg
+                                        font.weight: Theme.fwHeading
                                     }
                                 }
                                 RowLayout {
-                                    spacing: Theme.spMd
-                                    Text { text: ip.modelData.id; color: Theme.textDim; font.family: Theme.fontMono; font.pixelSize: Theme.fsXs }
+                                    Layout.leftMargin: Theme.statusRingSize + Theme.spMd
+                                    spacing: Theme.spLg
+                                    Text { text: leadCard.t.id || ""; color: Theme.textDim; font.family: Theme.fontMono; font.pixelSize: Theme.fsXs }
                                     Text {
-                                        visible: String(ip.modelData.branch || "").length > 0
-                                        text: "⎇ " + ip.modelData.branch
+                                        visible: !leadCard.pr && String(leadCard.t.branch || "").length > 0
+                                        text: leadCard.t.branch || ""
                                         color: Theme.textMuted
                                         font.family: Theme.fontMono
                                         font.pixelSize: Theme.fsXs
                                     }
-                                    Text {
-                                        readonly property var pr: ip.modelData.repo && ip.modelData.repo.pr ? ip.modelData.repo.pr : null
-                                        visible: !!pr && pr.number > 0
-                                        text: pr ? "PR #" + pr.number + (pr.checks === "passing" ? " · CI ✓" : pr.checks === "failing" ? " · CI ✗" : "") : ""
-                                        color: Theme.text
-                                        font.family: Theme.fontUi
-                                        font.pixelSize: Theme.fsXs
+                                    Row {
+                                        visible: !!leadCard.pr && leadCard.pr.number > 0
+                                        spacing: Theme.spXs
+                                        Text {
+                                            text: leadCard.pr ? "PR #" + leadCard.pr.number + (leadCard.pr.checks ? " · CI" : "") : ""
+                                            color: Theme.textMuted
+                                            font.family: Theme.fontUi
+                                            font.pixelSize: Theme.fsSm
+                                        }
+                                        Icon {
+                                            visible: !!leadCard.pr && (leadCard.pr.checks === "passing" || leadCard.pr.checks === "failing")
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            name: leadCard.pr && leadCard.pr.checks === "failing" ? "close" : "check"
+                                            size: Theme.fsSm
+                                            color: leadCard.pr && leadCard.pr.checks === "failing" ? Theme.signalUrgent : Theme.textMuted
+                                        }
                                     }
                                     Item { Layout.fillWidth: true }
-                                    Text {
-                                        objectName: "today-timer"
-                                        visible: !!ip.modelData.isTiming
-                                        text: {
-                                            const s = root._rev >= 0 ? AppController.elapsedSecondsFor(ip.modelData.id) : 0;
-                                            const m = Math.floor(s / 60);
-                                            return "● " + Math.floor(m / 60) + ":" + String(m % 60).padStart(2, "0");
-                                        }
-                                        color: Theme.signalNow
-                                        font.family: Theme.fontMono
-                                        font.pixelSize: Theme.fsSm
-                                    }
+                                    TimerMark { visible: !!leadCard.t.isTiming; taskId: leadCard.t.id || "" }
                                 }
                             }
-                            ClickArea { label: ip.modelData.title; onActivated: root.taskClicked(ip.modelData.id) }
+                            ClickArea { label: leadCard.t.title || ""; onActivated: root.taskClicked(leadCard.t.id) }
                         }
-                    }
-                }
-
-                // Deadlines today / tomorrow; overdue apart, never in red.
-                ColumnLayout {
-                    objectName: "today-deadlines"
-                    Layout.alignment: Qt.AlignTop
-                    Layout.preferredWidth: root.stacked ? Theme.px(100) : -1
-                    Layout.fillWidth: true
-                    visible: (root.dayData.deadlines || []).length > 0 || (root.dayData.overdue || []).length > 0
-                    spacing: Theme.spSm
-                    SectionHeader { title: I18n.t("today.deadlines") }
-                    Repeater {
-                        model: root.dayData.deadlines || []
-                        delegate: TaskLine {
-                            required property var modelData
-                            task: modelData
-                            sub: modelData.id + (modelData.category === "blocked" ? " · " + I18n.t("today.blocked") : "")
-                                 + (modelData.profileName ? " · " + modelData.profileName : "")
-                            when: modelData.tomorrow ? I18n.t("quick.day.tomorrow") : I18n.t("quick.day.today")
-                            whenSignal: !modelData.tomorrow
-                        }
-                    }
-                    Text {
-                        objectName: "today-overdue"
-                        visible: (root.dayData.overdue || []).length > 0
-                        text: Style.urgency ? I18n.count((root.dayData.overdue || []).length, "today.n.overdue")
-                                            : I18n.t("today.overdueQuiet").arg((root.dayData.overdue || []).length)
-                        color: Theme.textDim
-                        font.family: Theme.fontUi
-                        font.pixelSize: Theme.fsSm
-                        font.underline: odCA.hovered
-                        ClickArea { id: odCA; label: parent.text; onActivated: root.undatedRequested() }
-                    }
-                }
-
-                // Whom to write; hidden when nobody. Folded in the quiet style.
-                ColumnLayout {
-                    objectName: "today-people"
-                    Layout.alignment: Qt.AlignTop
-                    Layout.preferredWidth: root.stacked ? Theme.px(100) : -1
-                    Layout.fillWidth: true
-                    visible: (root.dayData.people || []).length > 0
-                    spacing: Theme.spSm
-                    property bool open: Style.todayExtras === "open"
-                    Item {
-                        Layout.fillWidth: true
-                        implicitHeight: peopleHead.implicitHeight
-                        SectionHeader {
-                            id: peopleHead
-                            width: parent.width
-                            title: I18n.t("today.people") + (peopleBox.open ? "" : " · " + (root.dayData.people || []).length)
-                        }
-                        ClickArea {
-                            label: I18n.t("today.people")
-                            onActivated: peopleBox.open = !peopleBox.open
-                        }
-                    }
-                    id: peopleBox
-                    Repeater {
-                        model: peopleBox.open ? (root.dayData.people || []) : []
-                        delegate: RowLayout {
-                            id: pr
-                            required property var modelData
-                            Layout.fillWidth: true
-                            spacing: Theme.spMd
-                            Rectangle {
-                                implicitWidth: Theme.chipH; implicitHeight: Theme.chipH
-                                radius: width / 2
-                                color: Theme.panel3
+                        // The others in progress, as lines; quiet draws all
+                        // of them this way.
+                        Repeater {
+                            model: root.cards ? root.otherInProgress : root.inProgress
+                            delegate: RowLayout {
+                                id: ipRow
+                                required property var modelData
+                                Layout.fillWidth: true
+                                spacing: Theme.spMd
+                                StatusRing {
+                                    visible: !root.stacked
+                                    size: Theme.statusRingSize - 2
+                                    category: ipRow.modelData.category || "prog"
+                                }
                                 Text {
-                                    anchors.centerIn: parent
-                                    text: String(pr.modelData.name).split(/\s+/).map(w => w.charAt(0)).join("").slice(0, 2).toUpperCase()
+                                    Layout.fillWidth: true
+                                    text: ipRow.modelData.title
+                                    elide: Text.ElideRight
                                     color: Theme.text
                                     font.family: Theme.fontUi
-                                    font.pixelSize: Theme.fsXs
-                                    font.weight: Theme.fwTitle
+                                    font.pixelSize: Theme.fsMd
+                                    ClickArea { label: parent.text; onActivated: root.taskClicked(ipRow.modelData.id) }
                                 }
-                            }
-                            Text {
-                                Layout.fillWidth: true
-                                text: "<b>" + pr.modelData.name + "</b>" + (pr.modelData.question ? " — " + pr.modelData.question : "")
-                                textFormat: Text.StyledText
-                                elide: Text.ElideRight
-                                color: Theme.textMuted
-                                font.family: Theme.fontUi
-                                font.pixelSize: Theme.fsSm
-                                ClickArea {
-                                    objectName: "today-person-open"
-                                    label: pr.modelData.name
-                                    onActivated: root.peopleRequested(pr.modelData.id)
-                                }
-                            }
-                            PillButton {
-                                objectName: "today-wrote"
-                                text: I18n.t("today.wrote")
-                                onClicked: AppController.setPersonState(pr.modelData.id, "pinged")
+                                TimerMark { visible: !!ipRow.modelData.isTiming; taskId: ipRow.modelData.id }
                             }
                         }
                     }
-                }
 
-                // Tasks without a date: a fact and a way there.
-                Text {
-                    objectName: "today-undated"
-                    Layout.columnSpan: root.stacked ? 3 : 1
-                    Layout.fillWidth: true
-                    visible: (root.dayData.undated || 0) > 0
-                    text: I18n.count(root.dayData.undated || 0, "today.n.undated") + "  →"
-                    color: Theme.textMuted
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsSm
-                    font.underline: undCA.hovered
-                    ClickArea { id: undCA; label: parent.text; onActivated: root.undatedRequested() }
-                }
+                    // Deadlines; overdue apart, never in red (DG-013).
+                    ColumnLayout {
+                        objectName: "today-deadlines"
+                        Layout.alignment: Qt.AlignTop
+                        Layout.preferredWidth: root.stacked ? Theme.px(100) : -1
+                        Layout.fillWidth: true
+                        visible: root.deadlines.length > 0 || (root.dayData.overdue || []).length > 0
+                        spacing: root.cards ? 0 : Theme.spSm
+                        SideHead {
+                            Layout.bottomMargin: root.cards ? Theme.spXs : 0
+                            text: I18n.t(root.cards ? "today.deadlines" : "today.q.dueToday")
+                        }
+                        Repeater {
+                            model: root.deadlines
+                            delegate: TaskLine {
+                                required property var modelData
+                                task: modelData
+                                sub: {
+                                    const p = [];
+                                    if (root.cards) p.push(modelData.id);
+                                    if (modelData.category === "blocked") p.push(I18n.t("today.blocked"));
+                                    if (root.cards && String(modelData.priority || "").length > 0) p.push(String(modelData.priority).toUpperCase());
+                                    if (modelData.profileName) p.push(modelData.profileName);
+                                    return root.stacked ? "" : p.join(" · ");
+                                }
+                                when: !root.cards ? "" : modelData.tomorrow ? I18n.t("quick.day.tomorrow") : I18n.t("quick.day.today")
+                                whenSignal: !modelData.tomorrow
+                            }
+                        }
+                        Text {
+                            objectName: "today-overdue"
+                            Layout.topMargin: Theme.spSm
+                            visible: (root.dayData.overdue || []).length > 0
+                            text: Style.urgency ? I18n.count((root.dayData.overdue || []).length, "today.n.overdue")
+                                                : I18n.t("today.overdueQuiet").arg((root.dayData.overdue || []).length)
+                            color: Theme.textDim
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsSm
+                            font.underline: odCA.hovered
+                            ClickArea { id: odCA; label: parent.text; onActivated: root.undatedRequested() }
+                        }
+                    }
 
-                // The week's recap, on its last working day (APP-211).
-                Text {
-                    objectName: "today-recap"
-                    Layout.columnSpan: root.stacked ? 3 : 1
-                    Layout.fillWidth: true
-                    visible: root.dayData.recapDay === true
-                    text: I18n.t("today.recap") + "  →"
-                    color: Theme.textMuted
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsSm
-                    font.underline: recapCA.hovered
-                    ClickArea { id: recapCA; label: parent.text; onActivated: root.recapRequested() }
+                    // Whom to write; hidden when nobody. Folded in the quiet
+                    // style (DG-013, DG-015).
+                    ColumnLayout {
+                        id: peopleBox
+                        objectName: "today-people"
+                        Layout.alignment: Qt.AlignTop
+                        Layout.preferredWidth: root.stacked ? Theme.px(100) : -1
+                        Layout.fillWidth: true
+                        visible: root.people.length > 0
+                        spacing: root.cards ? 0 : Theme.spSm
+                        property bool open: Style.todayExtras === "open" && !root.stacked
+                        readonly property bool folding: !root.cards
+                        readonly property bool shown: peopleBox.open || !peopleBox.folding
+                        // Bold: a heading. Quiet: "▸ Кому написать · 2".
+                        SideHead {
+                            visible: !peopleBox.folding
+                            Layout.bottomMargin: Theme.spXs
+                            text: I18n.t("today.people")
+                        }
+                        Item {
+                            visible: peopleBox.folding
+                            Layout.fillWidth: true
+                            implicitHeight: foldRow.implicitHeight
+                            Row {
+                                id: foldRow
+                                spacing: Theme.spSm
+                                Icon {
+                                    visible: !root.stacked
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    name: peopleBox.open ? "chevron-down" : "chevron-right"
+                                    size: Theme.fsSm
+                                    color: Theme.textDim
+                                }
+                                Text {
+                                    text: I18n.t("today.people") + " · " + root.people.length
+                                    color: Theme.textDim
+                                    font.family: Theme.fontUi
+                                    font.pixelSize: Theme.fsSm
+                                }
+                            }
+                            ClickArea {
+                                objectName: "today-people-fold"
+                                label: I18n.t("today.people")
+                                checkable: true
+                                checked: peopleBox.open
+                                onActivated: peopleBox.open = !peopleBox.open
+                            }
+                        }
+                        Text {
+                            visible: root.stacked && !peopleBox.open
+                            text: I18n.t("today.collapsed")
+                            color: Theme.textDim
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsMd
+                        }
+                        Repeater {
+                            model: peopleBox.shown ? root.people : []
+                            delegate: RowLayout {
+                                id: pr
+                                required property var modelData
+                                Layout.fillWidth: true
+                                Layout.topMargin: root.cards ? Theme.spSm : 0
+                                Layout.bottomMargin: root.cards ? Theme.spSm : 0
+                                spacing: Theme.spMd
+                                Rectangle {
+                                    visible: root.cards
+                                    implicitWidth: Theme.px(28); implicitHeight: Theme.px(28)
+                                    radius: width / 2
+                                    color: Theme.panel3
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: String(pr.modelData.name).split(/\s+/).map(w => w.charAt(0)).join("").slice(0, 2).toUpperCase()
+                                        color: Theme.textMuted
+                                        font.family: Theme.fontUi
+                                        font.pixelSize: Theme.fsXs
+                                        font.weight: Theme.fwHeading
+                                    }
+                                }
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: root.cards
+                                          ? "<b>" + pr.modelData.name + "</b>" + (pr.modelData.question ? " <font color=\"" + Theme.textDim + "\">— " + pr.modelData.question + "</font>" : "")
+                                          : pr.modelData.name + (pr.modelData.question ? " — " + pr.modelData.question : "")
+                                    textFormat: root.cards ? Text.StyledText : Text.PlainText
+                                    elide: Text.ElideRight
+                                    color: root.cards ? Theme.text : Theme.textMuted
+                                    font.family: Theme.fontUi
+                                    font.pixelSize: Theme.fsMd
+                                    ClickArea {
+                                        objectName: "today-person-open"
+                                        label: pr.modelData.name
+                                        onActivated: root.peopleRequested(pr.modelData.id)
+                                    }
+                                }
+                                // "Написал": an outlined button in bold, a
+                                // text link in quiet.
+                                PillButton {
+                                    objectName: "today-wrote"
+                                    visible: root.cards
+                                    text: I18n.t("today.wrote")
+                                    onClicked: AppController.setPersonState(pr.modelData.id, "pinged")
+                                }
+                                Text {
+                                    objectName: "today-wrote-link"
+                                    visible: !root.cards
+                                    text: I18n.t("today.q.wrote")
+                                    color: wroteCA.hovered ? Theme.text : Theme.textDim
+                                    font.family: Theme.fontUi
+                                    font.pixelSize: Theme.fsSm
+                                    font.underline: true
+                                    ClickArea { id: wroteCA; label: I18n.t("today.wrote"); onActivated: AppController.setPersonState(pr.modelData.id, "pinged") }
+                                }
+                            }
+                        }
+                    }
+
+                    // The footer (DG-015): tasks without a date (bold), and
+                    // the week's recap on its last working day (APP-211,
+                    // owner: both styles).
+                    FooterLink {
+                        objectName: "today-undated"
+                        visible: root.cards && (root.dayData.undated || 0) > 0
+                        text: I18n.t("today.undatedLook").arg(I18n.count(root.dayData.undated || 0, "today.n.undated"))
+                        onActivated: root.undatedRequested()
+                    }
+                    FooterLink {
+                        objectName: "today-recap"
+                        visible: root.dayData.recapDay === true
+                        divider: root.cards && !((root.dayData.undated || 0) > 0)
+                        text: I18n.t("today.recap")
+                        onActivated: root.recapRequested()
+                    }
+                    Item { visible: !root.stacked; Layout.fillHeight: true }
                 }
-                Item { visible: !root.stacked; Layout.fillHeight: true }
+            }
+            // Quiet: the side stands right after the day (max 680 px), the
+            // rest of the width stays empty (H2-Today-Calm).
+            Item {
+                visible: !root.stacked && root.plain
+                Layout.fillWidth: true
+                Layout.preferredWidth: 0
             }
         }
+        // Small: the day and the side keep to the top.
+        Item { visible: root.stacked && !root.firstRun; Layout.fillHeight: true }
     }
 
     function _step(n) {
@@ -606,65 +773,160 @@ FocusScope {
         }
     }
 
+    // ‹ ›: a box in bold, a bare chevron in quiet.
     component NavBtn: Rectangle {
         id: nb
-        property string glyph: ""
+        property string icon: ""
         property string label: ""
         property string shortcutId: ""
         signal activated()
         implicitWidth: Theme.chipH; implicitHeight: Theme.chipH
         radius: Theme.radiusMd
-        color: nbCA.hovered ? Theme.panel2 : "transparent"
+        color: nbCA.hovered && !root.plain ? Theme.panel2 : "transparent"
         border.color: Theme.border
-        border.width: 1
-        Text { anchors.centerIn: parent; text: nb.glyph; color: Theme.text; font.pixelSize: Theme.fsLg }
+        border.width: root.plain ? 0 : 1
+        Icon {
+            anchors.centerIn: parent
+            name: nb.icon
+            size: Theme.fsMd
+            color: root.plain && !nbCA.hovered ? Theme.textDim : Theme.textMuted
+        }
         ClickArea { id: nbCA; label: nb.label; shortcutId: nb.shortcutId; onActivated: nb.activated() }
     }
 
+    // A heading on the side: the bold section title, or quiet's small grey
+    // words.
+    component SideHead: Text {
+        color: Theme.textDim
+        font.family: Theme.fontUi
+        font.pixelSize: root.cards ? Theme.fsMd : Theme.fsSm
+        font.weight: root.cards ? Theme.fwHeading : Theme.fwBody
+        Accessible.role: Accessible.Heading
+        Accessible.name: text
+    }
+
+    // A running timer: an amber dot in bold, the time alone in quiet.
+    component TimerMark: Row {
+        id: tm
+        property string taskId: ""
+        spacing: Theme.spXs
+        Rectangle {
+            visible: Style.urgency
+            anchors.verticalCenter: parent.verticalCenter
+            width: Theme.spSm; height: Theme.spSm; radius: width / 2
+            color: Theme.signalNow
+        }
+        Text {
+            objectName: "today-timer"
+            text: root._timer(tm.taskId)
+            color: Style.urgency ? Theme.signalNow : Theme.textDim
+            font.family: Theme.fontMono
+            font.pixelSize: Theme.fsXs
+        }
+    }
+
+    // A line at the foot of the side: a hairline above it in bold, the
+    // text, → on the right.
+    component FooterLink: Item {
+        id: fl
+        property string text: ""
+        property bool divider: root.cards
+        signal activated()
+        Layout.columnSpan: root.stacked ? 3 : 1
+        Layout.fillWidth: true
+        implicitHeight: flRow.implicitHeight + (root.cards ? 2 * Theme.spLg : 0)
+        Rectangle {
+            visible: fl.divider
+            width: parent.width
+            height: 1
+            color: Theme.border
+        }
+        RowLayout {
+            id: flRow
+            anchors.left: parent.left
+            anchors.right: root.cards ? parent.right : undefined
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Theme.spSm
+            Text {
+                Layout.fillWidth: root.cards
+                text: fl.text
+                color: flCA.hovered ? Theme.text : (root.cards ? Theme.textMuted : Theme.textDim)
+                font.family: Theme.fontUi
+                font.pixelSize: root.cards ? Theme.fsMd : Theme.fsSm
+                font.underline: !root.cards
+            }
+            Icon {
+                name: "arrow-right"
+                size: root.cards ? Theme.fsLg : Theme.fsSm
+                color: root.cards ? Theme.textMuted : Theme.textDim
+            }
+        }
+        ClickArea { id: flCA; label: fl.text; role: Accessible.Link; onActivated: fl.activated() }
+    }
+
     // A task line on the side: its status mark (a click = Done), title,
-    // the facts under it, when on the right.
-    component TaskLine: RowLayout {
+    // the facts under it, when on the right; a hairline under it in bold.
+    component TaskLine: Item {
         id: tl
         property var task: ({})
         property string sub: ""
         property string when: ""
         property bool whenSignal: false
         Layout.fillWidth: true
-        spacing: Theme.spMd
-        Item {
-            implicitWidth: Theme.statusRingSize; implicitHeight: Theme.statusRingSize
-            Layout.alignment: Qt.AlignTop
-            Layout.topMargin: Theme.spXs
-            StatusRing { category: tl.task.category || "todo" }
-            ClickArea { label: I18n.t("taskmenu.done"); shortcutId: "task.done"; onActivated: AppController.toggleDone([tl.task.id]) }
-        }
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: 0
-            Text {
+        implicitHeight: tlRow.implicitHeight + (root.cards ? 2 * Theme.spMd : 0)
+        RowLayout {
+            id: tlRow
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Theme.spMd
+            Item {
+                visible: !root.stacked
+                implicitWidth: Theme.statusRingSize; implicitHeight: Theme.statusRingSize
+                Layout.alignment: Qt.AlignTop
+                Layout.topMargin: Theme.spXs / 2
+                StatusRing { size: root.cards ? Theme.statusRingSize : Theme.statusRingSize - 2; category: tl.task.category || "todo" }
+                ClickArea { label: I18n.t("taskmenu.done"); shortcutId: "task.done"; onActivated: AppController.toggleDone([tl.task.id]) }
+            }
+            ColumnLayout {
                 Layout.fillWidth: true
-                text: tl.task.title || ""
-                elide: Text.ElideRight
-                color: Theme.text
-                font.family: Theme.fontUi
-                font.pixelSize: Theme.fsMd
-                font.weight: Theme.fwTitle
-                ClickArea { label: parent.text; onActivated: root.taskClicked(tl.task.id) }
+                spacing: Theme.spXs / 2
+                Text {
+                    Layout.fillWidth: true
+                    text: tl.task.title || ""
+                    elide: Text.ElideRight
+                    color: Theme.text
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsMd
+                    font.weight: root.cards ? Theme.fwTitle : Theme.fwBody
+                    ClickArea { label: parent.text; onActivated: root.taskClicked(tl.task.id) }
+                }
+                Text {
+                    visible: tl.sub.length > 0
+                    Layout.fillWidth: true
+                    text: tl.sub
+                    elide: Text.ElideRight
+                    color: Theme.textDim
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
+                }
             }
             Text {
-                text: tl.sub
-                color: Theme.textDim
+                visible: tl.when.length > 0
+                Layout.alignment: Qt.AlignTop
+                text: tl.when
+                color: tl.whenSignal ? Theme.signalUrgent : Theme.signalNow
                 font.family: Theme.fontUi
-                font.pixelSize: Theme.fsXs
+                font.pixelSize: Theme.fsSm
+                font.weight: tl.whenSignal ? Theme.fwHeading : Theme.fwBody
             }
         }
-        Text {
-            Layout.alignment: Qt.AlignTop
-            text: tl.when
-            color: tl.whenSignal ? Theme.signalUrgent : Theme.signalNow
-            font.family: Theme.fontUi
-            font.pixelSize: Theme.fsSm
-            font.weight: Theme.fwTitle
+        Rectangle {
+            visible: root.cards
+            anchors.bottom: parent.bottom
+            width: parent.width
+            height: 1
+            color: Theme.border
         }
     }
 
@@ -674,40 +936,58 @@ FocusScope {
         required property var modelData
         required property int index
         width: ListView.view.width
-        implicitHeight: dr.modelData.kind === "meeting" || dr.modelData.kind === "task" || dr.modelData.kind === "allday"
-                        ? Math.max(Theme.px(48), body.implicitHeight + 2 * Theme.spMd)
-                        : Theme.px(24)
         readonly property var b: dr.modelData.block || ({})
+        readonly property bool item: dr.modelData.kind === "meeting" || dr.modelData.kind === "task" || dr.modelData.kind === "allday"
+        readonly property bool meeting: dr.modelData.kind !== "task"
+        readonly property int timeW: root.plain ? Theme.px(44) : Theme.px(52)
+        // Quiet: a free window is a gap, the end of the day is not drawn;
+        // a small window keeps no gaps at all (DG-012, X-Oth-Small).
+        implicitHeight: {
+            const k = dr.modelData.kind;
+            if (dr.item) {
+                if (root.stacked) return Theme.px(30);
+                return root.plain ? plainBody.implicitHeight + 2 * Theme.spMd
+                                  : Math.max(Theme.px(48), body.implicitHeight + 2 * Theme.spMd);
+            }
+            if (k === "now") return root.plain ? Theme.spLg : Theme.px(20);
+            if (root.plain) return k === "free" && !root.stacked && (dr.modelData.end - dr.modelData.start) >= 1 ? Theme.px(22) : 0;
+            return Theme.px(30);
+        }
+        visible: implicitHeight > 0
         opacity: dr.b.past ? 0.55 : 1
 
         Text {
             id: timeT
-            width: Theme.px(56)
-            anchors.top: parent.top
-            anchors.topMargin: dr.modelData.kind === "meeting" || dr.modelData.kind === "task" ? Theme.spMd : 0
+            visible: dr.item || !root.plain
+            width: dr.timeW
+            horizontalAlignment: Text.AlignRight
+            anchors.top: dr.item && !root.stacked ? parent.top : undefined
+            anchors.topMargin: dr.item ? (root.stacked ? 0 : root.plain ? Theme.spMd + Theme.spXs / 2 : Theme.spMd + Theme.spXs) : 0
+            anchors.verticalCenter: dr.item && !root.stacked ? undefined : parent.verticalCenter
             text: dr.modelData.kind === "allday" ? I18n.t("today.allDay")
                 : dr.b.fromPrevDay ? I18n.t("today.fromPrev")
                 : root._hm(dr.modelData.start)
-            color: dr.modelData.kind === "now" ? Theme.signalNow : Theme.textDim
+            elide: Text.ElideRight
+            color: dr.modelData.kind === "now" ? Theme.signalNow : dr.item && !root.plain ? Theme.textMuted : Theme.textDim
             font.family: Theme.fontMono
             font.pixelSize: Theme.fsXs
         }
-        // Meetings and tasks.
+
+        // ── bold: a meeting card with a bar, a task card with its ring ──
         Rectangle {
             id: blockBox
-            visible: dr.modelData.kind === "meeting" || dr.modelData.kind === "task" || dr.modelData.kind === "allday"
+            visible: dr.item && !root.plain
             anchors.left: timeT.right
-            anchors.leftMargin: Theme.spMd
+            anchors.leftMargin: Theme.spLg
             anchors.right: parent.right
             height: parent.height
             radius: Theme.radiusLg
-            readonly property bool meeting: dr.modelData.kind !== "task"
-            color: blockBox.meeting ? (Style.chipFill ? Theme.meetingFill : "transparent") : "transparent"
-            border.color: blockBox.meeting ? (Style.chipFill ? "transparent" : Theme.border) : Theme.border
+            color: dr.meeting && Style.fills ? Theme.meetingFill : "transparent"
+            border.color: dr.meeting && Style.fills ? "transparent" : Theme.border
             border.width: 1
             Rectangle {
-                visible: blockBox.meeting
-                anchors.left: parent.left; anchors.leftMargin: Theme.spMd
+                visible: dr.meeting
+                anchors.left: parent.left; anchors.leftMargin: Theme.spLg
                 anchors.verticalCenter: parent.verticalCenter
                 width: Theme.cursorBarH; height: parent.height - 2 * Theme.spMd
                 radius: width / 2
@@ -716,21 +996,22 @@ FocusScope {
             RowLayout {
                 id: body
                 anchors.left: parent.left
-                anchors.leftMargin: blockBox.meeting ? Theme.spXl + Theme.spMd : Theme.spLg
+                anchors.leftMargin: dr.meeting ? Theme.spXl + Theme.spMd : Theme.spLg
                 anchors.right: parent.right
                 anchors.rightMargin: Theme.spLg
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: Theme.spMd
                 Item {
-                    visible: !blockBox.meeting
+                    visible: !dr.meeting
+                    Layout.alignment: Qt.AlignTop
+                    Layout.topMargin: Theme.spXs / 2
                     implicitWidth: Theme.statusRingSize; implicitHeight: Theme.statusRingSize
                     StatusRing { category: dr.b.category || "todo" }
                     ClickArea { label: I18n.t("taskmenu.done"); onActivated: AppController.toggleDone([dr.b.id]) }
                 }
-                MeetingIcon { visible: blockBox.meeting && !Style.chipFill }
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 0
+                    spacing: Theme.spXs / 2
                     Text {
                         Layout.fillWidth: true
                         text: dr.b.title || ""
@@ -738,84 +1019,151 @@ FocusScope {
                         color: Theme.text
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsMd
-                        font.weight: Theme.fwTitle
+                        font.weight: Theme.fwHeading
                     }
                     Text {
                         Layout.fillWidth: true
-                        text: {
-                            const parts = [];
-                            if (blockBox.meeting) parts.push(dr.b.eventType === "focus" ? I18n.t("today.withSelf") : I18n.t("event.kind.meeting"));
-                            else parts.push(dr.b.id, I18n.t("today.plannedByYou"));
-                            if (dr.b.attendees) parts.push(dr.b.attendees);
-                            if (dr.b.profileName) parts.push(dr.b.profileName);
-                            if (dr.b.toNextDay) parts.push(I18n.t("today.untilNext").arg(root._hm(dr.b.end % 24)));
-                            if ((dr.b.overlapsWith || []).length > 0) parts.push(I18n.t("today.overlaps").arg(dr.b.overlapsWith.join(", ")));
-                            return parts.join(" · ");
-                        }
+                        text: root._sub(dr.modelData.kind, dr.b)
                         elide: Text.ElideRight
                         color: Theme.textDim
                         font.family: Theme.fontUi
-                        font.pixelSize: Theme.fsXs
+                        font.pixelSize: Theme.fsSm
                     }
                 }
                 Text {
+                    Layout.alignment: Qt.AlignTop
                     visible: dr.modelData.kind !== "allday"
                     text: root._len(dr.b.start || 0, dr.b.end || 0)
                     color: Theme.textDim
                     font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsXs
+                    font.pixelSize: Theme.fsSm
                 }
             }
-            FocusRing {
-                objectName: "today-cursor"
-                visible: root.cursorVisible && root.cursorKey.length > 0 && root.cursorKey === root._rowKey(dr.modelData)
-            }
-            ClickArea {
-                anchors.fill: undefined
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.bottom: parent.bottom
-                anchors.leftMargin: blockBox.meeting ? 0 : Theme.spLg + Theme.statusRingSize + Theme.spMd
-                label: dr.b.title || ""
-                onActivated: blockBox.meeting ? root.eventClicked(dr.b.id, null) : root.taskClicked(dr.b.id)
-            }
         }
-        // A free window, a fact.
-        Text {
-            visible: dr.modelData.kind === "free"
+
+        // ── quiet: an icon, the title, the caption; one line when small ──
+        RowLayout {
+            id: plainBody
+            visible: dr.item && root.plain
             anchors.left: timeT.right
             anchors.leftMargin: Theme.spLg
+            anchors.right: parent.right
+            anchors.top: root.stacked ? undefined : parent.top
+            anchors.topMargin: Theme.spMd
+            anchors.verticalCenter: root.stacked ? parent.verticalCenter : undefined
+            spacing: Theme.spLg
+            Item {
+                visible: !root.stacked
+                Layout.alignment: Qt.AlignTop
+                Layout.topMargin: Theme.spXs / 2
+                implicitWidth: Theme.statusRingSize; implicitHeight: Theme.statusRingSize
+                MeetingIcon { visible: dr.meeting; anchors.centerIn: parent; ink: Theme.textMuted }
+                StatusRing { visible: !dr.meeting; anchors.centerIn: parent; size: Theme.statusRingSize - 1; category: dr.b.category || "todo" }
+                ClickArea { enabled: !dr.meeting; label: I18n.t("taskmenu.done"); onActivated: AppController.toggleDone([dr.b.id]) }
+            }
+            ColumnLayout {
+                visible: !root.stacked
+                Layout.fillWidth: true
+                spacing: Theme.spXs / 2
+                Text {
+                    Layout.fillWidth: true
+                    text: dr.b.title || ""
+                    elide: Text.ElideRight
+                    color: Theme.text
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsLg
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: root._sub(dr.modelData.kind, dr.b)
+                    elide: Text.ElideRight
+                    color: Theme.textDim
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
+                }
+            }
+            Text {
+                visible: root.stacked
+                Layout.fillWidth: true
+                text: (dr.b.title || "") + "<font color=\"" + Theme.textDim + "\"> · " + root._sub(dr.modelData.kind, dr.b) + "</font>"
+                textFormat: Text.StyledText
+                elide: Text.ElideRight
+                color: Theme.text
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsMd
+                font.weight: Theme.fwTitle
+            }
+        }
+
+        FocusRing {
+            objectName: "today-cursor"
+            anchors.fill: undefined
+            x: root.plain ? 0 : blockBox.x
+            width: root.plain ? parent.width : blockBox.width
+            height: parent.height
+            visible: dr.item && root.cursorVisible && root.cursorKey.length > 0 && root.cursorKey === root._rowKey(dr.modelData)
+        }
+        ClickArea {
+            visible: dr.item
+            anchors.fill: undefined
+            x: root.plain ? (root.stacked ? 0 : timeT.width + Theme.spLg + Theme.statusRingSize + Theme.spLg)
+                          : blockBox.x + (dr.meeting ? 0 : Theme.spLg + Theme.statusRingSize + Theme.spMd)
+            width: parent.width - x
+            height: parent.height
+            label: dr.b.title || ""
+            onActivated: dr.meeting ? root.eventClicked(dr.b.id, null) : root.taskClicked(dr.b.id)
+        }
+
+        // Bold: a free window and the end of the day, facts beside a line.
+        Rectangle {
+            visible: !root.plain && (dr.modelData.kind === "free" || dr.modelData.kind === "end")
+            anchors.left: timeT.right
+            anchors.leftMargin: Theme.spLg
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            width: 1
+            color: Theme.border
+        }
+        Text {
+            visible: !root.plain && (dr.modelData.kind === "free" || dr.modelData.kind === "end")
+            anchors.left: timeT.right
+            anchors.leftMargin: Theme.spLg + Theme.spLg
             anchors.verticalCenter: parent.verticalCenter
-            text: I18n.t("today.free").arg(root._len(dr.modelData.start, dr.modelData.end || dr.modelData.start))
+            text: dr.modelData.kind === "free"
+                  ? I18n.t("today.free").arg(root._len(dr.modelData.start, dr.modelData.end || dr.modelData.start))
+                  : I18n.t("today.endOfDay").arg(root._hm(dr.modelData.start))
             color: Theme.textDim
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsSm
         }
-        // Now.
+        // Now: amber with a dot in bold; a thin grey line with the time on
+        // the right in quiet.
         Rectangle {
+            id: nowLine
             visible: dr.modelData.kind === "now"
             anchors.left: timeT.right
-            anchors.right: parent.right
+            anchors.leftMargin: root.plain ? Theme.spLg : Theme.spMd
+            anchors.right: root.plain ? nowTime.left : parent.right
+            anchors.rightMargin: root.plain ? Theme.spLg : 0
             anchors.verticalCenter: parent.verticalCenter
-            height: Style.urgency ? 2 : 1
-            color: Theme.nowLineColor
+            height: root.plain ? 1 : 2
+            color: root.plain ? Theme.borderStrong : Theme.nowLineColor
             Rectangle {
+                visible: !root.plain
                 width: Theme.spSm; height: Theme.spSm; radius: width / 2
                 anchors.verticalCenter: parent.verticalCenter
                 color: Theme.nowLineColor
             }
         }
-        // The end of the working day.
         Text {
-            visible: dr.modelData.kind === "end"
-            anchors.left: timeT.right
-            anchors.leftMargin: Theme.spLg
+            id: nowTime
+            visible: dr.modelData.kind === "now" && root.plain
+            anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            text: I18n.t("today.endOfDay").arg(root._hm(dr.modelData.start))
+            text: root._hm(dr.modelData.start)
             color: Theme.textDim
-            font.family: Theme.fontUi
-            font.pixelSize: Theme.fsSm
+            font.family: Theme.fontMono
+            font.pixelSize: Theme.fsXs
         }
     }
 }

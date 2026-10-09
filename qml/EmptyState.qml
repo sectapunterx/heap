@@ -13,6 +13,9 @@ Column {
     property string title: ""
     property string line: ""
     property bool compact: false
+    // The line as a link ("сбросить фильтр · Esc", DG-160).
+    property bool lineLink: false
+    signal lineActivated()
     // Whole multiples of the icons' 18px grid (APP-195), so their 1px lines
     // land on device pixels.
     readonly property int _iconSize: compact ? 18 : 36
@@ -51,8 +54,16 @@ Column {
         width: root.width
         horizontalAlignment: Text.AlignHCenter
         text: root.line
-        color: Theme.textDim
+        color: root.lineLink && lineCA.hovered ? Theme.text : Theme.textDim
         font.pixelSize: root.compact ? Theme.fsXs : Theme.fsSm
         wrapMode: Text.WordWrap
+        ClickArea {
+            id: lineCA
+            objectName: "empty-state-link"
+            visible: root.lineLink
+            label: root.line
+            role: Accessible.Link
+            onActivated: root.lineActivated()
+        }
     }
 }

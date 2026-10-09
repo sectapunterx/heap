@@ -254,7 +254,7 @@ QVector<CalEvent> events(const QDate& today, Lang lang) {
     return {
         mk("ev-1", "Дейли стендап", "standup", 10.0, 10.25, "Команда продукта", 0),
         mk("ev-2", "1:1 с Олегом", "oneone", 11.0, 11.5, "Олег Т.", 1),
-        mk("ev-3", "Фокус-блок", "focus", 13.0, 15.0, "🔒 глубокая работа", 0),
+        mk("ev-3", "Фокус-блок", "focus", 13.0, 15.0, "глубокая работа", 0),
         mk("ev-4", "Планирование спринта", "sync", 16.0, 16.5, "Вся команда", 2),
         mk("ev-5", "Ревью кода", "sync", 17.0, 17.5, "Андрей, Виктор", 3),
     };
@@ -262,7 +262,7 @@ QVector<CalEvent> events(const QDate& today, Lang lang) {
   return {
       mk("ev-1", "Daily standup", "standup", 10.0, 10.25, "Product team", 0),
       mk("ev-2", "1:1 with Oleg", "oneone", 11.0, 11.5, "Oleg T.", 1),
-      mk("ev-3", "Focus block", "focus", 13.0, 15.0, "🔒 deep work", 0),
+      mk("ev-3", "Focus block", "focus", 13.0, 15.0, "deep work", 0),
       mk("ev-4", "Sprint planning", "sync", 16.0, 16.5, "Whole team", 2),
       mk("ev-5", "Code review", "sync", 17.0, 17.5, "Andrey, Victor", 3),
   };

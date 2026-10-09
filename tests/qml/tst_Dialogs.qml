@@ -38,16 +38,4 @@ TestCase {
         }
     }
 
-    function test_welcome_close_is_a_named_keyboard_button() {
-        const w = createTemporaryQmlObject('import TodoCpp; WelcomePopup { }', host);
-        w.open();
-        tryVerify(function () { return w.opened; }, 1000);
-        const close = findChild(w.contentItem, "welcome-close");
-        verify(close !== null);
-        const area = close.children[close.children.length - 1];
-        verify(area.activeFocusOnTab, "the ✕ is not on the Tab path");
-        compare(area.Accessible.name, I18n.t("welcome.skip"));
-        w.close();
-    }
-
 }

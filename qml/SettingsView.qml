@@ -769,7 +769,7 @@ Item {
         return false;
     }
 
-    // The guide ("С чего начать", the welcome tour's "Learn more"): the help
+    // The guide ("С чего начать", also Ctrl K "welcome.replay"): the help
     // document in a reader over the page, scrolled to `anchor`.
     function openHelp(anchor) {
         helpReader.openAt(anchor || "");
@@ -3758,7 +3758,7 @@ Item {
     }
 
     // The guide (HelpContent) in a reader over the page: "С чего начать" and
-    // the welcome tour's "Learn more" open it.
+    // Ctrl K "welcome.replay" open it.
     Popup {
         id: helpReader
         objectName: "settings-help-reader"

@@ -4,11 +4,15 @@ import QtQuick.Layouts
 import QtQuick.Controls.Basic as QQC
 import TodoCpp
 
-// The first run (APP-271, sheet H2-First): instead of a tour, an empty Today
-// with the one input right on the page — one line, one task, the date, time
-// and priority read from it the way Ctrl N reads them — three keys to know,
-// and where tasks that already exist elsewhere come from. The example is a
-// profile of its own; nothing here touches the person's tasks.
+// The first run (APP-271): instead of a tour, an empty Today with the one
+// input right on the page — one line, one task, the date, time and priority
+// read from it the way Ctrl N reads them — the keys to know, and where tasks
+// that already exist elsewhere come from. The example is a profile of its
+// own; nothing here touches the person's tasks.
+//
+// Bold (H2-First): a heading, an emphasized box, three key cards, buttons.
+// Quiet (Q-First, DG-111): a label, an underline input, two hint lines and
+// three text links.
 Item {
     id: root
     objectName: "first-run"
@@ -17,6 +21,8 @@ Item {
     signal connectRequested()
     signal importRequested()
     signal exampleRequested()
+
+    readonly property bool quiet: !Style.fills
 
     implicitHeight: col.implicitHeight
 
@@ -45,70 +51,109 @@ Item {
     ColumnLayout {
         id: col
         anchors.horizontalCenter: parent.horizontalCenter
-        width: Math.min(parent.width, Theme.px(640))
+        width: Math.min(parent.width, Theme.px(root.quiet ? 560 : 640))
         spacing: 0
 
         Text {
             objectName: "first-run-title"
             Layout.fillWidth: true
             text: I18n.t("first.title")
-            color: Theme.text
+            color: root.quiet ? Theme.textMuted : Theme.text
             font.family: Theme.fontUi
-            font.pixelSize: Theme.fsXl
-            font.weight: Theme.fwHeading
+            font.pixelSize: root.quiet ? Theme.fsLg : Theme.fsXl
+            font.weight: root.quiet ? Theme.fwBody : Theme.fwHeading
             wrapMode: Text.WordWrap
             Accessible.role: Accessible.Heading
             Accessible.name: text
         }
         Text {
+            visible: !root.quiet
             Layout.fillWidth: true
             Layout.topMargin: Theme.spSm
             text: I18n.t("first.sub")
             color: Theme.textMuted
             font.family: Theme.fontUi
-            font.pixelSize: Theme.fsSm
+            font.pixelSize: Theme.fsMd
             wrapMode: Text.WordWrap
         }
 
-        // The input, on the page.
+        // The input, on the page: an emphasized box in bold, a line under
+        // the words in quiet.
         Rectangle {
             Layout.fillWidth: true
-            Layout.topMargin: Theme.sp2xl
-            implicitHeight: Theme.px(48)
-            radius: Theme.radiusLg
-            color: Theme.bg
-            border.width: 1
-            border.color: input.activeFocus ? Theme.focusRing : Theme.fieldBorder
+            Layout.topMargin: root.quiet ? Theme.spLg : Theme.spXl
+            implicitHeight: root.quiet ? Theme.px(44) : Theme.px(50)
+            radius: root.quiet ? 0 : Theme.radiusXl
+            color: root.quiet ? "transparent" : Theme.bg2
+            border.width: root.quiet ? 0 : 1
+            border.color: input.activeFocus ? Theme.focusRing : Theme.text
+            Rectangle {
+                visible: root.quiet
+                anchors.bottom: parent.bottom
+                width: parent.width
+                height: 1
+                color: input.activeFocus ? Theme.focusRing : Theme.borderStrong
+            }
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: Theme.spXl
-                anchors.rightMargin: Theme.spXl
+                anchors.leftMargin: root.quiet ? 0 : Theme.spXl
+                anchors.rightMargin: root.quiet ? 0 : Theme.spXl
                 spacing: Theme.spMd
                 QQC.TextField {
                     id: input
                     objectName: "first-run-input"
                     Layout.fillWidth: true
+                    leftPadding: root.quiet ? Theme.spXs : 0
                     background: Item {}
                     color: Theme.text
                     font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsLg
-                    placeholderText: I18n.t("first.placeholder")
+                    font.pixelSize: root.quiet ? Theme.fsXl : Theme.fsLg
+                    placeholderText: I18n.t(root.quiet ? "first.q.placeholder" : "first.placeholder")
                     placeholderTextColor: Theme.textDim
                     selectByMouse: true
                     Accessible.name: I18n.t("first.title")
                     onAccepted: root.submit()
                 }
                 Text {
-                    text: "↵"
+                    visible: !root.quiet
+                    text: "Enter"
                     color: Theme.textDim
-                    font.pixelSize: Theme.fsSm
+                    font.family: Theme.fontMono
+                    font.pixelSize: Theme.fsXs
                     Accessible.ignored: true
                 }
             }
         }
 
-        // Three keys, always shown here: this is where they are learnt.
+        // Quiet: two lines of hints instead of the cards.
+        Text {
+            visible: root.quiet
+            Layout.fillWidth: true
+            Layout.topMargin: Theme.spLg
+            text: I18n.t("first.q.hintSave")
+            color: Theme.textDim
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsMd
+            lineHeight: 1.5
+            wrapMode: Text.WordWrap
+        }
+        Text {
+            visible: root.quiet
+            Layout.fillWidth: true
+            text: I18n.t("first.q.hintKeys")
+                  .arg("<font face=\"" + Theme.fontMono + "\" color=\"" + Theme.textMuted + "\">" + root._keys("palette.open", "Ctrl+K") + "</font>")
+                  .arg("<font face=\"" + Theme.fontMono + "\" color=\"" + Theme.textMuted + "\">" + root._keys("hotkeys.open.alt", "?") + "</font>")
+            textFormat: Text.StyledText
+            color: Theme.textDim
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsMd
+            lineHeight: 1.5
+            wrapMode: Text.WordWrap
+        }
+
+        // Bold: three keys, always shown here: this is where they are learnt.
         RowLayout {
+            visible: !root.quiet
             Layout.fillWidth: true
             Layout.topMargin: Theme.sp2xl
             spacing: Theme.spLg
@@ -116,26 +161,30 @@ Item {
                 model: [
                     { keys: root._keys("palette.open", "Ctrl+K"), text: I18n.t("first.key.palette") },
                     { keys: root._keys("task.done", "D").toLowerCase(), text: I18n.t("first.key.done") },
-                    { keys: root._keys("hotkeys.open", "?"), text: I18n.t("first.key.keys") }
+                    { keys: root._keys("hotkeys.open.alt", "?"), text: I18n.t("first.key.keys") }
                 ]
                 delegate: Rectangle {
                     id: keyCard
                     required property var modelData
+                    objectName: "first-run-key"
                     Layout.fillWidth: true
+                    Layout.fillHeight: true
                     Layout.preferredWidth: 1
-                    implicitHeight: keyCol.implicitHeight + 2 * Theme.spXl
+                    implicitHeight: keyCol.implicitHeight + 2 * Theme.spLg
                     radius: Theme.radiusLg
                     color: Theme.surfaceCard
                     ColumnLayout {
                         id: keyCol
-                        anchors.fill: parent
-                        anchors.margins: Theme.spXl
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.margins: Theme.spLg
                         spacing: Theme.spSm
-                        KeyHint {
-                            always: true
-                            keys: keyCard.modelData.keys
+                        Text {
+                            text: keyCard.modelData.keys
                             color: Theme.text
-                            font.pixelSize: Theme.fsSm
+                            font.family: Theme.fontMono
+                            font.pixelSize: Theme.fsMd
                         }
                         Text {
                             Layout.fillWidth: true
@@ -143,6 +192,7 @@ Item {
                             color: Theme.textMuted
                             font.family: Theme.fontUi
                             font.pixelSize: Theme.fsSm
+                            lineHeight: 1.2
                             wrapMode: Text.WordWrap
                         }
                     }
@@ -151,50 +201,66 @@ Item {
         }
 
         Rectangle {
+            visible: !root.quiet
             Layout.fillWidth: true
-            Layout.topMargin: Theme.sp3xl
+            Layout.topMargin: Theme.sp2xl
             implicitHeight: 1
             color: Theme.border
         }
 
-        // Tasks that already live somewhere else.
+        // Tasks that already live somewhere else: buttons in bold, words in
+        // quiet.
         RowLayout {
             Layout.fillWidth: true
-            Layout.topMargin: Theme.sp2xl
-            spacing: Theme.spMd
+            Layout.topMargin: root.quiet ? Theme.px(60) : Theme.spXl
+            spacing: root.quiet ? Theme.spXl : Theme.spMd
             Text {
+                visible: !root.quiet
                 Layout.fillWidth: true
                 text: I18n.t("first.elsewhere")
-                color: Theme.textMuted
+                color: Theme.textDim
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsSm
                 wrapMode: Text.WordWrap
             }
             PillButton {
                 objectName: "first-run-connect"
+                visible: !root.quiet
                 text: I18n.t("first.connect")
                 onClicked: root.connectRequested()
             }
             PillButton {
                 objectName: "first-run-import"
+                visible: !root.quiet
                 text: I18n.t("first.import")
                 onClicked: root.importRequested()
             }
+            QuietLink { visible: root.quiet; text: I18n.t("first.q.connect"); onActivated: root.connectRequested() }
+            QuietLink { visible: root.quiet; text: I18n.t("first.q.import"); onActivated: root.importRequested() }
+            QuietLink { visible: root.quiet; text: I18n.t("first.q.example"); onActivated: root.exampleRequested() }
+            Item { visible: root.quiet; Layout.fillWidth: true }
         }
-        Text {
-            id: exampleLink
+        QuietLink {
             objectName: "first-run-example"
+            visible: !root.quiet
             Layout.topMargin: Theme.spLg
             text: I18n.t("first.example")
             color: Theme.textMuted
-            font.family: Theme.fontUi
-            font.pixelSize: Theme.fsSm
-            font.underline: true
-            ClickArea {
-                label: exampleLink.text
-                role: Accessible.Link
-                onActivated: root.exampleRequested()
-            }
+            onActivated: root.exampleRequested()
+        }
+    }
+
+    component QuietLink: Text {
+        id: ql
+        signal activated()
+        color: Theme.textDim
+        font.family: Theme.fontUi
+        font.pixelSize: root.quiet ? Theme.fsMd : Theme.fsSm
+        font.underline: true
+        ClickArea {
+            label: ql.text
+            role: Accessible.Link
+            onActivated: ql.activated()
         }
     }
 }

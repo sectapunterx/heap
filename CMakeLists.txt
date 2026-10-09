@@ -467,8 +467,6 @@ qt_add_qml_module(heap_core
         qml/CaptureWindow.qml
         qml/QuickCaptureNotesPopup.qml
         qml/MentionAutocomplete.qml
-        qml/WelcomePopup.qml
-        qml/Tour.js
         qml/DocsStarter.js
         qml/Mention.js
         qml/Attendees.js

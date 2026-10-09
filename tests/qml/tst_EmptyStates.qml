@@ -87,8 +87,15 @@ TestCase {
             tryVerify(() => !s.visible, 2000, "the board has a task but says it is empty");
             b.searchText = tc.nothing;
             verifyState(s, "board search");
-            compare(s.title, I18n.t("view.empty.noMatch.title"));
-            compare(s.line, I18n.t("view.empty.noMatch.hint"));
+            // DG-160: one plain line naming the filter, and the way back.
+            compare(s.title, I18n.t("view.empty.noMatchFor").arg(tc.nothing));
+            compare(s.line, I18n.t("view.empty.resetFilter"));
+            verify(b.nothingFound);
+            verify(!findChild(b, "board-empty").visible, "the filter's empty state sits on a card");
+            const spy = createTemporaryQmlObject('import QtTest; SignalSpy { signalName: "resetFilterRequested" }', b);
+            spy.target = b;
+            s.lineActivated();
+            compare(spy.count, 1);
             const cols = [];
             (function walk(it) {
                 if (!it) return;

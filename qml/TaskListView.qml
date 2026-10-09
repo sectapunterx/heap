@@ -22,12 +22,22 @@ Item {
     // date | status | priority | profile
     property string groupBy: "date"
     signal taskClicked(string id)
+    // "сбросить фильтр · Esc" under a filter that found nothing (DG-160).
+    signal resetFilterRequested()
 
     readonly property var activePriorities: {
         const out = [];
         for (const k in root.prioritiesFilter) if (root.prioritiesFilter[k]) out.push(k);
         return out;
     }
+
+    // The filter as words for "Ничего под «…»" (DG-160).
+    readonly property string filterLabel: {
+        const parts = root.searchText.trim().split(/\s+/).filter(x => x.length > 0);
+        for (const p of root.activePriorities) parts.push(String(p).toUpperCase());
+        return parts.join(" · ");
+    }
+    readonly property bool nothingFound: root.taskCount === 0 && (root.searchText.trim().length > 0 || root.activePriorities.length > 0)
 
     // ── Rows ─────────────────────────────────────────────────────────
     // Built in C++ (AppController.taskListRows, views/TaskListGroups) and
@@ -222,7 +232,7 @@ Item {
             id: list
             objectName: "task-list"
             Layout.fillWidth: true
-            Layout.fillHeight: true
+            Layout.fillHeight: root.taskCount > 0
             Layout.leftMargin: Theme.sp2xl
             Layout.rightMargin: Theme.sp2xl
             clip: true
@@ -451,18 +461,19 @@ Item {
             }
         }
 
-        // Nothing matches the query: say so, once.
+        // Nothing matches the query: say so, once, in the middle (X-Err-Empty).
+        Item { visible: root.taskCount === 0; Layout.fillHeight: true }
         EmptyState {
             objectName: "list-empty"
             Layout.alignment: Qt.AlignHCenter
-            Layout.bottomMargin: Theme.sp3xl
             Layout.preferredWidth: Math.min(root.width - 96, 360)
             visible: root.taskCount === 0
-            title: root.searchText.trim().length > 0 || root.activePriorities.length > 0
-                   ? I18n.t("view.empty.noMatch.title") : I18n.t("list.empty")
-            line: root.searchText.trim().length > 0 || root.activePriorities.length > 0
-                  ? I18n.t("view.empty.noMatch.hint") : ""
+            title: root.nothingFound ? I18n.t("view.empty.noMatchFor").arg(root.filterLabel) : I18n.t("list.empty")
+            line: root.nothingFound ? I18n.t("view.empty.resetFilter") : ""
+            lineLink: root.nothingFound
+            onLineActivated: root.resetFilterRequested()
         }
+        Item { visible: root.taskCount === 0; Layout.fillHeight: true }
 
         // The keys along the bottom (H2-List), in the bold style.
         Rectangle {

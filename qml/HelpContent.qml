@@ -139,11 +139,6 @@ Item {
                 text: root.tr2("A developer's workday in lowkey, laid out across widgets: board, timeline, week and month calendars, a day panel, notes and documentation. Everything stays local in JSON; nothing goes to the cloud unless you connect a tracker. Below — a tour of the sections. Click an item in the table of contents to jump to the topic you need.",
                               "Рабочий день разработчика в lowkey, разложенный по виджетам: доска, лента, календари недели и месяца, панель дня, заметки и документация. Всё хранится локально в JSON; в облако ничего не уходит, пока вы сами не подключите трекер. Ниже — обзор разделов. Нажмите пункт оглавления, чтобы перейти к нужной теме.")
             }
-            PillButton {
-                Layout.topMargin: Theme.sp2xs
-                text: I18n.t("welcome.replay")
-                onClicked: AppController.replayWelcome()
-            }
         }
 
         // ─────────────────────────────────────────── TOC
