@@ -65,6 +65,14 @@ QVector<heap::notify::NotificationAction> AppController::reminderActions(const Q
   const int longMin = notif.value(QStringLiteral("snoozeLongMin"), hn::kDefaultSnoozeLongMin).toInt();
   const QString snoozeShort = QString::fromLatin1(hn::kSnoozeShort);
   const QString snoozeLong = QString::fromLatin1(hn::kSnoozeLong);
+  // The start of a task block (APP-256): open it, put it off a quarter of an
+  // hour, or move it to the next free window. Done is not offered: being
+  // reminded to start is not having finished.
+  if(kind == QStringLiteral("taskBlock")) {
+    return {{QString::fromLatin1(hn::kOpen), tr_(QStringLiteral("notify.action.open"))},
+            {QString::fromLatin1(hn::kSnoozeBlock), tr_(QStringLiteral("notify.action.snooze15"))},
+            {QString::fromLatin1(hn::kNextWindow), tr_(QStringLiteral("notify.action.window"))}};
+  }
   QVector<hn::NotificationAction> out{{snoozeShort, hn::snoozeLabel(hn::snoozeMinutesFor(snoozeShort, shortMin, longMin), ru)},
                                       {snoozeLong, hn::snoozeLabel(hn::snoozeMinutesFor(snoozeLong, shortMin, longMin), ru)},
                                       {QString::fromLatin1(hn::kOpen), tr_(QStringLiteral("notify.action.open"))}};

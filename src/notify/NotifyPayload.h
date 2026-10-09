@@ -28,6 +28,10 @@ inline constexpr char kSnoozeShort[] = "snoozeShort";
 inline constexpr char kSnoozeLong[] = "snoozeLong";
 inline constexpr char kOpen[] = "open";
 inline constexpr char kDone[] = "done";
+// A task block's start (APP-256): a quarter of an hour later, or the next
+// free window.
+inline constexpr char kSnoozeBlock[] = "snooze15";
+inline constexpr char kNextWindow[] = "nextWindow";
 // Older toasts (and Linux ones still on screen after an update) say this.
 inline constexpr char kLegacySnooze1h[] = "snooze1h";
 

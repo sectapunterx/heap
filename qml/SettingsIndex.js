@@ -69,6 +69,8 @@ var ITEMS = [
 
     ["notifications", "group", "settings.notif.sub.deadlines"],
     ["notifications", "row", "settings.notif.deadlineReminders"],
+    ["notifications", "row", "settings.notif.taskBlock"],
+    ["notifications", "row", "settings.notif.taskBlockLead"],
     ["notifications", "row", "settings.notif.leadHours"],
     ["notifications", "row", "settings.notif.meetingReminders"],
     ["notifications", "row", "settings.notif.meetingLead"],

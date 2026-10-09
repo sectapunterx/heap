@@ -89,7 +89,9 @@ add_test(NAME heap_chrono_tests COMMAND heap_chrono_tests)
 # The day as Today draws it (APP-260/247): a pure function.
 add_executable(heap_day_plan_tests
     test_day_plan.cpp
+    test_free_window.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/plan/DayPlan.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/plan/FreeWindow.cpp
 )
 target_include_directories(heap_day_plan_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(heap_day_plan_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)

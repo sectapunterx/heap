@@ -136,8 +136,9 @@ Item {
                 actionFn: fn, action2Label: "", action2Fn: null,
                 ms: _duration(k || "info", seconds, !!label) });
     }
-    // Two actions side by side ([{label, fn}, {label, fn}]): "Open in
-    // tracker" / "Archive" for a refused move (APP-204). Same look, same
+    // Up to three actions side by side ([{label, fn}, …]): "Open in
+    // tracker" / "Archive" for a refused move (APP-204); open / in 15 min /
+    // next free window on a task block's start (APP-256). Same look, same
     // clock: an action keeps it up at least ToastTiming.ACTION_MS.
     function showWithActions(s, actions, seconds, k) {
         const a = actions || [];
@@ -145,6 +146,7 @@ Item {
         _push({ id: ++_seq, message: String(s), kind: k || "info",
                 actionLabel: label, actionFn: a.length > 0 ? a[0].fn : null,
                 action2Label: a.length > 1 ? String(a[1].label) : "", action2Fn: a.length > 1 ? a[1].fn : null,
+                action3Label: a.length > 2 ? String(a[2].label) : "", action3Fn: a.length > 2 ? a[2].fn : null,
                 ms: _duration(k || "info", seconds, a.length > 0) });
     }
 
@@ -324,7 +326,8 @@ Item {
                         width: Math.min(implicitWidth,
                                         card.cap - card.leftPad - card.rightPad - Theme.toastIcon - rowL.spacing
                                         - (actionBox.visible ? actionBox.implicitWidth + rowL.spacing : 0)
-                                        - (action2Box.visible ? action2Box.implicitWidth + rowL.spacing : 0))
+                                        - (action2Box.visible ? action2Box.implicitWidth + rowL.spacing : 0)
+                                        - (action3Box.visible ? action3Box.implicitWidth + rowL.spacing : 0))
                         text: card.modelData.message
                         textFormat: Text.PlainText
                         color: Theme.toastText
@@ -384,6 +387,33 @@ Item {
                             label: card.modelData.action2Label || ""
                             showTip: false
                             onActivated: card.runAction(card.modelData.action2Fn)
+                        }
+                    }
+                    // The third (APP-256).
+                    Rectangle {
+                        id: action3Box
+                        visible: !!card.modelData.action3Label && card.modelData.action3Label.length > 0
+                        anchors.verticalCenter: parent.verticalCenter
+                        radius: Theme.radiusSm
+                        color: action3MA.hovered ? Theme.accentSoft : "transparent"
+                        border.color: Theme.accent
+                        border.width: 1
+                        implicitWidth: action3T.implicitWidth + 2 * Theme.spLg
+                        implicitHeight: action3T.implicitHeight + 2 * Theme.spXs
+                        Text {
+                            id: action3T
+                            anchors.centerIn: parent
+                            text: card.modelData.action3Label || ""
+                            color: Theme.accentStrong
+                            font.pixelSize: Theme.fsMd
+                            font.weight: Theme.fwTitle
+                        }
+                        ClickArea {
+                            id: action3MA
+                            objectName: "toast-action-3"
+                            label: card.modelData.action3Label || ""
+                            showTip: false
+                            onActivated: card.runAction(card.modelData.action3Fn)
                         }
                     }
                 }

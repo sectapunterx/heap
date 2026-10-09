@@ -3402,6 +3402,118 @@ TEST_F(PeoplePickerTest, AnOrdinaryEditNeitherCreatesNorLinksAContact) {
   EXPECT_TRUE(contacts().isEmpty());
 }
 
+// ── APP-253: one free-window search, task blocks are busy ──
+
+TEST_F(AppControllerTest, FreeWindowSeesTaskBlocks) {
+  const QDate thu(2026, 10, 8);
+  app_->setWorkdayStart(9);
+  app_->setWorkdayEnd(19);
+  Task busy = mkTask(QStringLiteral("T-1"), QStringLiteral("planned"));
+  busy.scheduledAt = QDateTime(thu, QTime(9, 0));
+  busy.scheduledHasTime = true;
+  busy.estimateMinutes = 120;
+  Task t = mkTask(QStringLiteral("T-2"), QStringLiteral("to place"));
+  t.estimateMinutes = 60;
+  app_->tasks()->reset({busy, t});
+
+  const QVariantMap w = app_->freeWindowAt(QStringLiteral("T-2"), thu, QDateTime(thu, QTime(8, 0)));
+  EXPECT_TRUE(w.value("found").toBool());
+  EXPECT_DOUBLE_EQ(w.value("start").toDouble(), 11.0) << "the 9-11 task block is taken";
+  // Its own block never stands in its way.
+  const QVariantMap self = app_->freeWindowAt(QStringLiteral("T-1"), thu, QDateTime(thu, QTime(8, 0)));
+  EXPECT_DOUBLE_EQ(self.value("start").toDouble(), 9.0);
+}
+
+TEST_F(AppControllerTest, FreeWindowSaysNoWhenTheWorkdayIsFull) {
+  const QDate thu(2026, 10, 8);
+  app_->setWorkdayStart(9);
+  app_->setWorkdayEnd(19);
+  QVariantMap draft = app_->newEventDraft(9, thu);
+  draft["end"] = 19.0;
+  app_->saveEvent(draft);
+  Task t = mkTask(QStringLiteral("T-2"), QStringLiteral("to place"));
+  t.estimateMinutes = 60;
+  app_->tasks()->reset({t});
+
+  const QVariantMap w = app_->freeWindowAt(QStringLiteral("T-2"), thu, QDateTime(thu, QTime(10, 0)));
+  EXPECT_FALSE(w.value("found").toBool());
+  EXPECT_EQ(w.value("nextDate").toDate(), thu.addDays(1));
+  EXPECT_DOUBLE_EQ(w.value("nextStart").toDouble(), 9.0);
+  EXPECT_DOUBLE_EQ(w.value("lateStart").toDouble(), 19.0);
+}
+
+// ── APP-248: carrying leftovers, by hand only ──
+
+namespace {
+
+Task leftover(const QString& id, const QDateTime& at, bool timed) {
+  Task t = mkTask(id, id);
+  t.scheduledAt = at;
+  t.scheduledHasTime = timed;
+  t.dueAt = QDateTime(QDate(2026, 10, 20), QTime(0, 0));
+  t.recurrence = QStringLiteral("every:week");
+  t.estimateMinutes = 60;
+  return t;
+}
+
+}  // namespace
+
+TEST_F(AppControllerTest, CarryTomorrowKeepsTimeDeadlineAndRepeat) {
+  const QDateTime now(QDate(2026, 10, 8), QTime(18, 0));
+  app_->tasks()->reset({leftover(QStringLiteral("T-1"), QDateTime(QDate(2026, 10, 7), QTime(14, 30)), true),
+                        leftover(QStringLiteral("T-2"), QDateTime(QDate(2026, 10, 8), QTime(0, 0)), false)});
+  EXPECT_EQ(app_->carryTasksAt({QStringLiteral("T-1"), QStringLiteral("T-2")}, QStringLiteral("tomorrow"), now), 2);
+  const Task a = app_->tasks()->items().at(0);
+  const Task b = app_->tasks()->items().at(1);
+  EXPECT_EQ(a.scheduledAt, QDateTime(QDate(2026, 10, 9), QTime(14, 30)));
+  EXPECT_TRUE(a.scheduledHasTime);
+  EXPECT_EQ(b.scheduledAt.date(), QDate(2026, 10, 9));
+  EXPECT_FALSE(b.scheduledHasTime);
+  EXPECT_EQ(a.dueAt.date(), QDate(2026, 10, 20)) << "the deadline is never touched";
+  EXPECT_EQ(a.recurrence, QStringLiteral("every:week"));
+
+  app_->undo();
+  EXPECT_EQ(app_->tasks()->items().at(0).scheduledAt, QDateTime(QDate(2026, 10, 7), QTime(14, 30))) << "one undo step";
+  EXPECT_EQ(app_->tasks()->items().at(1).scheduledAt.date(), QDate(2026, 10, 8));
+}
+
+TEST_F(AppControllerTest, CarrySomedayAndClearDropOnlyThePlan) {
+  const QDateTime now(QDate(2026, 10, 8), QTime(18, 0));
+  app_->tasks()->reset({leftover(QStringLiteral("T-1"), QDateTime(QDate(2026, 10, 8), QTime(10, 0)), true),
+                        leftover(QStringLiteral("T-2"), QDateTime(QDate(2026, 10, 8), QTime(11, 0)), true)});
+  app_->carryTasksAt({QStringLiteral("T-1")}, QStringLiteral("someday"), now);
+  app_->carryTasksAt({QStringLiteral("T-2")}, QStringLiteral("clear"), now);
+  const Task a = app_->tasks()->items().at(0);
+  const Task b = app_->tasks()->items().at(1);
+  EXPECT_TRUE(a.someday);
+  EXPECT_FALSE(a.scheduledAt.isValid());
+  EXPECT_EQ(a.status, QStringLiteral("todo")) << "no column move";
+  EXPECT_FALSE(b.someday);
+  EXPECT_FALSE(b.scheduledAt.isValid());
+  EXPECT_TRUE(b.dueAt.isValid());
+}
+
+TEST_F(AppControllerTest, CarryToWindowsLinesTheSelectionUp) {
+  app_->setWorkdayStart(9);
+  app_->setWorkdayEnd(19);
+  const QDateTime now(QDate(2026, 10, 8), QTime(17, 0));  // Thursday, two hours left
+  QVariantMap draft = app_->newEventDraft(17, QDate(2026, 10, 8));
+  draft["end"] = 18.0;
+  app_->saveEvent(draft);
+  app_->tasks()->reset({leftover(QStringLiteral("T-1"), QDateTime(QDate(2026, 10, 8), QTime(10, 0)), true),
+                        leftover(QStringLiteral("T-2"), QDateTime(QDate(2026, 10, 8), QTime(11, 0)), true)});
+  EXPECT_EQ(app_->carryTasksAt({QStringLiteral("T-1"), QStringLiteral("T-2")}, QStringLiteral("window"), now), 2);
+  EXPECT_EQ(app_->tasks()->items().at(0).scheduledAt, QDateTime(QDate(2026, 10, 8), QTime(18, 0)));
+  EXPECT_EQ(app_->tasks()->items().at(1).scheduledAt, QDateTime(QDate(2026, 10, 9), QTime(9, 0)))
+      << "the second one does not stack on the first, nor run past the working day";
+}
+
+TEST_F(AppControllerTest, CarryWithAnUnknownModeDoesNothing) {
+  app_->tasks()->reset({leftover(QStringLiteral("T-1"), QDateTime(QDate(2026, 10, 8), QTime(10, 0)), true)});
+  EXPECT_EQ(app_->carryTasksAt({QStringLiteral("T-1")}, QStringLiteral("auto"), QDateTime(QDate(2026, 10, 8), QTime(9, 0))), 0);
+  EXPECT_TRUE(app_->tasks()->items().at(0).scheduledAt.isValid());
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);

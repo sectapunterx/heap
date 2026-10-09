@@ -30,12 +30,14 @@ Rectangle {
            { id: "docs", label: I18n.t("lens.links"), keys: "" }]
         : []
     readonly property string lens: view === "timeline" ? "list"
-                                 : (view === "week" || view === "month") ? "calendar"
+                                 : (view === "day" || view === "week" || view === "month") ? "calendar"
                                  : view
     signal lensSelected(string id)
     // The lens's own setting, shown beside the tabs (see optionBtn).
     property var option: null
     signal optionPicked(string id)
+    // The calendar's zoom (APP-264): day / week / month, keys z d / z w / z m.
+    signal zoomSelected(string id)
     // The task search belongs to the views that list tasks.
     property bool searchShown: section === "tasks"
 
@@ -230,8 +232,24 @@ Rectangle {
                 }
             }
         }
+        LensTabs {
+            objectName: "view-header-zoom"
+            visible: root.lens === "calendar"
+            model: [{ id: "day", label: I18n.t("calzoom.day"), keys: "z d" },
+                    { id: "week", label: I18n.t("calzoom.week"), keys: "z w" },
+                    { id: "month", label: I18n.t("calzoom.month"), keys: "z m" }]
+            current: root.view
+            onSelected: (id) => root.zoomSelected(id)
+        }
 
         Item { Layout.fillWidth: true }
+
+        CalendarNav {
+            id: calendarNav
+            visible: root.lens === "calendar"
+            Layout.alignment: Qt.AlignVCenter
+            zoom: root.view
+        }
 
         // Git focus banner — appears when GitWatcher detects a checkout
         // matching a registered task prefix. Dismiss persists until next

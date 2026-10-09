@@ -13,6 +13,8 @@ inline const QStringList& all() {
                                     QStringLiteral("board"),
                                     QStringLiteral("list"),
                                     QStringLiteral("timeline"),
+                                    // The calendar lens at the day zoom (APP-264).
+                                    QStringLiteral("day"),
                                     QStringLiteral("week"),
                                     QStringLiteral("month"),
                                     QStringLiteral("docs"),

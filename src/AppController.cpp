@@ -48,7 +48,9 @@
 #include "notes/NoteGraph.h"
 #include "notes/NoteLinks.h"
 #include "notify/NotificationCenter.h"
+#include "plan/Carry.h"
 #include "plan/DayPlan.h"
+#include "plan/FreeWindow.h"
 #include "platform/Accessibility.h"
 #include "platform/GlobalHotkey.h"
 #include "platform/Paths.h"
@@ -333,6 +335,14 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"reschedule.dueCleared", {"%1: deadline removed", "%1: срок снят"}},
       {"reschedule.localOnly", {"changed here only, not in the tracker", "изменено только здесь, не в трекере"}},
       {"reschedule.block", {"%1: %2–%3", "%1: %2–%3"}},
+      {"undo.carry", {"Carry undone", "Перенос отменён"}},
+      {"carry.tomorrow", {"%1 → tomorrow", "%1 → завтра"}},
+      {"carry.window", {"%1 → %2", "%1 → %2"}},
+      {"carry.someday", {"%1 → someday", "%1 → когда-нибудь"}},
+      {"carry.clear", {"%1: no longer planned for a day", "%1: больше не запланировано на день"}},
+      {"carry.many", {"%1 tasks", "Задач: %1"}},
+      {"carry.windows", {"the nearest free windows", "ближайшие свободные окна"}},
+      {"carry.noWindow", {"no free window in the next two weeks", "нет свободного окна в ближайшие две недели"}},
       {"undo.timer", {"Timer change undone: %1", "Изменение таймера отменено: %1"}},
       {"undo.snooze", {"Snooze undone: %1", "Откладывание отменено: %1"}},
       {"undo.bulkEdit", {"Change undone for %1 task(s)", "Изменение отменено для задач: %1"}},
@@ -854,6 +864,11 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"selection.toast.unarchived", {"Tasks unarchived: %1", "Задач возвращено из архива: %1"}},
       // ---- Notification copy ----
       {"notify.deadlineTitle", {"Deadline %1", "Дедлайн %1"}},
+      {"notify.blockNow", {"Time for “%1”", "Время для «%1»"}},
+      {"notify.blockSoon", {"“%1” in %2 min", "«%1» через %2 мин"}},
+      {"notify.blockBody", {"planned for %1–%2", "запланировано на %1–%2"}},
+      {"notify.action.snooze15", {"In 15 min", "Через 15 мин"}},
+      {"notify.action.window", {"Next free window", "В ближайшее окно"}},
       {"notify.overdueTitle", {"Overdue %1", "Просрочено %1"}},
       {"notify.deadlineWhen.overdue", {"just now", "только что"}},
       {"notify.deadlineWhen.overdueH", {"by %1 h", "на %1 ч"}},
@@ -4138,15 +4153,11 @@ QVariantMap blockToVariant(const heap::plan::Block& b) {
           {"overlapsWith", b.overlapsWith}};
 }
 
-}  // namespace
-
-QVariantMap AppController::todayData(const QDate& date, bool allProfiles) const {
-  QVariantMap out;
-  const QDateTime now = QDateTime::currentDateTime();
-
-  // Meetings from every profile: the day before too, for one across midnight.
+// Meetings from every profile that touch `date`: the day before too, for one
+// across midnight.
+QVector<heap::plan::EventIn> dayEvents(const QVector<CalEvent>& all, const QDate& date) {
   QVector<heap::plan::EventIn> events;
-  for(const heap::cal::Occurrence& o : heap::cal::expandEvents(m_events.items(), date.addDays(-1), date)) {
+  for(const heap::cal::Occurrence& o : heap::cal::expandEvents(all, date.addDays(-1), date)) {
     heap::plan::EventIn e;
     e.id = o.event.id;
     e.title = o.event.title;
@@ -4161,6 +4172,15 @@ QVariantMap AppController::todayData(const QDate& date, bool allProfiles) const 
     e.occurrence = o.occurrenceDate.toString(Qt::ISODate);
     events.append(e);
   }
+  return events;
+}
+
+}  // namespace
+
+QVariantMap AppController::todayData(const QDate& date, bool allProfiles) const {
+  QVariantMap out;
+  const QDateTime now = QDateTime::currentDateTime();
+  const QVector<heap::plan::EventIn> events = dayEvents(m_events.items(), date);
 
   // The tasks: this profile's, or every profile's with its name.
   struct Src {
@@ -5999,6 +6019,8 @@ QVariantList AppController::calendarTasks(const QDate& from, const QDate& to, bo
     m["scheduledHasTime"] = t.scheduledHasTime;
     m["archived"] = t.archived;
     m["estimateMinutes"] = t.estimateMinutes;
+    // The block's length as Today and the day's load count it (APP-247).
+    m["blockMinutes"] = taskBlockMinutes(t.id);
     m["searchText"] = m_tasks.data(idx, TaskModel::SearchTextRole);
     m["ticket"] = m_tasks.data(idx, TaskModel::TicketRole);
     m["dueDay"] = dueIn ? static_cast<int>(from.daysTo(due)) : -1;
@@ -6100,11 +6122,198 @@ void AppController::scheduleTask(const QString& taskId, double startHour, const 
 }
 
 void AppController::scheduleTaskAtNextFreeSlot(const QString& taskId, const QDate& date) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return;
+  }
   const QDate day = date.isValid() ? date : m_selectedDate;
-  // The gap is looked for with the length the block will actually have; it
-  // used to search for an hour and then book ninety minutes over a meeting.
-  const double hours = taskBlockMinutes(taskId) / 60.0;
-  scheduleTask(taskId, nextFreeSlot(day, hours), day);
+  // The gap is looked for with the length the block will actually have, and
+  // among the task blocks too (APP-253). No room in the working day is said
+  // out loud, never booked past its end without a word.
+  const QVariantMap w = freeWindow(taskId, day);
+  if(w.value("found").toBool()) {
+    placeTaskAt(taskId, day, w.value("start").toDouble());
+    return;
+  }
+  emit freeWindowMissing(taskId,
+                         m_tasks.items().at(row).title,
+                         day,
+                         w.value("nextDate").toDate(),
+                         w.value("nextStart").toDouble(),
+                         w.value("lateStart").toDouble());
+}
+
+QVector<QPair<double, double>> AppController::busySpans(const QDate& date, const QString& exceptTaskId, const QDateTime& now) const {
+  QVector<heap::plan::EventIn> events = dayEvents(m_events.items(), date);
+  if(!exceptTaskId.isEmpty()) {
+    events.erase(std::remove_if(events.begin(),
+                                events.end(),
+                                [&](const heap::plan::EventIn& e) {
+                                  return e.taskId == exceptTaskId;
+                                }),
+                 events.end());
+  }
+  QVector<heap::plan::TaskIn> timed;
+  for(const Task& t : m_tasks.items()) {
+    if(t.archived || !t.scheduledHasTime || !t.scheduledAt.isValid() || t.id == exceptTaskId) {
+      continue;
+    }
+    if(t.scheduledAt.date() != date || statusCategory(t.status) == QLatin1String("done")) {
+      continue;
+    }
+    heap::plan::TaskIn in;
+    in.id = t.id;
+    in.title = t.title;
+    in.scheduledAt = t.scheduledAt;
+    in.minutes = taskBlockMinutes(t.id);
+    timed.append(in);
+  }
+  const heap::plan::Day day = heap::plan::buildDay(date, now, events, timed, m_workdayStart, m_workdayEnd, true);
+  QVector<QPair<double, double>> out;
+  for(const heap::plan::Block& b : day.blocks) {
+    out.append({qMax(0.0, b.start), qMin(24.0, b.end)});
+  }
+  return out;
+}
+
+QVariantMap AppController::freeWindow(const QString& taskId, const QDate& date) const {
+  return freeWindowAt(taskId, date, QDateTime::currentDateTime());
+}
+
+QVariantMap AppController::freeWindowAt(const QString& taskId, const QDate& date, const QDateTime& now) const {
+  heap::plan::WindowAsk ask;
+  ask.date = date;
+  ask.now = now;
+  ask.hours = taskBlockMinutes(taskId) / 60.0;
+  ask.workStart = m_workdayStart;
+  ask.workEnd = m_workdayEnd;
+  ask.step = snapStepHours();
+  const heap::plan::Window w = heap::plan::findWindow(
+      ask,
+      [&](const QDate& d) {
+        return busySpans(d, taskId, now);
+      },
+      [this](const QDate& d) {
+        return isWorkDay(d);
+      });
+  return {{"found", w.found},
+          {"date", date},
+          {"start", w.start},
+          {"hours", ask.hours},
+          {"nextDate", w.nextDate},
+          {"nextStart", w.nextStart},
+          {"lateStart", w.lateStart}};
+}
+
+bool AppController::placeTaskAt(const QString& taskId, const QDate& date, double start) {
+  if(!date.isValid() || start < 0 || start >= 24) {
+    return false;
+  }
+  return rescheduleTask(taskId, QStringLiteral("scheduled"), QDateTime(date, heap::cal::hourToTime(start)), true);
+}
+
+int AppController::carryTasks(const QStringList& ids, const QString& mode) {
+  return carryTasksAt(ids, mode, QDateTime::currentDateTime());
+}
+
+int AppController::carryTasksAt(const QStringList& ids, const QString& mode, const QDateTime& now) {
+  const bool tomorrow = mode == QLatin1String("tomorrow");
+  const bool window = mode == QLatin1String("window");
+  const bool someday = mode == QLatin1String("someday");
+  const bool clear = mode == QLatin1String("clear");
+  if(!tomorrow && !window && !someday && !clear) {
+    return 0;
+  }
+  const QDate today = now.date();
+  UndoScope scope(this, tr_("undo.carry"));
+  int changed = 0;
+  int missing = 0;
+  QString lastId;
+  QString lastWhere;
+  for(const QString& id : ids) {
+    const int row = m_tasks.indexOfId(id);
+    if(row < 0) {
+      continue;
+    }
+    Task t = m_tasks.items().at(row);
+    if(t.archived) {
+      continue;
+    }
+    const QDateTime was = t.scheduledAt;
+    const bool wasTimed = t.scheduledHasTime;
+    const bool wasSomeday = t.someday;
+    if(tomorrow) {
+      const heap::plan::Planned p = heap::plan::toTomorrow(t.scheduledAt, t.scheduledHasTime, today);
+      t.scheduledAt = p.at;
+      t.scheduledHasTime = p.hasTime;
+      t.someday = false;
+    } else if(window) {
+      heap::plan::WindowAsk ask;
+      ask.date = today;
+      ask.now = now;
+      ask.hours = taskBlockMinutes(id) / 60.0;
+      ask.workStart = m_workdayStart;
+      ask.workEnd = m_workdayEnd;
+      ask.step = snapStepHours();
+      // The tasks carried before this one are in the model already, so they
+      // count as busy and the selection lines up instead of stacking.
+      const auto [day, start] = heap::plan::nextWindow(
+          ask,
+          [&](const QDate& d) {
+            return busySpans(d, id, now);
+          },
+          [this](const QDate& d) {
+            return isWorkDay(d);
+          });
+      if(!day.isValid()) {
+        ++missing;
+        continue;
+      }
+      t.scheduledAt = QDateTime(day, heap::cal::hourToTime(start));
+      t.scheduledHasTime = true;
+      t.someday = false;
+    } else {
+      t.scheduledAt = QDateTime();
+      t.scheduledHasTime = false;
+      if(someday) {
+        t.someday = true;
+      }
+    }
+    if(t.scheduledAt == was && t.scheduledHasTime == wasTimed && t.someday == wasSomeday) {
+      continue;
+    }
+    m_tasks.upsert(t);
+    if(t.scheduledHasTime && wasTimed) {
+      moveLinkedFocusBlocks(t.id, was, t.scheduledAt);
+    }
+    ++changed;
+    lastId = t.id;
+    lastWhere = t.scheduledHasTime ? dateTimeLabel(t.scheduledAt, QStringLiteral("weekdayDay")) : QString();
+  }
+  if(changed == 0) {
+    scope.abandon();
+    if(missing > 0) {
+      emit toast(tr_("carry.noWindow"), QStringLiteral("info"));
+    }
+    return 0;
+  }
+  const QString who = changed == 1 ? lastId : tr_("carry.many").arg(changed);
+  QString msg;
+  if(tomorrow) {
+    msg = tr_("carry.tomorrow").arg(who);
+  } else if(window) {
+    msg = tr_("carry.window").arg(who, changed == 1 ? lastWhere : tr_("carry.windows"));
+  } else if(someday) {
+    msg = tr_("carry.someday").arg(who);
+  } else {
+    msg = tr_("carry.clear").arg(who);
+  }
+  if(missing > 0) {
+    msg += QStringLiteral(" · ") + tr_("carry.noWindow");
+  }
+  emit undoableToast(msg, 6);
+  scheduleSave();
+  return changed;
 }
 
 bool AppController::rescheduleTask(const QString& taskId, const QString& field, const QDateTime& when, bool hasTime) {
@@ -6250,13 +6459,37 @@ void AppController::followFocusBlock(const CalEvent& before, const CalEvent* aft
 double AppController::nextFreeSlot(const QDate& date, double durationHours) const {
   const double step = snapStepHours();
   const double dur = qMax(step, durationHours);
-  // Start at the top of the working day, or at the next slot from now when the
-  // day in question is today — "schedule this" should not offer a time that has
-  // already passed.
-  const QDateTime now = QDateTime::currentDateTime();
+  // One search (APP-253): meetings and task blocks are busy, the working
+  // hours of a working day first. Today starts from now; any other day from
+  // the top of the working day.
+  const QDateTime realNow = QDateTime::currentDateTime();
+  const QDateTime now = date == realNow.date() ? realNow : QDateTime(date, QTime(0, 0));
+  heap::plan::WindowAsk ask;
+  ask.date = date;
+  ask.now = now;
+  ask.hours = dur;
+  ask.workStart = m_workdayStart;
+  ask.workEnd = m_workdayEnd;
+  ask.step = step;
+  ask.maxDays = 0;
+  const heap::plan::Window w = heap::plan::findWindow(
+      ask,
+      [&](const QDate& d) {
+        return busySpans(d, QString(), now);
+      },
+      [this](const QDate& d) {
+        return isWorkDay(d);
+      });
+  if(w.found) {
+    return w.start;
+  }
+  if(w.lateStart >= 0) {
+    return w.lateStart;
+  }
+  // Nothing fits at all: the old answer, a block that still ends by midnight.
   double cursor = m_workdayStart;
-  if(date == now.date()) {
-    cursor = qMax(cursor, nextQuarterHour(now));
+  if(date == realNow.date()) {
+    cursor = qMax(cursor, nextQuarterHour(realNow));
   }
   cursor = std::ceil(cursor / step) * step;
 
@@ -14087,15 +14320,24 @@ void AppController::scheduleFocusBlockFor(const QString& taskId) {
   const double dur = std::max(0.25, durMin / 60.0);
   // The first free stretch inside working hours, on a working day, within the
   // coming week. A Saturday-night drag used to book 21:00 that same night.
-  for(int offset = 0; offset < 7; ++offset) {
-    const QDate day = now.date().addDays(offset);
-    if(!isWorkDay(day)) {
-      continue;
-    }
-    const double start = nextFreeSlot(day, dur);
-    if(start + dur > m_workdayEnd + 1e-9 || start < m_workdayStart - 1e-9) {
-      continue;
-    }
+  // The same search as "next free window" (APP-253): task blocks are busy too.
+  heap::plan::WindowAsk ask;
+  ask.date = now.date();
+  ask.now = now;
+  ask.hours = dur;
+  ask.workStart = m_workdayStart;
+  ask.workEnd = m_workdayEnd;
+  ask.step = snapStepHours();
+  ask.maxDays = 6;
+  const auto [day, start] = heap::plan::nextWindow(
+      ask,
+      [&](const QDate& d) {
+        return busySpans(d, taskId, now);
+      },
+      [this](const QDate& d) {
+        return isWorkDay(d);
+      });
+  if(day.isValid()) {
     CalEvent e;
     e.id = QStringLiteral("ev-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
     e.title = QStringLiteral("Focus · %1").arg(t.title);
@@ -14326,6 +14568,51 @@ void AppController::runAutomationAt(const QDateTime& now) {
                    QStringLiteral("%1 (%2)").arg(t.title, t.priority),
                    QStringLiteral("deadline"),
                    now);
+    }
+  }
+
+  // 3b. The start of a planned task block (APP-256): off unless switched on,
+  // held by quiet hours and focus mode like the deadlines. It only says so:
+  // no timer starts and the task stays in its column.
+  if(notif.value("taskBlockReminders", false).toBool() && !quiet) {
+    const int lead = qBound(0, notif.value("taskBlockLead", 0).toInt(), 60);
+    const auto consider = [&](const QString& profileId, const Task& t, bool own) {
+      if(t.archived || !t.scheduledHasTime || !t.scheduledAt.isValid()) {
+        return;
+      }
+      if(qAbs(today.daysTo(t.scheduledAt.date())) > 1) {
+        return;
+      }
+      const QString cat = own ? statusCategory(t.status) : heap::board::defaultCategoryFor(t.status);
+      if(cat == QLatin1String("done")) {
+        return;
+      }
+      const heap::cal::BlockCall call = heap::cal::taskBlockReminder(t.id, t.scheduledAt, now, lead);
+      if(!call.due || reminderSent(call.key)) {
+        return;
+      }
+      markReminderSent(call.key, now);
+      const int minutes = own ? taskBlockMinutes(t.id) : (t.estimateMinutes > 0 ? t.estimateMinutes : 60);
+      const QDateTime end = t.scheduledAt.addSecs(60LL * minutes);
+      const QString title =
+          call.minutesLeft <= 0 ? tr_("notify.blockNow").arg(t.title) : tr_("notify.blockSoon").arg(t.title).arg(call.minutesLeft);
+      notifyTaskAt(
+          heap::notify::taskRef(profileId, t.id),
+          title,
+          tr_("notify.blockBody")
+              .arg(heap::text::formatTime(t.scheduledAt.time(), twelveHourClock()), heap::text::formatTime(end.time(), twelveHourClock())),
+          QStringLiteral("taskBlock"),
+          now);
+    };
+    for(const Task& t : m_tasks.items()) {
+      consider(m_activeProfileId, t, true);
+    }
+    for(const Profile& p : m_profiles) {
+      if(p.id != m_activeProfileId) {
+        for(const Task& t : p.tasks) {
+          consider(p.id, t, false);
+        }
+      }
     }
   }
 
@@ -14795,6 +15082,20 @@ void AppController::notifyTaskAt(
   }
   const QString inApp = title.isEmpty() ? body : title + QStringLiteral(" · ") + body;
   const QVariantMap notif = settingsMap().value("notifications").toMap();
+  // The start of a task block (APP-256) carries its buttons in the window too:
+  // open, in 15 minutes, the next free window.
+  const auto inAppToast = [&]() {
+    if(kind == QLatin1String("taskBlock")) {
+      const QString id = heap::notify::routingId(kind, taskId);
+      ShownReminder& shown = m_shownReminders[id];
+      shown.title = title;
+      shown.body = body;
+      shown.kind = kind;
+      emit reminderToast(id, inApp);
+    } else {
+      emit toast(inApp);
+    }
+  };
   // Suppress the OS toast when notifications are disabled, unavailable, or the
   // window is currently focused. In the focused case the in-app Toast bar below
   // already shows the message — emitting both is the double-notification bug on
@@ -14802,7 +15103,7 @@ void AppController::notifyTaskAt(
   const bool appActive = QGuiApplication::applicationState() == Qt::ApplicationActive;
   if(!notif.value("desktopNotif", true).toBool() || !m_notifier || appActive) {
     // Fallback path — still surface via in-app toast for visibility.
-    emit toast(inApp);
+    inAppToast();
     return;
   }
 
@@ -14827,7 +15128,7 @@ void AppController::notifyTaskAt(
   if(notif.value("soundOnPing", false).toBool()) {
     QApplication::beep();
   }
-  emit toast(inApp);
+  inAppToast();
 }
 
 void AppController::notifyCapture(const QString& taskId, const QString& title, const QString& body) {
@@ -14893,6 +15194,20 @@ void AppController::onNotifierAction(const QString& notificationId, const QStrin
     openReminder(notificationId);
     return;
   }
+  // A task block's own buttons (APP-256).
+  if(actionId == QLatin1String(heap::notify::kSnoozeBlock)) {
+    snoozeReminderAt(notificationId, 15, QDateTime::currentDateTime());
+    return;
+  }
+  if(actionId == QLatin1String(heap::notify::kNextWindow)) {
+    const ReminderTask target = reminderTask(taskId);
+    if(target.profileId == m_activeProfileId) {
+      scheduleTaskAtNextFreeSlot(target.task.id, today());
+    } else if(!target.profileId.isEmpty()) {
+      emit openTaskRequested(target.task.id, target.profileId);
+    }
+    return;
+  }
   if(actionId != QLatin1String(heap::notify::kDone)) {
     return;
   }
@@ -14909,6 +15224,10 @@ void AppController::onNotifierAction(const QString& notificationId, const QStrin
   setActiveProfileId(target.profileId);
   moveTask(target.task.id, QStringLiteral("done"));
   setActiveProfileId(current);
+}
+
+void AppController::reminderAction(const QString& notificationId, const QString& actionId) {
+  onNotifierAction(notificationId, actionId);
 }
 
 void AppController::onNotifierActivated(const QString& notificationId) {

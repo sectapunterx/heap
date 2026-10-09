@@ -1156,6 +1156,8 @@ class AppController : public QObject {
   // Puts a shown reminder off: it comes back `minutes` after `now`, with the
   // same text, through the usual quiet-hours rules. Kept in snoozes.json.
   void snoozeReminderAt(const QString& notificationId, int minutes, const QDateTime& now);
+  // A button of an in-app reminder toast: the same as the OS one (APP-256).
+  Q_INVOKABLE void reminderAction(const QString& notificationId, const QString& actionId);
 
   // Snoozed reminders waiting (tests).
   QVector<heap::notify::SnoozedReminder> pendingSnoozes() const {
@@ -1262,6 +1264,22 @@ class AppController : public QObject {
   Q_INVOKABLE void scheduleTaskAtNextFreeSlot(const QString& taskId, const QDate& date);
   // How long a block for this task is, in minutes.
   Q_INVOKABLE int taskBlockMinutes(const QString& taskId) const;
+  // The nearest free window for the task's block on `date` (APP-253): busy is
+  // meetings and task blocks, the window inside the working hours of a
+  // working day. {found, date, start, hours, nextDate, nextStart, lateStart}
+  // — when today has no room, the next working day's first window and what
+  // is left of this evening (-1 when nothing fits before midnight).
+  Q_INVOKABLE QVariantMap freeWindow(const QString& taskId, const QDate& date) const;
+  QVariantMap freeWindowAt(const QString& taskId, const QDate& date, const QDateTime& now) const;
+  // Plans the task at `start` on `date` (the answer to "no room today").
+  // Only "when" changes; one undo step with its toast.
+  Q_INVOKABLE bool placeTaskAt(const QString& taskId, const QDate& date, double start);
+  // Carrying leftovers on by hand (APP-248). `mode`: "tomorrow" (keeps the
+  // time it had), "window" (the nearest free window from now on), "someday"
+  // or "clear" (no "when"). The deadline is never touched. One undo step and
+  // one toast for the whole selection; returns how many tasks changed.
+  Q_INVOKABLE int carryTasks(const QStringList& ids, const QString& mode);
+  int carryTasksAt(const QStringList& ids, const QString& mode, const QDateTime& now);
   // Drag-to-reschedule in Week, Month and Timeline (APP-249), and the keys
   // that do the same. Sets one date of one task: `field` is "scheduled" (when
   // it is planned) or "due" (its deadline). `hasTime` says whether the clock
@@ -1287,6 +1305,14 @@ class AppController : public QObject {
   // `schedDay` — the day's offset from `from`, or -1. Only candidates have
   // their fields read, which is what keeps a 10k-task profile's week cheap.
   Q_INVOKABLE QVariantList calendarTasks(const QDate& from, const QDate& to, bool includeArchived) const;
+  // The load of each day from `from` on (APP-247): [{date, workday,
+  // meetings, tasks, free, overWork, work}] in minutes, each minute counted
+  // once — the fact the calendar's day headers show.
+  Q_INVOKABLE QVariantList dayLoads(const QDate& from, int days) const;
+  // The calendar's "Without a date" tray (APP-264): what "is:undated" finds,
+  // narrowed by the section's query. [{id, title, status, category,
+  // priority, blockMinutes}].
+  Q_INVOKABLE QVariantList undatedTasks(const QString& search) const;
 
   // ---- People ops ----
   Q_INVOKABLE void cyclePerson(const QString& id);
@@ -1802,6 +1828,14 @@ class AppController : public QObject {
   // the restart.
   void updateReadyToInstall(const QString& version, const QString& sha256);
   void undoableToast(const QString& message, int seconds);
+  // A reminder with buttons shown in the window (the start of a task block,
+  // APP-256); the buttons call reminderAction(notificationId, …).
+  void reminderToast(const QString& notificationId, const QString& message);
+  // "Next free window" found no room on `date` (APP-253): the toast says so
+  // and offers the next working day's window and, when one is left, a time
+  // this evening. Nothing is planned until the person picks.
+  void freeWindowMissing(
+      const QString& taskId, const QString& title, const QDate& date, const QDate& nextDate, double nextStart, double lateStart);
   // A status change did not reach the tracker. The UI offers a retry.
   void trackerPushFailed(const QString& taskId, const QString& message);
   // A conflict on this task was settled, one field or all (APP-163).
@@ -2145,6 +2179,10 @@ class AppController : public QObject {
   void storeEvent(CalEvent e);
   bool inQuietHours(const QDateTime& when) const;
   static double nextQuarterHour(const QDateTime& when);
+  // What is taken on `date` (APP-253): meetings and task blocks of the
+  // active profile, each as hours on the day; `exceptTaskId`'s own block and
+  // its focus blocks left out, so moving a task does not collide with itself.
+  QVector<QPair<double, double>> busySpans(const QDate& date, const QString& exceptTaskId, const QDateTime& now) const;
   void scheduleFocusBlockFor(const QString& taskId);
   void focusBlockOnStatusChange(const QString& taskId, const QString& from, const QString& to);
   // The local layer's own bookkeeping (AppControllerLocal.cpp).
