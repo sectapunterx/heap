@@ -3,10 +3,10 @@ import QtQuick.Layouts
 import TodoCpp
 
 // One setting inside a SettingsGroup (APP-172): the label and a one-line hint
-// on the left, in a column of fixed width so every label in a group lines up,
-// and the control on the right. Rows carry their own vertical padding and a
-// hairline on top; SettingsGroup hides the first one, so a group reads as
-// one surface with thin dividers.
+// on the left and the control on the right. Rows carry their own vertical
+// padding and a hairline under them, so a section reads as a flat list
+// (sheets H2-Settings / X-Set-*, DG-090). The quiet style (no fills) sets the
+// label in regular weight and a softer colour.
 //
 //   SettingsGroup {
 //       title: I18n.t(<key>)
@@ -30,7 +30,7 @@ Item {
 
     property string label: ""
     property string hint: ""
-    property color hintColor: Theme.textMuted
+    property color hintColor: Theme.textDim
     // The label column. Capped at a share of the row so a narrow window
     // still leaves the control room.
     property int labelWidth: 248
@@ -67,10 +67,10 @@ Item {
     }
     readonly property bool stacked: width > 0 && width < stackBelow
     readonly property bool hasLabel: label.length > 0 || hint.length > 0
-    readonly property int vpad: Theme.spXl
+    readonly property int vpad: Theme.px(12)
     // Every one-line row is the same height whatever its control (a switch,
     // a slider, a 30px segmented control), so a group reads as an even list.
-    readonly property int minContent: 32
+    readonly property int minContent: Theme.px(30)
 
     Layout.fillWidth: true
     implicitWidth: grid.implicitWidth
@@ -80,10 +80,9 @@ Item {
     Rectangle {
         objectName: "settings-row-match"
         visible: row.searchMark > 0
-        // Out to the group's frame, so the bar sits on its edge, clear of
-        // the label.
-        x: -(Theme.inset - 1)
-        width: parent.width + 2 * (Theme.inset - 1)
+        // Out past the row's edge, so the bar sits clear of the label.
+        x: -Theme.spMd
+        width: parent.width + 2 * Theme.spMd
         height: parent.height
         color: Theme.accentSoft
         Rectangle {
@@ -97,7 +96,7 @@ Item {
         visible: row.separator
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.top: parent.top
+        anchors.bottom: parent.bottom
         height: 1
         color: Theme.border
     }
@@ -128,9 +127,9 @@ Item {
                 visible: row.label.length > 0
                 Layout.fillWidth: true
                 text: row.label
-                color: Theme.text
+                color: Style.chipFill ? Theme.text : Theme.textMuted
                 font.pixelSize: Theme.fsMd
-                font.weight: Theme.fwTitle
+                font.weight: Style.chipFill ? Theme.fwTitle : Theme.fwBody
                 wrapMode: Text.WordWrap
             }
             Text {

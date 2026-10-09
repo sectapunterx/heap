@@ -63,7 +63,7 @@ TestCase {
     // UX-5: the reset row asks twice, like the rows next to it.
     function test_danger_row_needs_a_second_click() {
         const row = createTemporaryQmlObject(
-            'import TodoCpp; SettingsView.DangerRow { title: "t"; buttonText: "Reset all"; width: 500 }', host);
+            'import TodoCpp; SettingsDangerRow { label: "t"; buttonText: "Reset all"; width: 500 }', host);
         verify(row !== null);
         const spy = createTemporaryQmlObject('import QtTest; SignalSpy { signalName: "triggered" }', host);
         spy.target = row;

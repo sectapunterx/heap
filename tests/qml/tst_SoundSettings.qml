@@ -34,11 +34,14 @@ TestCase {
         AppController.appSettingsJson = JSON.stringify(s);
     }
 
+    // Звук is a row of Уведомления (DG-095); volume and chimes are under the
+    // section's "more" line.
     function openAppearance() {
         const sv = createTemporaryQmlObject('import TodoCpp; SettingsView { anchors.fill: parent }', host);
         verify(sv !== null);
-        sv.activeSection = "appearance";
+        sv.activeSection = "notifications";
         tryVerify(function () { return findChild(sv, "settings-sound-enabled") !== null; }, 2000);
+        findChild(findChild(sv, "settings-block-notifications"), "settings-more-toggle").parent.userOpen = true;
         return sv;
     }
 
@@ -46,7 +49,7 @@ TestCase {
         clearSound();
         const sv = openAppearance();
         const row = findChild(sv, "settings-sound-enabled");
-        verify(!row.checked, "sound is on for a profile that never chose it");
+        compare(row.value, "off", "sound is on for a profile that never chose it");
         verify(!findChild(sv, "settings-sound-volume").visible);
         verify(!findChild(sv, "settings-sound-meeting").visible);
         compare(sv.defaults.sound.enabled, false);
@@ -58,7 +61,7 @@ TestCase {
         clearSound();
         const sv = openAppearance();
         const row = findChild(sv, "settings-sound-enabled");
-        row.toggled(true);
+        row.selected("on");
         compare(stored().enabled, true);
         tryVerify(function () { return findChild(sv, "settings-sound-volume").visible; }, 1000);
         const vol = findChild(sv, "settings-sound-volume");
@@ -75,7 +78,7 @@ TestCase {
 
     function test_chime_minutes_are_read_latest_first() {
         const sv = openAppearance();
-        const card = findChild(sv, "settings-sound-card");
+        const card = sv;
         compare(JSON.stringify(card.parseChimeMinutes("5, 15, 10")), "[15,10,5]");
         compare(JSON.stringify(card.parseChimeMinutes(" 3,3, 0, 200, 7 ")), "[7,3]");
         compare(JSON.stringify(card.parseChimeMinutes("30, 20, 10, 5")), "[30,20,10]");

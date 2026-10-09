@@ -255,6 +255,7 @@ Rectangle {
             id: gitBanner
             visible: AppController.focusedTaskId.length > 0
                   && !AppController.focusedBannerDismissed
+                  && Theme.gitWorkingLine
             Layout.preferredHeight: 26
             Layout.alignment: Qt.AlignVCenter
             radius: Theme.radiusMd

@@ -1435,6 +1435,12 @@ ApplicationWindow {
                             function exportJson()  { exportJsonDialog.open() }
                             function importJson()  { importJsonDialog.open() }
                             function openTimeMachine() { timeMachine.showNow() }
+                            function openCheatSheet() { win.openCheatSheet() }
+                            function exportMarkdown() { exportVaultDialog.open() }
+                            // A key being rebound in place (Settings → Keys):
+                            // the global shortcuts stand down as they do for
+                            // the hotkeys panel.
+                            function setKeyCapture(on) { hotkeys.capturingId = on ? "settings" : "" }
                         }
                     }
                 }

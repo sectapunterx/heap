@@ -35,6 +35,10 @@ Policy policyFrom(const QVariantMap& dataSettings) {
   p.dailyDays = ok && days > 0 ? std::clamp(days, 2, 365) : kDefaultDays;
   const int mb = dataSettings.value(QStringLiteral("historyMaxMb")).toInt(&ok);
   p.maxBytes = static_cast<qint64>(ok && mb > 0 ? std::clamp(mb, 10, 10000) : kDefaultMaxMb) * 1024 * 1024;
+  // Settings → Safety net "Snapshots": every hour (the default) or every day.
+  if(dataSettings.value(QStringLiteral("historyEvery")).toString() == QLatin1String("daily")) {
+    p.minIntervalSecs = 24 * 3600;
+  }
   return p;
 }
 

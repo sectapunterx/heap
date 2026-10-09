@@ -159,7 +159,7 @@ TestCase {
         row.forceActiveFocus(Qt.TabFocusReason);
         compare(sv.activeSection, "appearance");
         keyClick(Qt.Key_Down);
-        compare(sv.activeSection, "calendar");
+        compare(sv.activeSection, "tasks");
         verify(sv.openSection("notifications"));
         compare(sv.activeSection, "notifications");
     }

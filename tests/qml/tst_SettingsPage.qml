@@ -51,8 +51,8 @@ TestCase {
         // The page lists them in nav order.
         const order = sv._blocks().map((b) => b.sectionId);
         compare(order.join(","), sv.sections.map((s) => s.id).join(","));
-        // The profile is no longer the first thing.
-        verify(sv.sections.findIndex((s) => s.id === "profile") > 3);
+        // No profile section (DG-101): the sheets have none.
+        verify(sv.sections.findIndex((s) => s.id === "profile") < 0);
     }
 
     function test_nav_scrolls_to_the_section_and_follows_the_scroll() {
@@ -120,17 +120,20 @@ TestCase {
 
     function test_style_switch_and_custom() {
         const sv = make();
-        findChild(sv, "settings-style").selected("quiet");
+        findChild(sv, "settings-style").picked("quiet");
         compare(Style.name, "quiet");
-        findChild(sv, "settings-style").selected("bold");
+        findChild(sv, "settings-style").picked("bold");
         compare(Style.name, "bold");
         const reset = findChild(sv, "settings-style-reset");
         verify(!reset.visible);
         findChild(sv, "settings-style-counters").toggled(false);
         compare(Style.name, "custom");
         verify(reset.visible, "no way back from Custom");
+        // Тихий / Насыщенный / Свой, always (DG-098); Свой only says so.
         compare(findChild(sv, "settings-style").options.length, 3);
-        findChild(sv, "settings-style-reset-button").clicked();
+        findChild(sv, "settings-style").picked("custom");
+        compare(Style.name, "custom");
+        reset.activated();
         compare(Style.name, "bold");
     }
 }
