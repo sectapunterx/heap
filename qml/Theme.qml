@@ -175,7 +175,7 @@ QtObject {
     readonly property string cursorColorPick: _cursorHex ? _appearance.cursorColor.toLowerCase()
         : accentTone === "ink" ? (dark ? "#e6e8ec" : "#14181d")
         : accentTone === "graphite" ? (dark ? "#8f949c" : "#5c626b")
-        : ""
+        : (dark ? "#b1a7f0" : "#5a4fb3")
     readonly property color focusRing: Presets.ensureContrast(cursorColorPick.length ? cursorColorPick : String(accent),
         [String(bg), String(panel), String(panel2), String(panel3)], 3.0)
     // The soft glow just outside the ring, so the cursor reads at a glance

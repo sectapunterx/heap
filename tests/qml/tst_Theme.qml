@@ -467,7 +467,8 @@ TestCase {
     function test_heap_presets_match_the_shipped_palette() {
         const saved = AppController.appSettingsJson;
         const savedTheme = AppController.theme;
-        AppController.appSettingsJson = "";
+        // Classic dark by name: the default dark is lowkey since 0.8.0.
+        AppController.appSettingsJson = JSON.stringify({ appearance: { darkPreset: "heap-dark" } });
         AppController.theme = "dark";
         const d = { bg: String(Theme.bg), panel3: String(Theme.panel3), borderStrong: String(Theme.borderStrong),
                     accent: String(Theme.accent), accentStrong: String(Theme.accentStrong),

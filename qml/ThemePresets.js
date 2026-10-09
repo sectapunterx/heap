@@ -522,7 +522,7 @@ var RETIRED_PALETTES = {
     }
 };
 
-var DEFAULT_DARK = "heap-dark";
+var DEFAULT_DARK = "heap-ink";
 var DEFAULT_LIGHT = "heap-light";
 
 var _HEX = /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;

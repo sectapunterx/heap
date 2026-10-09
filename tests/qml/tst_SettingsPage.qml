@@ -108,7 +108,7 @@ TestCase {
         verify(Theme.cursorColorPick.length > 0);
         findChild(sv, "settings-accent").selected("lavender");
         compare(Theme.accentTone, "lavender");
-        compare(Theme.cursorColorPick, "");
+        compare(Theme.cursorColorPick, Theme.dark ? "#b1a7f0" : "#5a4fb3", "lavender is the logo's, on any theme");
         findChild(sv, "settings-density").selected("spacious");
         compare(AppController.density, "spacious");
         verify(Theme.spacious);

@@ -1560,8 +1560,9 @@ Item {
                         ({value: "lavender", label: I18n.t("settings.appearance.accent.lavender")}),
                         ({value: "ink", label: I18n.t("settings.appearance.accent.ink")}),
                         ({value: "graphite", label: I18n.t("settings.appearance.accent.graphite")})
-                    ]
-                    onSelected: (value) => root.set("appearance", "cursorColor", value === "lavender" ? "" : value)
+                    ].concat(Theme.accentTone === "custom"
+                             ? [({value: "custom", label: I18n.t("settings.appearance.accent.custom")})] : [])
+                    onSelected: (value) => { if (value !== "custom") root.set("appearance", "cursorColor", value === "lavender" ? "" : value); }
                 }
                 SegRow {
                     objectName: "settings-density"
