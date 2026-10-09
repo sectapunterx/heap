@@ -63,7 +63,7 @@ void rotateIfNeeded() {
     // Called from inside the message handler, so qWarning() would re-enter
     // it: the console is the only place left to say the log is gone.
     static_cast<void>(
-        fputs(qPrintable(QStringLiteral("heap: cannot reopen log file %1: %2\n").arg(base, g_logFile.errorString())), stderr));
+        fputs(qPrintable(QStringLiteral("lowkey: cannot reopen log file %1: %2\n").arg(base, g_logFile.errorString())), stderr));
   }
 }
 
@@ -124,7 +124,7 @@ void installFileLogger() {
   } else {
     // An unwritable data dir used to leave no trace at all (PLAT-4).
     static_cast<void>(fputs(
-        qPrintable(QStringLiteral("heap: cannot open log file %1: %2\n").arg(g_logFile.fileName(), g_logFile.errorString())), stderr));
+        qPrintable(QStringLiteral("lowkey: cannot open log file %1: %2\n").arg(g_logFile.fileName(), g_logFile.errorString())), stderr));
   }
 }
 

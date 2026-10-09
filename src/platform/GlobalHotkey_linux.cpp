@@ -363,7 +363,7 @@ class PortalHotkey : public GlobalHotkey {
     QList<PortalShortcut> shortcuts;
     for(auto it = wanted_.constBegin(); it != wanted_.constEnd(); ++it) {
       shortcuts.append(PortalShortcut{.id = QStringLiteral("heap-%1").arg(it.key()),
-                                      .properties = QVariantMap{{QStringLiteral("description"), QStringLiteral("heap: quick capture")},
+                                      .properties = QVariantMap{{QStringLiteral("description"), QStringLiteral("lowkey: quick capture")},
                                                                 {QStringLiteral("preferred_trigger"), it.value()}}});
     }
     QDBusMessage call = QDBusMessage::createMethodCall(kPortalService, kPortalPath, kShortcutsInterface, QStringLiteral("BindShortcuts"));

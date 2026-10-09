@@ -141,7 +141,7 @@ bool installMac(const QString& package, QString& error) {
     return false;
   }
   if(!QDir().rename(fresh, bundle)) {
-    error = QStringLiteral("could not put the new heap.app in place");
+    error = QStringLiteral("could not put the new lowkey.app in place");
     QDir().rename(aside, bundle);
     QDir(fresh).removeRecursively();
     return false;
@@ -222,7 +222,7 @@ bool startInstall(PackageKind kind, const QString& package, QString& error) {
     case PackageKind::None:
       break;
   }
-  error = QStringLiteral("this copy of heap is not updated from inside the app");
+  error = QStringLiteral("this copy of lowkey is not updated from inside the app");
   return false;
 }
 

@@ -84,9 +84,9 @@ Item {
         // Logo lockup
         BrandLogo {
             anchors.horizontalCenter: parent.horizontalCenter
-            variant: "lockup"
+            variant: "wordmark"
             theme: Theme.dark ? "dark" : "light"
-            height: 92
+            height: 56
         }
 
         // Tagline: Work, in one place.

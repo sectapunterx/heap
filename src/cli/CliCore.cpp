@@ -68,11 +68,11 @@ ParsedArgs fail(const QString& error) {
 
 QString helpText() {
   return QStringLiteral(
-             "heap - keyboard-first tickets, planning and notes for engineers.\n"
+             "lowkey - a developer's workday in one window: tickets, planning and notes.\n"
              "\n"
              "Usage:\n"
-             "  heap [--view <name>] [--data-dir <dir>]   open the window (or bring it forward)\n"
-             "  heap <command> [options]                  answer on the command line\n"
+             "  lowkey [--view <name>] [--data-dir <dir>] open the window (or bring it forward)\n"
+             "  lowkey <command> [options]                answer on the command line\n"
              "\n"
              "Commands:\n"
              "  add \"<text>\" [--profile <p>] [--json]   capture a task, read like quick capture:\n"
@@ -100,7 +100,7 @@ QString helpText() {
              "  -h, --help         this text\n"
              "  -v, --version      the version\n"
              "\n"
-             "With heap open on the same data directory, commands go to the window, so\n"
+             "With lowkey open on the same data directory, commands go to the window, so\n"
              "a change shows up there at once and can be undone there.\n"
              "\n"
              "Exit codes: 0 ok, 1 usage, 2 not found, 3 data error.\n")
@@ -191,7 +191,7 @@ ParsedArgs parseArgs(const QStringList& args) {
       }
       r.text = positional.join(QChar(' ')).trimmed();
       if(r.text.isEmpty()) {
-        return fail(QStringLiteral("add needs the text of the task, e.g. heap add \"fix login tomorrow p1\""));
+        return fail(QStringLiteral("add needs the text of the task, e.g. lowkey add \"fix login tomorrow p1\""));
       }
       break;
     case Verb::Now:
@@ -226,7 +226,7 @@ ParsedArgs parseArgs(const QStringList& args) {
         return notFor(QStringLiteral("format"));
       }
       if(positional.size() != 1 || positional.constFirst().trimmed().isEmpty()) {
-        return fail(positional.isEmpty() ? QStringLiteral("%1 needs a task id, e.g. heap %1 APP-12").arg(name)
+        return fail(positional.isEmpty() ? QStringLiteral("%1 needs a task id, e.g. lowkey %1 APP-12").arg(name)
                                          : QStringLiteral("unexpected argument '%1'").arg(positional.at(1)));
       }
       r.taskId = positional.constFirst().trimmed();

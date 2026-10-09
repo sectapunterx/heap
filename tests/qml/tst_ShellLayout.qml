@@ -58,9 +58,8 @@ TestCase {
     // UX-31: the title ends with the display name, so Windows does not add it
     // a second time.
     function test_window_title_names_the_app_once() {
-        verify(tc.win.title.length > 0);
-        verify(/heap\.$/.test(tc.win.title), tc.win.title);
-        compare(tc.win.title.indexOf("heap."), tc.win.title.length - 5);
+        // lowkey since 0.8.0 (APP-280): the name alone, as the taskbar shows it.
+        compare(tc.win.title, "lowkey");
     }
 
     // UX-7: long names elide instead of pushing "+ Task" off the window.

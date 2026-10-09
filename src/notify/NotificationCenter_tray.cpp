@@ -4,11 +4,27 @@
 #include <QGuiApplication>
 #include <QIcon>
 #include <QMenu>
+#include <QStyleHints>
 #include <QSystemTrayIcon>
 
 namespace heap::notify {
 
 namespace {
+
+// The tray shows the glyph alone, in one colour (APP-280): the full app icon
+// with its tile turns to mush at 16 px on a taskbar. macOS recolours a
+// template image for the menu bar itself; elsewhere the glyph is white on a
+// dark taskbar or panel and near-black on a light one.
+QIcon trayIcon() {
+#ifdef Q_OS_MACOS
+  QIcon icon(QStringLiteral(":/brand/lowkey/lowkey-tray-template.svg"));
+  icon.setIsMask(true);
+#else
+  const bool dark = QGuiApplication::styleHints()->colorScheme() != Qt::ColorScheme::Light;
+  QIcon icon(dark ? QStringLiteral(":/brand/lowkey/lowkey-tray-light.svg") : QStringLiteral(":/brand/lowkey/lowkey-tray-dark.svg"));
+#endif
+  return icon.isNull() ? QGuiApplication::windowIcon() : icon;
+}
 
 // Fallback backend: legacy QSystemTrayIcon::showMessage. No action buttons
 // (the Shell_NotifyIcon balloon API does not support them). Clicking the
@@ -20,19 +36,15 @@ class TrayBackend : public NotificationCenter {
     if(!QSystemTrayIcon::isSystemTrayAvailable()) {
       return;
     }
-    QIcon icon(QStringLiteral(":/brand/icon/heap-icon.svg"));
-    if(icon.isNull()) {
-      icon = QGuiApplication::windowIcon();
-    }
-    m_tray = new QSystemTrayIcon(icon, this);
-    m_tray->setToolTip(QStringLiteral("heap."));
+    m_tray = new QSystemTrayIcon(trayIcon(), this);
+    m_tray->setToolTip(QStringLiteral("lowkey"));
 
     // Context menu so the app is controllable while running windowless (the
     // window hides to the tray on close). QMenu needs QtWidgets, which the app
     // already links. Parented to no widget — QSystemTrayIcon owns it via
     // setContextMenu.
     auto* menu = new QMenu();
-    QAction* showAction = menu->addAction(QStringLiteral("Show heap."));
+    QAction* showAction = menu->addAction(QStringLiteral("Show lowkey"));
     connect(showAction, &QAction::triggered, this, [this]() {
       emit showWindowRequested();
     });

@@ -106,7 +106,7 @@ int runHeap(bool command) {
   PROCESS_INFORMATION pi{};
   if(CreateProcessW(exe.c_str(), cmdLine.data(), nullptr, nullptr, command ? TRUE : FALSE, 0, nullptr, nullptr, &si, &pi) == 0) {
     heap::cli::write(true,
-                     QStringLiteral("heap-cli: cannot start %1 (it belongs next to heap-cli.exe)\n").arg(QString::fromStdWString(exe)));
+                     QStringLiteral("lowkey-cli: cannot start %1 (it belongs next to lowkey-cli.exe)\n").arg(QString::fromStdWString(exe)));
     return heap::cli::kExitData;
   }
   CloseHandle(pi.hThread);

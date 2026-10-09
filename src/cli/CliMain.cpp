@@ -172,7 +172,7 @@ int run(int argc, char** argv) {
       }
     }
     if(deadline.hasExpired()) {
-      return report({kExitData, QString(), QStringLiteral("heap: another heap is using this data directory and is not responding\n")});
+      return report({kExitData, QString(), QStringLiteral("lowkey: another lowkey is using this data directory and is not responding\n")});
     }
     QThread::msleep(100);
   }

@@ -241,7 +241,7 @@ QNetworkRequest RestIssueProvider::buildRequest(const QString& url) const {
   // Qt would follow a redirect to another host and carry the credentials
   // with it; keep every authenticated call on the origin it was aimed at.
   req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::SameOriginRedirectPolicy);
-  req.setRawHeader("User-Agent", "heap-sync");
+  req.setRawHeader("User-Agent", "lowkey-sync");
   for(const auto& h : m_desc.auth.extraHeaders) {
     req.setRawHeader(h.first, h.second);
   }

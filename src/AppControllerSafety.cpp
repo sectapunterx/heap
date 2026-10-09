@@ -63,7 +63,7 @@ void AppController::safetyNotify(
     n.id = heap::notify::routingId(kind, taskIds.isEmpty() ? QStringLiteral("-") : taskIds.join(QLatin1Char(',')));
     n.title = title;
     n.body = body;
-    n.iconPath = QStringLiteral(":/brand/icon/heap-icon.svg");
+    n.iconPath = QStringLiteral(":/brand/lowkey/lowkey-icon.svg");
     n.category = kind;
     m_notifier->post(n);
   }

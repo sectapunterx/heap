@@ -624,7 +624,7 @@ ProviderDescriptor trello() {
   d.oauth.clientIdParam = QStringLiteral("key");
   d.oauth.redirectParam = QStringLiteral("return_url");
   d.oauth.extraAuthParams = {{QStringLiteral("expiration"), QStringLiteral("never")},
-                             {QStringLiteral("name"), QStringLiteral("heap")},
+                             {QStringLiteral("name"), QStringLiteral("lowkey")},
                              {QStringLiteral("response_type"), QStringLiteral("token")},
                              {QStringLiteral("callback_method"), QStringLiteral("fragment")}};
   return d;

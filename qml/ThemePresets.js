@@ -106,7 +106,7 @@ var TOKENS = [
 // - textMuted sits between text and textDim; it used to be within a few
 //   points of textDim, so the app had two text levels, not three.
 var HEAP_DARK = {
-    id: "heap-dark", name: "heap. dark", base: "dark", contrast: "high", builtin: true,
+    id: "heap-dark", name: "Classic dark", base: "dark", contrast: "high", builtin: true,
     colors: {
         bg: "#0b0e13", bg2: "#11151c", panel: "#14181f", panel2: "#1a1f29", panel3: "#1f2530",
         border: "#262d39", borderStrong: "#313a4a",
@@ -130,26 +130,26 @@ var HEAP_DARK = {
 };
 
 var HEAP_LIGHT = {
-    id: "heap-light", name: "heap. light", base: "light", contrast: "high", builtin: true,
+    id: "heap-light", name: "lowkey light", base: "light", contrast: "high", builtin: true,
     colors: {
         bg: "#f3f5f8", bg2: "#eaecee", panel: "#ffffff", panel2: "#f8f8f8", panel3: "#f1f1f1",
         border: "#dde3ec", borderStrong: "#b8bdc5",
         text: "#11151c", textMuted: "#4b5463", textDim: "#656e7d",
-        textOnAccent: "#06121a", textOnDanger: "#ffffff", textOnBadge: "#ffffff",
-        accent: "#178ea0", accentStrong: "#137888", accentSoft: "#1f178ea0", knob: "#ffffff",
+        textOnAccent: "#ffffff", textOnDanger: "#ffffff", textOnBadge: "#ffffff",
+        accent: "#5a4fb3", accentStrong: "#4a40a0", accentSoft: "#1f5a4fb3", knob: "#ffffff",
         danger: "#b54432", warning: "#945c26", success: "#357650", info: "#1f6fb0",
         toastBg: "#f1f1f1", toastBorder: "#b8bdc5", toastText: "#11151c",
         scrim: "#8c000000",
         p0: "#b54432", p1: "#945c26", p2: "#5f6878", p3: "#646974",
         stBacklog: "#8a909a", stTodo: "#6b7382", stProg: "#1f6fb0", stHalf: "#1f6fb0",
         stBlocked: "#c34a36", stReview: "#4b5463", stDone: "#3e8a5d",
-        mStandup: "#1f6fb0", mOneone: "#7a3e91", mSync: "#317e74", mFocus: "#3e8a5d", nowLine: "#c34a36",
+        mStandup: "#1f6fb0", mOneone: "#a3446f", mSync: "#317e74", mFocus: "#3e8a5d", nowLine: "#c34a36",
         codeBg: "#eaecee", code: "#7a672c", synKeyword: "#137382", synString: "#7a672c",
         synNumber: "#35754f", synComment: "#616a78", synType: "#2d746b", synBuiltin: "#7a3e91",
-        mention: "#1f6fb0", ticket: "#806c2e", tag: "#7a3e91", math: "#7a3e91",
+        mention: "#1f6fb0", ticket: "#806c2e", tag: "#a3446f", math: "#7a3e91",
         heading: "#9050c3", highlightBg: "#1f178ea0",
         mdLink: "#147989", mdCode: "#11151c", mdCodeBg: "#f8f8f8", mdMention: "#1f6fb0",
-        mdTicket: "#147989", mdTag: "#7a3e91", mdMath: "#806c2e", mdHighlight: "#1f178ea0"
+        mdTicket: "#147989", mdTag: "#a3446f", mdMath: "#806c2e", mdHighlight: "#1f178ea0"
     }
 };
 
@@ -289,30 +289,31 @@ var MINIMAL_DARK = {
     }
 };
 
-// heap. ink: the Minimal recipe (neutral surfaces, translucent hairlines, a
-// monochrome accent) in the brand's own colours. Navy-black
-// surfaces and the mark's ink greys from design/brand-export, a monochrome
-// accent like the logo, hairlines tinted with the ink, and the brand cyan
-// kept for links, mentions and keywords.
+// lowkey (heap. ink until 0.8.0; the id stays, saved settings name it): the
+// Minimal recipe (neutral surfaces, translucent hairlines) in the brand's own
+// colours. Navy-black surfaces and ink greys, the brand's lavender as the
+// accent — cursor, focus, selection (APP-280) — and cyan kept for links,
+// mentions and keywords. Tags, review and 1:1s moved from violet to rose so
+// nothing but the brand reads lavender.
 var HEAP_INK = {
-    id: "heap-ink", name: "heap. ink", base: "dark", contrast: "high", builtin: true,
+    id: "heap-ink", name: "lowkey", base: "dark", contrast: "high", builtin: true,
     colors: {
         bg: "#0b0e13", bg2: "#080a0e", panel: "#0f1218", panel2: "#141820",
         panel3: "#1a1f29", border: "#14c6d0dc", borderStrong: "#26c6d0dc", text: "#e5ecf3",
         textMuted: "#a6b0bd", textDim: "#8a94a3", textOnAccent: "#0b0e13", textOnDanger: "#0b0e13",
-        textOnBadge: "#0b0e13", accent: "#e8eef4", accentStrong: "#ffffff", accentSoft: "#1ac6d0dc",
+        textOnBadge: "#0b0e13", accent: "#b1a7f0", accentStrong: "#c4bcf5", accentSoft: "#26b1a7f0",
         knob: "#a6b0bd", danger: "#e6624c", warning: "#fe9c3a", success: "#78be7a",
         info: "#32b2e7", toastBg: "#141820", toastBorder: "#1ac6d0dc", toastText: "#e5ecf3",
         scrim: "#99000000", p0: "#e6624c", p1: "#fe9c3a", p2: "#a6b0bd",
         p3: "#8a94a3", stBacklog: "#6f7888", stTodo: "#86a0bd", stProg: "#32b2e7",
-        stHalf: "#d8c277", stBlocked: "#e6624c", stReview: "#bf94ec", stDone: "#78be7a",
-        mStandup: "#32b2e7", mOneone: "#bf94ec", mSync: "#3bccdd", mFocus: "#78be7a",
+        stHalf: "#d8c277", stBlocked: "#e6624c", stReview: "#de8fbd", stDone: "#78be7a",
+        mStandup: "#32b2e7", mOneone: "#de8fbd", mSync: "#3bccdd", mFocus: "#78be7a",
         nowLine: "#e6624c", synKeyword: "#3bccdd", synString: "#78be7a", synNumber: "#d8c277",
         synComment: "#7d8797", synType: "#86a0bd", synBuiltin: "#e5ecf3", codeBg: "#080a0e",
-        code: "#c6d0dc", mention: "#3bccdd", ticket: "#a6b0bd", tag: "#bf94ec",
+        code: "#c6d0dc", mention: "#3bccdd", ticket: "#a6b0bd", tag: "#de8fbd",
         math: "#d8c277", heading: "#a6b0bd", highlightBg: "#4dd8c277", mdLink: "#3bccdd",
         mdCode: "#e5ecf3", mdCodeBg: "#141820", mdMention: "#3bccdd", mdTicket: "#e5ecf3",
-        mdTag: "#bf94ec", mdMath: "#d8c277", mdHighlight: "#4dd8c277"
+        mdTag: "#de8fbd", mdMath: "#d8c277", mdHighlight: "#4dd8c277"
     }
 };
 

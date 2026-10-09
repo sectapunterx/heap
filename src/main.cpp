@@ -85,7 +85,7 @@ constexpr int kUsageExit = heap::cli::kExitUsage;
 constexpr int kSmokeSettleMs = 2000;
 
 [[noreturn]] void usageError(const QCommandLineParser& parser, const QString& message) {
-  fputs(qPrintable(QStringLiteral("heap: %1\n\n").arg(message) + parser.helpText()), stderr);
+  fputs(qPrintable(QStringLiteral("lowkey: %1\n\n").arg(message) + parser.helpText()), stderr);
   std::exit(kUsageExit);
 }
 
@@ -98,7 +98,7 @@ CliOptions parseCommandLine(const QStringList& args) {
   QCommandLineParser parser;
   // ASCII only: this is printed straight to a console whose code page is not
   // guaranteed to be UTF-8 (cp866/cp1251 on a stock Windows shell).
-  parser.setApplicationDescription(QStringLiteral("heap - keyboard-first tickets, planning and notes for engineers."));
+  parser.setApplicationDescription(QStringLiteral("lowkey - a developer's workday in one window: tickets, planning and notes."));
   const QCommandLineOption helpOption = parser.addHelpOption();
   const QCommandLineOption versionOption = parser.addVersionOption();
 
@@ -124,13 +124,13 @@ CliOptions parseCommandLine(const QStringList& args) {
   // Bindable from the desktop's own keyboard settings where heap cannot grab
   // a global key itself (Wayland without the shortcuts portal, APP-171).
   const QCommandLineOption captureOption(QStringLiteral("capture"),
-                                         QStringLiteral("Open quick capture - in the heap already running for this data "
+                                         QStringLiteral("Open quick capture - in the lowkey already running for this data "
                                                         "directory, or in a new one."));
   parser.addOption(captureOption);
   const QCommandLineOption minimizedOption(
       QStringLiteral("minimized"),
       QStringLiteral("Start hidden in the tray (minimized where there is no tray), and leave an already "
-                     "running heap where it is. The start-at-login entry passes it."));
+                     "running lowkey where it is. The start-at-login entry passes it."));
   parser.addOption(minimizedOption);
   QCommandLineOption openTaskOption(QString::fromLatin1(heap::cli::kOpenTaskOption), QString(), QStringLiteral("id"));
   openTaskOption.setFlags(QCommandLineOption::HiddenFromHelp);
@@ -255,7 +255,7 @@ struct LogCloser {
     if(!keepAs.isEmpty() && QDir().mkpath(QFileInfo(keepAs).absolutePath())) {
       QFile::remove(keepAs);
       if(!QFile::copy(heap::logging::logFilePath(), keepAs)) {
-        static_cast<void>(fprintf(stderr, "heap: could not keep the smoke log as %s\n", qUtf8Printable(keepAs)));
+        static_cast<void>(fprintf(stderr, "lowkey: could not keep the smoke log as %s\n", qUtf8Printable(keepAs)));
       }
     }
   }
@@ -277,7 +277,7 @@ int main(int argc, char* argv[]) {
   QApplication::setApplicationName(QLatin1String(heap::brand::kName));
   QApplication::setApplicationDisplayName(QLatin1String(heap::brand::kName));
   QApplication::setApplicationVersion(QStringLiteral(HEAP_VERSION));
-  QApplication::setWindowIcon(QIcon(QStringLiteral(":/brand/icon/heap-icon.svg")));
+  QApplication::setWindowIcon(QIcon(QStringLiteral(":/brand/lowkey/lowkey-icon.svg")));
 
   const CliOptions cli = parseCommandLine(QApplication::arguments());
   if(cli.perfLog) {
@@ -403,7 +403,7 @@ int main(int argc, char* argv[]) {
     qInfo("data directory overridden: %s", qUtf8Printable(heap::paths::dataDir()));
   }
 
-  // Before any QML asks for "heap Golos Text" / "heap JetBrains Mono" (Theme.qml); after
+  // Before any QML asks for "lowkey Golos Text" / "lowkey JetBrains Mono" (Theme.qml); after
   // the file logger, so a face that fails to load is in heap.log.
   heap::platform::registerBundledFonts();
   heap::platform::useBundledUiFontByDefault();
@@ -529,11 +529,11 @@ int main(int argc, char* argv[]) {
     const std::optional<heap::cli::Request> request = heap::cli::decodeRequest(line);
     if(!request) {
       return heap::cli::encodeResponse(
-          {heap::cli::kExitUsage, QString(), QStringLiteral("heap: the window did not understand the request\n")});
+          {heap::cli::kExitUsage, QString(), QStringLiteral("lowkey: the window did not understand the request\n")});
     }
     auto* controller = engine.singletonInstance<AppController*>("TodoCpp", "AppController");
     if(controller == nullptr) {
-      return heap::cli::encodeResponse({heap::cli::kExitData, QString(), QStringLiteral("heap: the window is not ready\n")});
+      return heap::cli::encodeResponse({heap::cli::kExitData, QString(), QStringLiteral("lowkey: the window is not ready\n")});
     }
     return heap::cli::encodeResponse(heap::cli::execute(*controller, *request, QDateTime::currentDateTime()));
   });

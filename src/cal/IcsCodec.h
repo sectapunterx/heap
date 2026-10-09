@@ -1150,7 +1150,7 @@ inline QString toIcs(const QVector<CalEvent>& events,
   }
 
   QStringList lines;
-  lines << QStringLiteral("BEGIN:VCALENDAR") << QStringLiteral("VERSION:2.0") << QStringLiteral("PRODID:-//heap//EN")
+  lines << QStringLiteral("BEGIN:VCALENDAR") << QStringLiteral("VERSION:2.0") << QStringLiteral("PRODID:-//lowkey//EN")
         << QStringLiteral("CALSCALE:GREGORIAN");
   QList<QByteArray> ids = zoneYears.keys();
   std::sort(ids.begin(), ids.end());

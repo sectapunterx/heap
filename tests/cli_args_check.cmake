@@ -89,7 +89,7 @@ if (leftovers)
 endif ()
 
 # ── The verbs (APP-173), on an empty data dir ──
-expect_out(0 "heap <command> [options]" --help)
+expect_out(0 "lowkey <command> [options]" --help)
 expect_out(0 "now [--json]" help)
 expect_out(0 "[]" list --data-dir "${WORK_DIR}" --json)
 # Nothing current: silent and successful, as a shell prompt needs.

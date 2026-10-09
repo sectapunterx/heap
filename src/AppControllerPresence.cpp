@@ -87,7 +87,7 @@ void AppController::sendTestNotification() {
   n.id = heap::notify::routingId(QStringLiteral("test"), QStringLiteral("heap"));
   n.title = tr_(QStringLiteral("notify.test.title"));
   n.body = tr_(QStringLiteral("notify.test.body"));
-  n.iconPath = QStringLiteral(":/brand/icon/heap-icon.svg");
+  n.iconPath = QStringLiteral(":/brand/lowkey/lowkey-icon.svg");
   n.category = QStringLiteral("test");
   if(m_notifier->supportsActions()) {
     n.actions = reminderActions(n.category);

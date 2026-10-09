@@ -2229,7 +2229,7 @@ Item {
                 NoteRow {
                     objectName: "settings-capture-command-hint"
                     visible: Qt.platform.os === "linux" && AppController.globalHotkeyBackend() === "none"
-                    text: I18n.t("settings.shortcuts.captureCommand").arg("heap --capture")
+                    text: I18n.t("settings.shortcuts.captureCommand").arg("lowkey --capture")
                 }
                 // On by default: it speaks once per action, ever (APP-166).
                 SwitchRow {
@@ -3436,7 +3436,7 @@ Item {
                             Layout.fillWidth: true
                             spacing: Theme.sp2xs
                             Text {
-                                text: "heap."; color: Theme.text; font.family: Theme.fontMono; font.pixelSize: Theme.fsLg; font.weight: Theme.fwTitle
+                                text: Brand.name; color: Theme.text; font.family: Theme.fontUi; font.pixelSize: Theme.fsLg; font.weight: Theme.fwTitle
                             }
                             Text {
                                 Layout.fillWidth: true

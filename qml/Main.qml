@@ -980,7 +980,7 @@ ApplicationWindow {
             onExportVaultRequested: exportVaultDialog.open()
             onExportIcsRequested: {
                 exportIcsDialog.currentFile = "file:///" + (
-                    (AppController.activeProfileId || "heap") + ".ics"
+                    (AppController.activeProfileId || "lowkey") + ".ics"
                 );
                 exportIcsDialog.open();
             }

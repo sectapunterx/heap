@@ -105,9 +105,9 @@ Rectangle {
 
         // Brand
         BrandLogo {
-            Layout.preferredHeight: 26
+            Layout.preferredHeight: 18
             Layout.alignment: Qt.AlignVCenter
-            variant: "lockup"
+            variant: "wordmark"
             theme: Theme.dark ? "dark" : "light"
         }
 

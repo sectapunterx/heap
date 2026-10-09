@@ -575,7 +575,7 @@ TEST_F(CliDamagedStateTest, AddAndDoneRefuseAndTouchNothing) {
   const Response added = applyHeadless(add, QDateTime::currentDateTime());
   EXPECT_EQ(added.exitCode, kExitData);
   EXPECT_TRUE(added.err.contains(QStringLiteral("damaged"))) << qPrintable(added.err);
-  EXPECT_TRUE(added.err.contains(QStringLiteral("open heap"))) << qPrintable(added.err);
+  EXPECT_TRUE(added.err.contains(QStringLiteral("open lowkey"))) << qPrintable(added.err);
   EXPECT_EQ(dataDirListing(), before);
 
   Request done;
@@ -596,7 +596,7 @@ TEST_F(CliDamagedStateTest, ValidJsonThatIsNotAStateFileIsDamageToo) {
   add.text = QStringLiteral("after the damage");
   const Response r = applyHeadless(add, QDateTime::currentDateTime());
   EXPECT_EQ(r.exitCode, kExitData);
-  EXPECT_TRUE(r.err.contains(QStringLiteral("open heap"))) << qPrintable(r.err);
+  EXPECT_TRUE(r.err.contains(QStringLiteral("open lowkey"))) << qPrintable(r.err);
   EXPECT_EQ(dataDirListing(), before);
 }
 

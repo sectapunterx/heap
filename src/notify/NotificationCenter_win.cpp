@@ -133,7 +133,7 @@ QString ensureToastIcon() {
     return toastIconPath();
   }
   QDir().mkpath(heap::paths::dataDir());
-  const QPixmap pm = QIcon(QStringLiteral(":/brand/icon/heap-icon.svg")).pixmap(QSize(96, 96));
+  const QPixmap pm = QIcon(QStringLiteral(":/brand/lowkey/lowkey-icon.svg")).pixmap(QSize(96, 96));
   return !pm.isNull() && pm.save(toastIconPath(), "PNG") ? toastIconPath() : QString();
 }
 

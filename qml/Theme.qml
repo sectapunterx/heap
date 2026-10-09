@@ -421,9 +421,10 @@ QtObject {
     // Earlier seeded defaults sit in existing profiles and read as "the
     // default": "IBM Plex Sans" from before the fonts were bundled, and the
     // upstream "Golos Text" / "JetBrains Mono" that 0.6.0 seeded. The bundled
-    // faces are "heap ..." now, and the upstream name may be an installed copy.
-    readonly property var legacyDefaultFontsUi: ["IBM Plex Sans", "Golos Text"]
-    readonly property var legacyDefaultFontsMono: ["JetBrains Mono"]
+    // faces are "lowkey ..." now ("heap ..." until 0.8.0, which a pick in
+    // Appearance may still name), and the upstream name may be an installed copy.
+    readonly property var legacyDefaultFontsUi: ["IBM Plex Sans", "Golos Text", "heap Golos Text"]
+    readonly property var legacyDefaultFontsMono: ["JetBrains Mono", "heap JetBrains Mono"]
     function _installedFont(family, fallback) {
         return family && Qt.fontFamilies().indexOf(family) >= 0 ? family : fallback;
     }

@@ -54,7 +54,7 @@ QByteArray base64Url(const QByteArray& raw) {
 // nothing for a crafted callback URL to inject.
 QByteArray landingPage(const QByteArray& headline, const QByteArray& detail) {
   return "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
-         "<title>heap</title><style>"
+         "<title>lowkey</title><style>"
          "body{background:#0f1419;color:#c8d2dc;font:15px/1.6 system-ui,sans-serif;"
          "display:flex;align-items:center;justify-content:center;height:100vh;margin:0}"
          "div{text-align:center}h1{font-size:19px;font-weight:600;margin:0 0 6px}"
@@ -204,7 +204,7 @@ void LoopbackReceiver::serveLanding(QTcpSocket* sock, const QUrlQuery& query) {
   const QString error = query.queryItemValue(QStringLiteral("error"));
   if(!error.isEmpty()) {
     const QString description = query.queryItemValue(QStringLiteral("error_description"));
-    reply(sock, 200, "text/html", landingPage("Sign-in cancelled", "You can close this tab and try again in heap."));
+    reply(sock, 200, "text/html", landingPage("Sign-in cancelled", "You can close this tab and try again in lowkey."));
     if(!m_done) {
       m_done = true;
       emit failed(error == QLatin1String("access_denied") ? QStringLiteral("you declined the authorization request")
@@ -218,7 +218,7 @@ void LoopbackReceiver::serveLanding(QTcpSocket* sock, const QUrlQuery& query) {
     // wire. Hand back a page that posts it here, then scrubs it from the
     // address bar. The script is the only one allowed to run (CSP + nonce).
     const QByteArray body =
-        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>heap</title>"
+        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>lowkey</title>"
         "<style>body{background:#0f1419;color:#c8d2dc;font:15px/1.6 system-ui,sans-serif;"
         "display:flex;align-items:center;justify-content:center;height:100vh;margin:0}"
         "div{text-align:center}h1{font-size:19px;font-weight:600;margin:0 0 6px}"
@@ -232,7 +232,7 @@ void LoopbackReceiver::serveLanding(QTcpSocket* sock, const QUrlQuery& query) {
         "fetch('/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:b.toString()})"
         ".then(function(){history.replaceState(null,'','/');"
         "document.querySelector('h1').textContent='You can close this tab';"
-        "document.querySelector('p').textContent='heap is connected.';});})();</script>"
+        "document.querySelector('p').textContent='Connected to lowkey.';});})();</script>"
         "</body></html>";
     reply(sock,
           200,
@@ -248,7 +248,7 @@ void LoopbackReceiver::serveLanding(QTcpSocket* sock, const QUrlQuery& query) {
     reply(sock, 400, "text/plain", "missing code");
     return;
   }
-  reply(sock, 200, "text/html", landingPage("You can close this tab", "heap is finishing the sign-in."));
+  reply(sock, 200, "text/html", landingPage("You can close this tab", "Finishing the sign-in to lowkey."));
   if(!m_done) {
     m_done = true;
     emit received(QVariantMap{{QStringLiteral("code"), code}});

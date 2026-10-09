@@ -653,7 +653,7 @@ void JiraProvider::sendOnce(const QByteArray& method, const QString& path, const
   // with it; keep every authenticated call on the origin it was aimed at.
   req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::SameOriginRedirectPolicy);
   req.setRawHeader("Accept", "application/json");
-  req.setRawHeader("User-Agent", "heap-sync");
+  req.setRawHeader("User-Agent", "lowkey-sync");
   if(m_oauth || (m_deployment == JiraDeployment::Server && m_email.isEmpty())) {
     // Two different bearer credentials that happen to travel the same way: a
     // Cloud 3LO access token, and a Server/DC Personal Access Token. Neither
@@ -691,7 +691,7 @@ void JiraProvider::resolveCloudId(std::function<void(bool)> done) {
   // with it; keep every authenticated call on the origin it was aimed at.
   req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::SameOriginRedirectPolicy);
   req.setRawHeader("Accept", "application/json");
-  req.setRawHeader("User-Agent", "heap-sync");
+  req.setRawHeader("User-Agent", "lowkey-sync");
   QNetworkReply* reply = m_nam->get(req);
   connect(reply, &QNetworkReply::finished, this, [this, reply, done = std::move(done)]() {
     reply->deleteLater();
@@ -716,7 +716,7 @@ void JiraProvider::detectDeployment(const std::function<void()>& then) {
   QNetworkRequest req{QUrl(m_baseUrl + QStringLiteral("/rest/api/2/serverInfo"))};
   req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::SameOriginRedirectPolicy);
   req.setRawHeader("Accept", "application/json");
-  req.setRawHeader("User-Agent", "heap-sync");
+  req.setRawHeader("User-Agent", "lowkey-sync");
   QNetworkReply* reply = m_nam->get(req);
   connect(reply, &QNetworkReply::finished, this, [this, reply, then]() {
     reply->deleteLater();

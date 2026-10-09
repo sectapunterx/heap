@@ -54,7 +54,7 @@ struct Response {
 
 struct ParsedArgs {
   bool ok = false;
-  QString error;  // why not, for "heap: <error>"
+  QString error;  // why not, for "lowkey: <error>"
   Request request;
   QString dataDir;
   bool dataDirSet = false;

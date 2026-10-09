@@ -597,7 +597,7 @@ target_compile_options(heap_provider_registry PRIVATE "${HEAP_WARNING_OPTIONS}")
 # operate on. Each keyword applies only to its own platform. (HEAP-28)
 qt_add_executable(heap WIN32 MACOSX_BUNDLE
     src/main.cpp
-    $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/design/brand-export/icon/heap-icon.rc>
+    $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/design/brand-export/lowkey/lowkey-icon.rc>
 )
 # Link the QML module plugin too: for a statically-linked qml module the plugin
 # carries the type-registration + qmlcache resource init. Linking only the
@@ -704,22 +704,21 @@ qt_add_resources(heap_core "fonts"
         resources/fonts/JetBrainsMono-Medium.ttf
 )
 
-# ── Brand assets (heap. logo + app icon, exported by design/brand-export) ──
+# ── Brand assets (lowkey logo + app icon, design/brand-export/lowkey — APP-280) ──
 # On heap_core, not the app, so every binary that loads the QML — the test
 # runner included — has the icons the QML asks for.
 qt_add_resources(heap_core "brand"
     PREFIX "/brand"
     BASE "design/brand-export"
     FILES
-        design/brand-export/logo/heap-mark.svg
-        design/brand-export/logo/heap-mark-light.svg
-        design/brand-export/logo/heap-mark-mono.svg
-        design/brand-export/logo/heap-lockup.svg
-        design/brand-export/logo/heap-lockup-light.svg
-        design/brand-export/logo/heap-wordmark.svg
-        design/brand-export/logo/heap-wordmark-light.svg
-        design/brand-export/icon/heap-icon.svg
-        design/brand-export/icon/favicon.svg
+        design/brand-export/lowkey/lowkey-icon.svg
+        design/brand-export/lowkey/lowkey-icon-light.svg
+        design/brand-export/lowkey/lowkey-wordmark-on-dark.svg
+        design/brand-export/lowkey/lowkey-wordmark-on-light.svg
+        design/brand-export/lowkey/lowkey-tray-light.svg
+        design/brand-export/lowkey/lowkey-tray-dark.svg
+        design/brand-export/lowkey/lowkey-tray-template.svg
+        design/brand-export/lowkey/favicon.svg
         design/brand-export/icons/heap-01-board.svg
         design/brand-export/icons/heap-02-timeline.svg
         design/brand-export/icons/heap-03-week.svg
@@ -778,8 +777,8 @@ if(APPLE)
     set_target_properties(heap PROPERTIES
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/packaging/macos/Info.plist.in")
 
-    set(_heap_icns "${CMAKE_SOURCE_DIR}/design/brand-export/icon/heap.icns")
-    set(_heap_icon_svg "${CMAKE_SOURCE_DIR}/design/brand-export/icon/heap-icon.svg")
+    set(_heap_icns "${CMAKE_SOURCE_DIR}/design/brand-export/lowkey/lowkey.icns")
+    set(_heap_icon_svg "${CMAKE_SOURCE_DIR}/design/brand-export/lowkey/lowkey-icon.svg")
     if(NOT EXISTS "${_heap_icns}")
         find_program(RSVG_CONVERT rsvg-convert)
         find_program(ICONUTIL iconutil)

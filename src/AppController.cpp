@@ -212,7 +212,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
        {"Update not installed: the release publishes no SHA-256 checksum for this file, so it cannot be checked.",
         "Обновление не установлено: в релизе нет контрольной суммы SHA-256 для этого файла, проверить его нельзя."}},
       {"update.downloadFailed", {"Download failed: %1", "Не удалось скачать: %1"}},
-      {"update.installing", {"Installing — heap will restart…", "Установка — heap перезапустится…"}},
+      {"update.installing", {"Installing — lowkey will restart…", "Установка — lowkey перезапустится…"}},
       {"update.installFailed", {"Could not install the update: %1", "Не удалось установить обновление: %1"}},
       {"update.installed", {"Updated to %1", "Обновлено до %1"}},
       {"sync.noTracker", {"Connect a tracker in Settings → Integrations first", "Сначала подключите трекер: Настройки → Интеграции"}},
@@ -466,7 +466,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"backup.restored", {"Restored from %1", "Восстановлено из %1"}},
       {"history.notFound", {"That snapshot is gone", "Этого снимка больше нет"}},
       {"history.damaged", {"That snapshot cannot be read", "Этот снимок не читается"}},
-      {"history.newer", {"That snapshot was made by a newer heap", "Этот снимок сделан более новой версией heap"}},
+      {"history.newer", {"That snapshot was made by a newer lowkey", "Этот снимок сделан более новой версией lowkey"}},
       {"history.restored",
        {"Restored to %1. The state before it is in the time machine too.",
         "Состояние на %1 восстановлено. То, что было до него, тоже есть в машине времени."}},
@@ -478,9 +478,9 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"history.undo.item", {"Restore %1", "Восстановление «%1»"}},
       {"history.itemRestored", {"Restored: %1", "Восстановлено: %1"}},
       {"data.recovered",
-       {"Your data file was damaged, so heap opened backup %1 — changes made after that backup are not in it. "
+       {"Your data file was damaged, so backup %1 was opened instead — changes made after that backup are not in it. "
         "The damaged file is kept in the data folder as %2.",
-        "Файл данных был повреждён, heap открыл бэкап %1 — изменений, сделанных после него, здесь нет. "
+        "Файл данных был повреждён, поэтому открыт бэкап %1 — изменений, сделанных после него, здесь нет. "
         "Повреждённый файл сохранён в папке данных как %2."}},
       {"data.corruptKept",
        {"Your data file was damaged and there is no backup, so this is an empty workspace, not a new install. "
@@ -488,24 +488,24 @@ const QHash<QString, I18nEntry>& i18nTable() {
         "Файл данных был повреждён, бэкапа нет, поэтому открыто пустое пространство — это не новая установка. "
         "Повреждённый файл сохранён в папке данных как %1."}},
       {"data.schemaTooNew",
-       {"Read-only: this data file was written by a newer heap (schema v%1, this build reads v%2). "
-        "Nothing you change now is saved — update heap to edit it.",
-        "Только чтение: файл данных записан более новой версией heap (схема v%1, эта сборка знает v%2). "
-        "Изменения сейчас не сохраняются — обновите heap, чтобы редактировать."}},
+       {"Read-only: this data file was written by a newer lowkey (schema v%1, this build reads v%2). "
+        "Nothing you change now is saved — update lowkey to edit it.",
+        "Только чтение: файл данных записан более новой версией lowkey (схема v%1, эта сборка знает v%2). "
+        "Изменения сейчас не сохраняются — обновите lowkey, чтобы редактировать."}},
       // ── audit-plat: storage health banner (PLAT-1/4) ──
       {"storage.unreadable",
-       {"Read-only: heap could not open %1 (%2). Nothing is saved over it until it opens — changes made now "
+       {"Read-only: %1 could not be opened (%2). Nothing is saved over it until it opens — changes made now "
         "are not kept.",
-        "Только чтение: heap не смог открыть %1 (%2). Пока файл не откроется, поверх него ничего не "
+        "Только чтение: не удаётся открыть %1 (%2). Пока файл не откроется, поверх него ничего не "
         "сохраняется — изменения сейчас не сохранятся."}},
       {"storage.showingBackup", {"Showing backup %1.", "Показан бэкап %1."}},
       {"storage.editNotKept",
-       {"Not saved: this session is read-only, the change is lost when heap closes",
-        "Не сохранено: сессия только для чтения, правка пропадёт при закрытии heap"}},
+       {"Not saved: this session is read-only, the change is lost when lowkey closes",
+        "Не сохранено: сессия только для чтения, правка пропадёт при закрытии lowkey"}},
       {"storage.damagedLocked", {"the file is damaged and could not be set aside", "файл повреждён и его не удалось отложить в сторону"}},
       {"storage.writeFailed",
-       {"Not saved: writing %1 failed (%2). Your changes are kept in memory and heap keeps retrying.",
-        "Не сохранено: запись %1 не удалась (%2). Изменения в памяти, heap повторяет попытки."}},
+       {"Not saved: writing %1 failed (%2). Your changes are kept in memory and lowkey keeps retrying.",
+        "Не сохранено: запись %1 не удалась (%2). Изменения в памяти, lowkey повторяет попытки."}},
       {"storage.dirUnwritable",
        {"Not saved: the data folder is not writable (%1). Nothing you change is saved.",
         "Не сохранено: папка данных недоступна для записи (%1). Изменения не сохраняются."}},
@@ -520,7 +520,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"backup.snapshotFailed",
        {"Restore cancelled: could not snapshot the current state first",
         "Восстановление отменено: не удалось сохранить текущее состояние"}},
-      {"backup.invalid", {"%1 is not a heap state file", "%1 — не файл состояния heap"}},
+      {"backup.invalid", {"%1 is not a lowkey (or heap) state file", "%1 — не файл состояния lowkey (или heap)"}},
       {"hotkeys.reset", {"Hotkeys reset to defaults", "Хоткеи сброшены к дефолту"}},
       {"onboarding.startedFresh", {"Demo cleared — your workspace is empty", "Демо очищено — рабочее пространство пустое"}},
       {"branch.required", {"Set a branch — required by Settings", "Укажите ветку — этого требуют настройки"}},
@@ -529,7 +529,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"notify.action.done", {"Mark done", "Готово"}},
       {"notify.snoozedUntil", {"Reminder snoozed until %1", "Напоминание отложено до %1"}},
       {"notify.reminderTitle", {"Reminder", "Напоминание"}},
-      {"notify.test.title", {"heap. test reminder", "heap. — проверка напоминания"}},
+      {"notify.test.title", {"lowkey test reminder", "lowkey — проверка напоминания"}},
       {"notify.test.body", {"Buttons work like on a real reminder.", "Кнопки работают как у настоящего напоминания."}},
       {"settings.system.startAtLogin.failed",
        {"Could not change the login start: the system refused", "Не удалось изменить автозапуск: система не дала"}},
@@ -571,8 +571,8 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.timeMachine.open.desc", {"Bring back an earlier state from a snapshot.", "Вернуть прежнее состояние из снимка."}},
       {"shortcut.standup.draft.label", {"Standup draft", "Черновик стендапа"}},
       {"shortcut.standup.draft.desc",
-       {"Yesterday / Today / Blockers from what heap saw; to edit and copy.",
-        "Вчера / Сегодня / Блокеры из того, что видел heap; поправить и скопировать."}},
+       {"Yesterday / Today / Blockers from what lowkey saw; to edit and copy.",
+        "Вчера / Сегодня / Блокеры из того, что видно в lowkey; поправить и скопировать."}},
       {"shortcut.recap.open.label", {"Weekly recap", "Сводка недели"}},
       {"shortcut.recap.open.desc", {"What changed column last week.", "Что сменило колонку на прошлой неделе."}},
       {"shortcut.endOfDay.open.label", {"End of day", "Конец дня"}},
@@ -873,7 +873,7 @@ AppController::AppController(QObject* parent) :
               n.id = routeId.isEmpty() ? QStringLiteral("info:") + QString::number(QDateTime::currentMSecsSinceEpoch()) : routeId;
               n.title = title;
               n.body = body;
-              n.iconPath = QStringLiteral(":/brand/icon/heap-icon.svg");
+              n.iconPath = QStringLiteral(":/brand/lowkey/lowkey-icon.svg");
               n.category = kind;
               if(!routeId.isEmpty() && m_notifier->supportsActions()) {
                 n.actions = reminderActions(kind);
@@ -4448,7 +4448,7 @@ void AppController::fetchCalendarSubscription(const QString& id) {
   }
   QNetworkRequest req(url);
   req.setRawHeader("Accept", "text/calendar, */*;q=0.5");
-  req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("heap/%1").arg(QString::fromLatin1(HEAP_VERSION)));
+  req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("lowkey/%1").arg(QString::fromLatin1(HEAP_VERSION)));
   req.setTransferTimeout(30 * 1000);
   st.busy = true;
   emit calendarSubscriptionsChanged();
@@ -4922,7 +4922,7 @@ QVariantMap AppController::exportNotesFolder(const QUrl& folderUrl, const QStrin
     name.chop(3);
   }
   name = name.trimmed().isEmpty()
-             ? QStringLiteral("heap-notes-%1").arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd-HHmm")))
+             ? QStringLiteral("lowkey-notes-%1").arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd-HHmm")))
              : heap::notes::detail::sanitiseFileName(name);
   QString target = name;
   for(int n = 2; parent.exists(target); ++n) {
@@ -7564,7 +7564,7 @@ QString AppController::issueReportBody() const {
                      "filled in automatically — please keep them. -->\n\n"
                      "---\n"
                      "**Diagnostics**\n"
-                     "- heap version: %1\n"
+                     "- lowkey version: %1\n"
                      "- OS: %2 (%3)\n"
                      "- Qt: %4\n"
                      "- The full log is on your clipboard — paste it below if it helps.\n\n"
@@ -7591,7 +7591,7 @@ QString AppController::issueDiagnostics() const {
   const auto scrubbed = [](const QString& text) {
     return heap::diag::scrubPersonalPaths(text, QDir::homePath(), heap::diag::currentUserName());
   };
-  QString out = QStringLiteral("heap %1 · %2 (%3) · Qt %4\n\n```\n%5\n```\n")
+  QString out = QStringLiteral("lowkey %1 · %2 (%3) · Qt %4\n\n```\n%5\n```\n")
                     .arg(QCoreApplication::applicationVersion(),
                          QSysInfo::prettyProductName(),
                          QSysInfo::currentCpuArchitecture(),
@@ -9899,7 +9899,7 @@ void AppController::resolveJiraSite(const QString& accessToken, const QString& l
   req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::SameOriginRedirectPolicy);
   req.setRawHeader("Authorization", QByteArrayLiteral("Bearer ") + accessToken.toUtf8());
   req.setRawHeader("Accept", "application/json");
-  req.setRawHeader("User-Agent", "heap-sync");
+  req.setRawHeader("User-Agent", "lowkey-sync");
 
   QNetworkReply* reply = m_oauthNam->get(req);
   connect(reply, &QNetworkReply::finished, this, [this, reply, label]() {
@@ -13754,7 +13754,7 @@ void AppController::notifyTaskAt(
   n.id = heap::notify::routingId(kind, taskId);
   n.title = title;
   n.body = body;
-  n.iconPath = QStringLiteral(":/brand/icon/heap-icon.svg");
+  n.iconPath = QStringLiteral(":/brand/lowkey/lowkey-icon.svg");
   n.category = kind;
   ShownReminder& shown = m_shownReminders[n.id];
   shown.title = title;
@@ -13783,7 +13783,7 @@ void AppController::notifyCapture(const QString& taskId, const QString& title, c
                                  taskId.isEmpty() ? QStringLiteral("-") : heap::notify::taskRef(m_activeProfileId, taskId));
   n.title = title;
   n.body = body;
-  n.iconPath = QStringLiteral(":/brand/icon/heap-icon.svg");
+  n.iconPath = QStringLiteral(":/brand/lowkey/lowkey-icon.svg");
   n.category = QStringLiteral("capture");
   m_notifier->post(n);
 }

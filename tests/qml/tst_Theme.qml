@@ -54,7 +54,7 @@ TestCase {
         const legacy = Theme.fontUi;
         // A pick the machine has (the bundled mono, always there) stays; one
         // it lacks gives way to the bundled face instead of an arbitrary one.
-        AppController.appSettingsJson = JSON.stringify({ appearance: { fontUI: "heap JetBrains Mono" } });
+        AppController.appSettingsJson = JSON.stringify({ appearance: { fontUI: "lowkey JetBrains Mono" } });
         const custom = Theme.fontUi;
         AppController.appSettingsJson = JSON.stringify({ appearance: { fontUI: "No Such Font heap", fontMono: "No Such Mono heap" } });
         const missing = Theme.fontUi;
@@ -63,15 +63,15 @@ TestCase {
 
         // One family each: Qt reads font.family as a single name, so a
         // "A, B, sans-serif" list matched nothing and drew in the system font.
-        compare(fresh, "heap Golos Text");
-        compare(freshMono, "heap JetBrains Mono");
-        compare(seeded, "heap Golos Text");
-        compare(seeded060, "heap Golos Text");
-        compare(seeded060Mono, "heap JetBrains Mono");
-        compare(legacy, "heap Golos Text");
-        compare(custom, "heap JetBrains Mono");
-        compare(missing, "heap Golos Text");
-        compare(missingMono, "heap JetBrains Mono");
+        compare(fresh, "lowkey Golos Text");
+        compare(freshMono, "lowkey JetBrains Mono");
+        compare(seeded, "lowkey Golos Text");
+        compare(seeded060, "lowkey Golos Text");
+        compare(seeded060Mono, "lowkey JetBrains Mono");
+        compare(legacy, "lowkey Golos Text");
+        compare(custom, "lowkey JetBrains Mono");
+        compare(missing, "lowkey Golos Text");
+        compare(missingMono, "lowkey JetBrains Mono");
     }
 
     // quick_test_main registers the bundled fonts as main() does, so a Text
@@ -82,11 +82,11 @@ TestCase {
     Text { id: monoProbe; text: "0"; font.family: Theme.fontMono; font.weight: Font.Medium }
     Text { id: plainProbe; text: "a" }
     function test_bundled_fonts_resolve() {
-        compare(uiProbe.fontInfo.family, "heap Golos Text");
+        compare(uiProbe.fontInfo.family, "lowkey Golos Text");
         compare(uiProbe.fontInfo.weight, Font.DemiBold);
-        compare(monoProbe.fontInfo.family, "heap JetBrains Mono");
+        compare(monoProbe.fontInfo.family, "lowkey JetBrains Mono");
         compare(monoProbe.fontInfo.weight, Font.Medium);
-        compare(plainProbe.fontInfo.family, "heap Golos Text");
+        compare(plainProbe.fontInfo.family, "lowkey Golos Text");
     }
 
     // ── Weights (APP-193): three, one job each, and only the heading at 600 ──
@@ -486,8 +486,9 @@ TestCase {
         compare(l.bg, String(Brand.lightBg));
         compare(l.bg2, String(Qt.darker(Brand.lightBg, 1.04)));
         compare(l.panel2, String(Qt.darker(Brand.lightPanel, 1.03)));
+        // lowkey light: the brand lavender on light (APP-280).
         compare(l.accent, String(Brand.lightAccent));
-        compare(l.accentStrong, String(Qt.darker(Brand.lightAccent, 1.18)));
+        compare(l.accentStrong, "#4a40a0");
         compare(l.p0, "#b54432");  // #be4835, darkened to read at AA on panel3
     }
 
