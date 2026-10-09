@@ -65,6 +65,9 @@ struct TaskLocal {
   QVector<LocalLink> related;
   // A comment being written for the tracker (APP-241). heap never sends it.
   QString commentDraft;
+  // The column a task was in when "Done" (d) took it out, so a second d puts
+  // it back there (APP-268).
+  QString doneFrom;
   // Keys of `local` this build does not read, carried through a save.
   QJsonObject extra;
 

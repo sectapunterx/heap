@@ -24,6 +24,17 @@ Item {
     property var prioritiesFilter: ({})
     property bool showArchived: false
     signal taskClicked(string id)
+    // The task menu (APP-268), one for the view, refilled per task.
+    TaskMenuHost {
+        id: viewTaskMenu
+        anchorItem: root
+        onOpenRequested: root.taskClicked(viewTaskMenu.taskId)
+    }
+    function openTaskMenu(id) {
+        viewTaskMenu.releaseMenu();
+        viewTaskMenu.taskId = id;
+        viewTaskMenu.popup();
+    }
     // The occurrence, not just its id: a repeating event is stored once, so
     // every occurrence of a series carries the master's id and only the
     // occurrence map says which date was clicked.
@@ -574,6 +585,11 @@ Item {
                                 }
                                 // A click opens it; a drag takes it to another day
                                 // (APP-249).
+                                // The task's menu, the same in every view (APP-268).
+                                TapHandler {
+                                    acceptedButtons: Qt.RightButton
+                                    onTapped: root.openTaskMenu(taskChip.task.id)
+                                }
                                 MouseArea {
                                     id: chipMA
                                     anchors.fill: parent

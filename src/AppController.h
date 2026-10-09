@@ -599,6 +599,14 @@ class AppController : public QObject {
 
   // ---- Task ops ----
   Q_INVOKABLE void moveTask(const QString& id, const QString& newStatus);
+  // "Done" in one action (APP-268): the tasks go to the first column whose
+  // stage is "done"; when every one of them is done already, each goes back
+  // to the column it came from. One undo for all of them, one toast.
+  // Returns {count, reopened, unchecked, localOnly, error}; error
+  // "noDoneColumn" when the profile has no column of that stage.
+  Q_INVOKABLE QVariantMap toggleDone(const QStringList& ids);
+  // The first column, in board order, whose stage is "done"; "" if none.
+  Q_INVOKABLE QString doneColumn() const;
   // Manual order: place `id` in `statusId` immediately above `beforeTaskId`,
   // or at the end of the column when that is empty. This is what a drop
   // between two cards calls; moveTask() is the "somewhere in that column"
@@ -1564,6 +1572,8 @@ class AppController : public QObject {
   void languageChanged();
   void currentViewChanged();
   void shellNoticeChanged();
+  // "Done" asked for, but no column has the "done" stage (APP-268).
+  void doneColumnMissing();
   void focusedStatusChanged();
   void workdayChanged();
   void crumbProjectChanged();

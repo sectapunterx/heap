@@ -112,6 +112,7 @@ Task makeFullTask() {
           QStringLiteral("r1"), QStringLiteral("related"), QStringLiteral("https://gitlab.example/a/b/-/merge_requests/17"), QString()},
       LocalLink{QStringLiteral("r2"), QStringLiteral("related"), QStringLiteral("APP-12"), QStringLiteral("work")}};
   t.local.commentDraft = QStringLiteral("Reproduced on 0.8.0, see notes.");
+  t.local.doneFrom = QStringLiteral("review");
   t.local.extra = QJsonObject{{QStringLiteral("futureLocalField"), true}};
   // A key a newer build wrote: it has to come back out as itself (PLAT-15).
   t.extra = QJsonObject{{QStringLiteral("futureTaskField"), QJsonObject{{QStringLiteral("n"), 1}}}};
@@ -275,6 +276,7 @@ class Gen {
             LocalLink{QStringLiteral("r1"), QStringLiteral("related"), QStringLiteral("T-") + QString::number(pick(1, 9)), QString()});
       }
       t.local.commentDraft = boolean() ? text() : QString();
+      t.local.doneFrom = boolean() ? QStringLiteral("prog") : QString();
     }
     return t;
   }
@@ -328,7 +330,7 @@ constexpr int kCases = 1000;
 // only one serializer is updated, that serializer's own static_assert fires.
 TEST(FieldCountGuard, TaskAndEventArityIsPinned) {
   EXPECT_EQ(heap::meta::fieldCount<Task>(), 28u);
-  EXPECT_EQ(heap::meta::fieldCount<TaskLocal>(), 11u);
+  EXPECT_EQ(heap::meta::fieldCount<TaskLocal>(), 12u);
   EXPECT_EQ(heap::meta::fieldCount<Attachment>(), 4u);
   EXPECT_EQ(heap::meta::fieldCount<CalEvent>(), 22u);
 }

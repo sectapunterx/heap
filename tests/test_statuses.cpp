@@ -329,3 +329,62 @@ int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
+
+// ── "Done" in one action (APP-268) ──
+
+namespace {
+QString statusOf(AppController& app, const QString& id) {
+  return app.taskById(id).value(QStringLiteral("status")).toString();
+}
+}  // namespace
+
+TEST_F(StatusTest, DoneMovesToTheDoneStageAndBackToWhereItWas) {
+  app_->tasks()->upsert(makeTask(QStringLiteral("D-1"), QStringLiteral("prog")));
+  const QVariantMap r = app_->toggleDone({QStringLiteral("D-1")});
+  EXPECT_EQ(r.value("count").toInt(), 1);
+  EXPECT_EQ(statusOf(*app_, QStringLiteral("D-1")), app_->doneColumn());
+  // Again: back to "in progress", not to the first column.
+  const QVariantMap back = app_->toggleDone({QStringLiteral("D-1")});
+  EXPECT_TRUE(back.value("reopened").toBool());
+  EXPECT_EQ(statusOf(*app_, QStringLiteral("D-1")), QStringLiteral("prog"));
+}
+
+TEST_F(StatusTest, DoneOnManyIsOneUndo) {
+  app_->tasks()->upsert(makeTask(QStringLiteral("D-1"), QStringLiteral("todo")));
+  app_->tasks()->upsert(makeTask(QStringLiteral("D-2"), QStringLiteral("review")));
+  app_->toggleDone({QStringLiteral("D-1"), QStringLiteral("D-2")});
+  EXPECT_EQ(statusOf(*app_, QStringLiteral("D-1")), app_->doneColumn());
+  EXPECT_EQ(statusOf(*app_, QStringLiteral("D-2")), app_->doneColumn());
+  app_->undo();
+  EXPECT_EQ(statusOf(*app_, QStringLiteral("D-1")), QStringLiteral("todo"));
+  EXPECT_EQ(statusOf(*app_, QStringLiteral("D-2")), QStringLiteral("review")) << "one undo for all";
+}
+
+TEST_F(StatusTest, DoneWithNothingIsNothing) {
+  EXPECT_EQ(app_->toggleDone({}).value("count").toInt(), 0);
+  EXPECT_EQ(app_->toggleDone({QStringLiteral("NOPE-1")}).value("count").toInt(), 0);
+}
+
+TEST_F(StatusTest, DoneWithNoDoneStageSaysSoAndMovesNothing) {
+  for(const QString& id : statusIds()) {
+    if(app_->statusCategory(id) == QStringLiteral("done")) {
+      app_->setStatusCategory(id, QStringLiteral("review"));
+    }
+  }
+  ASSERT_TRUE(app_->doneColumn().isEmpty());
+  app_->tasks()->upsert(makeTask(QStringLiteral("D-1"), QStringLiteral("todo")));
+  QSignalSpy spy(app_.get(), &AppController::doneColumnMissing);
+  const QVariantMap r = app_->toggleDone({QStringLiteral("D-1")});
+  EXPECT_EQ(r.value("error").toString(), QStringLiteral("noDoneColumn"));
+  EXPECT_EQ(spy.count(), 1);
+  EXPECT_EQ(statusOf(*app_, QStringLiteral("D-1")), QStringLiteral("todo"));
+}
+
+TEST_F(StatusTest, DoneCountsTheUntickedItemsWithoutAsking) {
+  Task t = makeTask(QStringLiteral("D-1"), QStringLiteral("todo"));
+  t.desc = QStringLiteral("- [x] one\n- [ ] two\n- [ ] three");
+  app_->tasks()->upsert(t);
+  const QVariantMap r = app_->toggleDone({QStringLiteral("D-1")});
+  EXPECT_EQ(r.value("count").toInt(), 1);
+  EXPECT_EQ(r.value("unchecked").toInt(), 2);
+}

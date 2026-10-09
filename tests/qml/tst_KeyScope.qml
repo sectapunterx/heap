@@ -209,6 +209,8 @@ TestCase {
     function test_question_mark_opens_cheat_sheet() {
         const hk = popup("HotkeysPanel");
         verify(hk !== null);
+        // The task search is in the Tasks header (APP-258).
+        AppController.currentView = "board";
         const search = byName(tc.win.contentItem, "topbar-search");
         search.forceActiveFocus();
         keyClick(Qt.Key_Question, Qt.ShiftModifier);
@@ -221,6 +223,24 @@ TestCase {
         tryCompare(hk, "opened", true);
         hk.close();
         tryCompare(hk, "opened", false);
+    }
+
+    // APP-268: D on the card under the cursor is Done, D again puts it back;
+    // D in a text field types a d.
+    function test_d_is_done_on_the_cursor_card() {
+        const b = board();
+        b.searchText = tc.probe;
+        b.moveCursor(0, 1);
+        const id = b.cursorTaskId;
+        verify(id !== "");
+        const was = AppController.taskById(id).status;
+        tc.win.focusActiveView();
+        keyClick(Qt.Key_D);
+        tryCompare(AppController.taskById(id), "status", AppController.doneColumn());
+        b.cursorTaskId = id;
+        keyClick(Qt.Key_D);
+        tryVerify(function () { return AppController.taskById(id).status === was; }, 1000, "a second D did not put it back");
+        AppController.clearPendingUndo();
     }
 
     // UX-3: a card's context menu keeps Down and Esc.
@@ -262,8 +282,9 @@ TestCase {
 
         keyClick(Qt.Key_M);
         tryVerify(function () { return card._menu && card._menu.opened; });
-        keyClick(Qt.Key_Down);
-        keyClick(Qt.Key_Down);
+        // Down to Priority, wherever the menu has it (APP-268 reordered it).
+        for (let i = 0; i < 12 && card._menu.itemAt(card._menu.currentIndex).objectName !== "tc-menu-priority"; i++)
+            keyClick(Qt.Key_Down);
         compare(card._menu.itemAt(card._menu.currentIndex).objectName, "tc-menu-priority");
         keyClick(Qt.Key_Return);
         // The list is up, has the keyboard, and starts on the current value.

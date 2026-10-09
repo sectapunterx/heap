@@ -44,6 +44,7 @@ TaskLocal makeLocal() {
   l.related = {LocalLink{
       QStringLiteral("r1"), QStringLiteral("related"), QStringLiteral("https://gitlab.example/a/-/merge_requests/17"), QString()}};
   l.commentDraft = QStringLiteral("Reproduced, see notes.");
+  l.doneFrom = QStringLiteral("review");
   l.extra = QJsonObject{{QStringLiteral("futureLocalField"), 1}};
   return l;
 }

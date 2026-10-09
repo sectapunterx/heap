@@ -914,6 +914,14 @@ ApplicationWindow {
                 AppController.undoEntry(serial)
             });
         }
+        // "Done" with no column of that stage: offer to make one (APP-268).
+        function onDoneColumnMissing() {
+            toast.showWithAction(I18n.t("done.noColumn"), I18n.t("done.noColumn.create"), 10, function () {
+                AppController.addStatus(I18n.t("done.columnName"), "");
+                const sts = AppController.statuses;
+                AppController.setStatusCategory(sts[sts.length - 1].id, "done");
+            }, "warning");
+        }
         // A newer release was found. When heap can update this copy itself
         // the action downloads it (APP-125); otherwise it opens the release page.
         function onUpdateAvailable(version, url) {
@@ -1645,6 +1653,23 @@ ApplicationWindow {
     function openTask(id) {
         taskEditor.showFor(Object.assign({}, AppController.taskById(id)));
     }
+    // The tasks a key acts on: the selection, else the one under the
+    // cursor or the pointer in the open view.
+    function _keyTaskIds() {
+        if (AppController.selectionCount > 0) return AppController.selectedTaskIds;
+        const v = win.activeViewItem();
+        if (v && typeof v._actionCardId === "function") {
+            const id = v._actionCardId();
+            return id ? [id] : [];
+        }
+        if (v && v.hoveredTaskId) return [v.hoveredTaskId];
+        return [];
+    }
+    // D (APP-268): nothing under the key, nothing happens.
+    function markDone() {
+        const ids = win._keyTaskIds();
+        if (ids.length > 0) AppController.toggleDone(ids);
+    }
     function _toastCaptured(title, taskId) {
         const line = taskId ? quickCapture.headline(taskId) : "";
         if (line.length === 0) {
@@ -1714,6 +1739,7 @@ ApplicationWindow {
         }
         switch (id) {
         case "task.new":             quickCapture.open(); break;
+        case "task.done":            win.markDone(); break;
         case "quick-capture":        quickCapture.open(); break;
         case "quick-capture-notes":  quickCaptureNotes.open(); break;
         case "panel.right":          win.toggleRightPanel(); break;
@@ -2437,6 +2463,13 @@ ApplicationWindow {
         onActivated: { const b = win.activeViewItem(); if (b && b.toggleCursorColumn) b.toggleCursorColumn(); }
     }
 
+    // Done (APP-268): a bare letter, held back while typing or a popup is up.
+    Shortcut {
+        sequence: win._kbd("task.done")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !win._viewKeysBlocked
+        onActivated: win.markDone()
+    }
     Shortcut {
         sequence: _kbd("task.openExternal")
         context: Qt.ApplicationShortcut

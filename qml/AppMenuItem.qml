@@ -22,6 +22,9 @@ MenuItem {
     // the end of the row, dim, as a desktop menu shows its accelerators, so
     // a single-key action can be learnt from the menu (PERA-3).
     property string shortcutId: ""
+    // A word at the row's end, before its key (heap 2, APP-268): why the
+    // row is off ("no branch yet"), or "now" on the current choice.
+    property string note: ""
     readonly property string hint: item.shortcutId.length > 0
         ? (AppController.shortcuts, AppController.shortcutFor(item.shortcutId)) : ""
     // A third pick of the row with the mouse suggests its key once (APP-166).
@@ -33,7 +36,8 @@ MenuItem {
     // the menu and its rows do not chase each other (VISP-5).
     // A row that brings its own contentItem is measured by that.
     readonly property real _arrowW: item._arrow && arrowText ? Theme.spMd + arrowText.implicitWidth : 0
-    readonly property real _hintW: item.hint.length > 0 ? Theme.sp2xl + hintText.implicitWidth : 0
+    readonly property real _hintW: (item.hint.length > 0 ? Theme.sp2xl + hintText.implicitWidth : 0)
+                                   + (item.note.length > 0 ? Theme.sp2xl + noteText.implicitWidth : 0)
     readonly property real naturalWidth: labelRow && item.contentItem === labelRow
         ? item.leftPadding + Theme.fsMd + Theme.spMd + labelText.implicitWidth + item._hintW + item._arrowW + item.rightPadding
         : item.implicitWidth
@@ -114,6 +118,20 @@ MenuItem {
         textFormat: Text.PlainText
         color: Theme.textDim
         font.family: Theme.fontMono
+        font.pixelSize: Theme.fsXs
+    }
+
+    Text {
+        id: noteText
+        objectName: "menu-row-note"
+        visible: item.note.length > 0
+        x: item.width - width - item.rightPadding - item._arrowW
+           - (item.hint.length > 0 ? hintText.implicitWidth + Theme.spLg : 0)
+        anchors.verticalCenter: parent.verticalCenter
+        text: item.note
+        textFormat: Text.PlainText
+        color: Theme.textDim
+        font.family: Theme.fontUi
         font.pixelSize: Theme.fsXs
     }
 

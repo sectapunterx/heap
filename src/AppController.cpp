@@ -598,6 +598,18 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.welcome.replay.desc", {"Replay the first-run tour.", "Пройти тур первого запуска заново."}},
       {"shortcut.task.new.label", {"New task", "Новая задача"}},
       {"shortcut.task.new.desc", {"Create a ticket in the active profile.", "Создать тикет в активном профиле."}},
+      {"shortcut.task.done.label", {"Done", "Готово"}},
+      {"shortcut.task.done.desc",
+       {"The task under the cursor, or the selected ones, to Done; again puts it back.",
+        "Задача под курсором или выбранные — в «Готово»; повторно — обратно."}},
+      {"task.doneUndone", {"Done undone", "«Готово» отменено"}},
+      {"task.reopenUndone", {"Reopen undone", "Возврат отменён"}},
+      {"task.done.one", {"Done: %1", "Готово: %1"}},
+      {"task.done.many", {"Done: %1 tasks", "Готово задач: %1"}},
+      {"task.done.localOnly", {" · only here, the tracker is not told", " · только у вас, в трекер не ушло"}},
+      {"task.done.unchecked", {" · %1 checklist items not ticked", " · не отмечено пунктов: %1"}},
+      {"task.reopened.one", {"%1 is back in “%2”", "%1 снова в «%2»"}},
+      {"task.reopened.many", {"%1 tasks are back where they were", "Задач возвращено: %1"}},
       {"shortcut.section.today.label", {"Go to Today", "Перейти в «Сегодня»"}},
       {"shortcut.section.today.desc", {"The day: meetings, what is due, what you are on.", "День: встречи, сроки, что в работе."}},
       {"shortcut.section.tasks.label", {"Go to Tasks", "Перейти в «Задачи»"}},
@@ -2062,6 +2074,140 @@ void AppController::setAppSettingsJson(const QString& v) {
 
 void AppController::moveTask(const QString& id, const QString& newStatus) {
   moveTaskRanked(id, newStatus, std::nullopt);
+}
+
+QString AppController::doneColumn() const {
+  for(const QVariant& v : m_statuses) {
+    const QString id = v.toMap().value(QStringLiteral("id")).toString();
+    if(statusCategory(id) == QStringLiteral("done")) {
+      return id;
+    }
+  }
+  return {};
+}
+
+namespace {
+
+// Unticked checklist items, the card's own and "- [ ]" lines in the text.
+int uncheckedItems(const Task& t) {
+  int n = 0;
+  for(const LocalCheckItem& c : t.local.checklist) {
+    n += c.done ? 0 : 1;
+  }
+  static const QRegularExpression kOpen(QStringLiteral(R"((?m)^\s*[-*+]\s+\[ \])"));
+  for(auto it = kOpen.globalMatch(t.desc); it.hasNext(); it.next()) {
+    ++n;
+  }
+  return n;
+}
+
+}  // namespace
+
+QVariantMap AppController::toggleDone(const QStringList& ids) {
+  QVariantMap out{{QStringLiteral("count"), 0}};
+  QStringList present;
+  bool allDone = true;
+  for(const QString& id : ids) {
+    const int row = m_tasks.indexOfId(id);
+    if(row < 0 || present.contains(id)) {
+      continue;
+    }
+    present << id;
+    allDone = allDone && statusCategory(m_tasks.items().at(row).status) == QStringLiteral("done");
+  }
+  if(present.isEmpty()) {
+    return out;
+  }
+  const QString doneCol = doneColumn();
+  if(!allDone && doneCol.isEmpty()) {
+    out[QStringLiteral("error")] = QStringLiteral("noDoneColumn");
+    emit doneColumnMissing();
+    return out;
+  }
+  // Where a task goes back to when it has no column of its own to return
+  // to: the first "to do" stage, else the first column that is not done.
+  QString backTo;
+  for(const QVariant& v : m_statuses) {
+    const QString id = v.toMap().value(QStringLiteral("id")).toString();
+    const QString cat = statusCategory(id);
+    if(cat == QStringLiteral("todo")) {
+      backTo = id;
+      break;
+    }
+    if(backTo.isEmpty() && cat != QStringLiteral("done")) {
+      backTo = id;
+    }
+  }
+
+  int moved = 0;
+  int unchecked = 0;
+  bool localOnly = false;
+  QString lastTarget;
+  {
+    const UndoScope scope(this, allDone ? tr_(QStringLiteral("task.reopenUndone")) : tr_(QStringLiteral("task.doneUndone")));
+    for(const QString& id : present) {
+      const int row = m_tasks.indexOfId(id);
+      if(row < 0) {
+        continue;  // a recurrence spawn reordered nothing, but stay safe
+      }
+      Task t = m_tasks.items().at(row);
+      const bool isDone = statusCategory(t.status) == QStringLiteral("done");
+      if(allDone) {
+        QString target = t.local.doneFrom;
+        if(target.isEmpty() || statusIndexOf(target) < 0 || statusCategory(target) == QStringLiteral("done")) {
+          target = backTo;
+        }
+        if(target.isEmpty()) {
+          continue;
+        }
+        t.local.doneFrom.clear();
+        m_tasks.upsert(t);
+        moveTask(id, target);
+        lastTarget = target;
+      } else if(!isDone) {
+        unchecked += uncheckedItems(t);
+        if(!t.externalProvider.isEmpty() && !trackerWriteEnabled(t.externalProvider)) {
+          localOnly = true;
+        }
+        t.local.doneFrom = t.status;
+        m_tasks.upsert(t);
+        moveTask(id, doneCol);
+        lastTarget = doneCol;
+      } else {
+        continue;
+      }
+      const int after = m_tasks.indexOfId(id);
+      if(after >= 0 && m_tasks.items().at(after).status == lastTarget) {
+        ++moved;
+      }
+    }
+  }
+  out[QStringLiteral("count")] = moved;
+  out[QStringLiteral("reopened")] = allDone;
+  out[QStringLiteral("unchecked")] = unchecked;
+  out[QStringLiteral("localOnly")] = localOnly;
+  if(moved == 0) {
+    return out;
+  }
+  const auto columnName = [this](const QString& id) {
+    const int i = statusIndexOf(id);
+    return i < 0 ? id : m_statuses[i].toMap().value(QStringLiteral("name")).toString();
+  };
+  QString msg;
+  if(allDone) {
+    msg = moved == 1 ? tr_(QStringLiteral("task.reopened.one")).arg(present.first(), columnName(lastTarget))
+                     : tr_(QStringLiteral("task.reopened.many")).arg(moved);
+  } else {
+    msg = moved == 1 ? tr_(QStringLiteral("task.done.one")).arg(present.first()) : tr_(QStringLiteral("task.done.many")).arg(moved);
+    if(localOnly) {
+      msg += tr_(QStringLiteral("task.done.localOnly"));
+    }
+    if(unchecked > 0) {
+      msg += tr_(QStringLiteral("task.done.unchecked")).arg(unchecked);
+    }
+  }
+  emit undoableToast(msg, 5);
+  return out;
 }
 
 void AppController::moveTaskRanked(const QString& id, const QString& newStatus, std::optional<double> rank) {
@@ -12294,6 +12440,8 @@ void AppController::seedShortcutCatalog() {
   m_shortcuts.clear();
   add("palette.open", "Ctrl+K");
   add("task.new", "Ctrl+N");
+  // Done in one key (APP-268, keymap.md "d").
+  add("task.done", "D");
   // heap 2 (APP-258): Ctrl+1..3 are the sidebar's sections top to bottom,
   // Ctrl+, is Settings. The single views have no key of their own any more
   // — they are lenses inside Tasks and Knowledge — but stay bindable.

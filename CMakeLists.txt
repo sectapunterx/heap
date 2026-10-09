@@ -391,6 +391,7 @@ qt_add_qml_module(heap_core
         qml/ProfileSwitcher.qml
         qml/TodayView.qml
         qml/AppSwitch.qml
+        qml/TaskMenuHost.qml
         qml/FilterBar.qml
         qml/KanbanBoard.qml
         qml/TaskCard.qml

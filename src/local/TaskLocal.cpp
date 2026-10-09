@@ -11,7 +11,7 @@ namespace {
 
 // Same guard as the task's own: a new field here fails the build until the
 // JSON below learns it and tests/test_roundtrip.cpp fills it in makeFullTask().
-static_assert(heap::meta::fieldCount<TaskLocal>() == 11,
+static_assert(heap::meta::fieldCount<TaskLocal>() == 12,
               "TaskLocal gained or lost a field. Update toJson/fromJson in src/local/TaskLocal.cpp, "
               "extend makeFullTask() in tests/test_roundtrip.cpp, then bump this count.");
 static_assert(heap::meta::fieldCount<LocalCheckItem>() == 6,
@@ -147,6 +147,7 @@ QJsonObject toJson(const TaskLocal& l, bool compact) {
   put("tags", tagsToJson(l.tags), l.tags.isEmpty());
   put("related", relatedToJson(l.related), l.related.isEmpty());
   put("commentDraft", l.commentDraft, l.commentDraft.isEmpty());
+  put("doneFrom", l.doneFrom, l.doneFrom.isEmpty());
   return o;
 }
 
@@ -162,6 +163,7 @@ TaskLocal fromJson(const QJsonObject& o) {
   l.tags = tagsFromJson(o["tags"].toArray());
   l.related = relatedFromJson(o["related"].toArray());
   l.commentDraft = o["commentDraft"].toString();
+  l.doneFrom = o["doneFrom"].toString();
   static const QStringList kKnown = {QStringLiteral("notes"),
                                      QStringLiteral("checklist"),
                                      QStringLiteral("myPriority"),
@@ -171,7 +173,8 @@ TaskLocal fromJson(const QJsonObject& o) {
                                      QStringLiteral("myDueBase"),
                                      QStringLiteral("tags"),
                                      QStringLiteral("related"),
-                                     QStringLiteral("commentDraft")};
+                                     QStringLiteral("commentDraft"),
+                                     QStringLiteral("doneFrom")};
   for(auto it = o.begin(); it != o.end(); ++it) {
     if(!kKnown.contains(it.key())) {
       l.extra.insert(it.key(), it.value());

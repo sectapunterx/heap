@@ -46,19 +46,13 @@ Rectangle {
     // back while one is, or Down moved the board cursor under the menu.
     // `visible`, not `opened`: opened only turns true once the fade-in ends,
     // and a key pressed during it would still reach the board.
-    readonly property bool menuOpen: !!(card._menu && card._menu.visible)
-        || !!(card._statusMenu && card._statusMenu.visible)
-        || !!(card._priorityMenu && card._priorityMenu.visible)
+    readonly property bool menuOpen: menuHost.menuOpen
     readonly property bool _done: !!(card.task && card.task.status === "done")
     signal clicked()
 
     // Open the card's menu from the keyboard (board key M, or the Menu key),
     // anchored on the card rather than on a pointer that may be elsewhere.
-    function openMenu() {
-        const menu = card.contextMenu();
-        menu.popup(card, Theme.spLg, Math.min(card.height, 28));
-        menu.currentIndex = 1;
-    }
+    function openMenu() { menuHost.openMenu(); }
     Keys.onMenuPressed: card.openMenu()
 
     // Here vs tracker, field by field (APP-163). Made on first use: a board of
@@ -988,269 +982,24 @@ Rectangle {
         }
     }
 
-    // The context menu is built on the first right-click, not with the card:
-    // thirteen menu items per card were most of what a card cost, and the
-    // board, the timeline and the archive build a card for every row they
-    // show. contextMenu() makes it (once per card), releaseMenu() lets it go —
-    // a recycled list delegate calls that when it is pooled.
-    property var _menu: null
-    function contextMenu() {
-        if (!card._menu) {
-            card._menu = taskMenuComponent.createObject(card);
-            card._menu.subMenuRequested.connect(card.openSubMenu);
-            card._menu.pushActionRequested.connect(card.runPushAction);
-        }
-        // The keys its rows show (APP-166), as they stand when it opens.
-        card._menu.editKey = card.boardKeys ? "board.open" : "";
-        card._menu.archiveKey = card.boardKeys && !card._isArchived ? "board.archive" : "";
-        card._menu.canSendPush = card._isTicket && !!card._ticket.unsynced && !card._ticket.gone;
-        card._menu.canDropPush = card._isTicket && !!card._ticket.unsynced;
-        return card._menu;
+    // The task menu, shared by every view (APP-268): TaskMenuHost builds
+    // it, its status and priority lists on first use, parented to the card.
+    TaskMenuHost {
+        id: menuHost
+        taskId: card.taskId
+        task: card.task
+        anchorItem: card
+        boardKeys: card.boardKeys
+        onOpenRequested: card.clicked()
+        onStatusPicked: (sid) => card.statusPicked(sid)
     }
-    function runPushAction(send) {
-        if (send) AppController.retryTrackerPush(card.taskId);
-        else AppController.discardTrackerPush(card.taskId);
-    }
-    // The status and priority lists are built the same way, on first use.
-    property var _statusMenu: null
-    property var _priorityMenu: null
-    function statusMenu() {
-        if (!card._statusMenu) {
-            card._statusMenu = statusMenuComponent.createObject(card);
-            card._statusMenu.back.connect(() => card.backToMenu("status"));
-            card._statusMenu.picked.connect(sid => {
-                card.statusPicked(sid);
-                AppController.moveTaskTo(card.taskId, sid, "");
-            });
-        }
-        return card._statusMenu;
-    }
-    function priorityMenu() {
-        if (!card._priorityMenu) {
-            card._priorityMenu = priorityMenuComponent.createObject(card);
-            card._priorityMenu.back.connect(() => card.backToMenu("priority"));
-        }
-        return card._priorityMenu;
-    }
-    // The status or priority list at the card, on the task's current value,
-    // so an Enter straight away changes nothing.
-    function openSubMenu(which) {
-        const sub = which === "status" ? card.statusMenu() : card.priorityMenu();
-        sub.popup(card, Theme.spLg, Math.min(card.height, 28));
-        let cur = -1;
-        if (card.task && which === "status")
-            cur = AppController.statuses.findIndex(st => st.id === card.task.status);
-        else if (card.task)
-            cur = ["P0", "P1", "P2", "P3"].indexOf(card.task.priority);
-        sub.currentIndex = Math.max(0, cur);
-    }
-    // Left in a list: the card menu again, on the row the list came from.
-    function backToMenu(which) {
-        card.openMenu();
-        const name = which === "status" ? "tc-menu-status" : "tc-menu-priority";
-        for (let i = 0; i < card._menu.count; i++) {
-            const it = card._menu.itemAt(i);
-            if (it && it.objectName === name) { card._menu.currentIndex = i; break; }
-        }
-    }
-    function releaseMenu() {
-        for (const k of ["_menu", "_statusMenu", "_priorityMenu"]) {
-            if (!card[k]) continue;
-            card[k].destroy();
-            card[k] = null;
-        }
-    }
-    Component {
-        id: taskMenuComponent
-    AppMenu {
-        id: taskMenu
-        objectName: "tc-menu"
-        // Set by contextMenu(): the catalogue ids of Return and E on the board.
-        property string editKey: ""
-        property string archiveKey: ""
-        // A move that never reached the tracker (APP-243): send or drop it.
-        // Set by contextMenu(), like the keys above.
-        property bool canSendPush: false
-        property bool canDropPush: false
-        signal pushActionRequested(bool send)
-        AppMenuItem {
-            enabled: false
-            contentItem: Text {
-                text: card.task ? (card.task.id + " · " + card.task.priority) : ""
-                color: Theme.textDim
-                font.family: Theme.fontMono
-                font.pixelSize: Theme.fsXs
-                font.weight: Theme.fwTitle
-                leftPadding: Theme.spXl
-                rightPadding: Theme.spXl
-            }
-        }
-        AppMenuItem {
-            glyph: "✎"; text: I18n.t("taskcard.edit"); onTriggered: card.clicked()
-            shortcutId: taskMenu.editKey
-        }
-        // Status and priority without opening the editor (UX-26). Each opens
-        // its own list at the card, so the keyboard can walk it too.
-        // The list opens once this menu has finished closing. Opened straight
-        // from the row, it came up while this menu's close was still handing
-        // focus back to the board: the board kept the keys, and the list sat
-        // open without them until another popup's close gave it focus back and
-        // a stray Enter picked P0 (PERA-1).
-        property string _openNext: ""
-        signal subMenuRequested(string which)
-        onClosed: {
-            const which = taskMenu._openNext;
-            taskMenu._openNext = "";
-            if (which) taskMenu.subMenuRequested(which);
-        }
-        AppMenuItem {
-            objectName: "tc-menu-status"
-            glyph: "⇥"; text: I18n.t("taskcard.setStatus"); opensList: true
-            onTriggered: taskMenu._openNext = "status"
-        }
-        AppMenuItem {
-            objectName: "tc-menu-priority"
-            glyph: "!"; text: I18n.t("taskcard.setPriority"); opensList: true
-            onTriggered: taskMenu._openNext = "priority"
-        }
-        AppMenuItem {
-            objectName: "tc-menu-archive"
-            glyph: card._isArchived ? "↺" : "▣"
-            text: card._isArchived ? I18n.t("taskcard.unarchive") : I18n.t("taskcard.archive")
-            shortcutId: taskMenu.archiveKey
-            onTriggered: AppController.setArchived(card.taskId, !card._isArchived)
-        }
-        AppMenuItem {
-            glyph: card.task && card.task.isTiming ? "■" : "▸"
-            text: card.task && card.task.isTiming ? I18n.t("taskcard.stopTimer") : I18n.t("taskcard.startTimer")
-            onTriggered: {
-                if (!card.task) return;
-                if (card.task.isTiming) AppController.stopTaskTimer(card.task.id);
-                else AppController.startTaskTimer(card.task.id);
-            }
-        }
-        AppMenuSeparator { objectName: "tc-menu-ticketSep"; visible: card._isTicket }
-        AppMenuItem {
-            objectName: "tc-menu-open"
-            visible: card._isTicket && String(card._ticket.url || "").length > 0
-            height: visible ? implicitHeight : 0
-            glyph: "↗"
-            shortcutId: "task.openExternal"
-            text: I18n.t("taskcard.openIn").arg(card._badge.name || card._ticket.provider || "")
-            onTriggered: AppController.openTaskExternal(card.taskId)
-        }
-        AppMenuItem {
-            objectName: "tc-menu-copylink"
-            visible: card._isTicket && String(card._ticket.url || "").length > 0
-            height: visible ? implicitHeight : 0
-            glyph: "⎘"
-            text: I18n.t("taskcard.copyLink")
-            onTriggered: AppController.copyToClipboard(String(card._ticket.url || ""))
-        }
-        // A move that never reached the tracker: send it (after heap checks
-        // the issue) or drop it and keep the column here only (APP-243).
-        AppMenuItem {
-            objectName: "tc-menu-send-push"
-            visible: taskMenu.canSendPush
-            height: visible ? implicitHeight : 0
-            glyph: "↑"
-            text: I18n.t("taskcard.sendPush")
-            onTriggered: taskMenu.pushActionRequested(true)
-        }
-        AppMenuItem {
-            objectName: "tc-menu-discard-push"
-            visible: taskMenu.canDropPush
-            height: visible ? implicitHeight : 0
-            glyph: "✕"
-            text: I18n.t("taskcard.discardPush")
-            onTriggered: taskMenu.pushActionRequested(false)
-        }
-        AppMenuSeparator {}
-        AppMenuItem {
-            glyph: "◷"
-            text: I18n.t("taskcard.schedule")
-            onTriggered: {
-                if (!card.task) return;
-                // 14:00 used to be hardcoded here, so every task scheduled from
-                // the card landed on top of the last one — and on a time that
-                // had already passed for most of the afternoon.
-                // The gap is looked for with the block's real length (the
-                // estimate, else the focus-block setting); it used to search
-                // for an hour and then book ninety minutes over a meeting.
-                AppController.scheduleTaskAtNextFreeSlot(card.task.id, AppController.selectedDate);
-            }
-        }
-        AppMenuItem {
-            glyph: "⎘"
-            text: I18n.t("taskcard.copyId")
-            onTriggered: {
-                if (card.task && card.task.id) AppController.copyToClipboard(card.task.id);
-            }
-        }
-        AppMenuItem {
-            glyph: "⎇"
-            text: I18n.t("taskcard.copyBranch")
-            enabled: !!(card.task && card.task.branch && String(card.task.branch).length > 0)
-            onTriggered: {
-                if (card.task && card.task.branch) AppController.copyToClipboard(card.task.branch);
-            }
-        }
-        AppMenuItem {
-            glyph: "+"
-            text: I18n.t("taskcard.createBranch")
-            onTriggered: {
-                if (card.task && card.task.id) AppController.createBranchForTask(card.task.id);
-            }
-        }
-        AppMenuSeparator {}
-        AppMenuItem {
-            glyph: "×"; danger: true
-            text: I18n.t("common.delete"); onTriggered: AppController.deleteTask(card.taskId)
-        }
-    }
-    }
-
-    Component {
-        id: statusMenuComponent
-    AppMenu {
-        id: statusMenu
-        objectName: "tc-status-menu"
-        backOnLeft: true
-        // A row was picked; statusMenu() moves the task.
-        signal picked(string statusId)
-        Instantiator {
-            model: AppController.statuses
-            delegate: AppMenuItem {
-                required property var modelData
-                text: modelData.name
-                marked: !!(card.task && card.task.status === modelData.id)
-            }
-            onObjectAdded: (index, object) => {
-                statusMenu.insertItem(index, object);
-                object["triggered"].connect(() => statusMenu.picked(object["modelData"].id));
-            }
-            onObjectRemoved: (index, object) => statusMenu.removeItem(object)
-        }
-    }
-    }
-
-    Component {
-        id: priorityMenuComponent
-    AppMenu {
-        id: priorityMenu
-        objectName: "tc-priority-menu"
-        backOnLeft: true
-        Instantiator {
-            model: ["P0", "P1", "P2", "P3"]
-            delegate: AppMenuItem {
-                required property string modelData
-                text: modelData
-                marked: !!(card.task && card.task.priority === modelData)
-                onTriggered: AppController.setTaskPriority(card.taskId, modelData)
-            }
-            onObjectAdded: (index, object) => priorityMenu.insertItem(index, object)
-            onObjectRemoved: (index, object) => priorityMenu.removeItem(object)
-        }
-    }
-    }
+    readonly property var _menu: menuHost.menu
+    readonly property var _statusMenu: menuHost.statusList
+    readonly property var _priorityMenu: menuHost.priorityList
+    function contextMenu() { return menuHost.contextMenu(); }
+    function releaseMenu() { menuHost.releaseMenu(); }
+    function openSubMenu(which) { menuHost.openSubMenu(which); }
+    function backToMenu(which) { menuHost.backToMenu(which); }
+    function statusMenu() { return menuHost.statusMenu(); }
+    function priorityMenu() { return menuHost.priorityMenu(); }
 }
