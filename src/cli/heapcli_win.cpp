@@ -71,7 +71,7 @@ std::wstring heapExePath() {
     self.resize(self.size() * 2);
   }
   const std::size_t slash = self.find_last_of(L"\\/");
-  return (slash == std::wstring::npos ? std::wstring() : self.substr(0, slash + 1)) + L"heap.exe";
+  return (slash == std::wstring::npos ? std::wstring() : self.substr(0, slash + 1)) + L"lowkey.exe";
 }
 
 heap::cli::Invocation classifyArgs() {

@@ -198,13 +198,13 @@ PackageKind detectPackageKind(const PackageEnv& env) {
 QString assetNameFor(PackageKind kind, const QString& tag) {
   switch(kind) {
     case PackageKind::WindowsSetup:
-      return QStringLiteral("heap-%1-windows-setup.exe").arg(tag);
+      return QStringLiteral("lowkey-%1-windows-setup.exe").arg(tag);
     case PackageKind::WindowsPortable:
-      return QStringLiteral("heap-%1-windows-portable.zip").arg(tag);
+      return QStringLiteral("lowkey-%1-windows-portable.zip").arg(tag);
     case PackageKind::MacApp:
-      return QStringLiteral("heap-%1-macos.dmg").arg(tag);
+      return QStringLiteral("lowkey-%1-macos.dmg").arg(tag);
     case PackageKind::LinuxAppImage:
-      return QStringLiteral("heap-%1-linux-x86_64.AppImage").arg(tag);
+      return QStringLiteral("lowkey-%1-linux-x86_64.AppImage").arg(tag);
     case PackageKind::None:
       break;
   }
@@ -264,7 +264,7 @@ void Updater::checkForUpdates() {
 
   QNetworkRequest req{QUrl(m_latestUrl)};
   req.setRawHeader("Accept", "application/vnd.github+json");
-  req.setRawHeader("User-Agent", "heap-updater");
+  req.setRawHeader("User-Agent", "lowkey-updater");
   req.setTransferTimeout(kCheckTimeoutMs);
 
   QNetworkReply* reply = m_nam->get(req);
@@ -309,7 +309,13 @@ void Updater::downloadAsset(const QString& assetName, const QString& dir) {
   if(m_downloading) {
     return;
   }
-  const QString url = m_assets.value(assetName);
+  // A release published only under heap's names (or a test feed) is still an
+  // update: lowkey-<tag>-… falls back to heap-<tag>-… (APP-280).
+  QString name = assetName;
+  if(!m_assets.contains(name) && name.startsWith(QLatin1String("lowkey-"))) {
+    name = QStringLiteral("heap-") + name.mid(7);
+  }
+  const QString url = m_assets.value(name);
   if(url.isEmpty()) {
     emit downloadFailed(static_cast<int>(DownloadFailure::NoAsset), assetName);
     return;
@@ -333,7 +339,7 @@ void Updater::downloadAsset(const QString& assetName, const QString& dir) {
 
   QNetworkRequest req{QUrl(url)};
   req.setRawHeader("Accept", "application/octet-stream");
-  req.setRawHeader("User-Agent", "heap-updater");
+  req.setRawHeader("User-Agent", "lowkey-updater");
   req.setTransferTimeout(kDownloadStallMs);
   QNetworkReply* reply = m_nam->get(req);
   m_download = reply;
@@ -343,7 +349,7 @@ void Updater::downloadAsset(const QString& assetName, const QString& dir) {
       reply->abort();
     }
   });
-  connect(reply, &QNetworkReply::finished, this, [this, reply, path, assetName]() {
+  connect(reply, &QNetworkReply::finished, this, [this, reply, path, name]() {
     reply->deleteLater();
     if(!m_file) {
       return;  // cancelled
@@ -364,14 +370,14 @@ void Updater::downloadAsset(const QString& assetName, const QString& dir) {
       return;
     }
     m_file.reset();
-    fetchSums(path, assetName);
+    fetchSums(path, name);  // the checksum is listed under the name it was published as
   });
 }
 
 void Updater::fetchSums(const QString& path, const QString& assetName) {
   QNetworkRequest req{QUrl(m_assets.value(QLatin1String(kSumsAsset)))};
   req.setRawHeader("Accept", "application/octet-stream");
-  req.setRawHeader("User-Agent", "heap-updater");
+  req.setRawHeader("User-Agent", "lowkey-updater");
   req.setTransferTimeout(kCheckTimeoutMs);
   QNetworkReply* reply = m_nam->get(req);
   m_download = reply;

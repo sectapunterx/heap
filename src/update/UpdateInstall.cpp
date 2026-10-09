@@ -65,16 +65,16 @@ bool startAfterQuit(const QString& then, const QString& a, const QString& b) {
 
 bool installWindows(PackageKind kind, const QString& package, QString& error) {
   const QString appDir = QCoreApplication::applicationDirPath();
-  const QString helper = QDir(appDir).filePath(QStringLiteral("heap-updater.exe"));
+  const QString helper = QDir(appDir).filePath(QStringLiteral("lowkey-updater.exe"));
   if(!QFileInfo::exists(helper)) {
-    error = QStringLiteral("heap-updater.exe is missing next to heap.exe");
+    error = QStringLiteral("lowkey-updater.exe is missing next to lowkey.exe");
     return false;
   }
   // It must not run from the folder it is about to replace.
-  const QString copy = QDir(updateWorkDir()).filePath(QStringLiteral("heap-updater.exe"));
+  const QString copy = QDir(updateWorkDir()).filePath(QStringLiteral("lowkey-updater.exe"));
   QFile::remove(copy);
   if(!QFile::copy(helper, copy)) {
-    error = QStringLiteral("could not copy heap-updater.exe to %1").arg(updateWorkDir());
+    error = QStringLiteral("could not copy lowkey-updater.exe to %1").arg(updateWorkDir());
     return false;
   }
   QFile::remove(outcomePath());
@@ -93,7 +93,7 @@ bool installWindows(PackageKind kind, const QString& package, QString& error) {
       QDir::toNativeSeparators(outcomePath()),
   };
   if(!QProcess::startDetached(copy, args, updateWorkDir())) {
-    error = QStringLiteral("could not start heap-updater.exe");
+    error = QStringLiteral("could not start lowkey-updater.exe");
     return false;
   }
   return true;
@@ -194,7 +194,9 @@ PackageEnv currentPackageEnv() {
 #if defined(Q_OS_WIN)
   env.os = QStringLiteral("windows");
   env.hasUninstaller = QFileInfo::exists(QDir(env.appDir).filePath(QStringLiteral("unins000.exe")));
-  env.hasPortableMarker = QFileInfo::exists(QDir(env.appDir).filePath(QStringLiteral("heap-portable.txt")));
+  // heap-portable.txt is what a 0.7.x zip unpacked; an update keeps it.
+  env.hasPortableMarker = QFileInfo::exists(QDir(env.appDir).filePath(QStringLiteral("lowkey-portable.txt"))) ||
+                          QFileInfo::exists(QDir(env.appDir).filePath(QStringLiteral("heap-portable.txt")));
   env.writable = canWriteInto(env.appDir);
 #elif defined(Q_OS_MACOS)
   env.os = QStringLiteral("macos");

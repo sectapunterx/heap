@@ -5,6 +5,7 @@
 #include "git/BranchTaskMatcher.h"
 #include "git/BranchTaskResolve.h"
 #include "local/Effective.h"
+#include "platform/Brand.h"
 
 #include <QCommandLineOption>
 #include <QCommandLineParser>
@@ -124,7 +125,7 @@ ParsedArgs parseArgs(const QStringList& args) {
   parser.addOptions({help, version, dataDir, profile, status, format, json, perfLog, capture, minimized});
 
   QStringList withProgram = args;
-  withProgram.prepend(QStringLiteral("heap"));
+  withProgram.prepend(QLatin1String(heap::brand::kName));
   if(!parser.parse(withProgram)) {
     return fail(parser.errorText());
   }
@@ -736,7 +737,7 @@ Response answer(const Snapshot& s, const Request& r, const QDateTime& now) {
     const int pi = findProfile(s, r.profile);
     if(pi < 0) {
       resp.exitCode = kExitNotFound;
-      resp.err = QStringLiteral("heap: no profile '%1'\n").arg(r.profile);
+      resp.err = QStringLiteral("lowkey: no profile '%1'\n").arg(r.profile);
       return resp;
     }
     const ProfileData& p = s.profiles.at(pi);
@@ -745,7 +746,7 @@ Response answer(const Snapshot& s, const Request& r, const QDateTime& now) {
       statusId = findStatus(p.statuses, r.status);
       if(statusId.isEmpty()) {
         resp.exitCode = kExitNotFound;
-        resp.err = QStringLiteral("heap: no column '%1' in profile '%2'\n").arg(r.status, p.name);
+        resp.err = QStringLiteral("lowkey: no column '%1' in profile '%2'\n").arg(r.status, p.name);
         return resp;
       }
     }
@@ -763,7 +764,7 @@ Response answer(const Snapshot& s, const Request& r, const QDateTime& now) {
   }
 
   resp.exitCode = kExitUsage;
-  resp.err = QStringLiteral("heap: '%1' changes data and cannot be answered from a snapshot\n").arg(verbName(r.verb));
+  resp.err = QStringLiteral("lowkey: '%1' changes data and cannot be answered from a snapshot\n").arg(verbName(r.verb));
   return resp;
 }
 

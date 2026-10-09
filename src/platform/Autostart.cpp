@@ -174,4 +174,19 @@ bool write(bool enabled, bool minimized) {
   return detail::writeSystem(testRoot(), enabled, minimized);
 }
 
+bool adoptLegacyEntry() {
+  if(!supported()) {
+    return false;
+  }
+  const Entry old = detail::readLegacySystem(testRoot());
+  if(!old.enabled) {
+    return false;
+  }
+  if(!detail::readSystem(testRoot()).enabled && !detail::writeSystem(testRoot(), true, old.minimized)) {
+    return false;
+  }
+  detail::removeLegacySystem(testRoot());
+  return true;
+}
+
 }  // namespace heap::platform::autostart

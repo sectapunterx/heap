@@ -10,7 +10,10 @@
 #include "notify/NotificationCenter.h"
 #include "notify/NotifyPayload.h"
 #include "platform/AltGrGuard.h"
+#include "platform/Autostart.h"
+#include "platform/Brand.h"
 #include "platform/BundledFonts.h"
+#include "platform/LegacyData.h"
 #include "platform/Paths.h"
 #include "platform/SingleInstance.h"
 #include "platform/Sound.h"
@@ -268,10 +271,11 @@ int main(int argc, char* argv[]) {
 
   heap::perf::markProcessStart();
   QApplication app(argc, argv);
-  QApplication::setOrganizationName("heap");
-  QApplication::setOrganizationDomain("heap.local");
-  QApplication::setApplicationName("heap");
-  QApplication::setApplicationDisplayName(QStringLiteral("heap."));
+  // lowkey since 0.8.0 (APP-280); a 0.7.x data folder moves over below.
+  QApplication::setOrganizationName(QLatin1String(heap::brand::kName));
+  QApplication::setOrganizationDomain(QStringLiteral("lowkey.local"));
+  QApplication::setApplicationName(QLatin1String(heap::brand::kName));
+  QApplication::setApplicationDisplayName(QLatin1String(heap::brand::kName));
   QApplication::setApplicationVersion(QStringLiteral(HEAP_VERSION));
   QApplication::setWindowIcon(QIcon(QStringLiteral(":/brand/icon/heap-icon.svg")));
 
@@ -318,12 +322,37 @@ int main(int argc, char* argv[]) {
   }
   heap::paths::setDataDir(dataDir);
 
+  // heap → lowkey (APP-280): the first launch copies a 0.7.x data folder into
+  // the new one. Only for the user's own folder, never a redirected one.
+  heap::platform::legacy::MoveResult legacyMove;
+  if(!heap::paths::dataDirOverridden() && !cli.smoke) {
+    legacyMove =
+        heap::platform::legacy::moveLegacyData(heap::paths::dataDir(), heap::platform::legacy::legacyDirFor(heap::paths::dataDir()));
+    if(legacyMove.kind == heap::platform::legacy::MoveKind::Busy) {
+      QMessageBox::information(nullptr,
+                               QStringLiteral("lowkey"),
+                               QStringLiteral("heap is now lowkey, and its data has to move to a new folder first.\n\n"
+                                              "heap 0.7 is still running. Close it (also from the tray) and start lowkey again."));
+      return 1;
+    }
+    if(legacyMove.kind == heap::platform::legacy::MoveKind::Failed) {
+      // Starting on an empty folder would look like everything was lost, and
+      // the next launch would no longer move anything: stop and say why.
+      QMessageBox::warning(nullptr,
+                           QStringLiteral("lowkey"),
+                           QStringLiteral("Your heap data could not be copied to lowkey's folder:\n%1\n\n"
+                                          "Nothing was changed; the data is still in\n%2")
+                               .arg(legacyMove.error, QDir::toNativeSeparators(legacyMove.from)));
+      return 1;
+    }
+  }
+
   // Say it on the console too: a GUI that cannot save is otherwise only a
   // banner, and nobody scripting heap reads that (PLAT-4).
   {
     QString why;
     if(!heap::storage::probeWritableDir(heap::paths::dataDir(), &why)) {
-      fputs(qPrintable(QStringLiteral("heap: data directory is not writable, nothing will be saved: %1\n").arg(why)), stderr);
+      fputs(qPrintable(QStringLiteral("lowkey: data directory is not writable, nothing will be saved: %1\n").arg(why)), stderr);
     }
   }
 
@@ -345,11 +374,11 @@ int main(int argc, char* argv[]) {
       case heap::platform::SingleInstance::Result::Forwarded:
         return 0;
       case heap::platform::SingleInstance::Result::Busy:
-        fputs("heap: another heap is using this data directory and is not responding\n", stderr);
+        fputs("lowkey: another lowkey is using this data directory and is not responding\n", stderr);
         QMessageBox::warning(nullptr,
-                             QStringLiteral("heap"),
-                             QStringLiteral("heap is already running with this data folder, but it is not responding:\n%1\n\n"
-                                            "Close it (or end it in the task manager) and start heap again.")
+                             QStringLiteral("lowkey"),
+                             QStringLiteral("lowkey is already running with this data folder, but it is not responding:\n%1\n\n"
+                                            "Close it (or end it in the task manager) and start lowkey again.")
                                  .arg(QDir::toNativeSeparators(heap::paths::dataDir())));
         return 1;
     }
@@ -359,7 +388,17 @@ int main(int argc, char* argv[]) {
   // org/app names are set so AppDataLocation resolves to the heap folder).
   heap::logging::installFileLogger();
   LogCloser logCloser{cli.smoke, smokeLogKeep};
-  qInfo("heap %s starting", qUtf8Printable(app.applicationVersion()));
+  qInfo("lowkey %s starting", qUtf8Printable(app.applicationVersion()));
+  if(legacyMove.kind == heap::platform::legacy::MoveKind::Moved) {
+    qInfo("moved %d file(s) of heap 0.7 data from %s to %s",
+          legacyMove.files,
+          qUtf8Printable(legacyMove.from),
+          qUtf8Printable(legacyMove.to));
+  }
+  // A login entry that still starts heap 0.7's binary becomes lowkey's own.
+  if(!cli.smoke && !heap::paths::dataDirOverridden()) {
+    heap::platform::autostart::adoptLegacyEntry();
+  }
   if(heap::paths::dataDirOverridden()) {
     qInfo("data directory overridden: %s", qUtf8Printable(heap::paths::dataDir()));
   }

@@ -7,6 +7,7 @@
 #include "cli/CliMain.h"
 #include "cli/CliQuery.h"
 #include "cli/VerbScan.h"
+#include "platform/LegacyData.h"
 #include "platform/Paths.h"
 #include "platform/SingleInstance.h"
 
@@ -55,11 +56,11 @@ Response launchOnTask(const Request& request, bool dataDirSet) {
   QString error;
   const std::optional<Snapshot> s = readSnapshot(&error);
   if(!s) {
-    return {kExitData, QString(), QStringLiteral("heap: %1\n").arg(error)};
+    return {kExitData, QString(), QStringLiteral("lowkey: %1\n").arg(error)};
   }
   const TaskRef ref = findTask(*s, request.taskId, findProfile(*s, QString()));
   if(!ref.found()) {
-    return {kExitNotFound, QString(), QStringLiteral("heap: no task '%1'\n").arg(request.taskId)};
+    return {kExitNotFound, QString(), QStringLiteral("lowkey: no task '%1'\n").arg(request.taskId)};
   }
   const QString id = s->profiles.at(ref.profile).tasks.at(ref.task).id;
   QStringList args;
@@ -87,7 +88,7 @@ Response launchOnTask(const Request& request, bool dataDirSet) {
   window.setStandardOutputFile(QProcess::nullDevice());
   window.setStandardErrorFile(QProcess::nullDevice());
   if(!window.startDetached()) {
-    return {kExitData, QString(), QStringLiteral("heap: could not start heap\n")};
+    return {kExitData, QString(), QStringLiteral("lowkey: could not start lowkey\n")};
   }
   Response r;
   r.out = request.json
@@ -119,6 +120,19 @@ int run(int argc, char** argv) {
   }
   const Request& request = parsed.request;
   heap::paths::setDataDir(parsed.dataDirSet ? parsed.dataDir : qEnvironmentVariable("HEAP_DATA_DIR"));
+  // The first lowkey command after an upgrade may come before the window ever
+  // opened: it moves heap 0.7's data over the same way (APP-280).
+  if(!heap::paths::dataDirOverridden()) {
+    using heap::platform::legacy::MoveKind;
+    const auto moved =
+        heap::platform::legacy::moveLegacyData(heap::paths::dataDir(), heap::platform::legacy::legacyDirFor(heap::paths::dataDir()));
+    if(moved.kind == MoveKind::Busy) {
+      return report({kExitData, QString(), QStringLiteral("lowkey: heap 0.7 is still running; close it so its data can move to lowkey\n")});
+    }
+    if(moved.kind == MoveKind::Failed) {
+      return report({kExitData, QString(), QStringLiteral("lowkey: could not move heap's data: %1\n").arg(moved.error)});
+    }
+  }
 
   if(const std::optional<int> answered = runQuery(request)) {
     return *answered;

@@ -131,6 +131,15 @@ target_link_libraries(heap_paths_tests PRIVATE
 
 add_test(NAME heap_paths_tests COMMAND heap_paths_tests)
 
+# heap → lowkey (APP-280): the one-time copy of a 0.7.x data folder.
+add_executable(heap_legacy_data_tests
+    test_legacy_data.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/LegacyData.cpp
+)
+target_include_directories(heap_legacy_data_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_legacy_data_tests PRIVATE Qt6::Core GTest::gtest)
+add_test(NAME heap_legacy_data_tests COMMAND heap_legacy_data_tests)
+
 # Board ranking — header-only, so only the test TU compiles.
 add_executable(heap_rank_tests test_rank.cpp)
 target_include_directories(heap_rank_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)

@@ -136,10 +136,12 @@ TEST(UpdatePackage, KnowsHowItWasInstalled) {
 TEST(UpdatePackage, AssetNamesMatchTheReleaseWorkflow) {
   using heap::update::assetNameFor;
   const QString tag = QStringLiteral("v0.5.7");
-  EXPECT_EQ(assetNameFor(PackageKind::WindowsSetup, tag), QStringLiteral("heap-v0.5.7-windows-setup.exe"));
-  EXPECT_EQ(assetNameFor(PackageKind::WindowsPortable, tag), QStringLiteral("heap-v0.5.7-windows-portable.zip"));
-  EXPECT_EQ(assetNameFor(PackageKind::MacApp, tag), QStringLiteral("heap-v0.5.7-macos.dmg"));
-  EXPECT_EQ(assetNameFor(PackageKind::LinuxAppImage, tag), QStringLiteral("heap-v0.5.7-linux-x86_64.AppImage"));
+  // lowkey since 0.8.0 (APP-280); a release that only has heap-… files is
+  // still found (Updater::downloadAsset falls back to the old name).
+  EXPECT_EQ(assetNameFor(PackageKind::WindowsSetup, tag), QStringLiteral("lowkey-v0.5.7-windows-setup.exe"));
+  EXPECT_EQ(assetNameFor(PackageKind::WindowsPortable, tag), QStringLiteral("lowkey-v0.5.7-windows-portable.zip"));
+  EXPECT_EQ(assetNameFor(PackageKind::MacApp, tag), QStringLiteral("lowkey-v0.5.7-macos.dmg"));
+  EXPECT_EQ(assetNameFor(PackageKind::LinuxAppImage, tag), QStringLiteral("lowkey-v0.5.7-linux-x86_64.AppImage"));
   EXPECT_TRUE(assetNameFor(PackageKind::None, tag).isEmpty());
 }
 

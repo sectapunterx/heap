@@ -1,4 +1,5 @@
 #include "integrations/SecretStore.h"
+#include "platform/Brand.h"
 #include "platform/Paths.h"
 
 #include <QDebug>
@@ -33,7 +34,10 @@
 namespace heap::integrations {
 
 namespace {
-const QString kService = QStringLiteral("heap.integrations");
+const QString kService = QLatin1String(heap::brand::kKeychainService);
+// heap 0.7's entries: read when the new service has nothing, then copied over
+// (never deleted, so a downgrade still signs in).
+const QString kLegacyService = QLatin1String(heap::brand::kLegacyKeychainService);
 
 // Values in secrets.json carrying this prefix are DPAPI blobs (Windows): only
 // the same Windows user on the same machine can read them back.
@@ -182,53 +186,24 @@ void SecretStore::load(const QVector<QPair<QString, QString>>& keys, const std::
       }
     };
     for(const auto& k : keys) {
-      const QString cache = cacheKey(k.first, k.second);
-      auto* job = new QKeychain::ReadPasswordJob(kService, this);
-      job->setAutoDelete(true);
-      job->setKey(cache);
-      connect(job, &QKeychain::Job::finished, this, [this, cache, remaining, finishOne](QKeychain::Job* j) {
-        QString text;
-        if(j->error() == QKeychain::NoError) {
-          text = static_cast<QKeychain::ReadPasswordJob*>(j)->textData();
-        }
-        const int count = text.startsWith(kChunkMarker) ? text.mid(kChunkMarker.size()).toInt() : 0;
-        if(count <= 0) {
-          if(!text.isEmpty()) {
-            m_cache.insert(cache, text);
-          }
+      const QString providerId = k.first;
+      const QString field = k.second;
+      const QString cache = cacheKey(providerId, field);
+      readKeychainValue(kService, cache, [this, cache, providerId, field, finishOne](const QString& text) {
+        if(!text.isEmpty()) {
+          m_cache.insert(cache, text);
           finishOne();
           return;
         }
-        // Chunked value: read every part, then stitch them together. One
-        // missing part makes the whole value useless, so it is dropped.
-        m_chunkCounts.insert(cache, count);
-        auto parts = std::make_shared<QStringList>(count);
-        auto partsLeft = std::make_shared<int>(count);
-        auto partsOk = std::make_shared<bool>(true);
-        for(int i = 0; i < count; ++i) {
-          auto* partJob = new QKeychain::ReadPasswordJob(kService, this);
-          partJob->setAutoDelete(true);
-          partJob->setKey(chunkKey(cache, i));
-          connect(partJob, &QKeychain::Job::finished, this, [this, cache, i, parts, partsLeft, partsOk, finishOne](QKeychain::Job* pj) {
-            if(pj->error() == QKeychain::NoError) {
-              (*parts)[i] = static_cast<QKeychain::ReadPasswordJob*>(pj)->textData();
-            } else {
-              *partsOk = false;
-            }
-            if(--(*partsLeft) > 0) {
-              return;
-            }
-            if(*partsOk) {
-              m_cache.insert(cache, parts->join(QString()));
-            } else {
-              qWarning() << "keychain value for" << cache << "is missing a part — ignoring it";
-            }
-            finishOne();
-          });
-          partJob->start();
-        }
+        // Nothing under lowkey's name yet: a heap 0.7 token is read once and
+        // copied over, so an upgrade does not sign anyone out (APP-280).
+        readKeychainValue(kLegacyService, cache, [this, providerId, field, finishOne](const QString& old) {
+          if(!old.isEmpty()) {
+            setValue(providerId, field, old);
+          }
+          finishOne();
+        });
       });
-      job->start();
     }
     return;
   }
@@ -239,6 +214,54 @@ void SecretStore::load(const QVector<QPair<QString, QString>>& keys, const std::
     done();
   }
 }
+
+#ifdef HEAP_USE_KEYCHAIN
+void SecretStore::readKeychainValue(const QString& service, const QString& cache, const std::function<void(const QString&)>& done) {
+  auto* job = new QKeychain::ReadPasswordJob(service, this);
+  job->setAutoDelete(true);
+  job->setKey(cache);
+  connect(job, &QKeychain::Job::finished, this, [this, service, cache, done](QKeychain::Job* j) {
+    QString text;
+    if(j->error() == QKeychain::NoError) {
+      text = static_cast<QKeychain::ReadPasswordJob*>(j)->textData();
+    }
+    const int count = text.startsWith(kChunkMarker) ? text.mid(kChunkMarker.size()).toInt() : 0;
+    if(count <= 0) {
+      done(text);
+      return;
+    }
+    // Chunked value: read every part, then stitch them together. One missing
+    // part makes the whole value useless, so it is dropped.
+    if(service == kService) {
+      m_chunkCounts.insert(cache, count);
+    }
+    auto parts = std::make_shared<QStringList>(count);
+    auto partsLeft = std::make_shared<int>(count);
+    auto partsOk = std::make_shared<bool>(true);
+    for(int i = 0; i < count; ++i) {
+      auto* partJob = new QKeychain::ReadPasswordJob(service, this);
+      partJob->setAutoDelete(true);
+      partJob->setKey(chunkKey(cache, i));
+      connect(partJob, &QKeychain::Job::finished, this, [cache, i, parts, partsLeft, partsOk, done](QKeychain::Job* pj) {
+        if(pj->error() == QKeychain::NoError) {
+          (*parts)[i] = static_cast<QKeychain::ReadPasswordJob*>(pj)->textData();
+        } else {
+          *partsOk = false;
+        }
+        if(--(*partsLeft) > 0) {
+          return;
+        }
+        if(!*partsOk) {
+          qWarning() << "keychain value for" << cache << "is missing a part — ignoring it";
+        }
+        done(*partsOk ? parts->join(QString()) : QString());
+      });
+      partJob->start();
+    }
+  });
+  job->start();
+}
+#endif
 
 QString SecretStore::protectForFile(const QString& plain) {
 #ifdef Q_OS_WIN
