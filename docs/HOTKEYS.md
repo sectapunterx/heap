@@ -106,23 +106,25 @@ to create the task.
 
 ## Task under the cursor
 
-On the board the cursor is the card the keys move; elsewhere it is the
-selection or the task under the pointer.
+Every view has one keyboard cursor (0.8.0): the card on the board, the row
+in the List, the meeting or task on Today and in the calendar, the note in
+Knowledge. Without one the keys act on the selection or the task under the
+pointer.
 
 | Action | Default |
 |--------|---------|
 | Done; on a done task, back | `D` |
 | New task below / above (same column) | `O` / `Shift+O` |
 | Rename | `I` |
-| Schedule in the next free slot | `S` |
-| Deadline | `Shift+S` |
+| Schedule: a small field that reads "fri 15:00", "tomorrow", "no" (on an empty calendar day: go to a date) | `S` |
+| Deadline, the same way | `Shift+S` |
 | Priority P0 … P3 | `1` `2` `3` `4` |
 | Timer start / pause | `T` |
 | Archive | `E` |
 | Menu | `M` (or the `Menu` key) |
 | Copy ID / branch name / tracker link | `Y, Y` / `Y, B` / `Y, L` |
 | Create a git branch | `C, B` |
-| Delete (undoable) | `Del` |
+| Delete the selection, or the task under the cursor (undoable) | `Del` |
 
 ## Board cursor
 
@@ -163,6 +165,14 @@ own: the filter opens with it and the board narrows as you go.
 | Move the task a day earlier / later | `Ctrl+Left` / `Ctrl+Right` |
 | Move the task a week earlier / later | `Ctrl+Shift+Left` / `Ctrl+Shift+Right` |
 | Move a timed task a grid step earlier / later | `Ctrl+Up` / `Ctrl+Down` |
+| The cursor: next / previous meeting or task of the day | `J` / `K` |
+| The cursor: the day before / after | `H` / `L` |
+| Open what the cursor is on | `Return` |
+| Move it a day / a grid step (a week in Month) | `Shift+H` / `Shift+L`, `Shift+J` / `Shift+K` |
+| Its block a grid step longer / shorter | `Ctrl+Shift+J` / `Ctrl+Shift+K`, or `Ctrl+Shift+Down` / `Ctrl+Shift+Up` |
+
+A meeting that repeats asks "only this one / all" before it moves, as a drag
+does. Today walks with the same keys.
 
 To go to a date, type it in the command line: `:` then the date.
 
@@ -272,6 +282,9 @@ A new task's editor opens with the cursor in the title.
 
 | Where | Keys |
 |---|---|
+| Regions: sidebar → content → task panel / right panel → header | `F6` / `Shift+F6` (also out of a text field) |
+| Sidebar | `↑` / `↓` walk the rows, `Enter` opens (the keyboard goes into the content) |
+| Board column header | `Ctrl+Shift+H` / `Ctrl+Shift+L` move the column (as its menu's Move left / right) |
 | Filter bar (P0–P3, Clear, Sort, Archived) | `Tab` to a chip, `Space` / `Enter`; `↓` opens Sort |
 | Profile pill, breadcrumbs | `Tab`, then `Enter` (menu / edit; `F2` edits a crumb) |
 | Mini week | `←` / `→` a day, `PgUp` / `PgDn` a week, `Home` today |

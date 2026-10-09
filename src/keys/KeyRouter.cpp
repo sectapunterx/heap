@@ -195,7 +195,9 @@ bool KeyRouter::decide(QKeyEvent* ke, bool focusTyping) {
   }
 
   // A single letter is the field's while the person types (keymap rule 1).
-  if(focusTyping && bare) {
+  // A function key types nothing: F6 is how one leaves the field (APP-277).
+  const bool functionKey = ke->key() >= Qt::Key_F1 && ke->key() <= Qt::Key_F35;
+  if(focusTyping && bare && !functionKey) {
     return false;
   }
 

@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic as QQC
 import TodoCpp
+import "Reschedule.js" as Resched
 
 // Today (heap 2, APP-260): the start screen. The date and one line of facts;
 // the day by the hours — meetings filled, tasks outlined with their status,
@@ -93,6 +94,131 @@ FocusScope {
 
     Keys.onPressed: (e) => {
         if (e.modifiers & Qt.AltModifier && (e.key === Qt.Key_Left || e.key === Qt.Key_Right)) return;
+    }
+
+    // ── The keyboard cursor (APP-276) ────────────────────────────────
+    // j / k walk the day's meetings and tasks, h / l the day before / after
+    // (as [ ] do); the task keys act on the task under it. Held by key, so
+    // a move or a sync leaves it on the same thing, or on its neighbour.
+    property bool cursorVisible: false
+    property string cursorKey: ""
+    property int _cursorIdx: 0
+    readonly property bool cardMenuOpen: menuHost.menuOpen
+    function _rowKey(r) {
+        if (!r || !r.block) return "";
+        return (r.kind === "task" ? "task:" : "event:") + r.block.id;
+    }
+    function _items() {
+        const out = [];
+        for (let i = 0; i < root.rows.length; i++) {
+            const r = root.rows[i];
+            if (r.kind !== "meeting" && r.kind !== "task" && r.kind !== "allday") continue;
+            out.push({ kind: r.kind === "task" ? "task" : "event", id: r.block.id, key: root._rowKey(r), row: i, block: r.block });
+        }
+        return out;
+    }
+    function _cursorIndex() {
+        const items = root._items();
+        for (let i = 0; i < items.length; i++)
+            if (items[i].key === root.cursorKey) return i;
+        return -1;
+    }
+    function _cursorItem() {
+        if (!root.cursorVisible || root.cursorKey === "") return null;
+        const items = root._items();
+        for (let i = 0; i < items.length; i++)
+            if (items[i].key === root.cursorKey) return items[i];
+        return null;
+    }
+    readonly property string cursorTaskId: {
+        const it = root._cursorItem();
+        return it && it.kind === "task" ? it.id : "";
+    }
+    function clearCursor() {
+        root.cursorVisible = false;
+        root.cursorKey = "";
+    }
+    function _placeIdx(i) {
+        root.cursorVisible = true;
+        const items = root._items();
+        if (items.length === 0) {
+            root.cursorKey = "";
+            root._cursorIdx = 0;
+            return;
+        }
+        const at = Math.max(0, Math.min(items.length - 1, i));
+        root.cursorKey = items[at].key;
+        root._cursorIdx = at;
+        dayList.positionViewAtIndex(items[at].row, ListView.Contain);
+        if (items[at].kind === "task") AppController.markTaskSeen(items[at].id);
+    }
+    function moveCursor(dx, dy) {
+        if (dx !== 0) {
+            root._step(dx);
+            Qt.callLater(root._placeIdx, 0);
+            return;
+        }
+        const at = root._cursorIndex();
+        if (!root.cursorVisible || at < 0) { root._placeIdx(at < 0 && root.cursorVisible ? root._cursorIdx : 0); return; }
+        root._placeIdx(at + dy);
+    }
+    function _reconcile() {
+        if (root.cursorVisible && root.cursorKey !== "" && root._cursorIndex() < 0) root._placeIdx(root._cursorIdx);
+    }
+    onRowsChanged: if (root.cursorVisible) Qt.callLater(root._reconcile)
+    function _actionCardId() {
+        const it = root._cursorItem();
+        if (it) return it.kind === "task" ? it.id : "";
+        if (AppController.selectionCount === 1) return AppController.selectedTaskIds[0];
+        return "";
+    }
+    function openCursor() {
+        const it = root._cursorItem();
+        if (!it) { root.moveCursor(0, 0); return; }
+        if (it.kind === "task") root.taskClicked(it.id);
+        else root.eventClicked(it.id, null);
+    }
+    function toggleCursorSelection() {
+        const it = root._cursorItem();
+        if (it && it.kind === "task") AppController.toggleTaskSelection(it.id);
+        else if (!it) root.moveCursor(0, 0);
+    }
+    function openCursorMenu() {
+        const id = root._actionCardId();
+        if (!id) return;
+        menuHost.taskId = id;
+        menuHost.releaseMenu();
+        menuHost.popup();
+    }
+    // Shift H / L: the task a day earlier / later (the cursor follows);
+    // Shift J / K: a grid step; Ctrl Shift J / K: its block longer / shorter.
+    function moveSelectionOrCard(dx) {
+        const it = root._cursorItem();
+        if (!it || it.kind !== "task") return;
+        const t = AppController.taskById(it.id);
+        if (!t || !t.id) return;
+        const r = Resched.shiftByDays(t.scheduledAt, t.scheduledHasTime, dx, root.day, AppController.today);
+        if (AppController.rescheduleTask(it.id, "scheduled", r.when, r.timed)) root._step(dx);
+    }
+    function moveCursorCard(dx, dy) {
+        const it = root._cursorItem();
+        if (!it || it.kind !== "task" || dy === 0) return;
+        const t = AppController.taskById(it.id);
+        const r = t ? Resched.shiftByTime(t.scheduledAt, t.scheduledHasTime, dy, Theme.snapMinutes) : null;
+        if (r) AppController.rescheduleTask(it.id, "scheduled", r.when, true);
+    }
+    function resizeCursor(steps) {
+        const it = root._cursorItem();
+        if (!it || it.kind !== "task" || it.block.fromPrevDay || it.block.toNextDay) return false;
+        const step = Theme.snapMinutes / 60;
+        const end = Math.min(24, it.block.end + steps * step);
+        if (end - it.block.start < step - 1e-9) return false;
+        return AppController.resizeTaskBlock(it.id, root.day, it.block.start, end);
+    }
+    TaskMenuHost {
+        id: menuHost
+        anchorItem: root
+        onOpenRequested: root.taskClicked(menuHost.taskId)
     }
 
     RowLayout {
@@ -605,6 +731,10 @@ FocusScope {
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsXs
                 }
+            }
+            FocusRing {
+                objectName: "today-cursor"
+                visible: root.cursorVisible && root.cursorKey.length > 0 && root.cursorKey === root._rowKey(dr.modelData)
             }
             ClickArea {
                 anchors.fill: undefined

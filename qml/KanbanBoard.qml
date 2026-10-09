@@ -940,8 +940,25 @@ Item {
                             // Shift+F10 on any of its buttons, which pass the
                             // key up to here.
                             Keys.onMenuPressed: colHeaderMenu.popup()
+                            // Ctrl Shift H / L on the header (APP-278): the
+                            // column one place left / right, as the menu's
+                            // Move left / right. Taken before the window's
+                            // shortcuts: elsewhere Ctrl Shift L is the log.
+                            function _columnStep(event) {
+                                if (event.modifiers !== (Qt.ControlModifier | Qt.ShiftModifier)) return 0;
+                                // By the physical key on Windows, so a Russian layout works too.
+                                const vk = Qt.platform.os === "windows" ? event.nativeVirtualKey : 0;
+                                return event.key === Qt.Key_H || vk === 0x48 ? -1
+                                     : event.key === Qt.Key_L || vk === 0x4C ? 1 : 0;
+                            }
+                            Keys.onShortcutOverride: (event) => { if (_columnStep(event) !== 0) event.accepted = true; }
                             Keys.onPressed: (event) => {
-                                if (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier)) {
+                                const step = _columnStep(event);
+                                if (step !== 0) {
+                                    if (!(step < 0 && col.isFirst) && !(step > 0 && col.isLast))
+                                        AppController.moveStatus(col.statusId, col.index + step);
+                                    event.accepted = true;
+                                } else if (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier)) {
                                     colHeaderMenu.popup();
                                     event.accepted = true;
                                 }
@@ -1180,8 +1197,8 @@ Item {
                                     onTriggered: AppController.setStatusDoing(col.statusId, !AppController.isDoingStatus(col.statusId))
                                 }
                                 AppMenuSeparator {}
-                                AppMenuItem { text: I18n.t("kanban.moveLeft");  enabled: !col.isFirst; onTriggered: AppController.moveStatus(col.statusId, col.index - 1) }
-                                AppMenuItem { text: I18n.t("kanban.moveRight"); enabled: !col.isLast;  onTriggered: AppController.moveStatus(col.statusId, col.index + 1) }
+                                AppMenuItem { text: I18n.t("kanban.moveLeft");  enabled: !col.isFirst; keyText: AppController.keyText("Ctrl+Shift+H"); onTriggered: AppController.moveStatus(col.statusId, col.index - 1) }
+                                AppMenuItem { text: I18n.t("kanban.moveRight"); enabled: !col.isLast; keyText: AppController.keyText("Ctrl+Shift+L"); onTriggered: AppController.moveStatus(col.statusId, col.index + 1) }
                                 AppMenuSeparator {}
                                 AppMenuItem { danger: true; text: I18n.t("kanban.deleteColumn"); enabled: AppController.statuses.length > 1; onTriggered: root.requestDeleteColumn(col.statusId, col.statusName) }
                             }

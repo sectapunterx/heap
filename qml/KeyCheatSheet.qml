@@ -42,6 +42,7 @@ Popup {
             { label: "keys.row.today", ids: ["cal.today"] },
             { label: "keys.row.dayStep", ids: ["cal.prevDay", "cal.nextDay"] },
             { label: "keys.row.jumps", ids: ["nav.back", "nav.forward"] },
+            { label: "keys.row.region", ids: ["region.next", "region.prev"] },
             { label: "keys.row.open", ids: ["board.open"] }
         ] },
         { id: "go", rows: [
@@ -80,7 +81,8 @@ Popup {
             { label: "keys.row.moveUpDown", ids: ["board.moveDown", "board.moveUp"] },
             { label: "keys.row.moveDay", ids: ["cal.taskEarlier", "cal.taskLater"] },
             { label: "keys.row.moveWeek", ids: ["cal.taskEarlierWeek", "cal.taskLaterWeek"] },
-            { label: "keys.row.moveTime", ids: ["cal.taskTimeEarlier", "cal.taskTimeLater"] }
+            { label: "keys.row.moveTime", ids: ["cal.taskTimeEarlier", "cal.taskTimeLater"] },
+            { label: "keys.row.length", ids: ["cal.longer", "cal.shorter"] }
         ] },
         { id: "copy", rows: [
             { ids: ["task.copyId"] },
