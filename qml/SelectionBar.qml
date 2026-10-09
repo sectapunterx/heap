@@ -6,6 +6,8 @@ import TodoCpp
 
 Rectangle {
     id: bar
+    // The list under "is:archived" (DG-161): the bulk action restores.
+    property bool restoring: false
     visible: AppController.selectionCount > 0
     // Carries the selection on (APP-248): "tomorrow", "window", "someday", "clear".
     function carry(mode) { AppController.carryTasks(AppController.selectedTaskIds, mode); }
@@ -79,10 +81,10 @@ Rectangle {
             onClicked: labelPopup.open()
         }
         PillButton {
-            // Archive view operates on already-archived tickets — the only
+            // The archive holds already-archived tickets — the only
             // sensible bulk action is to restore (unarchive). Elsewhere we
             // offer the inverse.
-            readonly property bool _restoring: AppController.currentView === "archive"
+            readonly property bool _restoring: bar.restoring
             text: I18n.t(_restoring ? "selection.bar.unarchive" : "selection.bar.archive")
             onClicked: AppController.setSelectedTasksArchived(!_restoring)
         }

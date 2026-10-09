@@ -345,6 +345,10 @@ QtObject {
     // ── heap 2 components (APP-259) ──────────────────────────────────
     // A chip is a fixed height, line-height 1 and its content centred, so
     // chips line up at every scale and density; a filter condition is smaller.
+    // A window narrower than this (logical px, the window's own width) is
+    // "small" (X-Oth-Small, DG-008): the sidebar folds to its icons and
+    // Today's side column goes under the day. 1280 folds, 1366 does not.
+    readonly property int compactWindowWidth: 1360
     readonly property int chipH:       px(28)
     readonly property int chipHSmall:  px(24)
     readonly property int chipMaxW:    px(240)
@@ -362,6 +366,24 @@ QtObject {
     readonly property color meetingFill:  Style.chipFill ? (_c.meetingBg !== undefined ? _c.meetingBg : withAlpha(mStandup, 0.16))
                                                          : surfaceCard
     readonly property color nowLineColor: Style.urgency ? nowLine : borderStrong
+    // Selected segments, switches and buttons (DG-005, sheets H2/Q-Settings,
+    // X/N-Dlg-Small). Nothing is filled lavender: the bold style picks with a
+    // neutral fill and a heavier weight, the quiet one with a thin outline.
+    // Buttons are outlined in both; the primary one has the brighter line.
+    readonly property color segmentTrack:        Style.fills ? panel : "transparent"
+    readonly property color segmentSelected:     Style.fills ? Presets.mix(String(panel3), String(borderStrong), 0.6) : "transparent"
+    readonly property color segmentSelectedLine: Style.fills ? "transparent" : Presets.mix(String(borderStrong), String(textDim), 0.15)
+    readonly property color segmentText:         Style.fills ? textMuted : textDim
+    readonly property color segmentSelectedText: text
+    readonly property int   segmentSelectedWeight: Style.fills ? fwHeading : fwBody
+    readonly property color switchOn:      Presets.mix(String(borderStrong), String(textDim), 0.15)
+    readonly property color switchOffLine: Presets.mix(String(border), String(borderStrong), 0.6)
+    readonly property color switchKnobOn:  text
+    readonly property color switchKnobOff: Presets.mix(String(textDim), String(bg), 0.2)
+    readonly property color buttonLine:        Presets.mix(String(border), String(borderStrong), 0.5)
+    readonly property color buttonLinePrimary: Presets.mix(String(borderStrong), String(textDim), 0.35)
+    readonly property color buttonText:        textMuted
+    readonly property color buttonTextPrimary: text
     // The keyboard cursor and the active item: a short lavender bar under the
     // start of the text (the lowkey underline motif, APP-280).
     readonly property int cursorBarW: px(18)

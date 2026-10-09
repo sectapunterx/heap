@@ -112,14 +112,6 @@ TestCase {
         }
     }
 
-    function test_timeline_search_finds_nothing() {
-        const v = make('import TodoCpp; TimelineView { anchors.fill: parent }');
-        v.searchText = tc.nothing;
-        const s = findChild(v, "timeline-empty");
-        verifyState(s, "timeline");
-        compare(s.title, I18n.t("timeline.empty.title"));
-    }
-
     function test_week() {
         AppController.selectedDate = new Date(2099, 5, 15);
         const v = make('import TodoCpp; WeekView { anchors.fill: parent }');
@@ -142,14 +134,6 @@ TestCase {
         compare(state.title, I18n.t("month.empty.title"));
         v.searchText = tc.nothing;
         tryCompare(state, "title", I18n.t("view.empty.noMatch.title"));
-    }
-
-    function test_archive_search_finds_nothing() {
-        const v = make('import TodoCpp; ArchiveView { anchors.fill: parent }');
-        v.searchText = tc.nothing;
-        const s = findChild(v, "archive-empty");
-        verifyState(s, "archive");
-        compare(s.title, I18n.t("view.empty.noMatch.title"));
     }
 
     function test_notes_list() {

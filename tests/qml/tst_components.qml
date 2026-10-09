@@ -33,11 +33,7 @@ TestCase {
     function test_todayview()   { load("TodayView"); }
     function test_filterbar()   { load("FilterBar"); }
     function test_kanbanboard() { load("KanbanBoard"); }
-    function test_timelineview(){ load("TimelineView"); }
     function test_weekview()    { load("WeekView"); }
-    function test_daycalendar() { load("DayCalendar"); }
-    function test_peoplelist()  { load("PeopleList"); }
-    function test_archiveview() { load("ArchiveView"); }
     function test_notesview()   { load("NotesView"); }
     function test_settingsview(){ load("SettingsView"); }
     function test_toast()       { load("Toast"); }

@@ -49,7 +49,7 @@ TestCase {
     // The three that hold state the user would notice losing.
     function test_board_survives_a_round_trip() {
         const first = show("board");
-        show("timeline");
+        show("list");
         const second = show("board");
         compare(second, first, "the board must be the same item, not a rebuilt one");
     }
@@ -95,9 +95,9 @@ TestCase {
     // The cheap views are still rebuilt, which is what keeps three live views
     // from becoming eight.
     function test_a_cheap_view_is_rebuilt() {
-        const first = show("timeline");
+        const first = show("list");
         show("board");
-        const second = show("timeline");
-        verify(second !== first, "timeline is cheap to rebuild and is not kept alive");
+        const second = show("list");
+        verify(second !== first, "the list is cheap to rebuild and is not kept alive");
     }
 }

@@ -80,7 +80,7 @@ Popup {
     }
 
     // Views a task editor can open over without losing the reader's place.
-    readonly property var _taskViews: ["board", "timeline", "week", "month", "archive"]
+    readonly property var _taskViews: ["board", "list", "week", "month"]
 
     // Catalog actions that only mean something on a surface, with a cursor or
     // a selection — offered by the palette they would do nothing. A second

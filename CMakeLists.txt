@@ -348,6 +348,7 @@ qt_add_qml_module(heap_core
         qml/CursorBar.qml
         qml/SectionHeader.qml
         qml/MeetingIcon.qml
+        qml/Icon.qml
         qml/LensTabs.qml
         qml/QueryBar.qml
         qml/Pseudo.js
@@ -420,21 +421,17 @@ qt_add_qml_module(heap_core
         qml/TaskCard.qml
         qml/TaskListView.qml
         qml/SelectionBar.qml
-        qml/ArchiveView.qml
-        qml/TimelineView.qml
         qml/WeekView.qml
         qml/CalendarView.qml
         qml/CalendarNav.qml
         qml/UndatedTray.qml
         qml/MonthView.qml
-        qml/MiniWeek.qml
-        qml/DayCalendar.qml
         qml/DatePickerPopup.qml
-        qml/PeopleList.qml
         qml/TaskEditor.qml
         qml/EventEditor.qml
         qml/PersonEditor.qml
         qml/PersonPicker.qml
+        qml/PeopleDialog.qml
         qml/Toast.qml
         qml/ToastTiming.js
         qml/AppMenu.qml

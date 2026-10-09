@@ -268,11 +268,9 @@ Rectangle {
                 anchors.fill: parent
                 anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spSm
                 spacing: Theme.spMd
-                Text {
-                    text: "⎇"
+                Icon {
+                    name: "branch"
                     color: Theme.accentStrong
-                    font.family: Theme.fontMono
-                    font.pixelSize: Theme.fsMd
                 }
                 Text {
                     text: I18n.t("topbar.git.workingOn").arg(AppController.focusedTaskId)
@@ -355,11 +353,9 @@ Rectangle {
                     Text {
                         id: ciT
                         anchors.centerIn: parent
-                        text: {
-                            if (ciBadge.ci === "passing") return "CI ✓";
-                            if (ciBadge.ci === "failing") return "CI ✗";
-                            return "CI …";
-                        }
+                        // Words, not glyphs (DG-003).
+                        text: "CI " + I18n.t(ciBadge.ci === "passing" ? "topbar.ci.passing"
+                                             : ciBadge.ci === "failing" ? "topbar.ci.failing" : "topbar.ci.running")
                         color: Theme.text
                         font.family: Theme.fontUi
                         font.features: Theme.tabularNums
@@ -397,13 +393,11 @@ Rectangle {
                     Layout.preferredHeight: 20
                     radius: Theme.radiusSm
                     color: dismissMA.hovered ? Theme.withAlpha(Theme.accentStrong, 0.18) : "transparent"
-                    Text {
+                    Icon {
                         anchors.centerIn: parent
-                        text: "×"
+                        name: "close"
+                        size: Theme.px(12)
                         color: dismissMA.hovered ? Theme.accentStrong : Theme.textDim
-                        font.family: Theme.fontUi
-                        font.features: Theme.tabularNums
-                        font.pixelSize: Theme.fsLg
                     }
                     ClickArea {
                         id: dismissMA
@@ -498,10 +492,13 @@ Rectangle {
                 anchors.fill: parent
                 anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spLg
                 spacing: Theme.spMd
-                Text {
-                    text: "⌕"
+                // The sheets' funnel (DG-003); lights up while the text
+                // holds a clause.
+                Icon {
+                    objectName: "view-header-query-icon"
+                    name: "filter"
                     color: root.searchIsQuery ? Theme.accentStrong : Theme.textDim
-                    font.pixelSize: Theme.fsSm
+                    Layout.alignment: Qt.AlignVCenter
                 }
                 Flow {
                     id: queryFlow
@@ -535,15 +532,8 @@ Rectangle {
                 anchors.fill: parent
                 anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spSm
                 spacing: Theme.spXs
-                // Lights up when the text holds a clause, so it is obvious that
-                // `status:blocked` narrowed the board structurally rather than
-                // failing to find the literal string anywhere.
-                Text {
-                    text: "⌕"
-                    color: root.searchIsQuery ? Theme.accentStrong : Theme.textDim
-                    font.pixelSize: Theme.fsSm
-                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
-                }
+                // The row's funnel says the field is a query (one icon, not
+                // a second one here: DG-003).
                 TextField {
                     id: searchField
                     ContextMenu.menu: TextEditMenu { editor: searchField }

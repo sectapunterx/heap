@@ -509,6 +509,12 @@ Item {
         if (g.key === "status") return g.name || g.value;
         if (g.key === "priority") return g.value.length > 0 ? g.value : I18n.t("list.group.noPriority");
         if (g.key === "profile") return g.value;
+        if (g.key === "month") {
+            if (!g.from || !g.from.getTime) return I18n.t("list.group.none");
+            const m = I18n.monthName(g.from.getMonth());
+            const name = m.charAt(0).toUpperCase() + m.slice(1);
+            return g.from.getFullYear() === new Date().getFullYear() ? name : name + " " + g.from.getFullYear();
+        }
         return I18n.t("list.group." + g.key);
     }
     function groupNote(g) {

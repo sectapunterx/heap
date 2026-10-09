@@ -19,7 +19,9 @@
 //   none      — no date at all
 // By status the groups follow the board's column order; by priority P0 … P3
 // and then "no priority"; by profile the active profile first, then the rest
-// in their order. Empty groups are never returned.
+// in their order. By month (the archive, DG-161) a task goes by the month
+// its status last changed, the newest month first and the newest task first
+// in it. Empty groups are never returned.
 namespace heap::tasklist {
 
 struct Item {
@@ -32,11 +34,12 @@ struct Item {
   QString priority;      // "P0" … "P3" or empty
   int profileIndex = 0;  // 0 = the active profile
   QString profile;
+  QDate changed;  // the status's last change; the month group goes by it
 };
 
 struct Group {
-  QString key;    // see above; "status" / "priority" / "profile" for the others
-  QString value;  // the status id, the priority ("" = none), the profile name
+  QString key;    // see above; "status" / "priority" / "profile" / "month" for the others
+  QString value;  // the status id, the priority ("" = none), the profile name, "yyyy-MM"
   QDate from;     // the dates a date group spans (invalid when it has none)
   QDate to;
   QVector<int> members;  // indices into the items, in display order
@@ -48,7 +51,7 @@ QDate groupDate(const Item& t);
 // The date group of one task.
 QString dateGroupOf(const Item& t, const QDate& today);
 
-// by: "date" | "status" | "priority" | "profile"; anything else is "date".
+// by: "date" | "status" | "priority" | "profile" | "month"; anything else is "date".
 QVector<Group> group(const QVector<Item>& items, const QString& by, const QDate& today);
 
 }  // namespace heap::tasklist

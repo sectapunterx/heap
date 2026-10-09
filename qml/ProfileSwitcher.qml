@@ -26,6 +26,9 @@ Item {
     signal importIcsRequested()
     signal exportVaultRequested()
     signal importVaultRequested()
+    // The example profile (APP-271) goes from here: the sheets have no
+    // banner for it (DG-001), only its name in the sidebar.
+    signal removeExampleRequested()
 
     // A picker with a search field from this many profiles on.
     readonly property int pickerFrom: 8
@@ -85,6 +88,8 @@ Item {
         Item {
             id: syncDot
             objectName: "sidebar-sync-dot"
+            // Quiet has no profile dot (DG-006); a running sync still shows.
+            visible: Style.fills || root.syncDotShown || root.compact
             width: Theme.spLg
             height: root.height
             Rectangle {
@@ -165,7 +170,17 @@ Item {
         // Last, apart and in red, and it says which profile goes (DES-9).
         AppMenuSeparator {}
         AppMenuItem {
+            objectName: "sidebar-profile-remove-example"
+            visible: AppController.activeProfileId === "lowkey-example"
+            height: visible ? implicitHeight : 0
+            text: I18n.t("example.remove")
+            danger: true
+            onTriggered: root.removeExampleRequested()
+        }
+        AppMenuItem {
             objectName: "sidebar-profile-delete"
+            visible: AppController.activeProfileId !== "lowkey-example"
+            height: visible ? implicitHeight : 0
             text: I18n.t("topbar.profile.delete").arg(root.active.name || I18n.t("topbar.profile.fallback"))
             danger: true
             enabled: AppController.profiles.length > 1

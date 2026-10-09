@@ -181,7 +181,7 @@ TestCase {
                                                       archived: true, showDone: true, view: "timeline" });
         compare(tc.host.activeId, "", "saving through the API does not activate");
         mouseClick(railRow(0));
-        compare(AppController.currentView, "timeline");
+        compare(AppController.currentView, "list", "the timeline of 0.8.0 opens as the list (DG-162)");
         compare(tc.win.searchText, "svprobe");
         compare(tc.win.prioritiesFilter["P0"], true);
         compare(tc.win.boardSortMode, "priority");

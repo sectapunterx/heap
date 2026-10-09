@@ -102,38 +102,6 @@ TestCase {
 
     // ── The day grid ──
 
-    function makeDay(day) {
-        AppController.selectedDate = day;
-        const dc = createTemporaryQmlObject(
-            'import TodoCpp; DayCalendar { anchors.fill: parent }', host);
-        verify(dc !== null);
-        wait(0);
-        return dc;
-    }
-
-    // The point of the whole thing: the second Monday shows a meeting that was
-    // never written down.
-    function test_a_later_occurrence_is_drawn() {
-        const first = probeDay(615);
-        clearRange(first, probeDay(640));
-        const id = addSeries(first, "FREQ=WEEKLY");
-
-        const dc = makeDay(probeDay(622));
-        const block = findChild(dc, "event-" + id);
-        verify(block !== null && block.visible, "the following week must draw it too");
-        verify(block.repeating, "and know it belongs to a series");
-    }
-
-    function test_a_day_between_occurrences_is_empty() {
-        const first = probeDay(645);
-        clearRange(first, probeDay(670));
-        const id = addSeries(first, "FREQ=WEEKLY");
-
-        const dc = makeDay(probeDay(648));
-        const block = findChild(dc, "event-" + id);
-        verify(block === null || !block.visible);
-    }
-
     // ── The three scopes, through the model ──
 
     function occurrenceOn(day) {

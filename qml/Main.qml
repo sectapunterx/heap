@@ -209,94 +209,16 @@ ApplicationWindow {
     property string searchText: ""
     property var prioritiesFilter: ({})
 
-    // The calendar + people column. It took 420px on every view, which on a
-    // narrow window left two board columns. It folds away below
-    // _rightPanelMinWidth unless asked for, and the choice on a wide window is
-    // remembered in settings.
-    // 1440, not 1280: a 1080p screen at 150% is 1280 logical px, and with both
-    // side panels open that left the board about two columns.
-    readonly property int _rightPanelMinWidth: 1440
-    readonly property bool _narrow: win.width < _rightPanelMinWidth
-    property bool _rightPanelWanted: _settingsObject().rightPanel !== false
-    property bool _rightPanelOnNarrow: false
-    // Week and month are a calendar already, and settings has nothing to plan
-    // against: the panel's day grid next to them was a second calendar and
-    // 420px less of the first. It stays folded there unless asked for, and
-    // asking lasts until the app closes.
-    readonly property bool _panelFoldedView: AppController.currentView === "day"
-                                             || AppController.currentView === "week"
-                                             || AppController.currentView === "month"
-                                             || AppController.currentView === "settings"
-    property bool _rightPanelInFoldedView: false
-    // Board and List (APP-281 A2): the day panel beside them is the user's
-    // call, Ctrl \, remembered (settings.dayPanel). Until it is made, the
-    // quiet style keeps it closed, and the bold one opens it only on a window
-    // wide enough to keep six board columns beside it (APP-262: they fit
-    // 1440 px without a panel).
-    readonly property bool _dayPanelView: AppController.currentView === "board" || AppController.currentView === "list"
-    // "on" | "off" | "" (not chosen yet).
-    property string _dayPanelWanted: {
-        const v = _settingsObject().dayPanel;
-        return v === true ? "on" : v === false ? "off" : "";
-    }
-    readonly property bool dayPanelShown: win._dayPanelWanted === "on" ? true
-        : win._dayPanelWanted === "off" ? false
-        : (!Style.quiet && win.width >= win._rightPanelMinWidth + win.rightPanelDefaultWidth)
-    readonly property bool rightPanelShown: AppController.currentView === "today" ? false
-                                          : _dayPanelView ? dayPanelShown
-                                          : _narrow ? _rightPanelOnNarrow
-                                          : _panelFoldedView ? _rightPanelInFoldedView
-                                          : _rightPanelWanted
-    function toggleRightPanel() {
-        if (_dayPanelView) {
-            const open = !dayPanelShown;
-            _dayPanelWanted = open ? "on" : "off";
-            const ds = _settingsObject();
-            ds.dayPanel = open;
-            AppController.appSettingsJson = JSON.stringify(ds);
-            return;
-        }
-        if (_narrow) {
-            _rightPanelOnNarrow = !_rightPanelOnNarrow;
-            return;
-        }
-        if (_panelFoldedView) {
-            _rightPanelInFoldedView = !_rightPanelInFoldedView;
-            return;
-        }
-        _rightPanelWanted = !_rightPanelWanted;
-        const s = _settingsObject();
-        s.rightPanel = _rightPanelWanted;
-        AppController.appSettingsJson = JSON.stringify(s);
-    }
-
-    // Right panel width, dragged from its left edge. Clamped so the main
-    // column keeps room for at least a couple of board columns; the stored
-    // value is what the user dragged to, the clamp applies per window size.
-    readonly property int rightPanelDefaultWidth: 420
-    readonly property int rightPanelMinWidth: 300
-    readonly property int rightPanelMaxWidth: Math.max(rightPanelMinWidth,
-        Math.min(720, win.width - rail.width - 520))
-    property int _rightPanelWidthWanted: {
-        const w = Number(_settingsObject().rightPanelWidth);
-        return isFinite(w) && w > 0 ? Math.round(w) : rightPanelDefaultWidth;
-    }
-    readonly property int rightPanelWidth: Math.max(rightPanelMinWidth,
-        Math.min(rightPanelMaxWidth, _rightPanelWidthWanted))
-    function setRightPanelWidth(w, persist) {
-        _rightPanelWidthWanted = Math.max(rightPanelMinWidth, Math.min(rightPanelMaxWidth, Math.round(w)));
-        if (persist) {
-            const s = _settingsObject();
-            s.rightPanelWidth = _rightPanelWidthWanted;
-            AppController.appSettingsJson = JSON.stringify(s);
-        }
-    }
+    // No right panel (DG-002): the sheets have none. The day is on Today
+    // and in the calendar; the people are in "Кому написать" on Today and
+    // in their own dialog (PeopleDialog, palette "people.open").
 
     // Left sidebar: labelled (expanded) or the 56px icon rail. The choice is
     // remembered; below _sideRailMinWidth it folds to the rail on its own
     // without overwriting what was chosen, same as the right panel.
-    // heap 2 (APP-258): the sidebar folds to its icons below ~1100px.
-    readonly property int _sideRailMinWidth: 1100
+    // heap 2 (APP-258): the sidebar folds to its icons on a small window
+    // (X-Oth-Small: 1280×720 is small, DG-008).
+    readonly property int _sideRailMinWidth: Theme.compactWindowWidth
     property bool _sideRailWanted: _settingsObject().sideRailExpanded !== false
     property bool _sideRailOnNarrow: false
     readonly property bool sideRailExpanded: win.width < _sideRailMinWidth ? _sideRailOnNarrow : _sideRailWanted
@@ -327,7 +249,7 @@ ApplicationWindow {
     }
     property string listGroupBy: {
         const g = _settingsObject().listGroupBy;
-        return ["date", "status", "priority", "profile"].indexOf(g) >= 0 ? g : "date";
+        return ["date", "status", "priority", "profile", "month"].indexOf(g) >= 0 ? g : "date";
     }
     function setListGroupBy(g) {
         win.listGroupBy = g;
@@ -337,13 +259,24 @@ ApplicationWindow {
     }
     readonly property var _groupOption: {
         const ids = ["date", "status", "priority", "profile"];
-        return { label: I18n.t("list.groupBy"), current: win.listGroupBy,
-                 value: I18n.t("list.groupBy." + win.listGroupBy),
+        if (win._archiveQuery) ids.push("month");
+        return { label: I18n.t("list.groupBy"), current: win.listGroupEffective,
+                 value: I18n.t("list.groupBy." + win.listGroupEffective),
                  items: ids.map(id => ({ id: id, label: I18n.t("list.groupBy." + id) })) };
     }
     // The archive is a condition of the query on Board and List (heap 2,
     // X-Oth-Archive-People): "is:archived" lets archived tasks through.
     readonly property bool tasksShowArchived: win.showArchived || /(^|\s)is:archived(\s|$)/i.test(win.searchText)
+    // Archive is not a section of its own (DG-161, X-Oth-Archive-People): it
+    // is Tasks · List with the condition "is:archived", grouped by month.
+    readonly property bool _archiveQuery: /(^|\s)is:archived(\s|$)/i.test(win.searchText)
+    function openArchive() {
+        if (!win._archiveQuery) win.searchText = (win.searchText.trim() + " is:archived").trim();
+        AppController.currentView = "list";
+    }
+    // By date an archive is one "Earlier" heap: it goes by month unless
+    // another grouping was picked.
+    readonly property string listGroupEffective: win._archiveQuery && win.listGroupBy === "date" ? "month" : win.listGroupBy
 
     // Search, priority chips, sort and the archived / done toggles survive a
     // restart (TASKS-22): they lived only on the window, so every launch
@@ -370,8 +303,7 @@ ApplicationWindow {
         const v = AppController.currentView;
         const pri = [];
         for (const k in win.prioritiesFilter) if (win.prioritiesFilter[k]) pri.push(k);
-        AppController.setSelectionFilter(win.searchText, pri, win.showArchived || v === "archive",
-                                         v === "timeline" && !win.showDoneTimeline);
+        AppController.setSelectionFilter(win.searchText, pri, win.tasksShowArchived, false);
     }
     onSearchTextChanged: { _saveFiltersSoon(); _syncSelectionFilter(); }
     onPrioritiesFilterChanged: { _saveFiltersSoon(); _syncSelectionFilter(); }
@@ -1002,7 +934,7 @@ ApplicationWindow {
             const serial = AppController.undoSerialForToast();
             toast.showWithAction(msg, I18n.t("undo.action"), secs, function () {
                 AppController.undoEntry(serial)
-            });
+            }, "success", AppController.shortcutText("undo"));
         }
         // "Done" with no column of that stage: offer to make one (APP-268).
         function onDoneColumnMissing() {
@@ -1035,7 +967,7 @@ ApplicationWindow {
 
     GridLayout {
         anchors.fill: parent
-        columns: 3
+        columns: 2
         rows: 1
         columnSpacing: 0
         rowSpacing: 0
@@ -1071,6 +1003,7 @@ ApplicationWindow {
             onImportJsonRequested: importJsonDialog.open()
             onImportIcsRequested: importIcsDialog.open()
             onImportVaultRequested: importVaultDialog.open()
+            onRemoveExampleRequested: win.removeExample()
             onExportVaultRequested: exportVaultDialog.open()
             onExportIcsRequested: {
                 exportIcsDialog.currentFile = "file:///" + (
@@ -1101,35 +1034,6 @@ ApplicationWindow {
 
                 // state.json unreadable / from a newer heap / not saving.
                 StorageBanner { Layout.fillWidth: true }
-
-                // The example profile (APP-271): says so, and takes it away
-                // in one action — asking first when it was worked in.
-                Rectangle {
-                    objectName: "example-banner"
-                    Layout.fillWidth: true
-                    readonly property bool isExample: AppController.activeProfileId === "lowkey-example"
-                    visible: isExample
-                    implicitHeight: visible ? Theme.px(36) : 0
-                    color: Theme.panel2
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: Theme.sp2xl
-                        anchors.rightMargin: Theme.spLg
-                        spacing: Theme.spLg
-                        Text {
-                            text: I18n.t("example.banner")
-                            color: Theme.textMuted
-                            font.pixelSize: Theme.fsSm
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
-                        }
-                        PillButton {
-                            objectName: "example-remove"
-                            text: I18n.t("example.remove")
-                            onClicked: win.removeExample()
-                        }
-                    }
-                }
 
             TopBar {
                 id: topBar
@@ -1194,9 +1098,7 @@ ApplicationWindow {
                           && AppController.currentView !== "today"
                           && AppController.currentView !== "notes"
                           && AppController.currentView !== "settings"
-                          && AppController.currentView !== "archive"
-                    viewLabel: AppController.currentView === "timeline" ? I18n.t("siderail.timeline")
-                             : AppController.currentView === "day" ? I18n.t("calzoom.day")
+                    viewLabel: AppController.currentView === "day" ? I18n.t("calzoom.day")
                              : AppController.currentView === "week" ? I18n.t("siderail.week")
                              : AppController.currentView === "month" ? I18n.t("siderail.month")
                              : I18n.t("siderail.board")
@@ -1205,7 +1107,7 @@ ApplicationWindow {
                     // counts used to include archived tasks and ignore the
                     // search and the priority chips.
                     readonly property var _fc: AppController.filteredCounts(win.searchText, win._activePriorities,
-                        win.tasksShowArchived, AppController.currentView === "timeline" && !win.showDoneTimeline, win._counts)
+                        win.tasksShowArchived, false, win._counts)
                     totalCount: _fc.total
                     activeCount: _fc.active
                     blockedCount: _fc.blocked
@@ -1274,9 +1176,7 @@ ApplicationWindow {
                         sourceComponent: {
                             if (AppController.currentView === "today") return todayComp;
                             if (AppController.currentView === "list") return listComp;
-                            if (AppController.currentView === "timeline") return timelineComp;
                             if (["day", "week", "month"].indexOf(AppController.currentView) >= 0) return calendarComp;
-                            if (AppController.currentView === "archive") return archiveComp;
                             if (AppController.currentView === "settings") return settingsComp;
                             return null;
                         }
@@ -1287,7 +1187,7 @@ ApplicationWindow {
                     Binding { when: win._listOn; target: viewLoader.item; property: "searchText"; value: win.searchText }
                     Binding { when: win._listOn; target: viewLoader.item; property: "prioritiesFilter"; value: win.prioritiesFilter }
                     Binding { when: win._listOn; target: viewLoader.item; property: "showArchived"; value: win.tasksShowArchived }
-                    Binding { when: win._listOn; target: viewLoader.item; property: "groupBy"; value: win.listGroupBy }
+                    Binding { when: win._listOn; target: viewLoader.item; property: "groupBy"; value: win.listGroupEffective }
                     Connections {
                         target: viewLoader.item as TaskListView
                         ignoreUnknownSignals: true
@@ -1308,6 +1208,7 @@ ApplicationWindow {
                         function onConnectRequested() { win.runCommand("settings:integrations"); }
                         function onImportRequested() { importVaultDialog.open(); }
                         function onExampleRequested() { win.openExample(); }
+                        function onPeopleRequested(id) { peopleDialog.showFor(id); }
                     }
 
                     // First visit to one of the kept-alive views builds it.
@@ -1318,6 +1219,10 @@ ApplicationWindow {
                     Connections {
                         target: AppController
                         function onCurrentViewChanged() {
+                            // The document belongs to the section it was
+                            // opened in: another section closes it (DG-064).
+                            if (AppController.currentSection !== win._docSection && taskDoc.opened) taskDoc.close();
+                            win._docSection = AppController.currentSection;
                             win.activateCurrentView();
                             Qt.callLater(win._focusSwitchedView);
                         }
@@ -1337,6 +1242,7 @@ ApplicationWindow {
                         onInternalLinkActivated: (kind, target) => win.followMdLink(kind, target)
                     }
                     SelectionBar {
+                        restoring: win._archiveQuery
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.bottom: parent.bottom
                         anchors.bottomMargin: Theme.sp2xl
@@ -1363,18 +1269,6 @@ ApplicationWindow {
                     id: listComp
                     TaskListView {}
                 }
-                Component {
-                    id: timelineComp
-                    TimelineView {
-                        searchText: win.searchText
-                        prioritiesFilter: win.prioritiesFilter
-                        scheduleMap: win._scheduleMap
-                        showDone: win.showDoneTimeline
-                        showArchived: win.showArchived
-                        onTaskClicked: (id) => win.showTask(AppController.taskById(id))
-                        onToggleShowDone: win.showDoneTimeline = !win.showDoneTimeline
-                    }
-                }
                 // The Calendar lens (APP-264): Day / Week / Month as one zoom,
                 // with the "Without a date" tray. The zoom follows the view id,
                 // so the grid is kept across Day <-> Week.
@@ -1398,14 +1292,6 @@ ApplicationWindow {
                             AppController.selectedDate = day;
                             AppController.currentView = "day";
                         }
-                    }
-                }
-                Component {
-                    id: archiveComp
-                    ArchiveView {
-                        searchText: win.searchText
-                        prioritiesFilter: win.prioritiesFilter
-                        onTaskClicked: (id) => win.showTask(AppController.taskById(id))
                     }
                 }
                 Component {
@@ -1446,111 +1332,6 @@ ApplicationWindow {
                 }
             }
         }
-
-        // Right column
-        Rectangle {
-            id: rightPanel
-            objectName: "right-panel"
-            visible: win.rightPanelShown
-            Layout.row: 0; Layout.column: 2
-            Layout.preferredWidth: win.rightPanelWidth
-            Layout.minimumWidth: win.rightPanelMinWidth
-            Layout.maximumWidth: win.rightPanelMaxWidth
-            Layout.fillHeight: true
-            color: Theme.panel
-            Rectangle {
-                anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
-                width: 1
-                color: rightResize.pressed ? Theme.accent
-                     : rightResize.containsMouse ? Theme.borderStrong : Theme.border
-            }
-            // Drag handle on the left edge. Width follows the pointer live;
-            // settings are written once, on release.
-            MouseArea {
-                id: rightResize
-                objectName: "right-panel-resize"
-                anchors.left: parent.left; anchors.leftMargin: -3
-                anchors.top: parent.top; anchors.bottom: parent.bottom
-                width: 7
-                z: 10
-                hoverEnabled: true
-                cursorShape: Qt.SplitHCursor
-                property real _startX: 0
-                property int _startW: 0
-                onPressed: (m) => {
-                    _startX = mapToGlobal(m.x, 0).x;
-                    _startW = win.rightPanelWidth;
-                }
-                onPositionChanged: (m) => {
-                    if (pressed) win.setRightPanelWidth(_startW - (mapToGlobal(m.x, 0).x - _startX), false);
-                }
-                onReleased: win.setRightPanelWidth(win.rightPanelWidth, true)
-                onDoubleClicked: win.setRightPanelWidth(win.rightPanelDefaultWidth, true)
-                ToolTip.visible: containsMouse && !pressed
-                ToolTip.delay: 800
-                ToolTip.text: I18n.t("rightpanel.resizeTip")
-                Rectangle {
-                    anchors.centerIn: parent
-                    width: 2; height: 32; radius: 1
-                    color: Theme.text
-                    opacity: rightResize.containsMouse || rightResize.pressed ? 0.5 : 0
-                }
-            }
-            ColumnLayout {
-                anchors.fill: parent
-                spacing: 0
-                MiniWeek { Layout.fillWidth: true }
-                SplitView {
-                    id: rightSplit
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    orientation: Qt.Vertical
-                    // Remember where the calendar / people split was left.
-                    onResizingChanged: if (!resizing) {
-                        const s = win._settingsObject();
-                        s.peopleListHeight = Math.round(peopleList.height);
-                        AppController.appSettingsJson = JSON.stringify(s);
-                    }
-
-                    handle: Rectangle {
-                        implicitHeight: 6
-                        color: SplitHandle.pressed ? Theme.accent
-                             : SplitHandle.hovered ? Theme.borderStrong
-                             : Theme.border
-                        Rectangle {
-                            anchors.centerIn: parent
-                            width: 32; height: 2; radius: 1
-                            color: SplitHandle.hovered ? Theme.text : Theme.textDim
-                            opacity: 0.6
-                        }
-                    }
-
-                    DayCalendar {
-                        SplitView.fillHeight: true
-                        SplitView.minimumHeight: 120
-                        onEventClicked: (id, occurrence) => occurrence ? eventEditor.showForOccurrence(occurrence) : eventEditor.showForId(id)
-                        // A click or a drag on an empty slot opens the editor,
-                        // the same as the week grid.
-                        onCreateRequested: (startHour, endHour, day) => {
-                            const draft = AppController.newEventDraft(startHour, day);
-                            draft.end = endHour;
-                            eventEditor.showForDraft(draft);
-                        }
-                        onTaskClicked: (id) => win.showTask(AppController.taskById(id))
-                    }
-                    PeopleList {
-                        id: peopleList
-                        SplitView.preferredHeight: {
-                            const h = Number(win._settingsObject().peopleListHeight);
-                            return isFinite(h) && h >= 64 ? h : 220;
-                        }
-                        SplitView.minimumHeight: 64
-                        onPersonRequested: (id) => personEditor.showFor(AppController.personById(id))
-                        onPickPersonRequested: personPicker.open_()
-                    }
-                }
-            }
-        }
     }
 
     TaskEditor    {
@@ -1560,6 +1341,11 @@ ApplicationWindow {
     }
     EventEditor   { id: eventEditor }
     PersonEditor  { id: personEditor }
+    PeopleDialog {
+        id: peopleDialog
+        onEditRequested: (id) => personEditor.showFor(AppController.personById(id))
+        onAddRequested: personPicker.open_()
+    }
     PersonPicker  {
         id: personPicker
         onDraftRequested: (draft) => personEditor.showFor(draft)
@@ -1652,11 +1438,10 @@ ApplicationWindow {
                 Layout.preferredHeight: 22
                 radius: Theme.radiusSm
                 color: giveUpMA.hovered ? Theme.panel3 : "transparent"
-                Text {
+                Icon {
                     anchors.centerIn: parent
-                    text: "✕"
+                    name: "close"
                     color: giveUpMA.hovered ? Theme.text : Theme.textMuted
-                    font.pixelSize: Theme.fsMd
                 }
                 ClickArea {
                     id: giveUpMA
@@ -1764,6 +1549,7 @@ ApplicationWindow {
     }
     // A task opens as a document (APP-265); a draft is made real first, and
     // one with no title yet still goes to the editor.
+    property string _docSection: AppController.currentSection
     function showTask(t) {
         if (!t) return;
         if (t._isNew) {
@@ -1947,6 +1733,14 @@ ApplicationWindow {
             });
             return;
         }
+        if (id === "view.archive") {
+            win.openArchive();
+            return;
+        }
+        if (id === "view.timeline") {
+            AppController.currentView = "list";
+            return;
+        }
         if (id.indexOf("view.") === 0) {
             AppController.currentView = id.slice(5);
             return;
@@ -1979,7 +1773,7 @@ ApplicationWindow {
         case "task.schedule":        win.scheduleKeyTasks(); break;
         case "quick-capture":        quickCapture.open(); break;
         case "quick-capture-notes":  quickCaptureNotes.open(); break;
-        case "panel.right":          win.toggleRightPanel(); break;
+        case "people.open":          peopleDialog.showFor(""); break;
         case "rail.toggle":          win.toggleSideRail(); break;
         case "theme.toggle":         AppController.theme = (Theme.slot === "dark" ? "light" : "dark"); break;
         case "person.new":           personPicker.open_(); break;
@@ -2099,7 +1893,7 @@ ApplicationWindow {
     // the key came from a non-Latin layout; everything else it runs itself
     // through runShortcut().
     readonly property var _qtOwned: [
-        "palette.open", "palette.open.alt", "panel.right", "rail.toggle", "task.new", "quick-capture",
+        "palette.open", "palette.open.alt", "rail.toggle", "task.new", "quick-capture",
         "quick-capture-notes", "section.today", "section.tasks", "section.knowledge", "view.board",
         "view.timeline", "view.week", "view.month", "view.docs", "view.notes", "view.settings", "view.archive",
         "theme.toggle", "person.new", "profile.new", "profile.next", "profile.prev", "profile.exportMd",
@@ -2116,7 +1910,7 @@ ApplicationWindow {
         "savedView.1", "savedView.2", "savedView.3", "savedView.4", "savedView.5", "savedView.6",
         "savedView.7", "savedView.8", "savedView.9", "region.next", "region.prev"
     ]
-    readonly property var _dayViews: ["today", "board", "timeline", "week", "month", "archive"]
+    readonly property var _dayViews: ["today", "board", "list", "week", "month"]
     // Shift V: j / k grow the selection from the cursor until Esc.
     property bool _rangeMode: false
     // The last d, so a Vim-habit "dd" does not take Done back (keymap rule 6).
@@ -2197,7 +1991,7 @@ ApplicationWindow {
         case "cal.longer": case "cal.shorter":
             return !win._viewKeysBlocked && !!b && typeof b.resizeCursor === "function";
         case "selection.selectAll":
-            return ["board", "timeline", "week", "archive"].indexOf(v) >= 0;
+            return ["board", "list", "week"].indexOf(v) >= 0;
         case "nav.back": return win._navBack.length > 0 && !win._typing;
         case "nav.forward": return win._navFwd.length > 0 && !win._typing;
         case "undo": return AppController.hasPendingUndo && !win._overlayOpen && !win._typing;
@@ -2441,12 +2235,6 @@ ApplicationWindow {
     }
 
     Shortcut {
-        sequence: _kbd("panel.right")
-        context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: win.toggleRightPanel()
-    }
-    Shortcut {
         sequence: _kbd("rail.toggle")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
@@ -2498,7 +2286,7 @@ ApplicationWindow {
         sequence: _kbd("view.timeline")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: AppController.currentView = "timeline"
+        onActivated: AppController.currentView = "list"
     }
     Shortcut {
         sequence: _kbd("view.week")
@@ -2534,7 +2322,7 @@ ApplicationWindow {
         sequence: _kbd("view.archive")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: AppController.currentView = "archive"
+        onActivated: win.openArchive()
     }
     Shortcut {
         sequence: _kbd("theme.toggle")
@@ -2718,10 +2506,9 @@ ApplicationWindow {
         enabled: sequence.length > 0 && !win._viewKeysBlocked
             && (AppController.currentView === "board"
                 || AppController.currentView === "list"
-                || AppController.currentView === "timeline"
                 || AppController.currentView === "day"
                 || AppController.currentView === "week"
-                || AppController.currentView === "archive")
+)
         onActivated: {
             const v = win.activeViewItem();
             if (v && v.selectAllVisible) v.selectAllVisible();
@@ -2786,7 +2573,7 @@ ApplicationWindow {
     component DayKey: Shortcut {
         context: Qt.ApplicationShortcut
         enabled: sequences.length > 0 && !win._viewKeysBlocked
-            && ["today", "board", "timeline", "day", "week", "month", "archive"].indexOf(AppController.currentView) >= 0
+            && ["today", "board", "list", "day", "week", "month"].indexOf(AppController.currentView) >= 0
     }
     DayKey {
         sequences: [_kbd("cal.today")]
@@ -2857,12 +2644,12 @@ ApplicationWindow {
         sequences: ["Z,M"]
         onActivated: AppController.currentView = "month"
     }
-    // What a drag does in Week, Month and Timeline, from the keyboard
+    // What a drag does in Week and Month, from the keyboard
     // (APP-249): the task that has the keyboard (or the pointer) moves a day,
     // a week, or a grid step. Ctrl+arrows are the board's own card moves;
     // these are live only in the three views that drag dates.
     readonly property bool _moveKeysOn: !win._viewKeysBlocked
-        && ["day", "week", "month", "timeline"].indexOf(AppController.currentView) >= 0
+        && ["day", "week", "month"].indexOf(AppController.currentView) >= 0
     function _moveViewTask(days, steps) {
         const v = win.activeViewItem();
         if (!v) return;
@@ -2960,7 +2747,7 @@ ApplicationWindow {
 
     // ── Regions (APP-277) ──────────────────────────────────────────────
     // F6 / Shift F6 go round sidebar → content (onto the cursor) → the task
-    // document or the right panel → the header's filter line, instead of a
+    // document → the header's filter line, instead of a
     // long Tab through every control. The region it lands in is framed until
     // the keyboard leaves it.
     property string regionShown: ""
@@ -2968,7 +2755,7 @@ ApplicationWindow {
         for (let p = it; p; p = p.parent) {
             if (p === rail) return "sidebar";
             if (p === topBar) return "header";
-            if (p === taskDoc || p === rightPanel) return "panel";
+            if (p === taskDoc) return "panel";
         }
         return "content";
     }
@@ -2976,13 +2763,13 @@ ApplicationWindow {
         const out = [];
         if (rail.visible && rail.width > 0) out.push("sidebar");
         out.push("content");
-        if (taskDoc.opened || win.rightPanelShown) out.push("panel");
+        if (taskDoc.opened) out.push("panel");
         if (topBar.visible) out.push("header");
         return out;
     }
     function _regionItem(r) {
         return r === "sidebar" ? rail : r === "header" ? topBar
-             : r === "panel" ? (taskDoc.opened ? taskDoc : rightPanel) : viewArea;
+             : r === "panel" ? taskDoc : viewArea;
     }
     function _firstTabStop(it) {
         const kids = it ? it.children : [];
@@ -3199,8 +2986,6 @@ ApplicationWindow {
         enabled: sequence.length > 0 && !win._viewKeysBlocked
             && (AppController.currentView === "board"
                 || AppController.currentView === "list"
-                || AppController.currentView === "archive"
-                || AppController.currentView === "timeline"
                 || AppController.currentView === "day"
                 || AppController.currentView === "week")
         onActivated: {

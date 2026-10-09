@@ -97,6 +97,7 @@ QVariantList AppController::taskListRows(const QString& query,
     it.priority = heap::local::effectivePriority(t);
     it.profile = s.profile;
     it.profileIndex = profileIndex.value(s.profile, 0);
+    it.changed = t.statusChangedAt.isValid() ? t.statusChangedAt.date() : QDate();
     items.append(it);
   }
 
