@@ -11,7 +11,7 @@ namespace {
 
 // Same guard as the task's own: a new field here fails the build until the
 // JSON below learns it and tests/test_roundtrip.cpp fills it in makeFullTask().
-static_assert(heap::meta::fieldCount<TaskLocal>() == 12,
+static_assert(heap::meta::fieldCount<TaskLocal>() == 13,
               "TaskLocal gained or lost a field. Update toJson/fromJson in src/local/TaskLocal.cpp, "
               "extend makeFullTask() in tests/test_roundtrip.cpp, then bump this count.");
 static_assert(heap::meta::fieldCount<LocalCheckItem>() == 6,
@@ -30,6 +30,37 @@ QString dtToStr(const QDateTime& dt) {
 
 QDateTime dtFromStr(const QString& s) {
   return s.isEmpty() ? QDateTime() : QDateTime::fromString(s, Qt::ISODate);
+}
+
+static_assert(heap::meta::fieldCount<TimerSession>() == 4,
+              "TimerSession gained or lost a field. Update sessionsToJson/FromJson in src/local/TaskLocal.cpp "
+              "and makeFullTask() in tests/test_roundtrip.cpp.");
+
+QJsonArray sessionsToJson(const QVector<TimerSession>& xs) {
+  QJsonArray a;
+  for(const TimerSession& s : xs) {
+    QJsonObject o;
+    o["id"] = s.id;
+    o["start"] = dtToStr(s.start);
+    o["end"] = dtToStr(s.end);
+    o["seconds"] = s.seconds;
+    a.append(o);
+  }
+  return a;
+}
+
+QVector<TimerSession> sessionsFromJson(const QJsonArray& a) {
+  QVector<TimerSession> out;
+  for(const auto& v : a) {
+    const QJsonObject o = v.toObject();
+    TimerSession s;
+    s.id = o["id"].toString();
+    s.start = dtFromStr(o["start"].toString());
+    s.end = dtFromStr(o["end"].toString());
+    s.seconds = qMax(0, o["seconds"].toInt(0));
+    out.append(s);
+  }
+  return out;
 }
 
 QJsonArray checklistToJson(const QVector<LocalCheckItem>& xs) {
@@ -148,6 +179,7 @@ QJsonObject toJson(const TaskLocal& l, bool compact) {
   put("related", relatedToJson(l.related), l.related.isEmpty());
   put("commentDraft", l.commentDraft, l.commentDraft.isEmpty());
   put("doneFrom", l.doneFrom, l.doneFrom.isEmpty());
+  put("sessions", sessionsToJson(l.sessions), l.sessions.isEmpty());
   return o;
 }
 
@@ -164,6 +196,7 @@ TaskLocal fromJson(const QJsonObject& o) {
   l.related = relatedFromJson(o["related"].toArray());
   l.commentDraft = o["commentDraft"].toString();
   l.doneFrom = o["doneFrom"].toString();
+  l.sessions = sessionsFromJson(o["sessions"].toArray());
   static const QStringList kKnown = {QStringLiteral("notes"),
                                      QStringLiteral("checklist"),
                                      QStringLiteral("myPriority"),
@@ -174,7 +207,8 @@ TaskLocal fromJson(const QJsonObject& o) {
                                      QStringLiteral("tags"),
                                      QStringLiteral("related"),
                                      QStringLiteral("commentDraft"),
-                                     QStringLiteral("doneFrom")};
+                                     QStringLiteral("doneFrom"),
+                                     QStringLiteral("sessions")};
   for(auto it = o.begin(); it != o.end(); ++it) {
     if(!kKnown.contains(it.key())) {
       l.extra.insert(it.key(), it.value());

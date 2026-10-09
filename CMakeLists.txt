@@ -188,6 +188,8 @@ qt_add_library(heap_core STATIC
     src/StateSerializer.cpp
     # The task's local layer (ADR 0001, APP-244).
     src/local/TaskLocal.cpp
+    src/local/Checklist.cpp
+    src/local/Sessions.cpp
     src/CodeHighlighter.cpp
     src/chrono/ChronoTokenizer.cpp
     src/chrono/ChronoLocale_en.cpp
@@ -236,6 +238,7 @@ qt_add_library(heap_core STATIC
     # ── audit-plat: end ──
     # ── audit-tasks: begin ──
     src/AppControllerTaskEdits.cpp
+    src/AppControllerLocal.cpp
     src/AppControllerSavedViews.cpp
     src/AppControllerSafety.cpp
     src/safety/SafetyText.cpp
@@ -394,6 +397,13 @@ qt_add_qml_module(heap_core
         qml/AppSwitch.qml
         qml/TaskMenuHost.qml
         qml/TaskDocument.qml
+        # The local layer in the document and on the card (APP-236…241, 251).
+        qml/TaskLocalChecklist.qml
+        qml/TaskLocalTags.qml
+        qml/TaskRelations.qml
+        qml/TaskCommentDraft.qml
+        qml/TaskSessions.qml
+        qml/TaskCardLocal.qml
         qml/MdBlockEditor.qml
         qml/FilterBar.qml
         qml/KanbanBoard.qml
@@ -684,6 +694,8 @@ if(WIN32)
         src/storage/StateIO.cpp
         src/StateSerializer.cpp
         src/local/TaskLocal.cpp
+        src/local/Checklist.cpp
+        src/local/Sessions.cpp
         src/Models.cpp
     )
     set_target_properties(heap-cli PROPERTIES AUTOMOC ON)

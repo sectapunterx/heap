@@ -281,6 +281,16 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"task.idInvalid", {"“%1” can't be an id — no spaces or slashes", "«%1» не подходит для id — без пробелов и слэшей"}},
       {"task.editUndone", {"Edit undone: %1", "Правка отменена: %1"}},
       {"task.createUndone", {"Creation undone: %1", "Создание отменено: %1"}},
+      // The local layer (APP-236…241, 251).
+      {"local.waitsOn", {"%1 waits on %2 — still open", "%1 ждёт %2 — ещё открыто"}},
+      {"local.draftCopied", {"Draft copied — paste it into the ticket", "Черновик скопирован — вставьте его в тикет"}},
+      {"local.draftCleared", {"Draft cleared", "Черновик очищен"}},
+      {"local.notesCopied", {"Notes copied to the note “%1”", "Заметки скопированы в заметку «%1»"}},
+      {"local.notesFrom", {"From the notes of task %1", "Из заметок задачи %1"}},
+      {"local.tagRenamed", {"Tag #%1 → #%2", "Метка #%1 → #%2"}},
+      {"local.tagDeleted", {"Tag #%1 removed from %2 card(s)", "Метка #%1 снята с карточек: %2"}},
+      {"local.itemToCard", {"%1: now a card of its own", "%1: теперь своя карточка"}},
+      {"local.relatedNotFound", {"No task or link like “%1”", "Нет задачи или ссылки «%1»"}},
       // audit-tasks: toasts for operations that became undoable.
       {"undo.changedSince", {"Can't undo that — it has been changed since", "Нельзя отменить — это уже изменили после"}},
       {"undo.column", {"Column change undone: %1", "Изменение колонки отменено: %1"}},
@@ -989,6 +999,8 @@ AppController::AppController(QObject* parent) :
   // whichever path made it, minus loads. A tracker pull marks its own.
   m_tasks.setChangeObserver([this](const Task* before, const Task& after) {
     recordTaskChange(before, after);
+    // A checklist item that became this card ticks with its Done (APP-236).
+    followCardDone_(before, after);
   });
 
   // Re-localize shortcut catalog when language flips so the Settings →
@@ -2368,6 +2380,7 @@ void AppController::moveTaskRanked(const QString& id, const QString& newStatus, 
       }
       copy.statusChangedAt = QDateTime::currentDateTime();
       copy.trackedSeconds = 0;
+      copy.local.sessions.clear();
       copy.timerStartedAt = QDateTime();
       copy.recurrence = recurrence;  // stays recurring
       copy.externalId.clear();       // a new local occurrence, not the synced issue
@@ -6949,11 +6962,17 @@ QVariantMap AppController::taskById(const QString& id) const {
   m["externalProvider"] = t.externalProvider;
   // Everything the editor's read-only ticket strip shows (HEAP-117).
   m["ticket"] = ticketToVariant(t);
+  // My own tags (APP-239), apart from the tracker's labels.
+  QVariantList tags;
+  for(const LocalTag& tag : t.local.tags) {
+    tags.append(QVariantMap{{"id", tag.id}, {"color", tag.color}});
+  }
+  m["localTags"] = tags;
   return m;
 }
 
 QVariantMap AppController::compileSearch(const QString& text) const {
-  const heap::query::TaskQuery q = heap::query::TaskQuery::compile(text, m_today, m_statuses, m_syncNewIds);
+  const heap::query::TaskQuery q = compileTaskQuery_(text);
   QVariantMap out;
   out["isQuery"] = q.isQuery();
   out["freeText"] = q.freeText();
@@ -13578,6 +13597,8 @@ void AppController::focusBlockOnStatusChange(const QString& taskId, const QStrin
   const bool wasDoing = !from.isEmpty() && isDoingStatus(from);
   const bool isDoing = isDoingStatus(to);
   if(isDoing && !wasDoing) {
+    // A fact, not a refusal (APP-240): it still waits on something open.
+    noteOpenBlockers_(taskId);
     if(settingsMap().value("calendar").toMap().value("autoFocusBlock", true).toBool()) {
       scheduleFocusBlockFor(taskId);
     }
@@ -13602,8 +13623,9 @@ void AppController::scheduleFocusBlockFor(const QString& taskId) {
       return;
     }
   }
-  const QVariantMap cal = settingsMap().value("calendar").toMap();
-  const int durMin = cal.value("focusBlockDuration", 90).toInt();
+  // As long as the task's estimate when it has one (APP-246), else the
+  // focus-block length from settings — the same rule as a drop on the grid.
+  const int durMin = taskBlockMinutes(taskId);
   const double dur = std::max(0.25, durMin / 60.0);
   // The first free stretch inside working hours, on a working day, within the
   // coming week. A Saturday-night drag used to book 21:00 that same night.

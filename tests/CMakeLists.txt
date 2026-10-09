@@ -46,7 +46,22 @@ set(HEAP_QUERY_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_en.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_ru.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoParser.cpp
+    # Models.cpp reads the local checklist and sessions (APP-236, 251).
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/TaskLocal.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/Checklist.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/Sessions.cpp
 )
+
+# The local checklist and timer sessions as pure rules (APP-236, 251).
+add_executable(heap_local_rules_tests
+    test_local_checklist.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/TaskLocal.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/Checklist.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/Sessions.cpp
+)
+target_include_directories(heap_local_rules_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_local_rules_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
+add_test(NAME heap_local_rules_tests COMMAND heap_local_rules_tests)
 
 add_executable(heap_chrono_tests
     test_chrono_parser.cpp
@@ -408,6 +423,8 @@ heap_add_appcontroller_test(heap_sync_visibility_tests test_sync_visibility.cpp)
 # Tracker writes are opt-in per tracker, and checked before they go (APP-243/204).
 # The local layer (ADR 0001, APP-244): no sync path touches Task.local.
 heap_add_appcontroller_test(heap_local_layer_tests test_local_layer.cpp)
+# The local layer as the UI works it (APP-236…241, 246, 250, 251).
+heap_add_appcontroller_test(heap_local_features_tests test_local_features.cpp)
 # Upgrading 0.7.x (schema 11) to 0.8.0 loses no key (APP-244).
 heap_add_appcontroller_test(heap_upgrade_lossless_tests test_upgrade_lossless.cpp)
 target_compile_definitions(heap_upgrade_lossless_tests PRIVATE
@@ -811,6 +828,8 @@ add_executable(heap_sync_tests
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/sync/SyncSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/sync/SyncSerializer.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/TaskLocal.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/Checklist.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/Sessions.cpp
 )
 
 target_include_directories(heap_sync_tests PRIVATE
@@ -963,6 +982,8 @@ add_executable(heap_roundtrip_tests
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/sync/SyncSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/TaskLocal.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/Checklist.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/Sessions.cpp
 )
 set_target_properties(heap_roundtrip_tests PROPERTIES AUTOMOC ON)
 target_include_directories(heap_roundtrip_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)

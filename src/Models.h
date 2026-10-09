@@ -507,6 +507,9 @@ class TaskModel : public QAbstractListModel {
     // and why (an I18n key suffix). Runtime only, like the rest of GitInfo.
     PrMoveRole,
     PrMoveReasonRole,
+    // What the card shows of its local layer (APP-237…241): notes / draft /
+    // my tags / my priority or due / "changed in the tracker" / related.
+    LocalRole,
   };
 
   explicit TaskModel(QObject* parent = nullptr) : QAbstractListModel(parent) {

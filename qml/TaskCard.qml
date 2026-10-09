@@ -220,6 +220,7 @@ Rectangle {
         if (moveChip.visible && moveChip.tip.length > 0) parts.push(moveChip.tip);
         const labels = card.task.labels || [];
         if (labels.length > 2) parts.push(labels.slice(2).map(l => l.id).join(", "));
+        if (localMarks.tip.length > 0) parts.push(localMarks.tip);
         return parts.join("
 ");
     }
@@ -322,6 +323,7 @@ Rectangle {
         || (card._isTicket && (card._ticket.commentCount || 0) > 0) || labelRep.count > 0
         || card._attachmentCount > 0 || card._waiting !== undefined || card._isTicket
     readonly property bool _hasDetails: card._excerpt.length > 0 || (card._cl.total || 0) > 0 || card._hasFacts
+        || localMarks.hasContent
     readonly property bool _alerting: card._isStuck || card._isArchived
         || (card._isTicket && (syncChip.shown || !!card._ticket.conflict
                                || (!!card._ticket.outOfScope && !card._ticket.gone)))
@@ -693,6 +695,14 @@ Rectangle {
                             color: checklistRow._done === checklistRow._total ? Theme.success : Theme.textDim
                         }
                     }
+                }
+
+                // My own layer: the next step, notes / draft / my tags marks
+                // (APP-236…241). Its own component; the card only places it.
+                TaskCardLocal {
+                    id: localMarks
+                    Layout.fillWidth: true
+                    task: card.task
                 }
 
                 // The quieter facts. Flow, not a row: on a narrow column the
