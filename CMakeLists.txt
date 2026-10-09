@@ -194,6 +194,7 @@ qt_add_library(heap_core STATIC
     src/chrono/ChronoLocale_ru.cpp
     src/chrono/ChronoParser.cpp
     src/capture/CaptureParse.cpp
+    src/capture/SpanHighlighter.cpp
     src/git/BranchTaskMatcher.cpp
     src/git/BranchTaskResolve.cpp
     src/git/GitWatcher.cpp
@@ -389,6 +390,7 @@ qt_add_qml_module(heap_core
         qml/Sidebar.qml
         qml/ProfileSwitcher.qml
         qml/TodayView.qml
+        qml/AppSwitch.qml
         qml/FilterBar.qml
         qml/KanbanBoard.qml
         qml/TaskCard.qml
@@ -462,6 +464,7 @@ qt_add_qml_module(heap_core
         src/TaskFilterProxy.h
         src/SampleData.h
         src/CodeHighlighter.h
+        src/capture/SpanHighlighter.h
         src/cal/EventClamp.h
         src/chrono/ChronoTypes.h
         src/chrono/ChronoTokenizer.h
@@ -516,7 +519,7 @@ qt_add_qml_module(heap_core
 
 # src/markdown too: qt_add_qml_module's generated registration file includes
 # each QML-exposed header by its bare name.
-target_include_directories(heap_core PUBLIC src src/markdown)
+target_include_directories(heap_core PUBLIC src src/markdown src/capture)
 target_compile_options(heap_core PRIVATE "${HEAP_WARNING_OPTIONS}")
 target_link_libraries(heap_core PUBLIC
     heap_markdown

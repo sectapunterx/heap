@@ -126,3 +126,28 @@ TEST_F(Capture, EmptyAndPlainText) {
   EXPECT_EQ(r.title, QStringLiteral("просто задача"));
   EXPECT_TRUE(r.spans.isEmpty());
 }
+
+TEST_F(Capture, ABareHourIsTheNearerOfMorningAndEvening) {
+  // 10:00 now: "в 9" is 21:00 today, not 9:00 tomorrow.
+  const Parsed r = p(QStringLiteral("созвон в 9"));
+  EXPECT_EQ(r.when, QDateTime(QDate(2026, 5, 20), QTime(21, 0)));
+  // "в 11" is still ahead this morning.
+  EXPECT_EQ(p(QStringLiteral("созвон в 11")).when, QDateTime(QDate(2026, 5, 20), QTime(11, 0)));
+  // A date said with it is taken as said.
+  EXPECT_EQ(p(QStringLiteral("созвон завтра в 9")).when, QDateTime(QDate(2026, 5, 21), QTime(9, 0)));
+}
+
+TEST_F(Capture, APastDateIsAllowedAndFlagged) {
+  const Parsed r = p(QStringLiteral("отчёт вчера"));
+  EXPECT_EQ(r.when.date(), QDate(2026, 5, 19));
+  EXPECT_TRUE(r.whenPast);
+  EXPECT_FALSE(p(QStringLiteral("отчёт завтра")).whenPast);
+}
+
+TEST_F(Capture, AWeekdayNamedOnThatDayIsNextWeek) {
+  const QDateTime friday(QDate(2026, 5, 22), QTime(10, 0));
+  EXPECT_EQ(parse(QStringLiteral("отчёт до пятницы"), chrono, friday).due.date(), QDate(2026, 5, 29));
+  EXPECT_EQ(parse(QStringLiteral("ревью в пт"), chrono, friday).when.date(), QDate(2026, 5, 29));
+  EXPECT_EQ(parse(QStringLiteral("ревью сегодня"), chrono, friday).when.date(), QDate(2026, 5, 22)) << "today is today";
+  EXPECT_EQ(parse(QStringLiteral("ревью в 15:00"), chrono, friday).when.date(), QDate(2026, 5, 22)) << "a bare time is today";
+}

@@ -177,6 +177,8 @@ TestCase {
         // still at their defaults here, so submit dropped the comment (and could
         // create an unlinked event / no task at all).
         input.text = "синк с @hb в 16:00 // обсудить релиз";
+        // A meeting only when asked for (APP-266).
+        findChild(qc, "qc-meeting").checked = true;
         qc._submit();
 
         compare(tasks.rowCount(), tasksBefore + 1, "expected exactly one new task");
@@ -198,11 +200,12 @@ TestCase {
     // Quick capture reports what it made, readably: the headline says what it
     // is and where it went, the body quotes the title and lists only what was
     // set. A task no longer gets a "TODO-N" placeholder id.
-    function _capture(text) {
+    function _capture(text, meeting) {
         const qc = make('import TodoCpp; QuickCapturePopup {}');
         let got = null;
         qc.captured.connect(function (title, body, taskId) { got = {title: title, body: body, taskId: taskId}; });
         findChild(qc, "qc-input").text = text;
+        findChild(qc, "qc-meeting").checked = !!meeting;
         qc._submit();
         verify(got !== null, "captured() not emitted for " + text);
         return got;
@@ -265,7 +268,7 @@ TestCase {
     }
 
     function test_quickcapture_reports_a_meeting_with_its_type() {
-        const got = tc._capture("созвон с заказчиком завтра в 16:00-16:45");
+        const got = tc._capture("созвон с заказчиком завтра в 16:00-16:45", true);
         compare(got.title, I18n.t("quick.done.meeting.none"));
         verify(got.body.indexOf("16:00–16:45") >= 0, got.body);
         const ev = tc._eventOf(got.taskId);
@@ -274,7 +277,7 @@ TestCase {
         AppController.deleteEvent(ev.id);
         AppController.deleteTask(got.taskId);
 
-        const d = tc._capture("дейли завтра в 10:00");
+        const d = tc._capture("дейли завтра в 10:00", true);
         compare(d.title, I18n.t("quick.done.meeting.standup"));
         const dev = tc._eventOf(d.taskId);
         compare(dev.type, "standup");
@@ -282,10 +285,80 @@ TestCase {
         AppController.deleteTask(d.taskId);
     }
 
-    function test_quickcapture_untimed_meeting_says_so() {
-        const got = tc._capture("встреча с дизайнером по онбордингу");
-        verify(got.body.indexOf(I18n.t("quick.done.noTime")) >= 0, got.body);
+    // APP-266: the words "созвон"/"встреча" alone book nothing; a meeting is
+    // only made with the box ticked.
+    function test_quickcapture_meeting_words_book_nothing_by_themselves() {
+        const got = tc._capture("встреча с дизайнером завтра в 11:00");
         compare(tc._eventOf(got.taskId), null);
+        compare(got.title, I18n.t("quick.done.task").arg(tc._todoName()));
+        AppController.deleteTask(got.taskId);
+    }
+
+    // × on a chip gives the words back to the title (APP-266).
+    function test_quickcapture_chip_x_keeps_the_words() {
+        const qc = make('import TodoCpp; QuickCapturePopup {}');
+        qc.open();
+        tryVerify(() => qc.opened);
+        const input = findChild(qc, "qc-input");
+        input.text = "Обзор пятницы";
+        qc._refreshPreview();
+        const when = findChild(qc, "qc-when");
+        verify(when.visible, "no date chip");
+        compare(qc._title, "Обзор");
+        qc.rejectSpan("when");
+        verify(!when.visible);
+        compare(qc._title, "Обзор пятницы");
+        let id = "";
+        qc.captured.connect(function (t, b, taskId) { id = taskId; });
+        qc._submit();
+        const t = AppController.taskById(id);
+        compare(t.title, "Обзор пятницы");
+        verify(!t.scheduledAt || isNaN(t.scheduledAt.getTime()), "the rejected date was set anyway");
+        AppController.deleteTask(id);
+    }
+
+    // Several pasted lines: one question, then "N tasks" makes N.
+    function test_quickcapture_pasted_lines_ask_once() {
+        const qc = make('import TodoCpp; QuickCapturePopup {}');
+        qc.open();
+        tryVerify(() => qc.opened);
+        const input = findChild(qc, "qc-input");
+        const before = AppController.tasks.rowCount();
+        input.text = "paste-probe one\npaste-probe two\npaste-probe three";
+        qc._submit();
+        verify(findChild(qc, "qc-lines-ask").visible, "no question for a pasted block");
+        compare(AppController.tasks.rowCount(), before, "it saved before asking");
+        mouseClick(findChild(qc, "qc-lines-many"));
+        compare(AppController.tasks.rowCount(), before + 3);
+        const m = AppController.tasks;
+        for (let i = m.rowCount() - 1; i >= 0; i--) {
+            const id = String(m.data(m.index(i, 0), Qt.UserRole + 1));
+            if (AppController.taskById(id).title.indexOf("paste-probe") === 0) AppController.deleteTask(id);
+        }
+    }
+
+    // Empty input and Enter: nothing, and no complaint.
+    function test_quickcapture_empty_enter_is_nothing() {
+        const qc = make('import TodoCpp; QuickCapturePopup {}');
+        const before = AppController.tasks.rowCount();
+        findChild(qc, "qc-input").text = "   ";
+        qc._submit();
+        compare(AppController.tasks.rowCount(), before);
+        compare(qc._hint, "");
+    }
+
+    // The same text makes the same task from every input (APP-266): the
+    // quick input and the welcome tour's first task.
+    function test_every_input_reads_the_same() {
+        const text = "same-input probe tomorrow at 15:00 p1 #ops";
+        const a = AppController.quickTaskDraft(text, new Date());
+        const got = tc._capture(text);
+        const t = AppController.taskById(got.taskId);
+        compare(t.title, a.title);
+        compare(t.priority, "P1");
+        compare(t.labels.length, 1);
+        compare(t.scheduledAt.getTime(), a.scheduledAt.getTime());
+        verify(t.scheduledHasTime);
         AppController.deleteTask(got.taskId);
     }
 

@@ -949,7 +949,7 @@ ApplicationWindow {
             Layout.fillHeight: true
             expanded: win.sideRailExpanded
             onToggleRequested: win.toggleSideRail()
-            onNewTaskRequested: taskEditor.showFor(AppController.newTaskDraft("todo"))
+            onNewTaskRequested: quickCapture.open()
             onSyncStatusRequested: win.runCommand("settings:integrations")
             onNewProfileRequested: profileEditor.showCreate()
             onRenameProfileRequested: {
@@ -1539,7 +1539,11 @@ ApplicationWindow {
     }
     QuickCapturePopup {
         id: quickCapture
-        onCaptured: (title, body, taskId) => toast.show(title + " — " + body.replace(/\n/g, " · "))
+        // One toast for what was made (APP-266): "Created ID · when · column",
+        // Open / Undo; a task the filters on screen hide says so.
+        onCaptured: (title, body, taskId) => win._toastCaptured(title, taskId)
+        onOpenFullRequested: (draft) => taskEditor.showFor(draft)
+        onOpenTaskRequested: (id) => win.openTask(id)
         onSeenBeforeActivated: (hit) => {
             quickCapture.close();
             win.openSeenBefore(hit);
@@ -1641,6 +1645,19 @@ ApplicationWindow {
     function openTask(id) {
         taskEditor.showFor(Object.assign({}, AppController.taskById(id)));
     }
+    function _toastCaptured(title, taskId) {
+        const line = taskId ? quickCapture.headline(taskId) : "";
+        if (line.length === 0) {
+            toast.show(title);
+            return;
+        }
+        const serial = AppController.undoSerialForToast();
+        const open = { label: I18n.t("capture.open"), fn: function () { win.openTask(taskId); } };
+        const undo = { label: I18n.t("undo.action"), fn: function () { AppController.undoEntry(serial); } };
+        const seen = AppController.taskInCurrentFilter(taskId) || AppController.currentSection !== "tasks";
+        const msg = seen ? line : I18n.t("capture.done.hidden").arg(taskId);
+        toast.showWithActions(msg, [open, undo], 8);
+    }
     // The calendar lens opens on the calendar last used (week or month).
     property string _calendarView: "week"
     Connections {
@@ -1696,7 +1713,7 @@ ApplicationWindow {
             return;
         }
         switch (id) {
-        case "task.new":             taskEditor.showFor(AppController.newTaskDraft("todo")); break;
+        case "task.new":             quickCapture.open(); break;
         case "quick-capture":        quickCapture.open(); break;
         case "quick-capture-notes":  quickCaptureNotes.open(); break;
         case "panel.right":          win.toggleRightPanel(); break;
@@ -1830,7 +1847,7 @@ ApplicationWindow {
         sequence: _kbd("task.new")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: taskEditor.showFor(AppController.newTaskDraft("todo"))
+        onActivated: quickCapture.open()
     }
     Shortcut {
         sequence: _kbd("quick-capture")

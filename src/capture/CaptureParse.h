@@ -34,10 +34,13 @@ struct Parsed {
   bool whenHasTime = false;
   // The end of a time range said with it ("16:00-16:45"): a meeting's length.
   QDateTime whenEnd;
+  // Already behind `now` ("вчера"): allowed, shown greyed.
+  bool whenPast = false;
   // A date after a deadline word ("до пятницы", "к 15:00", "due fri", "by
   // monday"): the deadline.
   QDateTime due;
   bool dueHasTime = false;
+  bool duePast = false;
   // "~30m", "~1.5h", "~2ч"; 0 when none.
   int estimateMinutes = 0;
   QString recurrence;

@@ -2928,8 +2928,16 @@ QVariantMap AppController::captureParse(const QString& raw, const QDateTime& ref
   out["when"] = p.when;
   out["whenHasTime"] = p.whenHasTime;
   out["whenEnd"] = p.whenEnd;
+  out["whenPast"] = p.whenPast;
   out["due"] = p.due;
   out["dueHasTime"] = p.dueHasTime;
+  out["duePast"] = p.duePast;
+  out["priority"] = meta.priority;
+  out["labels"] = meta.labels;
+  out["ticketKey"] = meta.ticketKey;
+  // A key another task already holds stays in the title (TASKS-22); the
+  // input offers to open that task instead (APP-266).
+  out["ticketTaken"] = !meta.ticketKey.isEmpty() && m_tasks.indexOfId(meta.ticketKey) >= 0;
   out["estimateMinutes"] = p.estimateMinutes;
   out["recurrence"] = p.recurrence;
   QVariantList spans;
@@ -2937,6 +2945,28 @@ QVariantMap AppController::captureParse(const QString& raw, const QDateTime& ref
     spans.append(QVariantMap{{"start", s.start}, {"end", s.end}, {"kind", s.kind}, {"text", s.text}});
   }
   out["spans"] = spans;
+  // The same parts as offsets into `raw` itself, for colouring the field:
+  // each found after the one before it, on the first line only.
+  QVariantList marks;
+  const int firstLineEnd = static_cast<int>(raw.indexOf(QLatin1Char('\n')) < 0 ? raw.size() : raw.indexOf(QLatin1Char('\n')));
+  const QString line = raw.left(firstLineEnd);
+  const auto mark = [&](const QString& words, const QString& kind) {
+    if(words.isEmpty()) {
+      return;
+    }
+    const int at = static_cast<int>(line.indexOf(words, 0, Qt::CaseInsensitive));
+    if(at >= 0) {
+      marks.append(QVariantMap{{"start", at}, {"end", at + static_cast<int>(words.size())}, {"kind", kind}});
+    }
+  };
+  for(const heap::capture::Span& s : p.spans) {
+    mark(s.text, s.kind);
+  }
+  mark(meta.priorityWord, QStringLiteral("priority"));
+  for(const QString& l : meta.labels) {
+    mark(QLatin1Char('#') + l, QStringLiteral("label"));
+  }
+  out["marks"] = marks;
   return out;
 }
 

@@ -150,6 +150,16 @@ QVariantMap AppController::filteredCounts(
           {QStringLiteral("review"), review}};
 }
 
+bool AppController::taskInCurrentFilter(const QString& id) const {
+  const int row = m_tasks.indexOfId(id);
+  if(row < 0) {
+    return false;
+  }
+  const SelectionFilter& f = m_selectionFilter;
+  const heap::query::TaskQuery q = heap::query::TaskQuery::compile(f.search, m_today, m_statuses, m_syncNewIds);
+  return passesFilter_(row, q, f.priorities, f.showArchived, f.hideDone);
+}
+
 void AppController::setSelectionFilter(const QString& search, const QStringList& priorities, bool showArchived, bool hideDone) {
   m_selectionFilter = {search, priorities, showArchived, hideDone};
   pruneSelectionToFilter_();

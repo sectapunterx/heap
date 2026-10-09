@@ -91,14 +91,15 @@ Popup {
         return r.action !== "none";
     }
 
-    // The capture step's text, saved as a real task in To Do — exactly what
-    // was typed, nothing added.
+    // The capture step's text, saved as a real task in To Do, read the way
+    // every task input reads it (APP-266): "tomorrow at 15:00 p1" is a date
+    // and a priority, not part of the title.
     function _saveCapture() {
-        const title = captureField.text.trim();
+        const typed = captureField.text.trim();
+        if (typed.length === 0) return false;
+        const draft = AppController.quickTaskDraft(typed, new Date());
+        const title = String(draft.title);
         if (title.length === 0) return false;
-        const draft = AppController.newQuickTaskDraft("");
-        draft._isNew = true;
-        draft.title = title;
         if (!AppController.saveTask(draft)) return false;
         root.captured = root.captured.concat([title]);
         root.lastCapturedId = draft.id;

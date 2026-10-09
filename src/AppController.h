@@ -760,6 +760,10 @@ class AppController : public QObject {
   // query, priority chips, the archived toggle. { total, active, blocked,
   // review }. `hideDone` is the timeline's "Show done" off. `rev` is unused;
   // binding it to statusCounts re-evaluates the counts whenever tasks change.
+  // Whether a task shows under the filters on screen now (the selection
+  // filter Main keeps in step): a new task that does not gets a toast that
+  // says so (APP-266).
+  Q_INVOKABLE bool taskInCurrentFilter(const QString& id) const;
   Q_INVOKABLE QVariantMap filteredCounts(
       const QString& search, const QStringList& priorities, bool showArchived, bool hideDone = false, const QVariant& rev = {}) const;
 

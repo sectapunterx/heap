@@ -297,6 +297,7 @@ TaskMeta extractMeta(QStringView raw, bool keepTicketKey) {
     const auto pm = rx.match(lowered);
     if(pm.hasMatch()) {
       out.priority = QString::fromLatin1(pw.priority);
+      out.priorityWord = body.mid(pm.capturedStart(1), pm.capturedLength(1));
       body.remove(pm.capturedStart(1), pm.capturedLength(1));
       break;
     }

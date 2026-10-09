@@ -120,11 +120,17 @@ TestCase {
     function board() { return tc.win.activeViewItem(); }
 
     // UX-1 / TASKS-10: Ctrl+N and type — the title gets every character.
+    // APP-266: Ctrl+N is the one task input; Tab takes what was typed into
+    // the full editor, its title already there.
     function test_new_task_editor_focuses_title() {
+        const qc = popup("QuickCapturePopup");
         const te = popup("TaskEditor");
         keyClick(Qt.Key_N, Qt.ControlModifier);
-        tryCompare(te, "opened", true);
+        tryCompare(qc, "opened", true);
         keyClick(Qt.Key_A); keyClick(Qt.Key_B); keyClick(Qt.Key_C);
+        keyClick(Qt.Key_Tab);
+        tryCompare(te, "opened", true);
+        tryCompare(qc, "opened", false);
         const title = find(te.contentItem, function (it) { return it.placeholderText === I18n.t("editor.ph.titleShort"); });
         verify(title !== null);
         compare(title.text, "abc");

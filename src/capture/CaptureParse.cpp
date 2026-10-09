@@ -35,6 +35,40 @@ int estimateMinutes(QStringView token) {
 
 namespace {
 
+// "в 9" / "at 9": a bare hour under 12 with no date and no am/pm. The parser
+// takes the next 9:00, which after 9:00 is tomorrow morning; the nearer of
+// 9:00 and 21:00 is what "at 9" usually means (APP-266).
+QDateTime nearerBareHour(const heap::chrono::ParseResult& r, const QDateTime& now) {
+  static const QRegularExpression kBare(QStringLiteral(R"(^\s*(?:в|at|к)?\s*(\d{1,2})\s*$)"), QRegularExpression::CaseInsensitiveOption);
+  const auto m = kBare.match(r.consumed);
+  if(!m.hasMatch() || !r.hasTime) {
+    return r.start;
+  }
+  const int hour = m.captured(1).toInt();
+  if(hour < 1 || hour > 11 || r.start.time().hour() != hour) {
+    return r.start;
+  }
+  const QDateTime evening(now.date(), QTime(hour + 12, r.start.time().minute()));
+  return evening > now && evening < r.start ? evening : r.start;
+}
+
+// "пт" said on a Friday is next Friday, not today (APP-266): a weekday is
+// named to point away from today. "today"/"сегодня" and a bare time stay.
+QDateTime weekdayNotToday(const heap::chrono::ParseResult& r, const QDateTime& now) {
+  if(r.start.date() != now.date() || !r.recurrence.isEmpty()) {
+    return r.start;
+  }
+  static const QRegularExpression kWeekday(
+      QStringLiteral(R"((?<!\p{L})(пн|вт|ср|чт|пт|сб|вс|понед\p{L}*|вторн\p{L}*|сред\p{L}*|четв\p{L}*|пятн\p{L}*|субб\p{L}*|воскр\p{L}*|)"
+                     R"(mon\p{L}*|tue\p{L}*|wed\p{L}*|thu\p{L}*|fri\p{L}*|sat\p{L}*|sun\p{L}*)(?!\p{L}))"),
+      QRegularExpression::CaseInsensitiveOption | QRegularExpression::UseUnicodePropertiesOption);
+  return kWeekday.match(r.consumed).hasMatch() ? r.start.addDays(7) : r.start;
+}
+
+bool isPast(const QDateTime& d, bool hasTime, const QDateTime& now) {
+  return hasTime ? d < now : d.date() < now.date();
+}
+
 // The deadline word right before `at`, if one is there: its start offset,
 // or -1.
 int deadlineWordBefore(const QString& text, int at) {
@@ -107,14 +141,19 @@ Parsed parse(const QString& text, const heap::chrono::ChronoParser& chrono, cons
       if(out.due.isValid()) {
         continue;
       }
-      out.due = r.start;
+      out.due = weekdayNotToday(r, now);
       out.dueHasTime = r.hasTime;
+      out.duePast = isPast(out.due, r.hasTime, now);
     } else {
       if(out.when.isValid()) {
         continue;
       }
-      out.when = r.start;
+      out.when = weekdayNotToday(r, now);
+      if(out.when == r.start) {
+        out.when = nearerBareHour(r, now);
+      }
       out.whenHasTime = r.hasTime;
+      out.whenPast = isPast(out.when, r.hasTime, now);
       if(r.end.isValid() && r.end > r.start) {
         out.whenEnd = r.end;
       }
