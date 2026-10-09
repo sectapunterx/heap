@@ -29,18 +29,17 @@ inline QString canonical(const QString& name) {
   if(name == QStringLiteral("timeline") || name == QStringLiteral("archive")) {
     return QStringLiteral("list");
   }
+  // The 0.7 Docs catalogue is part of the Knowledge screen since 0.8.1
+  // (DG-070): "docs" is still accepted (a saved view, --view docs, Ctrl+4)
+  // and lands there.
+  if(name == QStringLiteral("docs")) {
+    return QStringLiteral("notes");
+  }
   return name;
 }
 
 inline bool isKnown(const QString& name) {
   return all().contains(canonical(name));
-}
-
-// The 0.7 Docs catalogue is part of the Knowledge screen since 0.8.1
-// (DG-070): "docs" is still accepted (a saved view, --view docs, Ctrl+4)
-// and lands there.
-inline QString canonical(const QString& name) {
-  return name == QStringLiteral("docs") ? QStringLiteral("notes") : name;
 }
 
 // heap 2 (APP-258): the sidebar has four places, and each view belongs to
