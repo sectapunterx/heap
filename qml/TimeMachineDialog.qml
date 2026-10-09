@@ -5,20 +5,22 @@ import QtQuick.Layouts
 import QtQuick.Controls
 import TodoCpp
 
-// The time machine (APP-162): the hourly snapshots in <dataDir>/history, and a
-// way back to any of them.
+// The time machine (APP-162, X-Dlg-TimeMachine): the snapshots in
+// <dataDir>/history, and a way back to any of them. First what would change,
+// then the restore; the current state is saved as a snapshot before it.
 //
-//   Today                 │ State at 14:00, 5 Oct
-//     14:00  120 tasks    │ Tasks since then: 2 added, 1 deleted, 5 changed
-//     13:00  119 tasks    │ Profiles      work · 118 tasks   [Restore as copy]
-//   Yesterday             │ Deleted since then
-//     23:00  …            │   Task  APP-12  Login rate limit   [Restore]
-//                         │                       [Restore everything] [Close]
+//   Снимки · 14 за 2 недели │ Вчера, 18:40
+//   Сегодня                 │ ежечасный · профиль Example
+//     09:12 · ежечасный 15  │ Если восстановить, по сравнению с сейчас
+//   Вчера                   │ Задачи     вернутся 1 удалённая (APP-099) …
+//     18:40 · …        14   │ Изменения  5 задач — статусы и сроки как тогда
+//                           │ [Открыть копией в новом профиле] [Показать файл]
+//                           │                     [Восстановить эту версию…]
 //
 // Keyboard: the list has focus on open, Up/Down picks a moment, Tab walks the
-// actions, Esc closes. Restoring one item is undoable (Ctrl+Z); restoring
-// everything snapshots the current state first, so it shows up in this list.
-Dialog {
+// actions, Esc closes. A deleted task's id in the diff brings back that one
+// task (undoable); restoring everything asks twice and snapshots first.
+Popup {
     id: root
     objectName: "time-machine"
     modal: true
@@ -26,9 +28,8 @@ Dialog {
     focus: true
     anchors.centerIn: Overlay.overlay
     parent: Overlay.overlay
-    padding: Theme.inset
-    width: Math.min(880, (parent ? parent.width : 880) - 2 * Theme.sp3xl)
-    height: Math.min(600, (parent ? parent.height : 600) - 2 * Theme.sp3xl)
+    padding: 0
+    width: Math.min(1100, (parent ? parent.width : 1100) - 2 * Theme.sp3xl)
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
     property var snapshots: []
@@ -47,20 +48,30 @@ Dialog {
         root.open();
     }
 
+    function _key(d) {
+        const p2 = (n) => (n < 10 ? "0" : "") + n;
+        return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate());
+    }
+    // "today" | "yesterday" | "earlier" — the list's sections.
+    function groupOf(iso) {
+        const today = new Date();
+        if (iso === root._key(today)) return "today";
+        if (iso === root._key(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1))) return "yesterday";
+        return "earlier";
+    }
     function reload() {
         const keep = root.current ? root.current.name : "";
-        root.snapshots = AppController.listSnapshots();
+        root.snapshots = AppController.listSnapshots().map(s => Object.assign({ grp: root.groupOf(s.day) }, s));
         let idx = root.snapshots.length > 0 ? 0 : -1;
         for (let i = 0; i < root.snapshots.length; i++)
             if (root.snapshots[i].name === keep) idx = i;
         snapList.currentIndex = idx;
         root.loadPreview();
     }
-
     function loadPreview() {
         root.preview = root.current ? AppController.previewSnapshot(root.current.name) : ({});
+        restoreAllBtn.armed = false;
     }
-
     function setData(key, value) {
         let s = {};
         try { s = JSON.parse(AppController.appSettingsJson || "{}") || {}; } catch (e) { s = {}; }
@@ -71,69 +82,90 @@ Dialog {
     }
 
     function dayLabel(iso) {
-        const today = new Date();
-        const p2 = (n) => (n < 10 ? "0" : "") + n;
-        const key = (d) => d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate());
-        if (iso === key(today)) return I18n.t("tm.today");
-        const y = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
-        if (iso === key(y)) return I18n.t("tm.yesterday");
-        return I18n.fmtDate(new Date(iso + "T00:00:00"), "weekdayDay");
+        const g = root.groupOf(iso);
+        if (g === "today") return I18n.t("tm.today");
+        if (g === "yesterday") return I18n.t("tm.yesterday");
+        return I18n.fmtDate(new Date(iso + "T00:00:00"), "dayMonth");
+    }
+    // What kind of snapshot: the hourly one, or one taken before something.
+    function kindText(tag) {
+        if (!tag) return I18n.t("tm.kind.hourly");
+        if (tag === "pre") return I18n.t("tm.tag.pre");
+        return tag;
+    }
+    function rowText(s) {
+        const lead = s.grp === "earlier" ? root.dayLabel(s.day) : s.time;
+        return lead + " · " + root.kindText(s.tag);
+    }
+    function listHead() {
+        const n = root.snapshots.length;
+        if (n === 0) return I18n.t("tm.listHead.none");
+        const a = new Date(root.snapshots[n - 1].day + "T00:00:00");
+        const b = new Date(root.snapshots[0].day + "T00:00:00");
+        const days = Math.max(1, Math.round((b - a) / 86400000) + 1);
+        return I18n.t("tm.listHead").arg(n).arg(I18n.count(days, "tm.days"));
+    }
+    function profileLine() {
+        const ps = root.preview.profiles || [];
+        if (ps.length === 1) return I18n.t("tm.profileOne").arg(ps[0].name);
+        return I18n.count(ps.length, "tm.profilesN");
     }
 
-    function kindLabel(kind) {
-        return kind === "task" ? I18n.t("tm.kind.task") : kind === "doc" ? I18n.t("tm.kind.doc") : I18n.t("tm.kind.note");
+    // ── the diff, row by row ──
+    readonly property var _missingTasks: (root.preview.missing || []).filter(m => m.kind === "task")
+    readonly property var _totals: root.preview.totals || ({})
+    function _esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+    function tasksText() {
+        const parts = [];
+        const back = root._missingTasks;
+        if (back.length > 0) {
+            const ids = back.slice(0, 5).map(m => "<a href=\"" + root._esc(m.id) + "\">" + root._esc(m.id) + "</a>").join(", ");
+            parts.push(I18n.count(back.length, "tm.diff.tasksBack") + " (" + ids + (back.length > 5 ? ", …" : "") + ")");
+        }
+        const added = root._totals.tasksAdded || 0;
+        if (added > 0) parts.push(I18n.count(added, "tm.diff.tasksGone"));
+        return parts.length > 0 ? parts.join(", ") : I18n.t("tm.diff.same");
     }
-
-    function restoreItem(row) {
+    function changesText() {
+        const n = root._totals.tasksChanged || 0;
+        return n > 0 ? I18n.count(n, "tm.diff.changed") : I18n.t("tm.diff.same");
+    }
+    function notesText() {
+        const t = root._totals;
+        const parts = [];
+        if ((t.notesRemoved || 0) > 0) parts.push(I18n.count(t.notesRemoved, "tm.diff.notesBack"));
+        if ((t.notesAdded || 0) > 0) parts.push(I18n.count(t.notesAdded, "tm.diff.notesGone"));
+        if ((t.notesChanged || 0) > 0) parts.push(I18n.count(t.notesChanged, "tm.diff.notesChanged"));
+        return parts.length > 0 ? parts.join(", ") : I18n.t("tm.diff.same");
+    }
+    readonly property var diffRows: [
+        { k: I18n.t("tm.diff.k.tasks"), v: root.tasksText(), links: true },
+        { k: I18n.t("tm.diff.k.changes"), v: root.changesText(), links: false },
+        { k: I18n.t("tm.diff.k.notes"), v: root.notesText(), links: false },
+        { k: I18n.t("tm.diff.k.events"), v: I18n.t("tm.diff.events"), links: false },
+        { k: I18n.t("tm.diff.k.settings"), v: I18n.t("tm.diff.settings"), links: false }
+    ]
+    // One deleted task back, from its id in the diff.
+    function restoreTask(id) {
         if (!root.current) return;
-        if (AppController.restoreSnapshotItem(root.current.name, row.kind, row.profileId, row.id))
+        const m = root._missingTasks.filter(x => x.id === id)[0];
+        if (!m) return;
+        if (AppController.restoreSnapshotItem(root.current.name, "task", m.profileId, m.id))
             root.loadPreview();
     }
-
-    // One task, note or page in the "deleted" / "changed" lists.
-    component ItemRow: Rectangle {
-        id: itemRow
-        required property var modelData
-        property string actionText: ""
-        signal restore()
-        Layout.fillWidth: true
-        implicitHeight: itemLine.implicitHeight + Theme.spXs * 2
-        radius: Theme.radiusMd
-        color: "transparent"
-        RowLayout {
-            id: itemLine
-            anchors.fill: parent
-            anchors.leftMargin: Theme.spSm
-            spacing: Theme.spMd
-            Text {
-                Layout.preferredWidth: 64
-                elide: Text.ElideRight
-                text: root.kindLabel(itemRow.modelData.kind)
-                color: Theme.textDim
-                font.pixelSize: Theme.fsXs
-            }
-            Text {
-                visible: itemRow.modelData.kind === "task"
-                text: itemRow.modelData.id
-                color: Theme.textMuted
-                font.family: Theme.fontMono
-                font.pixelSize: Theme.fsXs
-            }
-            Text {
-                Layout.fillWidth: true
-                elide: Text.ElideRight
-                text: itemRow.modelData.title + "  · " + itemRow.modelData.profileName
-                color: Theme.text
-                font.pixelSize: Theme.fsSm
-            }
-            PillButton {
-                text: itemRow.actionText
-                enabled: itemRow.modelData.profileExists
-                ToolTip.visible: !itemRow.modelData.profileExists && (hovered || visualFocus)
-                ToolTip.text: I18n.t("tm.profileGone.tip")
-                onClicked: itemRow.restore()
-            }
+    // The snapshot's copy of a profile, as a new profile: the active one if it
+    // was there, else the first.
+    function openAsCopy(profileId) {
+        if (!root.current) return;
+        const ps = root.preview.profiles || [];
+        let pid = profileId || "";
+        if (!pid) {
+            pid = ps.length > 0 ? ps[0].id : "";
+            for (let i = 0; i < ps.length; i++) if (ps[i].id === AppController.activeProfileId) pid = ps[i].id;
         }
+        if (pid.length === 0) return;
+        AppController.restoreSnapshotProfile(root.current.name, pid);
+        root.close();
     }
 
     // Arrowing through a month of snapshots must not inflate every one on the way.
@@ -143,21 +175,31 @@ Dialog {
         onTriggered: root.loadPreview()
     }
 
-    header: DialogHeader { text: I18n.t("tm.title") }
     background: ModalSurface {}
 
     contentItem: RowLayout {
-        spacing: Theme.inset
+        spacing: 0
 
         // ── Left: the moments ──
         ColumnLayout {
-            Layout.preferredWidth: 260
-            Layout.maximumWidth: 260
+            Layout.preferredWidth: 320
+            Layout.maximumWidth: 320
             Layout.fillHeight: true
-            spacing: Theme.spSm
+            Layout.margins: Theme.spLg
+            spacing: Theme.spXs
 
             Text {
+                objectName: "time-machine-head"
+                Layout.leftMargin: Theme.spSm
+                Layout.fillWidth: true
+                text: root.listHead()
+                color: Theme.textMuted
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsXs
+            }
+            Text {
                 visible: root.snapshots.length === 0
+                Layout.leftMargin: Theme.spSm
                 Layout.fillWidth: true
                 text: I18n.t("tm.empty")
                 color: Theme.textMuted
@@ -169,7 +211,7 @@ Dialog {
                 id: snapList
                 objectName: "time-machine-list"
                 Layout.fillWidth: true
-                Layout.fillHeight: true
+                Layout.preferredHeight: Math.min(contentHeight, 380)
                 clip: true
                 focus: true
                 activeFocusOnTab: true
@@ -182,56 +224,56 @@ Dialog {
                 onCurrentIndexChanged: previewDebounce.restart()
                 Keys.onReturnPressed: root.loadPreview()
 
-                section.property: "day"
+                section.property: "grp"
                 section.criteria: ViewSection.FullString
                 section.delegate: Text {
                     required property string section
                     width: snapList.width
+                    leftPadding: Theme.spSm
                     topPadding: Theme.spMd
                     bottomPadding: Theme.spXs
-                    text: root.dayLabel(section)
-                    color: Theme.textDim
-                    font.pixelSize: Theme.fsSm
-                    font.weight: Theme.fwTitle
+                    text: section === "today" ? I18n.t("tm.today") : section === "yesterday" ? I18n.t("tm.yesterday") : I18n.t("tm.earlier")
+                    color: Theme.textMuted
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsXs
                 }
 
                 delegate: Rectangle {
                     id: snapRow
                     required property var modelData
                     required property int index
+                    readonly property bool on: snapList.currentIndex === snapRow.index
                     objectName: "time-machine-snap-" + index
                     width: snapList.width
-                    implicitHeight: snapLine.implicitHeight + Theme.spSm * 2
+                    implicitHeight: Theme.chipH + Theme.spXs
                     radius: Theme.radiusMd
-                    color: snapList.currentIndex === index
-                           ? (snapList.activeFocus ? Theme.accentSoft : Theme.panel3)
-                           : (snapMA.hovered ? Theme.panel2 : "transparent")
+                    color: snapRow.on ? Theme.panel3 : (snapMA.hovered ? Theme.panel2 : "transparent")
+                    border.width: snapRow.on && snapList.activeFocus ? 1 : 0
+                    border.color: Theme.focusRing
                     RowLayout {
-                        id: snapLine
                         anchors.fill: parent
-                        anchors.leftMargin: Theme.spMd
-                        anchors.rightMargin: Theme.spMd
+                        anchors.leftMargin: Theme.spSm
+                        anchors.rightMargin: Theme.spSm
                         spacing: Theme.spMd
-                        Text {
-                            text: snapRow.modelData.time
-                            color: Theme.text
-                            font.family: Theme.fontUi
-                            font.features: Theme.tabularNums
-                            font.pixelSize: Theme.fsMd
-                        }
                         Text {
                             Layout.fillWidth: true
                             elide: Text.ElideRight
-                            text: snapRow.modelData.tag === "pre"
-                                  ? I18n.t("tm.tag.pre")
-                                  : I18n.t("tm.row.counts").arg(snapRow.modelData.tasks).arg(snapRow.modelData.notes + snapRow.modelData.docs)
-                            color: snapRow.modelData.tag === "pre" ? Theme.warning : Theme.textMuted
-                            font.pixelSize: Theme.fsSm
+                            text: root.rowText(snapRow.modelData)
+                            color: snapRow.on ? Theme.text : Theme.text
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsMd
+                            font.weight: snapRow.on ? Theme.fwTitle : Theme.fwBody
+                        }
+                        Text {
+                            text: I18n.count(snapRow.modelData.tasks, "tm.tasksN")
+                            color: Theme.textMuted
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsXs
                         }
                     }
                     ClickArea {
                         id: snapMA
-                        label: snapRow.modelData.time
+                        label: root.rowText(snapRow.modelData)
                         showTip: false
                         activeFocusOnTab: false
                         onActivated: {
@@ -242,235 +284,201 @@ Dialog {
                 }
             }
 
-            // Retention, next to what it keeps.
-            RowLayout {
-                spacing: Theme.spSm
-                Text { text: I18n.t("tm.keep"); color: Theme.textMuted; font.pixelSize: Theme.fsXs }
-                Repeater {
-                    model: [7, 30, 90]
-                    delegate: PillButton {
-                        required property int modelData
-                        objectName: "time-machine-days-" + modelData
-                        text: I18n.t("tm.keep.days").arg(modelData)
-                        selected: root.keepDays === modelData
-                        onClicked: root.setData("historyDays", modelData)
-                    }
+            Item { Layout.fillHeight: true }
+            // How long and how much history is kept, next to what it keeps.
+            Text {
+                id: keepText
+                objectName: "time-machine-keep"
+                Layout.leftMargin: Theme.spSm
+                Layout.topMargin: Theme.spMd
+                text: I18n.t("tm.keepLine").arg(I18n.t("tm.keep.days").arg(root.keepDays)).arg(I18n.t("tm.cap.mb").arg(root.capMb))
+                color: keepMA.hovered ? Theme.text : Theme.textMuted
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsXs
+                font.underline: keepMA.hovered
+                ClickArea {
+                    id: keepMA
+                    label: keepText.text
+                    onActivated: keepMenu.popup(keepText, 0, keepText.height)
                 }
-            }
-            RowLayout {
-                spacing: Theme.spSm
-                Text { text: I18n.t("tm.cap"); color: Theme.textMuted; font.pixelSize: Theme.fsXs }
-                Repeater {
-                    model: [100, 200, 500]
-                    delegate: PillButton {
-                        required property int modelData
-                        objectName: "time-machine-cap-" + modelData
-                        text: I18n.t("tm.cap.mb").arg(modelData)
-                        selected: root.capMb === modelData
-                        onClicked: root.setData("historyMaxMb", modelData)
-                    }
-                }
-            }
-        }
-
-        Rectangle {
-            Layout.fillHeight: true
-            implicitWidth: 1
-            color: Theme.border
-        }
-
-        // ── Right: that moment, next to now ──
-        Flickable {
-            id: detail
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            contentHeight: detailCol.implicitHeight
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
-            ScrollBar.vertical: ThinScrollBar {}
-
-            ColumnLayout {
-                id: detailCol
-                width: detail.width
-                spacing: Theme.spLg
-
-                Text {
-                    visible: !root.current
-                    text: I18n.t("tm.pick")
-                    color: Theme.textMuted
-                    font.pixelSize: Theme.fsMd
-                }
-                Text {
-                    visible: !!root.current && root.preview.ok === false
-                    Layout.fillWidth: true
-                    text: root.preview.error || ""
-                    color: Theme.danger
-                    font.pixelSize: Theme.fsMd
-                    wrapMode: Text.Wrap
-                }
-
-                ColumnLayout {
-                    visible: !!root.current && root.preview.ok === true
-                    Layout.fillWidth: true
-                    spacing: Theme.spLg
-
-                    Text {
-                        objectName: "time-machine-state-at"
-                        Layout.fillWidth: true
-                        text: root.current
-                              ? I18n.t("tm.stateAt").arg(root.current.time + ", " + root.dayLabel(root.current.day))
-                              : ""
-                        color: Theme.text
-                        font.pixelSize: Theme.fsLg
-                        font.weight: Theme.fwTitle
-                        wrapMode: Text.Wrap
-                    }
-                    Text {
-                        readonly property var t: root.preview.totals || ({})
-                        objectName: "time-machine-since-tasks"
-                        Layout.fillWidth: true
-                        text: I18n.t("tm.since.tasks").arg(t.tasksAdded || 0).arg(t.tasksRemoved || 0).arg(t.tasksChanged || 0)
-                        color: Theme.textMuted
-                        font.pixelSize: Theme.fsSm
-                        wrapMode: Text.Wrap
-                    }
-                    Text {
-                        readonly property var t: root.preview.totals || ({})
-                        Layout.fillWidth: true
-                        text: I18n.t("tm.since.notes").arg(t.notesAdded || 0).arg(t.notesRemoved || 0).arg(t.notesChanged || 0)
-                        color: Theme.textMuted
-                        font.pixelSize: Theme.fsSm
-                        wrapMode: Text.Wrap
-                    }
-
-                    // Profiles of that moment.
-                    Text {
-                        text: I18n.t("tm.profiles")
-                        color: Theme.textDim
-                        font.pixelSize: Theme.fsSm
-                        font.weight: Theme.fwTitle
-                    }
+                AppMenu {
+                    id: keepMenu
+                    objectName: "time-machine-keep-menu"
                     Repeater {
-                        model: root.preview.profiles || []
-                        delegate: RowLayout {
-                            id: profRow
-                            required property var modelData
+                        model: [7, 30, 90]
+                        delegate: AppMenuItem {
+                            required property int modelData
+                            objectName: "time-machine-days-" + modelData
+                            text: I18n.t("tm.keep") + " " + I18n.t("tm.keep.days").arg(modelData)
+                            marked: root.keepDays === modelData
+                            onTriggered: root.setData("historyDays", modelData)
+                        }
+                    }
+                    AppMenuSeparator {}
+                    Repeater {
+                        model: [100, 200, 500]
+                        delegate: AppMenuItem {
+                            required property int modelData
+                            objectName: "time-machine-cap-" + modelData
+                            text: I18n.t("tm.cap") + " " + I18n.t("tm.cap.mb").arg(modelData)
+                            marked: root.capMb === modelData
+                            onTriggered: root.setData("historyMaxMb", modelData)
+                        }
+                    }
+                }
+            }
+        }
+
+        Rectangle { Layout.fillHeight: true; implicitWidth: 1; color: Theme.border }
+
+        // ── Right: what the chosen moment would change ──
+        ColumnLayout {
+            Layout.fillWidth: true
+            Layout.alignment: Qt.AlignTop
+            Layout.margins: Theme.inset
+            spacing: 0
+
+            Text {
+                visible: !root.current
+                Layout.fillWidth: true
+                text: I18n.t("tm.pick")
+                color: Theme.textMuted
+                font.pixelSize: Theme.fsSm
+            }
+            Text {
+                visible: !!root.current && root.preview.ok === false
+                Layout.fillWidth: true
+                text: root.preview.error || ""
+                color: Theme.warning
+                font.pixelSize: Theme.fsSm
+                wrapMode: Text.Wrap
+            }
+
+            Text {
+                objectName: "time-machine-state-at"
+                visible: !!root.current
+                Layout.fillWidth: true
+                text: root.current ? root.dayLabel(root.current.day) + ", " + root.current.time : ""
+                color: Theme.text
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsLg
+                font.weight: Theme.fwHeading
+            }
+            Text {
+                visible: !!root.current && root.preview.ok === true
+                Layout.topMargin: Theme.spXs
+                Layout.fillWidth: true
+                text: root.current ? root.kindText(root.current.tag) + " · " + root.profileLine() : ""
+                color: Theme.textMuted
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsMd
+            }
+            Text {
+                visible: !!root.current && root.preview.ok === true
+                Layout.topMargin: Theme.spLg
+                Layout.bottomMargin: Theme.spXs
+                text: I18n.t("tm.diff.head")
+                color: Theme.textMuted
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsXs
+            }
+            Repeater {
+                model: !!root.current && root.preview.ok === true ? root.diffRows : []
+                delegate: ColumnLayout {
+                    id: diffRow
+                    required property var modelData
+                    required property int index
+                    objectName: "time-machine-diff-" + index
+                    Layout.fillWidth: true
+                    spacing: 0
+                    Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.border }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.minimumHeight: Theme.chipH + Theme.spXs
+                        spacing: Theme.spMd
+                        Text {
+                            Layout.preferredWidth: Theme.px(90)
+                            text: diffRow.modelData.k
+                            color: Theme.textMuted
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsMd
+                        }
+                        Text {
+                            objectName: "time-machine-diff-value-" + diffRow.index
                             Layout.fillWidth: true
-                            spacing: Theme.spMd
-                            Rectangle {
-                                implicitWidth: 8; implicitHeight: 8; radius: 4
-                                color: profRow.modelData.color || Theme.textDim
-                            }
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 0
-                                Text {
-                                    Layout.fillWidth: true
-                                    elide: Text.ElideRight
-                                    text: profRow.modelData.name + (profRow.modelData.existsNow ? "" : "  · " + I18n.t("tm.profile.gone"))
-                                    color: Theme.text
-                                    font.pixelSize: Theme.fsMd
-                                }
-                                Text {
-                                    text: I18n.t("tm.profile.counts").arg(profRow.modelData.tasks).arg(profRow.modelData.notes).arg(profRow.modelData.docs)
-                                    color: Theme.textMuted
-                                    font.pixelSize: Theme.fsXs
-                                }
-                            }
-                            PillButton {
-                                objectName: "time-machine-profile-copy-" + profRow.modelData.id
-                                text: I18n.t("tm.profile.restoreCopy")
-                                onClicked: {
-                                    if (root.current)
-                                        AppController.restoreSnapshotProfile(root.current.name, profRow.modelData.id);
-                                }
-                            }
-                        }
-                    }
-
-                    // What was there and is not any more.
-                    Text {
-                        text: I18n.t("tm.missing")
-                        color: Theme.textDim
-                        font.pixelSize: Theme.fsSm
-                        font.weight: Theme.fwTitle
-                    }
-                    Text {
-                        visible: (root.preview.missing || []).length === 0
-                        text: I18n.t("tm.missing.none")
-                        color: Theme.textMuted
-                        font.pixelSize: Theme.fsSm
-                    }
-                    Repeater {
-                        model: root.preview.missing || []
-                        delegate: ItemRow {
-                            id: missingRow
-                            objectName: "time-machine-missing-" + missingRow.modelData.id
-                            actionText: I18n.t("tm.restoreItem")
-                            onRestore: root.restoreItem(missingRow.modelData)
-                        }
-                    }
-
-                    Text {
-                        visible: (root.preview.changed || []).length > 0
-                        text: I18n.t("tm.changed")
-                        color: Theme.textDim
-                        font.pixelSize: Theme.fsSm
-                        font.weight: Theme.fwTitle
-                    }
-                    Repeater {
-                        model: root.preview.changed || []
-                        delegate: ItemRow {
-                            id: changedRow
-                            objectName: "time-machine-changed-" + changedRow.modelData.id
-                            actionText: I18n.t("tm.restoreVersion")
-                            onRestore: root.restoreItem(changedRow.modelData)
+                            text: diffRow.modelData.v
+                            textFormat: diffRow.modelData.links ? Text.StyledText : Text.PlainText
+                            linkColor: Theme.text
+                            color: Theme.text
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsMd
+                            wrapMode: Text.Wrap
+                            onLinkActivated: (link) => root.restoreTask(link)
+                            HoverHandler { cursorShape: parent.hoveredLink ? Qt.PointingHandCursor : Qt.ArrowCursor }
                         }
                     }
                 }
             }
-        }
-    }
 
-    footer: DialogFooter {
-        Text {
-            visible: !!root.current
-            Layout.fillWidth: true
-            Layout.maximumWidth: 420
-            text: I18n.t("tm.restoreAll.hint")
-            color: Theme.textMuted
-            font.pixelSize: Theme.fsXs
-            wrapMode: Text.Wrap
-        }
-        // Two presses: the first arms, the second (within 3.5 s) restores.
-        PillButton {
-            id: restoreAllBtn
-            objectName: "time-machine-restore-all"
-            property bool armed: false
-            enabled: !!root.current && root.preview.ok === true
-            danger: restoreAllBtn.armed
-            text: restoreAllBtn.armed ? I18n.t("tm.restoreAll.confirm") : I18n.t("tm.restoreAll")
-            Timer { id: disarm; interval: 3500; onTriggered: restoreAllBtn.armed = false }
-            onClicked: {
-                if (!restoreAllBtn.armed) {
-                    restoreAllBtn.armed = true;
-                    disarm.restart();
-                    return;
+            RowLayout {
+                visible: !!root.current && root.preview.ok === true
+                Layout.topMargin: Theme.spLg
+                Layout.fillWidth: true
+                spacing: Theme.spMd
+                PillButton {
+                    id: copyBtn
+                    objectName: "time-machine-copy"
+                    text: I18n.t("tm.openCopy")
+                    onClicked: (root.preview.profiles || []).length > 1 ? copyMenu.popup(copyBtn, 0, copyBtn.height) : root.openAsCopy("")
+                    AppMenu {
+                        id: copyMenu
+                        Repeater {
+                            model: root.preview.profiles || []
+                            delegate: AppMenuItem {
+                                required property var modelData
+                                objectName: "time-machine-profile-copy-" + modelData.id
+                                text: modelData.name
+                                onTriggered: root.openAsCopy(modelData.id)
+                            }
+                        }
+                    }
                 }
-                restoreAllBtn.armed = false;
-                disarm.stop();
-                if (AppController.restoreSnapshot(root.current.name))
-                    root.close();
+                PillButton {
+                    objectName: "time-machine-reveal"
+                    text: I18n.t("tm.reveal")
+                    onClicked: if (root.current) AppController.revealSnapshot(root.current.name)
+                }
+                Item { Layout.fillWidth: true }
+                PillButton {
+                    id: restoreAllBtn
+                    objectName: "time-machine-restore-all"
+                    property bool armed: false
+                    primary: true
+                    text: restoreAllBtn.armed ? I18n.t("tm.restoreAll.confirm") : I18n.t("tm.restoreAll")
+                    onClicked: {
+                        if (!root.current) return;
+                        if (!restoreAllBtn.armed) {
+                            restoreAllBtn.armed = true;
+                            disarm.restart();
+                            return;
+                        }
+                        restoreAllBtn.armed = false;
+                        if (AppController.restoreSnapshot(root.current.name)) root.close();
+                    }
+                    Timer { id: disarm; interval: 3500; onTriggered: restoreAllBtn.armed = false }
+                }
+            }
+            Text {
+                visible: !!root.current && root.preview.ok === true
+                Layout.topMargin: Theme.spLg
+                Layout.fillWidth: true
+                text: I18n.t("tm.restoreAll.hint")
+                color: Theme.textMuted
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsSm
+                wrapMode: Text.Wrap
             }
         }
-        PillButton {
-            objectName: "time-machine-close"
-            text: I18n.t("common.close")
-            primary: true
-            onClicked: root.close()
-        }
     }
-
     onOpened: snapList.forceActiveFocus()
-    onClosed: restoreAllBtn.armed = false
 }

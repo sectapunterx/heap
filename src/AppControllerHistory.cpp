@@ -7,6 +7,7 @@
 
 #include "platform/Paths.h"
 #include "storage/AsyncSaver.h"
+#include "storage/Attachments.h"
 #include "storage/Snapshots.h"
 #include "storage/StateIO.h"
 #include "text/LocaleFormat.h"
@@ -324,6 +325,14 @@ QVariantMap AppController::previewSnapshot(const QString& name) {
   out[QStringLiteral("missing")] = missing;
   out[QStringLiteral("changed")] = changed;
   return out;
+}
+
+bool AppController::revealSnapshot(const QString& name) const {
+  if(!heap::history::parseName(name)) {
+    return false;
+  }
+  const QString path = historyDirPath() + QLatin1Char('/') + name;
+  return QFile::exists(path) && heap::attachments::shell(path, true);
 }
 
 bool AppController::restoreSnapshot(const QString& name) {

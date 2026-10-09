@@ -1,117 +1,76 @@
-// Names a saved view: "Save view…" and "Rename…". One field, Enter saves, Esc
-// cancels — the whole point of a saved view is that it costs nothing to make.
+// Names a saved view: "Save as view" and "Rename" (X-Dlg-Small). The fact
+// line says where it will appear and its key; Name and Query (mono) are the
+// fields. Enter saves, Esc cancels — a saved view costs nothing to make.
 import QtQuick
 import QtQuick.Layouts
-import QtQuick.Controls
 import TodoCpp
 
-Popup {
+SmallDialog {
     id: root
     objectName: "saved-view-name-dialog"
-    modal: true
-    focus: true
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-    padding: 0
-    width: 420
-    anchors.centerIn: Overlay.overlay
-    Overlay.modal: ModalScrim {}
 
     // "save" | "rename"
     property string mode: "save"
-    // What the view will capture, one line under the field, so the name is
-    // chosen knowing what it names.
-    property string summary: ""
+    // The Alt digit the view will get (0 = none, past 9).
+    property int slot: 0
     readonly property alias text: nameField.text
+    readonly property alias query: queryField.text
 
-    // Emitted with the trimmed name; the dialog closes itself.
-    signal accepted(string name)
+    // Emitted with the trimmed name; the dialog closes itself. `query` holds
+    // what the Query field says by then.
+    signal named(string name)
 
-    function openFor(mode, name, summary) {
+    title: root.mode === "rename" ? I18n.t("savedview.dialog.renameTitle") : I18n.t("savedview.dialog.saveTitle")
+    fact: root.slot > 0 && root.slot <= 9 ? I18n.t("savedview.dialog.fact").arg(root.slot) : I18n.t("savedview.dialog.factNoKey")
+
+    function openFor(mode, name, query, slot) {
         root.mode = mode;
-        root.summary = summary || "";
+        root.slot = slot || 0;
         nameField.text = name || "";
+        queryField.text = query || "";
         open();
         // Now, not on a later tick: a quick first keystroke would otherwise
         // land before the select-all and be replaced by it.
-        nameField.forceActiveFocus();
-        nameField.selectAll();
+        nameField.focusField();
     }
 
     function submit() {
         const name = nameField.text.trim();
         if (name.length === 0) return;
         root.close();
-        root.accepted(name);
+        root.named(name);
+    }
+    onAccepted: root.submit()
+
+    DialogField {
+        id: nameField
+        fieldName: "saved-view-name-field"
+        label: I18n.t("savedview.dialog.name")
+        placeholderText: I18n.t("savedview.dialog.placeholder")
+        maximumLength: 60
+        onAccepted: root.submit()
+    }
+    DialogField {
+        id: queryField
+        fieldName: "saved-view-query-field"
+        visible: root.mode !== "rename"
+        label: I18n.t("savedview.dialog.query")
+        mono: true
+        onAccepted: root.submit()
     }
 
-    background: ModalSurface {}
-
-    contentItem: ColumnLayout {
-        spacing: Theme.spLg
-
-        Text {
-            Layout.topMargin: Theme.inset
-            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
-            Layout.fillWidth: true
-            text: root.mode === "rename" ? I18n.t("savedview.dialog.renameTitle") : I18n.t("savedview.dialog.saveTitle")
-            color: Theme.text
-            font.pixelSize: Theme.fsLg
-            font.weight: Theme.fwHeading
-            elide: Text.ElideRight
+    buttons: [
+        PillButton {
+            objectName: "saved-view-cancel"
+            text: I18n.t("common.cancel")
+            onClicked: root.close()
+        },
+        PillButton {
+            objectName: "saved-view-save"
+            primary: true
+            enabled: nameField.text.trim().length > 0
+            text: I18n.t("editor.btn.save")
+            onClicked: root.submit()
         }
-        TextField {
-            id: nameField
-            ContextMenu.menu: TextEditMenu { editor: nameField }
-            objectName: "saved-view-name-field"
-            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
-            Layout.fillWidth: true
-            placeholderText: I18n.t("savedview.dialog.placeholder")
-            maximumLength: 60
-            background: Rectangle {
-                radius: Theme.radiusMd
-                color: Theme.panel2
-                border.color: nameField.activeFocus ? Theme.accent : Theme.fieldBorder
-                border.width: 1
-            }
-            color: Theme.text
-            placeholderTextColor: Theme.textDim
-            selectByMouse: true
-            Accessible.name: I18n.t("savedview.dialog.placeholder")
-            onAccepted: root.submit()
-        }
-        Text {
-            visible: root.summary.length > 0
-            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
-            Layout.fillWidth: true
-            text: root.summary
-            color: Theme.textMuted
-            font.family: Theme.fontMono
-            font.pixelSize: Theme.fsSm
-            elide: Text.ElideRight
-        }
-        RowLayout {
-            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
-            Layout.bottomMargin: Theme.inset
-            spacing: Theme.spMd
-            Text {
-                Layout.fillWidth: true
-                text: I18n.t("savedview.dialog.keys")
-                color: Theme.textDim
-                font.pixelSize: Theme.fsXs
-                elide: Text.ElideRight
-            }
-            PillButton {
-                objectName: "saved-view-cancel"
-                text: I18n.t("common.cancel")
-                onClicked: root.close()
-            }
-            PillButton {
-                objectName: "saved-view-save"
-                primary: true
-                enabled: nameField.text.trim().length > 0
-                text: root.mode === "rename" ? I18n.t("editor.btn.save") : I18n.t("savedview.dialog.save")
-                onClicked: root.submit()
-            }
-        }
-    }
+    ]
 }

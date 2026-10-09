@@ -86,56 +86,19 @@ TestCase {
         te.close();
     }
 
-    // ── EventEditor ─────────────────────────────────────────────────────
+    // ── EventEditor (DG-120: the panel) ───────────────────────────────
 
-    function test_event_date_button_opens_from_the_keyboard() {
+    // The rows that open a menu are on the Tab path and named.
+    function test_event_rows_open_from_the_keyboard() {
         const ed = make('import TodoCpp; EventEditor { }');
         ed.showForDraft(AppController.newEventDraft(10, new Date()));
         tryVerify(() => ed.opened, 2000);
-        const ca = findChild(ed.contentItem, "event-date-pick");
-        onTabPathAndNamed(ca, "event date button");
-        verify(ca.Accessible.name.indexOf(I18n.t("editor.label.date")) === 0, "name: " + ca.Accessible.name);
-        const picker = pickerNextTo(ca.parent);
-        ca.forceActiveFocus(Qt.TabFocusReason);
-        keyClick(Qt.Key_Return);
-        tryVerify(() => picker.opened, 1000, "Return on the date button did not open the picker");
-        picker.close();
-        const end = findChild(ed.contentItem, "event-enddate");
-        onTabPathAndNamed(clickAreaIn(end), "event end-date button");
-        ed.close();
-    }
-
-    // DES-20: the All-day switch paints with the theme, not Basic's greys.
-    function test_all_day_switch_is_themed() {
-        const ed = make('import TodoCpp; EventEditor { }');
-        ed.showForDraft(AppController.newEventDraft(10, new Date()));
-        tryVerify(() => ed.opened, 2000);
-        const sw = findChild(ed.contentItem, "event-allday");
-        const track = findChild(ed.contentItem, "event-allday-track");
-        const knob = findChild(ed.contentItem, "event-allday-knob");
-        verify(sw !== null && track !== null && knob !== null);
-        compare(sw.Accessible.name, I18n.t("editor.label.allDay"));
-        ed.allDay = false;
-        compare(String(track.color), String(Theme.panel3));
-        compare(String(track.border.color), String(Theme.fieldBorder));
-        compare(String(knob.color), String(Theme.knob));
-        compare(String(knob.border.color), String(Theme.fieldBorder));
-        ed.allDay = true;
-        compare(String(track.color), String(Theme.accent));
-        // APP-175: the knob slides by transform; its x never moves.
-        compare(knob.x, 2);
-        tryVerify(() => knob.mapToItem(track, 0, 0).x === track.width - knob.width - 2, 1000,
-                  "the knob ends at the right edge");
-        ed.close();
-    }
-
-    function test_open_link_pill_has_a_name() {
-        const ed = make('import TodoCpp; EventEditor { }');
-        ed.showForDraft(AppController.newEventDraft(10, new Date()));
-        tryVerify(() => ed.opened, 2000);
-        const pill = findChild(ed.contentItem, "event-link-open");
-        verify(pill !== null);
-        compare(pill.Accessible.name, I18n.t("event.a11y.openLink"));
+        for (const name of ["event-repeat", "event-reminder", "event-profile", "event-task"]) {
+            const row = findChild(ed, name);
+            verify(row !== null, name);
+            verify(row.activeFocusOnTab, name + " is not on the Tab path");
+        }
+        compare(clickAreaIn(findChild(ed, "event-join")).Accessible.name, I18n.t("event.join"));
         ed.close();
     }
 

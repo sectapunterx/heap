@@ -21,7 +21,7 @@ TestCase {
         let answered = "", cancelled = false;
         d.ask("save", function (a) { answered = a; }, function () { cancelled = true; });
         tryVerify(function () { return d.opened; }, 1000);
-        verify(d.header !== null && d.header.text === d.title, "the title is not drawn by DialogHeader");
+        compare(d.title, I18n.t("repeat.scope.saveTitle"));
         const cancel = findChild(d.footer, "series-scope-cancel");
         verify(cancel !== null, "no Cancel button");
         mouseClick(cancel);

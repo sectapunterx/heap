@@ -1,12 +1,12 @@
-// EventEditor coverage: smoke-load of the modal popup against a live
-// AppController, the callable function contract (parseHour / parseHourRange /
-// _formatHour / _maybeExpandRange), and showForId() pulling a saved event's
-// data back out of the events model. EventEditor declares no signals and no
-// objectNames, so there is no click-driven layer here.
+// EventEditor (DG-120): the meeting as a right panel that saves on its own.
+// The time parsing it keeps, showForId() pulling a saved event back, the
+// autosave, the "When" row, the one-line input (EventCapture) and the rule
+// words (EventRule.js), and the read-only subscription meeting.
 import QtQuick
 import QtQuick.Controls
 import QtTest
 import TodoCpp
+import "../../qml/EventRule.js" as EventRule
 
 TestCase {
     id: tc
@@ -29,7 +29,7 @@ TestCase {
     function test_smoke_load() {
         const ed = make('import TodoCpp; EventEditor { }');
         compare(ed.eventId, "");
-        verify(!ed.visible, "editor popup must start closed");
+        verify(!ed.visible, "the panel starts closed");
         compare(Qt.formatDate(ed.pickedDate, "yyyy-MM-dd"),
                 Qt.formatDate(AppController.selectedDate, "yyyy-MM-dd"));
     }
@@ -99,27 +99,6 @@ TestCase {
         verify(ed.parseHourRange("14:00") === null, "single time is not a range");
     }
 
-    // _maybeExpandRange: typing a range into the start field splits it across
-    // start/end; a plain single time leaves both fields untouched.
-    function test_maybe_expand_range() {
-        const ed = make('import TodoCpp; EventEditor { }');
-        const f = createTemporaryQmlObject(
-            'import QtQuick; QtObject { property string text: "14:00-15:00" }', host);
-        const o = createTemporaryQmlObject(
-            'import QtQuick; QtObject { property string text: "" }', host);
-        verify(f !== null && o !== null);
-
-        ed._maybeExpandRange(f, o);
-        compare(f.text, "14:00");
-        compare(o.text, "15:00");
-
-        f.text = "10:30";
-        o.text = "keep";
-        ed._maybeExpandRange(f, o);
-        compare(f.text, "10:30", "single time must not be rewritten");
-        compare(o.text, "keep", "other field must not be clobbered");
-    }
-
     // showForId: a saved event round-trips through the events model back into
     // the editor — eventId and pickedDate reflect the stored row and the popup
     // opens. The shared test profile persists between runs, so the probe day
@@ -152,7 +131,7 @@ TestCase {
         const ed = make('import TodoCpp; EventEditor { }');
         ed.showForId(ev.id);
 
-        verify(ed.visible, "showForId must open the popup");
+        verify(ed.visible, "showForId opens the panel");
         compare(ed.eventId, ev.id);
         compare(Qt.formatDate(ed.pickedDate, "yyyy-MM-dd"),
                 Qt.formatDate(day, "yyyy-MM-dd"));
@@ -161,28 +140,93 @@ TestCase {
         AppController.deleteEvent(ev.id);   // leave the shared profile clean
     }
 
-    // "No type" is offered first, and an event saved with it reopens on it
-    // rather than falling back to the standup the list used to start with.
+    // "No type" is offered first, and an event saved with it reopens on it.
     function test_untyped_event_round_trips() {
         const ed = make('import TodoCpp; EventEditor { }');
         compare(ed.types[0], "none");
-        compare(ed._typeIndex("sync"), ed.types.indexOf("sync"));
-        compare(ed._typeIndex("imported-kind"), 0, "unknown types read as untyped");
-
         const day = new Date();
         day.setDate(day.getDate() + 420);
         day.setHours(0, 0, 0, 0);
         const ev = AppController.newEventDraft(10, day);
         ev.title = "untyped probe";
-        ev.type = "none";
+        ev.type = "imported-kind";
         ev.end = 10.5;
         ev.date = day;
         AppController.saveEvent(ev);
-
         ed.showForId(ev.id);
+        compare(ed.type, "none", "unknown types read as untyped");
         compare(ed._draft().type, "none");
         ed.close();
         AppController.deleteEvent(ev.id);
+    }
+
+    // Edits save themselves: the title after a pause, "When" on Enter.
+    function test_edits_save_themselves() {
+        const day = new Date();
+        day.setDate(day.getDate() + 430);
+        day.setHours(0, 0, 0, 0);
+        const ev = AppController.newEventDraft(10, day);
+        ev.title = "autosave probe";
+        ev.end = 11;
+        ev.date = day;
+        AppController.saveEvent(ev);
+        const ed = make('import TodoCpp; EventEditor { }');
+        ed.showForId(ev.id);
+        const title = findChild(ed, "event-title");
+        title.text = "autosave probe renamed";
+        tryVerify(() => AppController.eventById(ev.id).title === "autosave probe renamed", 3000);
+        compare(ed.applyWhen("15:00-16:30"), "");
+        const saved = AppController.eventById(ev.id);
+        compare(saved.start, 15);
+        compare(saved.end, 16.5);
+        compare(Qt.formatDate(saved.date, "yyyy-MM-dd"), Qt.formatDate(day, "yyyy-MM-dd"), "a bare time keeps the day");
+        compare(ed.applyWhen("qqq zzz"), I18n.t("event.when.unknown"));
+        compare(ed.applyWhen(ed.whenLabel()), "", "the label read back changes nothing");
+        ed.setRepeat("weekly");
+        compare(AppController.eventById(ev.id).rrule, "FREQ=WEEKLY");
+        ed.close();
+        AppController.deleteEvent(ev.id);
+    }
+
+    // The words of a rule, and what the one-line input takes out first.
+    function test_rule_words() {
+        const fri = new Date(2026, 9, 9);
+        if (I18n.lang === "ru") {
+            compare(EventRule.describe("FREQ=WEEKLY", fri, I18n), "каждую неделю по пятницам");
+            compare(EventRule.describe("FREQ=WEEKLY;INTERVAL=2", fri, I18n), "раз в 2 недели");
+        }
+        compare(EventRule.describe("", fri, I18n), I18n.t("event.repeat.none"));
+        const x = EventRule.extract("Ретро спринта пт 16:00 на 1 ч каждые 2 недели");
+        compare(x.rule, "FREQ=WEEKLY;INTERVAL=2");
+        compare(x.minutes, 60);
+        compare(x.text, "Ретро спринта пт 16:00");
+        compare(EventRule.fromChrono("every:fri"), "FREQ=WEEKLY;BYDAY=FR");
+        compare(EventRule.fromChrono("every:weekday"), "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR");
+    }
+
+    // A new meeting comes from one line, with chips for what was read.
+    function test_one_line_input_makes_the_meeting() {
+        const cap = make('import TodoCpp; EventCapture { }');
+        const day = new Date();
+        day.setDate(day.getDate() + 440);
+        day.setHours(0, 0, 0, 0);
+        cap.openAt({ date: day, start: 9, end: 10 });
+        tryVerify(() => cap.opened);
+        let made = "";
+        cap.created.connect((id) => made = id);
+        const input = findChild(cap.contentItem, "event-capture-input");
+        input.text = "capture probe 14:00 for 30 min every 2 weeks";
+        compare(cap.parsed.title, "capture probe");
+        compare(cap.parsed.start, 14);
+        compare(cap.parsed.end, 14.5);
+        compare(cap.parsed.rule, "FREQ=WEEKLY;INTERVAL=2");
+        verify(findChild(cap.contentItem, "event-capture-repeat").visible);
+        cap.submit();
+        tryVerify(() => made.length > 0);
+        const ev = AppController.eventById(made);
+        compare(ev.title, "capture probe");
+        compare(ev.rrule, "FREQ=WEEKLY;INTERVAL=2");
+        AppController.deleteEvent(made);
     }
 
     // Typing in the attendee field offers contacts; Enter takes the highlighted
@@ -223,7 +267,7 @@ TestCase {
     }
 
     // APP-118: a meeting from a calendar link opens read-only — no field takes
-    // input, Save and Delete are gone, and the join link is a button.
+    // input, Delete is gone, and the join link is there.
     function test_a_subscription_meeting_opens_read_only() {
         const ed = make('import TodoCpp; EventEditor { }');
         const d = AppController.newEventDraft(10, new Date());
@@ -233,9 +277,10 @@ TestCase {
         ed.showForDraft(d);
         tryVerify(() => ed.opened);
         verify(ed.readOnly);
-        verify(findChild(ed, "event-readonly-banner").visible);
-        verify(!findChild(ed, "event-title").enabled);
-        verify(findChild(ed, "event-notes").readOnly);
+        verify(findChild(ed, "event-saved").text.length > 0);
+        verify(findChild(ed, "event-title").readOnly);
+        verify(findChild(ed, "event-agenda").readOnly);
+        verify(!findChild(ed, "event-delete").visible);
         verify(findChild(ed, "event-join").visible);
         ed.close();
     }
@@ -245,8 +290,9 @@ TestCase {
         ed.showForDraft(AppController.newEventDraft(10, new Date()));
         tryVerify(() => ed.opened);
         verify(!ed.readOnly);
-        verify(!findChild(ed, "event-readonly-banner").visible);
-        verify(findChild(ed, "event-title").enabled);
+        verify(!findChild(ed, "event-title").readOnly);
+        verify(findChild(ed, "event-delete").visible);
+        compare(findChild(ed, "event-saved").text, I18n.t("event.saved"));
         ed.close();
     }
 }

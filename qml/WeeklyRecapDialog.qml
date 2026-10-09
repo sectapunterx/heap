@@ -5,21 +5,20 @@ import QtQuick.Layouts
 import QtQuick.Controls
 import TodoCpp
 
-// The Monday recap (WEAK PECAP): which tasks changed column last week,
-// grouped by the move —
+// The weekly recap (X-Dlg-Recap, DG-123): one week's facts — what closed,
+// per day as bars, the meetings' hours — the closed list a click from each
+// task, "Copy Markdown" and "Next week →". Opened by hand it shows the
+// current week; [ and ] step back and forth.
 //
-//   Backlog → In Progress
-//     APP-12  Login rate limit
-//     APP-14  CSV export
-//
-// It opens by itself once a week, when last week moved anything;
+// The Monday check still reads last week's column moves (WEAK PECAP): it
+// opens by itself once a week, when last week moved anything;
 // settings.notifications.weeklyRecap = false turns that off. Which week was
 // seen is kept in settings.notifications.recapSeenWeek, so a restart does not
 // show it again. "Seen" means the dialog was on screen and closed (APP-211):
 // heap runs for weeks, and a recap opened at midnight in a window hidden in
 // the tray used to mark the week seen with nobody looking. Until then the
 // board's recap button carries a dot. A task in the list opens in the editor.
-Dialog {
+Popup {
     id: root
     objectName: "weekly-recap"
     modal: true
@@ -27,8 +26,8 @@ Dialog {
     focus: true
     anchors.centerIn: Overlay.overlay
     parent: Overlay.overlay
-    padding: Theme.inset
-    width: 520
+    padding: 0
+    width: 428
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
     property var recap: ({ weekStart: "", weekEnd: "", groups: [] })
@@ -118,12 +117,13 @@ Dialog {
         const r = AppController.weeklyRecap();
         if (!root.shouldShowRecap(now, root.seenWeek, visible, active, overlayOpen, root._hasGroups(r))) return false;
         root.recap = r;
+        root._autoOpened = true;
         root.open();
         return true;
     }
 
-    // From the palette, the hotkey and the board's button: last week's recap
-    // whether it is due or not, empty or not.
+    // From the palette, the hotkey and the board's button: the current week,
+    // whether the recap is due or not, empty or not.
     function showNow() {
         root.recap = AppController.weeklyRecap();
         root.open();
@@ -133,130 +133,214 @@ Dialog {
     // Monday of the week it was shown in).
     onAboutToHide: root._markSeen(root.recap.weekEnd ? new Date(root.recap.weekEnd + "T00:00:00") : new Date())
 
-    function _range() {
-        if (!root.recap.weekStart) return "";
-        const a = new Date(root.recap.weekStart + "T00:00:00");
-        const b = new Date(root.recap.weekEnd + "T00:00:00");
-        b.setDate(b.getDate() - 1);
-        return I18n.fmtDate(a, "dayMonth") + " – " + I18n.fmtDate(b, "dayMonth");
-    }
+    // ── What it shows (DG-123): the facts of one week ──
+    // A day in the week on screen; [ and ] step through weeks.
+    property var weekDay: new Date()
+    property var facts: ({ closed: [], perDay: [0, 0, 0, 0, 0, 0, 0] })
+    readonly property var closedRows: root.facts.closed || []
+    property int meetingMinutes: 0
 
-    header: DialogHeader { text: I18n.t("recap.title").arg(root._range()) }
+    function _load(day) {
+        root.weekDay = day;
+        root.facts = AppController.weekFacts(day);
+        const a = root.facts.weekStart, b = root.facts.weekEnd;
+        let m = 0;
+        if (a && b) {
+            const occ = AppController.eventOccurrences(a, b);
+            for (let i = 0; i < occ.length; i++)
+                if (!occ[i].allDay) m += Math.max(0, (Number(occ[i].end) - Number(occ[i].start)) * 60);
+        }
+        root.meetingMinutes = Math.round(m);
+    }
+    function stepWeek(n) {
+        const d = new Date(root.weekDay.getFullYear(), root.weekDay.getMonth(), root.weekDay.getDate() + 7 * n);
+        root._load(d);
+    }
+    onAboutToShow: root._load(root._autoOpened ? new Date(new Date().getTime() - 7 * 86400000) : new Date())
+    property bool _autoOpened: false
+    onClosed: root._autoOpened = false
+
+    // "5 – 11 октября", "28 сентября – 4 октября".
+    function rangeText() {
+        const a = root.facts.weekStart, b = root.facts.weekEnd;
+        if (!a || !a.getTime || !b || !b.getTime) return "";
+        const ma = I18n.locale.monthName(a.getMonth(), Locale.LongFormat);
+        const mb = I18n.locale.monthName(b.getMonth(), Locale.LongFormat);
+        if (I18n.lang === "ru")
+            return a.getMonth() === b.getMonth() ? a.getDate() + " – " + b.getDate() + " " + mb
+                                                 : a.getDate() + " " + ma + " – " + b.getDate() + " " + mb;
+        return a.getMonth() === b.getMonth() ? ma + " " + a.getDate() + " – " + b.getDate()
+                                             : ma + " " + a.getDate() + " – " + mb + " " + b.getDate();
+    }
+    function factsLine() {
+        const parts = [I18n.count(root.closedRows.length, "recap.closedN")];
+        if (root.meetingMinutes > 0)
+            parts.push(I18n.t("recap.meetings").arg(I18n.fmtMinutes(root.meetingMinutes)));
+        return parts.join(" · ");
+    }
+    // Monday..Friday, and a weekend day only when something closed on it.
+    readonly property var dayRows: {
+        const out = [];
+        const per = root.facts.perDay || [];
+        const a = root.facts.weekStart;
+        for (let i = 0; i < 7; i++) {
+            const n = Number(per[i] || 0);
+            if (i >= 5 && n === 0) continue;
+            out.push({ dow: (i + 1) % 7, n: n });
+        }
+        return out;
+    }
+    function markdown() {
+        const lines = ["## " + I18n.t("recap.title").arg(root.rangeText()), "", root.factsLine(), ""];
+        for (let i = 0; i < root.closedRows.length; i++)
+            lines.push("- " + root.closedRows[i].id + " " + root.closedRows[i].title);
+        return lines.join("\n") + "\n";
+    }
+    function copyMarkdown() {
+        AppController.copyToClipboard(root.markdown());
+        AppController.toast(I18n.t("recap.copied"));
+    }
+    // "Next week →": the calendar on the week after, to look at, not to plan
+    // for the person.
+    signal nextWeekRequested(var day)
+
     background: ModalSurface {}
 
+    Shortcut { sequence: "["; enabled: root.opened; onActivated: root.stepWeek(-1) }
+    Shortcut { sequence: "]"; enabled: root.opened; onActivated: root.stepWeek(1) }
+
     contentItem: ColumnLayout {
-        spacing: Theme.spLg
+        spacing: 0
 
         Text {
+            objectName: "recap-title"
+            Layout.topMargin: Theme.inset
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             Layout.fillWidth: true
-            text: root.taskCount > 0 ? I18n.t("recap.summary").arg(root.taskCount)
-                                     : I18n.t("recap.empty")
+            text: I18n.t("recap.title").arg(root.rangeText())
+            color: Theme.text
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsLg
+            font.weight: Theme.fwHeading
+        }
+        Text {
+            objectName: "recap-facts"
+            Layout.topMargin: Theme.spXs
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+            Layout.fillWidth: true
+            text: root.factsLine()
             color: Theme.textMuted
+            font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
             wrapMode: Text.Wrap
         }
 
-        Flickable {
-            id: flick
-            Layout.fillWidth: true
-            Layout.preferredHeight: Math.min(groupsCol.implicitHeight, 420)
-            contentHeight: groupsCol.implicitHeight
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
-            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-
-            ColumnLayout {
-                id: groupsCol
-                width: flick.width
-                spacing: Theme.spLg
-
-                Repeater {
-                    model: root.groups
-                    delegate: ColumnLayout {
-                        id: grp
-                        required property var modelData
-                        objectName: "recap-group-" + modelData.from + "-" + modelData.to
-                        Layout.fillWidth: true
-                        spacing: Theme.spXs
-
-                        RowLayout {
-                            spacing: Theme.spSm
-                            Rectangle { implicitWidth: 8; implicitHeight: 8; radius: 4; color: grp.modelData.fromColor || Theme.textDim }
-                            Text { text: grp.modelData.fromName; color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Theme.fwTitle }
-                            Text { text: "→"; color: Theme.textDim; font.pixelSize: Theme.fsMd }
-                            Rectangle { implicitWidth: 8; implicitHeight: 8; radius: 4; color: grp.modelData.toColor || Theme.textDim }
-                            Text { text: grp.modelData.toName; color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Theme.fwTitle }
-                            Text { text: "· " + grp.modelData.tasks.length; color: Theme.textDim; font.pixelSize: Theme.fsSm }
-                        }
-
-                        Repeater {
-                            model: grp.modelData.tasks
-                            delegate: Rectangle {
-                                id: taskRow
-                                required property var modelData
-                                objectName: "recap-task-" + modelData.id
-                                Layout.fillWidth: true
-                                implicitHeight: taskLine.implicitHeight + Theme.spSm * 2
-                                radius: Theme.radiusMd
-                                color: taskMA.hovered ? Theme.panel3 : "transparent"
-                                RowLayout {
-                                    id: taskLine
-                                    anchors.fill: parent
-                                    anchors.leftMargin: Theme.spXl
-                                    anchors.rightMargin: Theme.spMd
-                                    spacing: Theme.spMd
-                                    Text {
-                                        // A fixed column, so the titles line up.
-                                        Layout.preferredWidth: 72
-                                        elide: Text.ElideRight
-                                        text: taskRow.modelData.id
-                                        color: Theme.textMuted
-                                        font.family: Theme.fontMono
-                                        font.pixelSize: Theme.fsXs
-                                    }
-                                    Text {
-                                        Layout.fillWidth: true
-                                        text: taskRow.modelData.title
-                                        color: Theme.text
-                                        font.pixelSize: Theme.fsSm
-                                        elide: Text.ElideRight
-                                    }
-                                }
-                                ClickArea {
-                                    id: taskMA
-                                    objectName: "recap-task-area-" + taskRow.modelData.id
-                                    label: taskRow.modelData.id + " " + taskRow.modelData.title
-                                    showTip: false
-                                    onActivated: {
-                                        root.close();
-                                        root.taskActivated(taskRow.modelData.id);
-                                    }
-                                }
-                            }
-                        }
+        // One bar per day, as long as what closed on it.
+        ColumnLayout {
+            objectName: "recap-days"
+            Layout.topMargin: Theme.spLg
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+            spacing: Theme.spSm
+            Repeater {
+                model: root.dayRows
+                delegate: RowLayout {
+                    id: dayRow
+                    required property var modelData
+                    spacing: Theme.spMd
+                    Text {
+                        Layout.preferredWidth: Theme.px(24)
+                        text: I18n.dayName(dayRow.modelData.dow)
+                        color: Theme.textMuted
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsSm
+                    }
+                    Rectangle {
+                        objectName: "recap-bar"
+                        implicitWidth: dayRow.modelData.n > 0 ? Theme.px(34) * Math.min(dayRow.modelData.n, 8) : 3
+                        implicitHeight: Theme.spSm
+                        radius: height / 2
+                        color: Theme.borderStrong
+                    }
+                    Text {
+                        text: I18n.t("recap.dayClosed").arg(dayRow.modelData.n)
+                        color: Theme.textMuted
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsSm
                     }
                 }
             }
         }
-    }
 
-    footer: DialogFooter {
-        PillButton {
-            objectName: "weekly-recap-standup"
-            visible: !!(AppController.safety && AppController.safety.standupDraft)
-            text: I18n.t("standup.open")
-            onClicked: {
-                root.close();
-                root.standupDraftRequested();
+        Text {
+            visible: root.closedRows.length > 0
+            Layout.topMargin: Theme.spLg
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+            text: I18n.t("recap.closed")
+            color: Theme.textMuted
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsXs
+        }
+        // The first few closed, each opening in one click; then "and N more".
+        Repeater {
+            model: root.closedRows.slice(0, 3)
+            delegate: Text {
+                id: taskRow
+                required property var modelData
+                objectName: "recap-task-" + modelData.id
+                Layout.topMargin: Theme.spXs
+                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+                Layout.fillWidth: true
+                text: taskRow.modelData.id + " " + taskRow.modelData.title
+                textFormat: Text.PlainText
+                color: Theme.text
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsMd
+                font.underline: taskMA.hovered
+                elide: Text.ElideRight
+                ClickArea {
+                    id: taskMA
+                    objectName: "recap-task-area-" + taskRow.modelData.id
+                    label: taskRow.text
+                    showTip: false
+                    onActivated: {
+                        root.close();
+                        root.taskActivated(taskRow.modelData.id);
+                    }
+                }
             }
         }
-        PillButton {
-            id: closeBtn
-            objectName: "weekly-recap-close"
-            text: I18n.t("common.close")
-            primary: true
-            onClicked: root.close()
+        Text {
+            objectName: "recap-more"
+            visible: root.closedRows.length > 3
+            Layout.topMargin: Theme.spXs
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+            text: I18n.t("recap.more").arg(root.closedRows.length - 3)
+            color: Theme.textMuted
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsSm
+        }
+
+        RowLayout {
+            Layout.margins: Theme.inset
+            Layout.fillWidth: true
+            spacing: Theme.spMd
+            PillButton {
+                id: copyBtn
+                objectName: "weekly-recap-copy"
+                text: I18n.t("recap.copyMarkdown")
+                onClicked: root.copyMarkdown()
+            }
+            PillButton {
+                objectName: "weekly-recap-next"
+                text: I18n.t("recap.nextWeek")
+                onClicked: {
+                    const d = new Date(root.weekDay.getFullYear(), root.weekDay.getMonth(), root.weekDay.getDate() + 7);
+                    root.close();
+                    root.nextWeekRequested(d);
+                }
+            }
+            Item { Layout.fillWidth: true }
         }
     }
-    onOpened: closeBtn.forceActiveFocus()
+    onOpened: copyBtn.forceActiveFocus()
 }

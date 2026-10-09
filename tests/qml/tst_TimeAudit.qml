@@ -247,63 +247,41 @@ TestCase {
         verify(isNaN(ed.parseHourStrict("")));
     }
 
+    // DG-120: the panel saves on its own, so "refused" means nothing is
+    // written — no name, no meeting; an end typed before the start keeps the
+    // length instead of becoming a 23-hour event.
     function test_editor_refuses_an_empty_title_and_a_backwards_end() {
         const day = probeDay(1250);
         clearRange(day, day);
         const ed = createTemporaryQmlObject('import TodoCpp; EventEditor { }', host);
         const draft = AppController.newEventDraft(10, day);
+        draft.title = "";
         ed.showForDraft(draft);
         const before = AppController.events.rowCount();
         findChild(ed, "event-title").text = "";
-        ed._save();
-        compare(AppController.events.rowCount(), before);
-        verify(ed._error.length > 0);
+        ed._save("text");
+        compare(AppController.events.rowCount(), before, "a nameless meeting is not made");
 
         findChild(ed, "event-title").text = "named";
-        findChild(ed, "event-start").text = "11:00";
-        findChild(ed, "event-end").text = "10:00";
-        ed._save();
-        compare(AppController.events.rowCount(), before, "an end before the start is not saved as a 23-hour event");
+        ed._save("text");
+        tc.seeded.push(draft.id);
+        compare(ed.applyWhen("11:00-10:00"), "");
+        const back = AppController.eventById(draft.id);
+        verify(back.end > back.start, "an end before the start is not saved as a 23-hour event");
+        verify(back.end - back.start <= 1.01);
         ed.close();
     }
 
+    // The repeat menu's kinds and the rules they stand for; a rule the menu
+    // cannot show stays as written ("custom").
     function test_editor_builds_weekday_and_end_rules() {
         const ed = createTemporaryQmlObject('import TodoCpp; EventEditor { }', host);
-        const day = probeDay(1260);
-        ed.showForDraft(AppController.newEventDraft(10, day));
-        ed._loadRule("FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR");
-        compare(ed._kind(), "weekdays");
-        compare(ed._ruleFromBox(), "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR");
-
-        ed._loadRule("FREQ=WEEKLY;BYDAY=MO,WE;COUNT=6");
-        compare(ed._kind(), "weekly");
-        compare(ed.repeatDays.join(","), "1,3");
-        compare(ed._ruleFromBox(), "FREQ=WEEKLY;BYDAY=MO,WE;COUNT=6");
-
-        ed._loadRule("FREQ=MONTHLY;BYDAY=-1FR");
-        compare(ed._kind(), "custom", "a rule the controls cannot show stays as text");
-        compare(ed._ruleFromBox(), "FREQ=MONTHLY;BYDAY=-1FR");
-        ed.close();
-    }
-
-    // Design audit DES-3: the days of a weekly rule are toggles the keyboard
-    // can reach — Tab to a day, Space or Enter flips it — and read as checkboxes.
-    function test_weekday_chips_toggle_from_the_keyboard() {
-        const ed = createTemporaryQmlObject('import TodoCpp; EventEditor { }', host);
-        ed.showForDraft(AppController.newEventDraft(10, probeDay(1262)));
-        ed._loadRule("FREQ=WEEKLY;BYDAY=MO");
-        const tue = findChild(ed.contentItem, "event-repeat-day-2");
-        verify(tue !== null);
-        verify(tue.activeFocusOnTab, "a weekday chip is not on the Tab path");
-        compare(tue.Accessible.role, Accessible.CheckBox);
-        verify(!tue.Accessible.checked);
-        tue.forceActiveFocus(Qt.TabFocusReason);
-        keyClick(Qt.Key_Space);
-        compare(ed.repeatDays.join(","), "1,2");
-        verify(tue.Accessible.checked);
-        keyClick(Qt.Key_Return);
-        compare(ed.repeatDays.join(","), "1");
-        ed.close();
+        compare(ed.repeatKindOf("FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"), "weekdays");
+        compare(ed.ruleFor("weekdays"), "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR");
+        compare(ed.repeatKindOf("FREQ=WEEKLY;INTERVAL=2"), "biweekly");
+        compare(ed.repeatKindOf("FREQ=WEEKLY;BYDAY=MO,WE;COUNT=6"), "custom");
+        compare(ed.repeatKindOf("FREQ=MONTHLY;BYDAY=-1FR"), "custom", "a rule the menu cannot show stays as text");
+        compare(ed.repeatKindOf(""), "never");
     }
 
     function test_editor_saves_notes_link_and_reminder() {
@@ -313,30 +291,29 @@ TestCase {
         const draft = AppController.newEventDraft(10, day);
         ed.showForDraft(draft);
         findChild(ed, "event-title").text = "with extras";
-        findChild(ed, "event-notes").text = "agenda";
-        findChild(ed, "event-link").text = "https://meet.example/x";
-        findChild(ed, "event-location").text = "Room 1";
-        findChild(ed, "event-reminder").currentIndex = ed.reminderChoices.indexOf(15);
-        ed._save();
+        findChild(ed, "event-agenda").text = "agenda";
+        findChild(ed, "event-call").text = "https://meet.example/x";
+        ed.reminderMinutes = 15;
+        ed._save("text");
         tc.seeded.push(draft.id);
         const back = AppController.eventById(draft.id);
         compare(back.notes, "agenda");
         compare(back.url, "https://meet.example/x");
-        compare(back.location, "Room 1");
         compare(back.reminderMinutes, 15);
     }
 
-    // ── TIME-25: a click outside with unsaved edits asks first ──
-
+    // TIME-25 is moot with autosave: what is typed is written on close.
     function test_unsaved_edits_survive_a_first_close_request() {
+        const day = probeDay(1270);
+        clearRange(day, day);
         const ed = createTemporaryQmlObject('import TodoCpp; EventEditor { }', host);
-        ed.showForDraft(AppController.newEventDraft(10, probeDay(1270)));
+        const draft = AppController.newEventDraft(10, day);
+        ed.showForDraft(draft);
         findChild(ed, "event-title").text = "half typed";
-        ed._requestClose();
-        verify(ed.opened, "the first request only warns");
-        verify(ed._confirmDiscard);
-        ed._requestClose();
-        verify(!ed.opened, "the second one discards");
+        ed.close();
+        verify(!ed.opened);
+        tc.seeded.push(draft.id);
+        compare(AppController.eventById(draft.id).title, "half typed", "closing writes what was typed");
     }
 
     // ── TIME-16: the date picker is keyboard-driven ──
@@ -471,7 +448,6 @@ TestCase {
         const ed = createTemporaryQmlObject('import TodoCpp; EventEditor { }', host);
         ed.showForOccurrence(occOf(id, new Date(2034, 2, 27)));
         findChild(ed, "event-title").text = "renamed weekly";
-        compare(ed._ruleFromBox(), "FREQ=WEEKLY", "the controls' own spelling");
         compare(ed._draft().rrule, "FREQ=WEEKLY;BYDAY=MO", "an untouched rule goes back as given");
         AppController.saveOccurrence(ed._draft(), "all");
         ed.close();
@@ -479,10 +455,6 @@ TestCase {
         verify(occOf(id, new Date(2034, 2, 13)) === null, "the deleted one stays deleted");
         compare(occOf(id, new Date(2034, 3, 3)).title, "renamed weekly");
 
-        // Touched, the controls say what is saved.
-        ed.showForOccurrence(occOf(id, new Date(2034, 3, 3)));
-        ed._toggleDay(3);
-        compare(ed._draft().rrule, "FREQ=WEEKLY;BYDAY=MO,WE");
         ed.close();
     }
 }

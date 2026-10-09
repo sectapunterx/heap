@@ -1,0 +1,17 @@
+# Design decisions for 0.8.1
+
+Questions the sheets leave open, decided against the sheets (ui-ux-pro-max review: progressive disclosure, undo over confirmation, one primary action). One entry per decision.
+
+## Dialogs group
+
+- **DG-120 · A series' words belong to the series.** In the auto-saving meeting panel, edits to the title, agenda, people, call, reminder, task and profile of a recurring meeting apply to the whole series without a question. Only a move, a rule change or a delete asks "only this / this and following / all" (the sheet's question is about "перенос, длительность, удаление"). Asking on every pause in typing would break the auto-save; all of it is undoable with Ctrl Z.
+- **DG-120 · New meetings come only from the one-line input.** Ctrl Alt E, `event.new` and a click or drag on the calendar grid all open the one-line input with chips (the slot pre-fills "когда"). Enter makes the meeting and opens it in the panel. Nothing is made without a name.
+- **DG-120 · Kept off the panel, never lost.** Location stays as the placeholder of the Call row and is saved as it is. Context is saved as it is. Type moves into the header word ("встреча" opens a menu with the types). A rule the repeat menu cannot show (days, an end date, a count) is edited as RRULE text under "Повтор → Своё правило". The weekday chips and the date pickers are gone: you type "Когда" ("пт 14:00", "завтра 10–11", "весь день").
+- **DG-121 · Per-item restore goes into the diff.** The deleted task IDs in the "Задачи" row are links. Each one brings back just that task (undoable). The long per-item list with "Вернуть эту версию" is gone: "Открыть копией в новом профиле" covers comparing versions.
+- **DG-121 · Retention behind one quiet line.** The dialog has no 7/30/90 and MB pills now. "хранить 30 дн., до 200 МБ" sits under the snapshot list and opens a menu.
+- **DG-122 · Source by kind.** Log entries carry no provider yet, so the source column says Синк / Задачи / Напоминание / Данные / lowkey by entry kind. "отменить" shows only on the newest undoable entry, the one Ctrl Z takes back. "решить" and "войти" wait for entries that carry a target.
+- **DG-123 · "Следующая неделя →" opens the calendar.** It shows next week in the week view, to look at, not a planning view (lowkey supports, it does not plan). Opened by hand, the recap shows the current week, and [ and ] step back through earlier weeks. Opened on its own on Monday, it shows last week. "Перенесено" is left out of the facts line: nothing records a carry yet.
+- **DG-124 · Closed today is a count.** It shows as "Закрыто N" in the facts line, not as a list. A running timer is a sentence with "остановить?" one click away.
+- **DG-126 · Person = name + what to ask.** The handle is made from the name. Role, state and colour stay as stored (they come from imports and the Today rail). The contacts picker no longer opens from `person.new`. It stays only as the waiting-on picker inside the legacy TaskEditor.
+- **DG-133 · Only the sheet's areas.** The cheat sheet shows the nine X-Keys areas, and rows with no key are hidden. Every other catalogue key still turns up under a search, so a key that exists can always be found. "Сдвинуть колонку Ctrl Shift H/L" is left out: there is no such binding, and Ctrl Shift L is the log.
+- **DG-132 · The focus screen sits under the toasts.** Meeting reminders still show over it. D marks the task done and ends the session. Leaving with nothing held back shows no toast.

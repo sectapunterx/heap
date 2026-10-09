@@ -148,7 +148,10 @@ TestCase {
         else keyClick(Qt.Key_J);
         verify(v.cursorKey.indexOf("event:") === 0, "j goes on to the meeting");
         keyClick(Qt.Key_Return);
-        tryVerify(function () { const e = popup("EventEditor"); return e && e.opened; }, 2000);
+        // The meeting opens in the panel on the right (DG-120).
+        const panel = find(tc.win.contentItem, function (it) { return it.objectName === "event-panel"; });
+        tryVerify(function () { return panel && panel.opened; }, 2000);
+        panel.close();
         closeAll();
         v.moveCursor(0, 0);
         v.moveCursor(0, 1);
