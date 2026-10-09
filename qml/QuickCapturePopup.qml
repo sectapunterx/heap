@@ -701,10 +701,11 @@ Popup {
                     Instantiator {
                         model: AppController.statuses
                         delegate: AppMenuItem {
+                            id: colRow
                             required property var modelData
-                            text: modelData.name
-                            marked: modelData.id === root._status
-                            onTriggered: root._status = modelData.id
+                            text: colRow.modelData.name
+                            marked: colRow.modelData.id === root._status
+                            onTriggered: root._status = colRow.modelData.id
                         }
                         onObjectAdded: (idx, obj) => columnMenu.insertItem(idx, obj)
                         onObjectRemoved: (idx, obj) => columnMenu.removeItem(obj)

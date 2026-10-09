@@ -300,7 +300,8 @@ TEST(ShellMigration, AReturningUserIsToldOnceWhatMoved) {
     QSignalSpy toasts(&app, &AppController::toast);
     app.noteKeyPressed(QStringLiteral("Ctrl+2"));
     ASSERT_EQ(toasts.count(), 1);
-    EXPECT_TRUE(toasts.at(0).at(0).toString().contains(QStringLiteral("Ctrl 2"))) << toasts.at(0).at(0).toString().toStdString();
+    EXPECT_TRUE(toasts.at(0).at(0).toString().contains(app.keyText(QStringLiteral("Ctrl+2"))))
+        << toasts.at(0).at(0).toString().toStdString();
     app.noteKeyPressed(QStringLiteral("Ctrl+2"));
     app.noteKeyPressed(QStringLiteral("J"));
     EXPECT_EQ(toasts.count(), 1) << "said once; a key that did not move says nothing";
@@ -320,7 +321,7 @@ TEST(ShellMigration, TheUsersOwnBindingKeepsItsKey) {
   EXPECT_EQ(sequenceIn(app, QStringLiteral("theme.toggle")), QStringLiteral("Ctrl+2"));
   EXPECT_TRUE(sequenceIn(app, QStringLiteral("section.tasks")).isEmpty()) << "the new default steps aside";
   EXPECT_EQ(sequenceIn(app, QStringLiteral("section.today")), QStringLiteral("Ctrl+1"));
-  EXPECT_TRUE(app.shellNotice().contains(QStringLiteral("Ctrl 2"))) << app.shellNotice().toStdString();
+  EXPECT_TRUE(app.shellNotice().contains(app.keyText(QStringLiteral("Ctrl+2")))) << app.shellNotice().toStdString();
   // Their own key is theirs: no "Ctrl 2 moved" when they press it.
   QSignalSpy toasts(&app, &AppController::toast);
   app.noteKeyPressed(QStringLiteral("Ctrl+2"));

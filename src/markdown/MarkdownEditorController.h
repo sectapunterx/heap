@@ -23,7 +23,9 @@ class MarkdownEditorController : public QObject {
   QML_ELEMENT
 
   // The editor's document. Everything here is a no-op until this is set.
-  Q_PROPERTY(QQuickTextDocument* target READ target WRITE setTarget NOTIFY targetChanged)
+  // Typed QObject* for QML: qmllint on CI (Qt 6.9) has no type for
+  // QQuickTextDocument and counts every binding to it as a finding.
+  Q_PROPERTY(QObject* target READ targetObject WRITE setTargetObject NOTIFY targetChanged)
   // Caret and selection, kept in step with the editor's own. The controller
   // writes back to these after an operation, and the editor binds them to its
   // cursorPosition and selection.
@@ -39,6 +41,14 @@ class MarkdownEditorController : public QObject {
   }
 
   void setTarget(QQuickTextDocument* target);
+
+  QObject* targetObject() const {
+    return m_target;
+  }
+
+  void setTargetObject(QObject* t) {
+    setTarget(qobject_cast<QQuickTextDocument*>(t));
+  }
 
   int cursorPosition() const {
     return m_selection.end;

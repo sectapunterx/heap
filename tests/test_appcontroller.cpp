@@ -387,14 +387,18 @@ TEST_F(AppControllerTest, TheVimKeymapIsTheDefault) {
 TEST_F(AppControllerTest, KeysAreWrittenTheKeymapWay) {
   EXPECT_EQ(app_->keyText(QStringLiteral("G, B")), QStringLiteral("g b"));
   EXPECT_EQ(app_->shortcutText(QStringLiteral("task.done")), QStringLiteral("d"));
-  EXPECT_EQ(app_->shortcutText(QStringLiteral("task.due")), QStringLiteral("Shift S"));
 #ifndef Q_OS_MACOS
+  EXPECT_EQ(app_->shortcutText(QStringLiteral("task.due")), QStringLiteral("Shift S"));
   EXPECT_EQ(app_->shortcutText(QStringLiteral("board.open")), QStringLiteral("Enter"));
   EXPECT_EQ(app_->shortcutText(QStringLiteral("palette.open")), QStringLiteral("Ctrl K"));
 #endif
   // A rebinding shows at once.
   EXPECT_TRUE(app_->setShortcut(QStringLiteral("task.done"), QStringLiteral("Shift+D")));
+#ifndef Q_OS_MACOS
   EXPECT_EQ(app_->shortcutText(QStringLiteral("task.done")), QStringLiteral("Shift D"));
+#else
+  EXPECT_EQ(app_->shortcutText(QStringLiteral("task.done")), app_->keyText(QStringLiteral("Shift+D")));
+#endif
 }
 
 // "Нельзя назначить g, если есть g b" (APP-272): a prefix is refused, not

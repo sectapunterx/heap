@@ -50,7 +50,8 @@ TestCase {
         verify(s.matches(copyId, "y y"), "by its key");
         verify(!s.matches(copyId, "g b"));
         verify(s.matches(board, "g b"));
-        verify(s.matches(palette, "ctrl k"), "Ctrl K by its key");
+        // macOS writes it ⌘K; the spelled-out search is the Windows/Linux one.
+        if (Qt.platform.os !== "osx") verify(s.matches(palette, "ctrl k"), "Ctrl K by its key");
         verify(s.matches(palette, "л"), "л is the K key of ЙЦУКЕН");
         verify(s.matches(palette, "к"), "к is k said in Russian");
         // On screen: a search hides the groups with nothing in it.
