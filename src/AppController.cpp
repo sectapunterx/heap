@@ -36,6 +36,7 @@
 #include "integrations/ProviderRegistry.h"
 #include "integrations/RestIssueProvider.h"
 #include "integrations/SecretStore.h"
+#include "integrations/Sprints.h"
 #include "integrations/StatusMap.h"
 #include "integrations/SyncState.h"
 #include "integrations/TrackerMerge.h"
@@ -2589,6 +2590,11 @@ void AppController::pushStatusToTracker(const QString& taskId, const QString& st
   }
   const Task& t = m_tasks.items().at(row);
   if(t.externalId.isEmpty() || t.externalProvider.isEmpty()) {
+    return;
+  }
+  // A merge / pull request is read-only in every mode (APP-242): a move of
+  // its card, where allowed, stays here.
+  if(isReviewItem(t)) {
     return;
   }
   // A tracker heap cannot write to has nothing to send to, and one whose
@@ -7027,7 +7033,36 @@ QString AppController::dateTimeLabel(const QDateTime& dt, const QString& style) 
   return heap::text::formatDateTime(dt, style, m_language, twelveHourClock());
 }
 
+QVariantList AppController::sprintMarkers(const QDate& from, const QDate& to) const {
+  QVariantList out;
+  for(const heap::integrations::SprintMarker& m : heap::integrations::sprintMarkers(m_tasks.items(), from, to)) {
+    out.append(QVariantMap{{QStringLiteral("name"), m.name},
+                           {QStringLiteral("state"), m.state},
+                           {QStringLiteral("start"), m.start},
+                           {QStringLiteral("end"), m.end},
+                           {QStringLiteral("endDay"), static_cast<int>(from.daysTo(m.end))},
+                           {QStringLiteral("tasks"), m.tasks}});
+  }
+  return out;
+}
+
+QVariantMap AppController::currentSprint() const {
+  const heap::integrations::SprintMarker m = heap::integrations::currentSprint(m_tasks.items(), m_today);
+  if(m.name.isEmpty()) {
+    return {};
+  }
+  return {{QStringLiteral("name"), m.name},
+          {QStringLiteral("start"), m.start},
+          {QStringLiteral("end"), m.end},
+          {QStringLiteral("daysLeft"), m.end.isValid() ? static_cast<int>(m_today.daysTo(m.end)) : -1}};
+}
+
 QString AppController::sprintLabel() const {
+  // A sprint the cards are in says it better than any week number (APP-255).
+  const heap::integrations::SprintMarker sprint = heap::integrations::currentSprint(m_tasks.items(), m_today);
+  if(!sprint.name.isEmpty()) {
+    return sprint.name;
+  }
   // The ISO week, in the UI language. It used to be "sprint-<month × 2.1>":
   // a number nobody's sprint was on, and English in a Russian UI.
   const int week = m_today.weekNumber();
@@ -8448,7 +8483,9 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
       if(ext.crossProject && !ext.project.isEmpty()) {
         base += ext.project.section(QChar('/'), -1) + QChar('-');
       }
-      t.id = uniqueTaskId(base + ext.externalId);
+      // "!17" is a merge request (APP-242); an id cannot carry the "!".
+      const QString number = ext.externalId.startsWith(QChar('!')) ? QStringLiteral("MR") + ext.externalId.mid(1) : ext.externalId;
+      t.id = uniqueTaskId(base + number);
       t.statusChangedAt = QDateTime::currentDateTime();
     }
     const bool needsRank = row < 0;
@@ -8516,15 +8553,21 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
     const auto isDone = [](const QString& column) {
       return column == QStringLiteral("done");
     };
+    // A merge / pull request (APP-242) is never written back. Its column is
+    // its stage — unless the user lets such cards move, and then a column
+    // picked here is theirs, whatever the tracker's write switch says.
+    const QString kind = ext.details.value(QStringLiteral("kind")).toString();
+    const bool review = kind == QLatin1String("mr") || kind == QLatin1String("pr");
+    const bool reviewFollowsStage = review && !reviewCardsMovable(providerId);
     using heap::integrations::StatusPull;
-    const StatusPull statusPull = isNewRow ? StatusPull::TakeRemote
-                                           : heap::integrations::mergeStatusOnPull(t.status,
-                                                                                   t.externalMeta.unsyncedStatus,
-                                                                                   t.externalMeta.status,
-                                                                                   ext.status,
-                                                                                   mapped,
-                                                                                   t.externalMeta.column,
-                                                                                   localOwnsColumn);
+    const StatusPull statusPull = isNewRow || reviewFollowsStage ? StatusPull::TakeRemote
+                                                                 : heap::integrations::mergeStatusOnPull(t.status,
+                                                                                                         t.externalMeta.unsyncedStatus,
+                                                                                                         t.externalMeta.status,
+                                                                                                         ext.status,
+                                                                                                         mapped,
+                                                                                                         t.externalMeta.column,
+                                                                                                         localOwnsColumn || review);
     if(statusPull == StatusPull::TakeRemote) {
       t.status = mapped;
       if(!t.externalMeta.unsyncedStatus.isEmpty() && t.externalMeta.status != ext.status) {
@@ -8594,6 +8637,7 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
     t.externalMeta.updatedAt = ext.updatedAt;
     t.externalMeta.dueAt = ext.dueAt;
     t.externalMeta.crossProject = ext.crossProject;
+    t.externalMeta.details = ext.details;
 
     // An unchanged issue must not mark the state dirty: auto-sync runs on a
     // timer, and rewriting the whole state.json every cycle for nothing is what
@@ -10176,6 +10220,10 @@ void AppController::scheduleRefreshRetry(const QString& providerId) {
       }
     });
   });
+}
+
+bool AppController::reviewCardsMovable(const QString& providerId) const {
+  return integrationConfig(providerId).value(QStringLiteral("reviewMovable")).toBool();
 }
 
 QString AppController::scopeFingerprintFor(const QString& providerId) const {
@@ -13249,6 +13297,15 @@ bool AppController::canTransitionStatus(const QString& taskId, const QString& ne
       playSound_(static_cast<int>(heap::platform::SoundCue::Refuse));
       return false;
     }
+  }
+  // A merge / pull request's column is its stage in the forge (APP-242). It
+  // moves only when the user said such cards may, and then only here.
+  if(isReviewItem(t) && newStatus != t.status && !reviewCardsMovable(t.externalProvider)) {
+    const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(t.externalProvider);
+    const QString label = d ? d->displayName : t.externalProvider;
+    emit trackerReadOnlyMove(taskId, tr_("int.reviewFixed").arg(externalKeyOf(t), label), t.externalUrl);
+    playSound_(static_cast<int>(heap::platform::SoundCue::Refuse));
+    return false;
   }
   // Only a tracker heap writes to has a say in where its cards go. With the
   // switch off (the default) a move is a local one, and neither the workflow

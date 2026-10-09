@@ -5,6 +5,7 @@
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QString>
+#include <QStringList>
 #include <QUrl>
 
 // Pure helpers for reading one tracker's JSON issue (HEAP-117). They are here
@@ -44,6 +45,11 @@ QString sanitizeProject(const QString& raw);
 // Collect one key out of an array of objects into "a, b" — the git forges list
 // several assignees and heap shows one line.
 QString joinObjectField(const QJsonValue& array, const QString& key);
+
+// The issues a merge / pull request description says it closes (APP-242):
+// "Closes #12", "fixes group/app#7", "Resolves: #3, #4". Each as written
+// ("#12", "group/app#7"), in order, without repeats.
+QStringList closingReferences(const QString& body);
 
 // ── Paging and backoff (pure; the walk itself lives in RestIssueProvider) ──
 

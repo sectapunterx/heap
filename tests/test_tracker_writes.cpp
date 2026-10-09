@@ -11,6 +11,7 @@
 #include "integrations/JiraProvider.h"
 #include "integrations/ProviderRegistry.h"
 #include "integrations/RestIssueProvider.h"
+#include "integrations/Sprints.h"
 #include "integrations/SyncState.h"
 
 #include <QApplication>
@@ -707,6 +708,151 @@ TEST_F(TrackerWrites, Check_StatusChangedInTheTrackerIsAConflictNotAWrite) {
       return count(server, tr.writeKey) == 1;
     })) << "keeping mine did not send it";
   }
+}
+
+// ── APP-242: merge / pull requests are read-only cards ──
+
+namespace {
+
+ExternalTask mergeRequest(const QString& status, const QString& state) {
+  ExternalTask e;
+  e.providerId = QStringLiteral("gitlab");
+  e.externalId = QStringLiteral("!17");
+  e.url = QStringLiteral("https://gitlab.example.com/acme/app/-/merge_requests/17");
+  e.title = QStringLiteral("login fix");
+  e.status = status;
+  e.project = QStringLiteral("acme/app");
+  e.issueType = QStringLiteral("MR");
+  e.details = QJsonObject{{QStringLiteral("kind"), QStringLiteral("mr")},
+                          {QStringLiteral("state"), state},
+                          {QStringLiteral("sourceBranch"), QStringLiteral("fix/login")},
+                          {QStringLiteral("targetBranch"), QStringLiteral("main")}};
+  return e;
+}
+
+ExternalTask issue17() {
+  ExternalTask e;
+  e.providerId = QStringLiteral("gitlab");
+  e.externalId = QStringLiteral("17");
+  e.url = QStringLiteral("https://gitlab.example.com/acme/app/-/issues/17");
+  e.title = QStringLiteral("login broken");
+  e.status = QStringLiteral("opened");
+  e.project = QStringLiteral("acme/app");
+  return e;
+}
+
+}  // namespace
+
+TEST_F(TrackerWrites, MergeRequest_IsItsOwnCard_InTheColumnOfItsStage) {
+  app_->mergeExternalTasks(QStringLiteral("gitlab"),
+                           QStringLiteral("gitlab-"),
+                           {issue17(), mergeRequest(QStringLiteral("MR open"), QStringLiteral("opened"))},
+                           false);
+  const Task* issue = task(QStringLiteral("gitlab-17"));
+  const Task* mr = task(QStringLiteral("gitlab-MR17"));
+  ASSERT_NE(issue, nullptr);
+  ASSERT_NE(mr, nullptr);
+  EXPECT_EQ(issue->status, QStringLiteral("todo"));
+  EXPECT_EQ(mr->status, QStringLiteral("review"));
+  EXPECT_EQ(externalKeyOf(*mr), QStringLiteral("!17"));
+  EXPECT_TRUE(isReviewItem(*mr));
+  EXPECT_FALSE(isReviewItem(*issue));
+  const int row = app_->tasks()->indexOfId(QStringLiteral("gitlab-MR17"));
+  const QVariantMap ticket = app_->tasks()->data(app_->tasks()->index(row, 0), TaskModel::TicketRole).toMap();
+  EXPECT_TRUE(ticket.value(QStringLiteral("review")).toBool());
+  EXPECT_EQ(ticket.value(QStringLiteral("details")).toMap().value(QStringLiteral("sourceBranch")).toString(), QStringLiteral("fix/login"));
+
+  // Merged: the card follows it to Done.
+  app_->mergeExternalTasks(
+      QStringLiteral("gitlab"), QStringLiteral("gitlab-"), {mergeRequest(QStringLiteral("MR merged"), QStringLiteral("merged"))}, false);
+  EXPECT_EQ(task(QStringLiteral("gitlab-MR17"))->status, QStringLiteral("done"));
+  EXPECT_EQ(task(QStringLiteral("gitlab-17"))->status, QStringLiteral("todo")) << "the issue with the same number is untouched";
+}
+
+TEST_F(TrackerWrites, MergeRequest_DragIsRefusedWithAReason_AndNothingIsSent) {
+  FakeHttpServer server;
+  connectTracker(trackerFor(QStringLiteral("gitlab")), server, /*writes=*/true);
+  app_->mergeExternalTasks(
+      QStringLiteral("gitlab"), QStringLiteral("gitlab-"), {mergeRequest(QStringLiteral("MR open"), QStringLiteral("opened"))}, false);
+  QSignalSpy refused(app_.get(), &AppController::trackerReadOnlyMove);
+  app_->moveTask(QStringLiteral("gitlab-MR17"), QStringLiteral("done"));
+  EXPECT_EQ(task(QStringLiteral("gitlab-MR17"))->status, QStringLiteral("review"));
+  ASSERT_EQ(refused.count(), 1);
+  EXPECT_TRUE(refused.at(0).at(1).toString().contains(QStringLiteral("!17"))) << refused.at(0).at(1).toString().toStdString();
+  EXPECT_EQ(refused.at(0).at(2).toString(), QStringLiteral("https://gitlab.example.com/acme/app/-/merge_requests/17"));
+  settle();
+  for(const auto& r : server.requests()) {
+    EXPECT_EQ(r.method, QByteArray("GET")) << r.key().toStdString();
+  }
+}
+
+TEST_F(TrackerWrites, MergeRequest_Movable_MovesHereOnly_AndTheNextSyncKeepsTheColumn) {
+  FakeHttpServer server;
+  connectTracker(trackerFor(QStringLiteral("gitlab")), server, /*writes=*/true);
+  {
+    QJsonObject settings = QJsonDocument::fromJson(app_->appSettingsJson().toUtf8()).object();
+    QJsonObject integrations = settings.value(QStringLiteral("integrations")).toObject();
+    QJsonObject gitlab = integrations.value(QStringLiteral("gitlab")).toObject();
+    gitlab.insert(QStringLiteral("reviewMovable"), true);
+    writeConfig(QStringLiteral("gitlab"), gitlab);
+  }
+  app_->mergeExternalTasks(
+      QStringLiteral("gitlab"), QStringLiteral("gitlab-"), {mergeRequest(QStringLiteral("MR open"), QStringLiteral("opened"))}, false);
+  app_->moveTask(QStringLiteral("gitlab-MR17"), QStringLiteral("prog"));
+  EXPECT_EQ(task(QStringLiteral("gitlab-MR17"))->status, QStringLiteral("prog"));
+  app_->mergeExternalTasks(
+      QStringLiteral("gitlab"), QStringLiteral("gitlab-"), {mergeRequest(QStringLiteral("MR open"), QStringLiteral("opened"))}, false);
+  EXPECT_EQ(task(QStringLiteral("gitlab-MR17"))->status, QStringLiteral("prog"));
+  EXPECT_EQ(task(QStringLiteral("gitlab-MR17"))->externalMeta.status, QStringLiteral("MR open")) << "the real stage stays known";
+  EXPECT_TRUE(task(QStringLiteral("gitlab-MR17"))->externalMeta.unsyncedStatus.isEmpty()) << "nothing is waiting to be sent";
+  settle();
+  for(const auto& r : server.requests()) {
+    EXPECT_EQ(r.method, QByteArray("GET")) << r.key().toStdString();
+  }
+}
+
+// ── APP-255: the Jira sprint, read-only ──
+
+TEST_F(TrackerWrites, Sprint_MarkersLabelAndSearch) {
+  const QDate today = QDate::currentDate();
+  const auto jira = [&](const QString& key, const QString& sprint, const QString& state, int endsIn) {
+    ExternalTask e;
+    e.providerId = QStringLiteral("jira");
+    e.externalId = key;
+    e.url = QStringLiteral("https://jira.example.com/browse/") + key;
+    e.title = key;
+    e.status = QStringLiteral("To Do");
+    e.project = QStringLiteral("HT");
+    if(!sprint.isEmpty()) {
+      e.details.insert(QStringLiteral("sprint"),
+                       QJsonObject{{QStringLiteral("name"), sprint},
+                                   {QStringLiteral("state"), state},
+                                   {QStringLiteral("end"), today.addDays(endsIn).toString(Qt::ISODate)}});
+    }
+    return e;
+  };
+  app_->mergeExternalTasks(QStringLiteral("jira"),
+                           QString(),
+                           {jira(QStringLiteral("HT-1"), QStringLiteral("S 14"), QStringLiteral("active"), 3),
+                            jira(QStringLiteral("HT-2"), QStringLiteral("S 14"), QStringLiteral("active"), 3),
+                            jira(QStringLiteral("HT-3"), QStringLiteral("S 15"), QStringLiteral("future"), 17),
+                            jira(QStringLiteral("HT-4"), QString(), QString(), 0)},
+                           false);
+  const QVariantList week = app_->sprintMarkers(today, today.addDays(6));
+  ASSERT_EQ(week.size(), 1);
+  EXPECT_EQ(week.at(0).toMap().value(QStringLiteral("name")).toString(), QStringLiteral("S 14"));
+  EXPECT_EQ(week.at(0).toMap().value(QStringLiteral("endDay")).toInt(), 3);
+  EXPECT_EQ(week.at(0).toMap().value(QStringLiteral("tasks")).toInt(), 2);
+  EXPECT_EQ(app_->sprintMarkers(today, today.addDays(30)).size(), 2);
+  EXPECT_EQ(app_->sprintLabel(), QStringLiteral("S 14"));
+  EXPECT_EQ(app_->currentSprint().value(QStringLiteral("daysLeft")).toInt(), 3);
+
+  const QStringList current = app_->compileSearch(QStringLiteral("sprint:current")).value(QStringLiteral("ids")).toStringList();
+  EXPECT_EQ(current, (QStringList{QStringLiteral("HT-1"), QStringLiteral("HT-2")}));
+  const QStringList none = app_->compileSearch(QStringLiteral("sprint:none")).value(QStringLiteral("ids")).toStringList();
+  EXPECT_EQ(none, QStringList{QStringLiteral("HT-4")});
+  const QStringList named = app_->compileSearch(QStringLiteral("sprint:15")).value(QStringLiteral("ids")).toStringList();
+  EXPECT_EQ(named, QStringList{QStringLiteral("HT-3")});
 }
 
 TEST(TrackerWritesPure, JiraJqlForOneIssue) {

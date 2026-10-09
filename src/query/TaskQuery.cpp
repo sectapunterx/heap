@@ -3,6 +3,7 @@
 #include "query/TaskQuery.h"
 
 #include <QDateTime>
+#include <QJsonObject>
 #include <QRegularExpression>
 #include <QSet>
 
@@ -23,6 +24,7 @@ const QSet<QString>& knownFields() {
                                   QStringLiteral("estimate"),
                                   QStringLiteral("branch"),
                                   QStringLiteral("has"),
+                                  QStringLiteral("sprint"),
                                   QStringLiteral("sort"),
                                   QStringLiteral("limit")};
   return f;
@@ -405,6 +407,26 @@ TaskQuery TaskQuery::compile(const QString& text, const QDate& today, const QVar
 }
 
 bool TaskQuery::clauseMatches(const Clause& c, const Task& t, const QString& haystack) const {
+  if(c.field == QLatin1String("sprint")) {
+    // A Jira sprint as the last pull saw it (APP-255): "current" is the
+    // active one, "none" no sprint, anything else a part of its name.
+    const QJsonObject sprint = t.externalMeta.details.value(QStringLiteral("sprint")).toObject();
+    const QString name = sprint.value(QStringLiteral("name")).toString().toLower();
+    for(const QString& v : c.values) {
+      if(v == QLatin1String("current") || v == QLatin1String("active")) {
+        if(sprint.value(QStringLiteral("state")).toString() == QLatin1String("active")) {
+          return true;
+        }
+      } else if(v == QLatin1String("none")) {
+        if(name.isEmpty()) {
+          return true;
+        }
+      } else if(!name.isEmpty() && name.contains(v)) {
+        return true;
+      }
+    }
+    return false;
+  }
   if(c.field == QLatin1String("text")) {
     return haystack.contains(c.values.constFirst());
   }

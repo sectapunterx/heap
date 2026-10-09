@@ -32,7 +32,7 @@ static_assert(heap::meta::fieldCount<Task>() == 28,
               "Task gained or lost a field. Update taskToJson/taskFromJson here AND in "
               "src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<ExternalMeta>() == 21,
+static_assert(heap::meta::fieldCount<ExternalMeta>() == 22,
               "ExternalMeta gained or lost a field. Update externalMetaToJson/FromJson here AND "
               "in src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -209,6 +209,9 @@ QJsonObject externalMetaToJson(const ExternalMeta& m) {
   if(m.pushQueued) {
     o["pushQueued"] = true;
   }
+  if(!m.details.isEmpty()) {
+    o["remoteDetails"] = m.details;
+  }
   return o;
 }
 
@@ -245,6 +248,7 @@ ExternalMeta externalMetaFromJson(const QJsonObject& o) {
   m.labels = stringsFromJson(o["remoteLabels"]);
   m.conflicts = stringsFromJson(o["conflicts"]);
   m.pushQueued = o["pushQueued"].toBool(false);
+  m.details = o["remoteDetails"].toObject();
   return m;
 }
 

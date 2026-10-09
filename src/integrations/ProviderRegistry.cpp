@@ -32,6 +32,56 @@ QVector<ExternalTask> gitlabParse(const QByteArray& body, const QString&) {
   return parseGitlabIssues(body);
 }
 
+QVector<ExternalTask> gitlabMergeRequestParse(const QByteArray& body, const QString&) {
+  return parseGitlabMergeRequests(body);
+}
+
+QVector<ExternalTask> githubPullParse(const QByteArray& body, const QString&) {
+  return parseGithubPulls(body);
+}
+
+// GitLab merge requests by role (APP-242): open ones, and the ones updated
+// lately whatever their state, so a merged one moves its card to Done.
+QVector<ReviewList> gitlabReviewLists() {
+  const QString project = QStringLiteral("/api/v4/projects/{projectId:enc}/merge_requests?per_page=100&");
+  const QString self = QStringLiteral("/api/v4/merge_requests?per_page=100&");
+  const QString open = QStringLiteral("&state=opened");
+  const QString recent = QStringLiteral("&state=all&updated_after={since:enc}");
+  QVector<ReviewList> out;
+  const QList<QPair<QString, QString>> roles = {
+      {QStringLiteral("author"), QStringLiteral("scope=created_by_me")},
+      {QStringLiteral("assignee"), QStringLiteral("scope=assigned_to_me")},
+      {QStringLiteral("reviewer"), QStringLiteral("scope=all&reviewer_username={me:enc}")},
+  };
+  for(const auto& [role, filter] : roles) {
+    const bool login = role == QLatin1String("reviewer");
+    out.append({role, project + filter + open, self + filter + open, login});
+    out.append({role, project + filter + recent, self + filter + recent, login});
+  }
+  return out;
+}
+
+// GitHub pull requests by role, through the search API: it is the one
+// endpoint that answers "mine" across repositories (APP-242).
+QVector<ReviewList> githubReviewLists() {
+  const QString search = QStringLiteral("/search/issues?per_page=100&q=is:pr+");
+  const QString open = QStringLiteral("+is:open");
+  const QString recent = QStringLiteral("+is:closed+updated:%3E={sinceDate}");
+  const QString repo = QStringLiteral("+repo:{repo}");
+  QVector<ReviewList> out;
+  const QList<QPair<QString, QString>> roles = {
+      {QStringLiteral("author"), QStringLiteral("author:@me")},
+      {QStringLiteral("assignee"), QStringLiteral("assignee:@me")},
+      {QStringLiteral("reviewer"), QStringLiteral("review-requested:@me")},
+      {QStringLiteral("reviewer"), QStringLiteral("reviewed-by:@me")},
+  };
+  for(const auto& [role, filter] : roles) {
+    out.append({role, search + filter + open + repo, search + filter + open, false});
+    out.append({role, search + filter + recent + repo, search + filter + recent, false});
+  }
+  return out;
+}
+
 FieldSpec secret(QString key, QString label, QString placeholder = QStringLiteral("***")) {
   return FieldSpec{std::move(key), std::move(label), std::move(placeholder), /*mono*/ true, /*secret*/ true};
 }
@@ -142,6 +192,13 @@ ProviderDescriptor github() {
   d.issuePathTemplate = QStringLiteral("/repos/{repo}/issues/{externalId}");
   d.selfUserPath = QStringLiteral("/user");
   d.selfLoginKey = QStringLiteral("login");
+  // Pull requests only when switched on ("pullRequests": "true"): until then
+  // the issue list skips them, as it always has (APP-242).
+  d.reviewLists = githubReviewLists();
+  d.reviewParser = githubPullParse;
+  d.reviewEnabledKey = QStringLiteral("pullRequests");
+  d.reviewRolesKey = QStringLiteral("prRoles");
+  d.reviewRolesDefault = {QStringLiteral("assignee"), QStringLiteral("reviewer")};
   return d;
 }
 
@@ -196,6 +253,13 @@ ProviderDescriptor gitlab() {
   d.issuePathTemplate = QStringLiteral("/api/v4/projects/{projectId:enc}/issues/{externalId}");
   d.selfUserPath = QStringLiteral("/api/v4/user");
   d.selfLoginKey = QStringLiteral("username");
+  // Merge requests (APP-242), read-only: assigned to me and where I review,
+  // unless "mrRoles" says otherwise ("author,assignee,reviewer"; "" = none).
+  // read_api is enough for all of it.
+  d.reviewLists = gitlabReviewLists();
+  d.reviewParser = gitlabMergeRequestParse;
+  d.reviewRolesKey = QStringLiteral("mrRoles");
+  d.reviewRolesDefault = {QStringLiteral("assignee"), QStringLiteral("reviewer")};
   return d;
 }
 

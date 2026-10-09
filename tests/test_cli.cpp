@@ -625,6 +625,230 @@ TEST_F(CliDamagedStateTest, AFreshDataDirStillTakesAnAdd) {
   EXPECT_EQ(s.profiles.at(pi).tasks.size(), 1);
 }
 
+// ── APP-254: today with overdue, sched / due / est / someday ──────────────
+
+TEST(CliPlanVerbs, AreCommands) {
+  EXPECT_EQ(classifyArgs({"sched", "APP-1", "tomorrow"}), Invocation::Command);
+  EXPECT_EQ(classifyArgs({"due", ".", "fri"}), Invocation::Command);
+  EXPECT_EQ(classifyArgs({"est", "APP-1", "2h"}), Invocation::Command);
+  EXPECT_EQ(classifyArgs({"someday", "APP-1"}), Invocation::Command);
+}
+
+TEST(CliPlanVerbs, ArgumentsAreTheIdThenTheValue) {
+  const ParsedArgs sched = parseArgs({QStringLiteral("sched"), QStringLiteral("."), QStringLiteral("tomorrow"), QStringLiteral("14:00")});
+  ASSERT_TRUE(sched.ok) << qPrintable(sched.error);
+  EXPECT_EQ(sched.request.verb, Verb::Sched);
+  EXPECT_EQ(sched.request.taskId, QStringLiteral("."));
+  EXPECT_EQ(sched.request.value, QStringLiteral("tomorrow 14:00"));
+  EXPECT_EQ(parseArgs({QStringLiteral("due"), QStringLiteral("APP-1"), QStringLiteral("none")}).request.value, QStringLiteral("none"));
+  EXPECT_FALSE(parseArgs({QStringLiteral("sched"), QStringLiteral("APP-1")}).ok);  // no date
+  EXPECT_FALSE(parseArgs({QStringLiteral("due")}).ok);                             // no id
+  EXPECT_FALSE(parseArgs({QStringLiteral("est"), QStringLiteral("APP-1"), QStringLiteral("soon")}).ok);
+  EXPECT_TRUE(parseArgs({QStringLiteral("est"), QStringLiteral("APP-1"), QStringLiteral("1h30m")}).ok);
+  EXPECT_TRUE(parseArgs({QStringLiteral("someday"), QStringLiteral("APP-1")}).ok);
+  EXPECT_EQ(parseArgs({QStringLiteral("someday"), QStringLiteral("APP-1"), QStringLiteral("OFF")}).request.value, QStringLiteral("off"));
+  EXPECT_FALSE(parseArgs({QStringLiteral("someday"), QStringLiteral("APP-1"), QStringLiteral("later")}).ok);
+  EXPECT_FALSE(
+      parseArgs({QStringLiteral("est"), QStringLiteral("APP-1"), QStringLiteral("2h"), QStringLiteral("--status"), QStringLiteral("x")})
+          .ok);
+  EXPECT_TRUE(helpText().contains(QStringLiteral("sched <ID> <when>")));
+}
+
+TEST(CliPlanVerbs, ValueTravelsToTheWindow) {
+  Request r;
+  r.verb = Verb::Est;
+  r.taskId = QStringLiteral(".");
+  r.value = QStringLiteral("2h");
+  r.branch = QStringLiteral("APP-1-login");
+  const Request b = decodeRequest(encodeRequest(r)).value_or(Request{});
+  EXPECT_EQ(b.verb, Verb::Est);
+  EXPECT_EQ(b.taskId, QStringLiteral("."));
+  EXPECT_EQ(b.value, QStringLiteral("2h"));
+  EXPECT_EQ(b.branch, r.branch);
+}
+
+TEST(CliPlanVerbs, EstimatesAndDurations) {
+  EXPECT_EQ(parseEstimate(QStringLiteral("2h")), 120);
+  EXPECT_EQ(parseEstimate(QStringLiteral("90m")), 90);
+  EXPECT_EQ(parseEstimate(QStringLiteral("1.5h")), 90);
+  EXPECT_EQ(parseEstimate(QStringLiteral("1,5ч")), 90);
+  EXPECT_EQ(parseEstimate(QStringLiteral("1h30m")), 90);
+  EXPECT_EQ(parseEstimate(QStringLiteral("~45мин")), 45);
+  EXPECT_EQ(parseEstimate(QStringLiteral("none")), 0);
+  EXPECT_EQ(parseEstimate(QStringLiteral("soon")), -1);
+  EXPECT_EQ(parseEstimate(QStringLiteral("0m")), -1);
+  EXPECT_EQ(humanMinutes(120, QStringLiteral("en")), QStringLiteral("2h"));
+  EXPECT_EQ(humanMinutes(90, QStringLiteral("en")), QStringLiteral("1h 30m"));
+  EXPECT_EQ(humanMinutes(45, QStringLiteral("ru")), QStringLiteral("45м"));
+}
+
+TEST(CliPlanVerbs, DotIsTheTaskOfTheBranch) {
+  const Snapshot s = twoProfiles();
+  QString why;
+  const TaskRef hit = resolveTaskArg(s, QStringLiteral("."), QStringLiteral("feature/APP-2-search"), &why);
+  ASSERT_TRUE(hit.found()) << qPrintable(why);
+  EXPECT_EQ(s.profiles.at(hit.profile).tasks.at(hit.task).id, QStringLiteral("APP-2"));
+  EXPECT_FALSE(resolveTaskArg(s, QStringLiteral("."), QString(), &why).found());
+  EXPECT_TRUE(why.contains(QStringLiteral("git branch")));
+  EXPECT_FALSE(resolveTaskArg(s, QStringLiteral("."), QStringLiteral("main"), &why).found());
+  EXPECT_TRUE(why.contains(QStringLiteral("main")));
+  EXPECT_TRUE(resolveTaskArg(s, QStringLiteral("home-1"), QString(), &why).found());
+}
+
+TEST(CliToday, OverdueComesFirstInItsOwnGroup) {
+  const QDate today(2026, 10, 6);
+  Snapshot s;
+  s.activeProfileId = QStringLiteral("w");
+  ProfileData p{QStringLiteral("w"), QStringLiteral("W"), {}, columns()};
+  p.tasks = {mkTask("T-1", "doing", "prog"),
+             mkTask("T-2", "late", "todo"),
+             mkTask("T-3", "late and doing", "prog"),
+             mkTask("T-4", "late but done", "done"),
+             mkTask("T-5", "late but archived", "todo"),
+             mkTask("T-6", "scheduled yesterday", "todo")};
+  p.tasks[1].dueAt = QDateTime(today.addDays(-2), QTime(0, 0));
+  p.tasks[2].dueAt = QDateTime(today.addDays(-1), QTime(18, 0));
+  p.tasks[2].dueHasTime = true;
+  p.tasks[3].dueAt = QDateTime(today.addDays(-1), QTime(0, 0));
+  p.tasks[4].dueAt = QDateTime(today.addDays(-1), QTime(0, 0));
+  p.tasks[4].archived = true;
+  p.tasks[5].scheduledAt = QDateTime(today.addDays(-1), QTime(10, 0));
+  s.profiles.append(p);
+
+  QStringList overdue;
+  for(const int r : overdueTasks(p, today)) {
+    overdue << p.tasks.at(r).id;
+  }
+  EXPECT_EQ(overdue, (QStringList{QStringLiteral("T-2"), QStringLiteral("T-3")}));
+  QStringList rest;
+  for(const int r : todayTasks(p, today)) {
+    rest << p.tasks.at(r).id;
+  }
+  EXPECT_EQ(rest, QStringList{QStringLiteral("T-1")});  // an overdue one is not listed twice
+
+  Request r;
+  r.verb = Verb::Today;
+  const QDateTime now(today, QTime(9, 0));
+  const QString text = answer(s, r, now).out;
+  const QStringList lines = text.split(QChar('\n'));
+  ASSERT_GE(lines.size(), 6) << qPrintable(text);
+  EXPECT_EQ(lines.at(0), QStringLiteral("Overdue"));
+  EXPECT_TRUE(lines.at(1).startsWith(QStringLiteral("T-2"))) << qPrintable(text);
+  EXPECT_TRUE(lines.at(2).startsWith(QStringLiteral("T-3"))) << qPrintable(text);
+  EXPECT_EQ(lines.at(3), QString());
+  EXPECT_EQ(lines.at(4), QStringLiteral("Today"));
+  EXPECT_TRUE(lines.at(5).startsWith(QStringLiteral("T-1"))) << qPrintable(text);
+
+  s.language = QStringLiteral("ru");
+  EXPECT_TRUE(answer(s, r, now).out.startsWith(QStringLiteral("Просрочено\n")));
+
+  r.json = true;
+  const QJsonArray arr = QJsonDocument::fromJson(answer(s, r, now).out.toUtf8()).array();
+  ASSERT_EQ(arr.size(), 3);
+  EXPECT_TRUE(arr.at(0).toObject().value(QStringLiteral("overdue")).toBool());
+  EXPECT_TRUE(arr.at(1).toObject().value(QStringLiteral("overdue")).toBool());
+  EXPECT_FALSE(arr.at(2).toObject().value(QStringLiteral("overdue")).toBool());
+
+  // Nothing overdue: no headings, the list as before.
+  s.profiles[0].tasks.remove(1, 2);
+  r.json = false;
+  EXPECT_TRUE(answer(s, r, now).out.startsWith(QStringLiteral("T-1"))) << qPrintable(answer(s, r, now).out);
+}
+
+TEST(CliSnapshot, ReadsTheLanguage) {
+  QJsonObject root;
+  root.insert(QStringLiteral("schemaVersion"), heap::state::kSchemaVersion);
+  root.insert(QStringLiteral("profiles"), QJsonArray{});
+  root.insert(QStringLiteral("settings"), QJsonObject{{QStringLiteral("language"), QStringLiteral("ru")}});
+  EXPECT_EQ(snapshotFromState(root).value_or(Snapshot{}).language, QStringLiteral("ru"));
+  root.insert(QStringLiteral("settings"), QJsonObject{});
+  EXPECT_EQ(snapshotFromState(root).value_or(Snapshot{}).language, QStringLiteral("en"));
+}
+
+TEST_F(CliHeadlessTest, SchedDueEstSomedayChangeTheTask) {
+  const QDateTime now(QDate(2026, 10, 6), QTime(9, 0));  // a Tuesday
+  {
+    AppController c;
+    Request add;
+    add.verb = Verb::Add;
+    add.text = QStringLiteral("write the report");
+    ASSERT_EQ(execute(c, add, now).exitCode, kExitOk);
+
+    Request r;
+    r.taskId = QStringLiteral("TASK-1");
+    r.verb = Verb::Sched;
+    r.value = QStringLiteral("tomorrow 14:00");
+    Response resp = execute(c, r, now);
+    EXPECT_EQ(resp.exitCode, kExitOk) << qPrintable(resp.err);
+    EXPECT_EQ(resp.out, QStringLiteral("TASK-1: when → Wed, Oct 7, 14:00\n"));
+    EXPECT_EQ(execute(c, r, now).out, QStringLiteral("TASK-1: already so\n"));
+
+    r.verb = Verb::Due;
+    r.value = QStringLiteral("2026-10-09");
+    resp = execute(c, r, now);
+    EXPECT_EQ(resp.out, QStringLiteral("TASK-1: deadline → Fri, Oct 9\n")) << qPrintable(resp.err);
+
+    r.verb = Verb::Est;
+    r.value = QStringLiteral("1h30m");
+    EXPECT_EQ(execute(c, r, now).out, QStringLiteral("TASK-1: estimate 1h 30m\n"));
+
+    r.verb = Verb::Sched;
+    r.value = QStringLiteral("tomorrow or never");  // words left over: refused, nothing guessed
+    EXPECT_EQ(execute(c, r, now).exitCode, kExitUsage);
+
+    r.verb = Verb::Someday;
+    r.value.clear();
+    r.json = true;
+    resp = execute(c, r, now);
+    const QJsonObject o = QJsonDocument::fromJson(resp.out.toUtf8()).object();
+    EXPECT_TRUE(o.value(QStringLiteral("changed")).toBool()) << qPrintable(resp.out);
+    EXPECT_TRUE(o.value(QStringLiteral("someday")).toBool());
+    EXPECT_EQ(o.value(QStringLiteral("estimateMinutes")).toInt(), 90);
+
+    r.taskId = QStringLiteral("NOPE-1");
+    EXPECT_EQ(execute(c, r, now).exitCode, kExitNotFound);
+    c.flushSave();
+  }
+  const Snapshot s = reload();
+  const TaskRef ref = findTask(s, QStringLiteral("TASK-1"), 0);
+  ASSERT_TRUE(ref.found());
+  const Task& t = s.profiles.at(ref.profile).tasks.at(ref.task);
+  EXPECT_EQ(t.scheduledAt, QDateTime(QDate(2026, 10, 7), QTime(14, 0)));
+  EXPECT_TRUE(t.scheduledHasTime);
+  EXPECT_EQ(t.dueAt.date(), QDate(2026, 10, 9));
+  EXPECT_FALSE(t.dueHasTime);
+  EXPECT_EQ(t.estimateMinutes, 90);
+  EXPECT_TRUE(t.someday);
+}
+
+TEST_F(CliHeadlessTest, DotFollowsTheBranchAndNoneClears) {
+  const QDateTime now(QDate(2026, 10, 6), QTime(9, 0));
+  AppController c;
+  Request add;
+  add.verb = Verb::Add;
+  add.text = QStringLiteral("login page tomorrow");
+  ASSERT_EQ(execute(c, add, now).exitCode, kExitOk);
+
+  Request r;
+  r.verb = Verb::Sched;
+  r.taskId = QStringLiteral(".");
+  r.value = QStringLiteral("none");
+  r.branch = QStringLiteral("feature/TASK-1-login");
+  const Response resp = execute(c, r, now);
+  EXPECT_EQ(resp.out, QStringLiteral("TASK-1: no longer planned for a day\n")) << qPrintable(resp.err);
+  EXPECT_FALSE(c.taskById(QStringLiteral("TASK-1")).value(QStringLiteral("scheduledAt")).toDateTime().isValid());
+
+  r.branch = QStringLiteral("main");
+  const Response miss = execute(c, r, now);
+  EXPECT_EQ(miss.exitCode, kExitNotFound);
+  EXPECT_TRUE(miss.err.contains(QStringLiteral("main"))) << qPrintable(miss.err);
+
+  r.verb = Verb::Someday;
+  r.taskId = QStringLiteral("TASK-1");
+  r.value = QStringLiteral("off");
+  EXPECT_EQ(execute(c, r, now).out, QStringLiteral("TASK-1: already so\n"));
+}
+
 int main(int argc, char** argv) {
   QStandardPaths::setTestModeEnabled(true);
   const QCoreApplication app(argc, argv);

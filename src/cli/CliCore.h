@@ -31,18 +31,20 @@ inline constexpr int kExitUsage = 1;     // the command line is wrong
 inline constexpr int kExitNotFound = 2;  // no such task, profile or column
 inline constexpr int kExitData = 3;      // state.json unreadable, a save failed, the window did not answer
 
-enum class Verb : std::uint8_t { Help, Version, Add, Now, List, Today, Done, Open };
+enum class Verb : std::uint8_t { Help, Version, Add, Now, List, Today, Done, Open, Sched, Due, Est, Someday };
 
 struct Request {
   Verb verb = Verb::Help;
   QString text;     // add: the capture text
-  QString taskId;   // done/open: the task asked for
+  QString taskId;   // done/open/sched/due/est/someday: the task asked for ("." = the branch's)
+  QString value;    // sched/due: the date words or "none"; est: "2h" or "none"; someday: "" or "off"
   QString profile;  // --profile: a profile name or id ("" = the active one)
   QString status;   // list --status: a column id or name
   QString format;   // now --format
   bool json = false;
-  // now: the branch checked out in the caller's working directory. Read by the
-  // caller, because the window's own working directory is somewhere else.
+  // now, and any verb given ".": the branch checked out in the caller's
+  // working directory. Read by the caller, because the window's own working
+  // directory is somewhere else.
   QString branch;
 };
 
@@ -59,6 +61,9 @@ struct ParsedArgs {
   QString dataDir;
   bool dataDirSet = false;
 };
+
+// The word a verb is typed as ("add", "sched", …).
+QString verbName(Verb v);
 
 // Parses a verb's command line (`args` without the program name). --data-dir
 // is accepted anywhere, as for a window launch.
@@ -88,9 +93,13 @@ struct Snapshot {
   QVector<ProfileData> profiles;
   QString activeProfileId;
   QString idPrefix = QStringLiteral("TASK");  // settings → tasks → idPrefix, uppercased
+  QString language = QStringLiteral("en");    // the app's language: "ru" or "en"
 };
 
-Snapshot snapshotFromProfiles(const QVector<Profile>& profiles, const QString& activeProfileId, const QString& idPrefix);
+Snapshot snapshotFromProfiles(const QVector<Profile>& profiles,
+                              const QString& activeProfileId,
+                              const QString& idPrefix,
+                              const QString& language = QStringLiteral("en"));
 
 // Reads a parsed state.json read-only (an older schema is migrated in memory,
 // never written back). Empty when the document has no profiles array — a
@@ -127,6 +136,11 @@ struct NowResult {
 
 NowResult resolveNow(const Snapshot& s, const QString& branch);
 
+// The task a verb's id argument names. "." is the task the checked-out
+// `branch` names in the active profile (APP-254), as `now` reads it; anything
+// else goes through findTask. `error` says why nothing was found.
+TaskRef resolveTaskArg(const Snapshot& s, const QString& arg, const QString& branch, QString* error = nullptr);
+
 // A column's display name, or the id when the column is unknown.
 QString statusName(const QVariantList& statuses, const QString& statusId);
 // In Progress, or a column the user marked as "doing".
@@ -141,8 +155,25 @@ QString doneStatus(const QVariantList& statuses);
 // by column, then by the manual rank within it.
 QVector<int> listTasks(const ProfileData& p, const QString& statusId);
 // What is on today's plate: unarchived, not done, and either in a "doing"
-// column or scheduled or due on `today`.
+// column or scheduled or due on `today`. Overdue tasks are not among them.
 QVector<int> todayTasks(const ProfileData& p, const QDate& today);
+// Unarchived, not done, with a deadline (the effective one, APP-244) before
+// `today`: shown above today's tasks (APP-254). Board order.
+QVector<int> overdueTasks(const ProfileData& p, const QDate& today);
+
+// ── Text ─────────────────────────────────────────────────────────────────
+// A command line answer in the app's language (`ru` or English). `key` is one
+// of the cli strings ("overdue", "today", "added", "sched", …); the key
+// itself when unknown.
+QString cliText(const QString& key, const QString& language);
+// A date as the answers print it: "Mon 12 Oct" / "пн 12 окт.", with the time
+// when it has one, and the year when it is not the year of `today`.
+QString humanDate(const QDateTime& dt, bool hasTime, const QString& language, const QDate& today);
+// Minutes as "2h", "1h 30m", "45m" (ru: "2ч", "1ч 30м", "45м").
+QString humanMinutes(int minutes, const QString& language);
+// Minutes in an estimate argument: "2h", "90m", "1.5h", "1h30m", "~2ч"; 0 for
+// "none"/"0"; -1 when it is not an estimate.
+int parseEstimate(const QString& text);
 
 // ── Output ───────────────────────────────────────────────────────────────
 QJsonObject taskJson(const ProfileData& p, const Task& t, const QDateTime& now);

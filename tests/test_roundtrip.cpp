@@ -21,6 +21,7 @@
 
 #include <QDate>
 #include <QDateTime>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QTime>
 
@@ -55,6 +56,14 @@ ExternalMeta makeFullMeta() {
   m.labels = {QStringLiteral("bug"), QStringLiteral("ui")};
   m.conflicts = {QStringLiteral("title"), QStringLiteral("priority")};
   m.pushQueued = true;
+  // APP-242 / APP-255: no key named createdAt/updatedAt in here (JsonMerger).
+  m.details =
+      QJsonObject{{QStringLiteral("kind"), QStringLiteral("mr")},
+                  {QStringLiteral("sourceBranch"), QStringLiteral("feature/x")},
+                  {QStringLiteral("conflicts"), true},
+                  {QStringLiteral("closes"), QJsonArray{QStringLiteral("#12")}},
+                  {QStringLiteral("sprint"),
+                   QJsonObject{{QStringLiteral("name"), QStringLiteral("S 14")}, {QStringLiteral("end"), QStringLiteral("2026-10-16")}}}};
   return m;
 }
 
@@ -348,7 +357,7 @@ TEST(FieldCountGuard, TaskAndEventArityIsPinned) {
 // ExternalMeta is nested inside Task, so Task's own count stays 1 for the whole
 // object — this is what stops a field added in there from being dropped.
 TEST(FieldCountGuard, ExternalMetaArityIsPinned) {
-  EXPECT_EQ(heap::meta::fieldCount<ExternalMeta>(), 21u);
+  EXPECT_EQ(heap::meta::fieldCount<ExternalMeta>(), 22u);
 }
 
 // ── The runtime half: one emitted key per declared field ──

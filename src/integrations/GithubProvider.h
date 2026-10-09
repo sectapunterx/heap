@@ -16,6 +16,13 @@ namespace heap::integrations {
 // returns both. Pure, no network — unit-tested with canned JSON.
 QVector<ExternalTask> parseGithubIssues(const QByteArray& json);
 
+// Parse pull requests (APP-242): a search answer ({"items": [...]}) or a
+// pulls list (an array). externalId is the PR number; status is "PR open" /
+// "PR draft" / "PR merged" / "PR closed"; branches, reviewers and the issues it
+// closes go to `details`. Entries that are not pull requests are skipped.
+// Pure, no network.
+QVector<ExternalTask> parseGithubPulls(const QByteArray& json);
+
 // Push-direction inverse of StatusMap: a heap column → the GitHub issue state.
 // Only "done" closes an issue; every other column (re)opens it.
 QString githubStateForColumn(const QString& column);

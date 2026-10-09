@@ -205,6 +205,18 @@ struct RetryRecipe {
   int maxDelayMs = 30000;  // and capped, including a server's own Retry-After
 };
 
+// A read-only list of merge / pull requests pulled after the issues (APP-242):
+// the ones of one role ("author", "assignee", "reviewer"). Only ever GET —
+// nothing is written back for a review item, in any mode. Paths expand like
+// the list path, plus {since} (ISO time) / {sinceDate} (yyyy-MM-dd) for the
+// "recently closed" window and {me} for the signed-in login (selfUserPath).
+struct ReviewList {
+  QString role;
+  QString path;      // with the scope key set (a repo / project)
+  QString selfPath;  // with it blank: across everything the user can see
+  bool needsLogin = false;
+};
+
 // The single source of truth for one tracker integration: its UI card, its
 // config schema, and (for generic providers) the REST recipe RestIssueProvider
 // executes. Bespoke providers (Jira, Trello) set `bespoke = true` and leave the
@@ -283,6 +295,19 @@ struct ProviderDescriptor {
 
   // Optional browser OAuth (see OAuthConfig).
   OAuthConfig oauth;
+
+  // ── Merge / pull requests (APP-242), read-only ──
+  // Pulled only when `reviewEnabledKey` is empty or "true" in the config, for
+  // the roles listed (comma-separated) under `reviewRolesKey`, else
+  // `reviewRolesDefault`. Empty `reviewLists` = the provider has none.
+  QVector<ReviewList> reviewLists;
+  ParseFn reviewParser = nullptr;
+  QString reviewEnabledKey;
+  QString reviewRolesKey;
+  QStringList reviewRolesDefault;
+  // How far back a merged or closed one is still pulled, so its card follows
+  // it to Done; older ones are left alone.
+  int reviewRecentDays = 14;
 };
 
 }  // namespace heap::integrations

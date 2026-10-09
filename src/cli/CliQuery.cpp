@@ -20,7 +20,7 @@ constexpr int kRequestTimeoutMs = 10000;
 }  // namespace
 
 bool changesData(Verb v) {
-  return v == Verb::Add || v == Verb::Done;
+  return v == Verb::Add || v == Verb::Done || v == Verb::Sched || v == Verb::Due || v == Verb::Est || v == Verb::Someday;
 }
 
 std::optional<Snapshot> readSnapshot(QString* error) {

@@ -142,11 +142,17 @@ closed, lowkey reads and saves `state.json` itself. Nothing here talks to the ne
 lowkey add "fix login tomorrow 14:00 p1 #backend // check the refresh token"   # read like quick capture
 lowkey now                    # the task with a running timer, else the one your git branch names
 lowkey list --status prog     # also --profile <name>, --json
-lowkey today                  # in progress, or scheduled or due today
+lowkey today                  # overdue first, then in progress, scheduled or due today
 lowkey done APP-12
 lowkey open APP-12            # show it in the window (starts lowkey if it is closed)
+lowkey sched . tomorrow 14:00 # plan it for a day ("." = the task your git branch names); "none" clears
+lowkey due APP-12 fri         # its deadline; on a tracker card it is your own date, the tracker keeps its own
+lowkey est . 1h30m            # the estimate; "none" clears
+lowkey someday APP-12         # park it (and "someday APP-12 off" to take it back)
 lowkey help
 ```
+
+Each change answers with one line of fact in the app's language (`--json` gives the task instead).
 
 `lowkey now` prints nothing and exits 0 when there is no current task, so it fits a shell prompt.
 `--format` takes `{id} {title} {status} {priority} {profile} {source} {elapsed}`:

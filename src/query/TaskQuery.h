@@ -41,6 +41,8 @@ namespace heap::query {
 //   has:notes has:draft       my notepad, a comment draft, a checklist,
 //   has:checklist has:links   links drawn by hand (APP-236…241)
 //   #tag also matches my own tags (APP-239)
+//   sprint:current  sprint:none  sprint:14   a Jira sprint (APP-255): the
+//                             active one, none, or a part of its name
 //   -clause   -#tag  -word    negation
 //   a OR b    a | b           either side (clauses on each side are ANDed;
 //                             a side's words are one of its clauses)

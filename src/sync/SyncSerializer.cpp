@@ -27,7 +27,7 @@ static_assert(heap::meta::fieldCount<Task>() == 28,
               "Task gained or lost a field. Update taskToJson/taskFromJson here AND in "
               "src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<ExternalMeta>() == 21,
+static_assert(heap::meta::fieldCount<ExternalMeta>() == 22,
               "ExternalMeta gained or lost a field. Update externalMetaToJson/FromJson here AND "
               "in src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -210,6 +210,7 @@ QJsonObject SyncSerializer::taskToJson(const Task& t) {
   meta[QStringLiteral("remoteLabels")] = QJsonArray::fromStringList(t.externalMeta.labels);
   meta[QStringLiteral("conflicts")] = QJsonArray::fromStringList(t.externalMeta.conflicts);
   meta[QStringLiteral("pushQueued")] = t.externalMeta.pushQueued;
+  meta[QStringLiteral("remoteDetails")] = t.externalMeta.details;
   o[QStringLiteral("externalMeta")] = meta;
   // The local layer (APP-244): every key, like the rest of this form. Its
   // checklist, tags and links carry ids, so JsonMerger merges them per item.
@@ -280,6 +281,7 @@ Task SyncSerializer::taskFromJson(const QJsonObject& o) {
     t.externalMeta.conflicts.append(v.toString());
   }
   t.externalMeta.pushQueued = meta.value(QStringLiteral("pushQueued")).toBool();
+  t.externalMeta.details = meta.value(QStringLiteral("remoteDetails")).toObject();
   t.rank = o.value(QStringLiteral("rank")).toDouble();
   t.links = linksFromJson(o.value(QStringLiteral("links")).toArray());
   t.attachments = attachmentsFromJson(o.value(QStringLiteral("attachments")).toArray());

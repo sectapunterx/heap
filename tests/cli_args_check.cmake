@@ -98,8 +98,16 @@ execute_process(COMMAND "${HEAP_EXE}" now --data-dir "${WORK_DIR}"
 if (NOT rc STREQUAL "0" OR NOT out STREQUAL "")
     message(FATAL_ERROR "heap now with nothing current: rc '${rc}', stdout '${out}', stderr '${err}'")
 endif ()
-expect_out(0 "Added TASK-1: write the cli check" add "write the cli check p1" --data-dir "${WORK_DIR}")
+# The answers speak the app's language (APP-254); a fresh data dir takes the
+# system's, so only the language-neutral part is checked.
+expect_out(0 "TASK-1: write the cli check" add "write the cli check p1" --data-dir "${WORK_DIR}")
 expect_out(0 "\"priority\": \"P1\"" list --data-dir "${WORK_DIR}" --json)
-expect_out(0 "Done TASK-1" done TASK-1 --data-dir "${WORK_DIR}")
+# APP-254: plan from the terminal.
+expect_out(0 "TASK-1:" sched TASK-1 2026-10-12 --data-dir "${WORK_DIR}")
+expect_out(0 "\"estimateMinutes\": 90" est TASK-1 1h30m --json --data-dir "${WORK_DIR}")
+expect_out(0 "TASK-1:" due TASK-1 2020-01-06 --data-dir "${WORK_DIR}")
+expect_out(0 "\"overdue\": true" today --json --data-dir "${WORK_DIR}")
+expect_refused("is not an estimate" est TASK-1 soon --data-dir "${WORK_DIR}")
+expect_out(0 "TASK-1" done TASK-1 --data-dir "${WORK_DIR}")
 expect_out(2 "" done NOPE-1 --data-dir "${WORK_DIR}")
 message("cli args: OK")
