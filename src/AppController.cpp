@@ -10614,6 +10614,13 @@ QVariantList AppController::integrationCatalog() const {
     m.insert(QStringLiteral("directory"), d.kind == heap::integrations::ProviderKind::Directory);
     // Whether the card offers "change the status in …" (APP-243).
     m.insert(QStringLiteral("writesStatus"), heap::integrations::writesStatus(d));
+    // Merge / pull requests (APP-242): the config keys the card's switches
+    // write, absent for a provider that has none.
+    if(!d.reviewLists.isEmpty() && d.reviewParser != nullptr) {
+      m.insert(QStringLiteral("reviewEnabledKey"), d.reviewEnabledKey);
+      m.insert(QStringLiteral("reviewRolesKey"), d.reviewRolesKey);
+      m.insert(QStringLiteral("reviewRolesDefault"), d.reviewRolesDefault);
+    }
     out.append(m);
   }
   return out;

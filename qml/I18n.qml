@@ -1451,6 +1451,9 @@ QtObject {
             // APP-242: merge / pull requests, read-only.
             "settings.int.review.pull": "Pull pull requests",
             "settings.int.review.roles": "Which ones: mine · assigned to me · to review",
+            "settings.int.review.role.author": "Mine",
+            "settings.int.review.role.assignee": "Assigned to me",
+            "settings.int.review.role.reviewer": "To review",
             "settings.int.review.movable": "Merge request cards can be moved between columns (only here)",
             "settings.int.review.movable.hint": "Off: a card's column is the request's stage, and dragging it is refused.",
             // APP-255: a Jira sprint on the week, the month and the list.
@@ -3414,6 +3417,9 @@ QtObject {
             "settings.int.gitlab.desc": "Синхронизация задач и статусов, закрытие при «Готово»",
             "settings.int.review.pull": "Тянуть pull requests",
             "settings.int.review.roles": "Какие: мои · назначенные мне · на ревью",
+            "settings.int.review.role.author": "Мои",
+            "settings.int.review.role.assignee": "Назначенные мне",
+            "settings.int.review.role.reviewer": "На ревью",
             "settings.int.review.movable": "Карточки MR можно двигать по колонкам (только здесь)",
             "settings.int.review.movable.hint": "Выкл: колонка карточки — стадия запроса, перетаскивание запрещено.",
             "sprint.marker": "Конец: %1",
