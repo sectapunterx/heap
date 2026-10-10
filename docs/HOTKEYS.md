@@ -241,6 +241,7 @@ listed in the sidebar under *My views*, numbered; `G, 1` … `G, 9` and
 | New profile | `Ctrl+Shift+P` |
 | Export active profile to Markdown (clipboard) | `Ctrl+Shift+E` |
 | Weekly shipped report (clipboard) | `Ctrl+Shift+W` |
+| Sync every tracker now | `Ctrl+Shift+R` |
 
 ## Panels
 

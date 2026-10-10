@@ -82,33 +82,104 @@ Item {
         return best.length > 0 ? I18n.t("sidebar.profile.synced").arg(best) : "";
     }
 
+    // ── The sync indicator (X/N-Ntf-Toasts, R2-048) ──
+    // In words where something is off: a dot when synced (the tip says when),
+    // "◔ синк…" while a pull runs, "○ 1 ошибка", "◌ офлайн". Bold colours the
+    // marks; quiet says it with the form. No tracker connected: the profile's
+    // own dot as before (bold only, DG-006). A click lists every source.
+    property var sources: AppController.syncSources
+    readonly property int _errors: {
+        let n = 0;
+        for (const s of root.sources || []) if (s.failing && s.kind !== "network" && !s.offline) n++;
+        return n;
+    }
+    readonly property bool _offline: (root.sources || []).some(s => s.offline || s.kind === "network")
+    readonly property string syncState: (root.sources || []).length === 0 ? (root.syncDotShown ? "syncing" : "none")
+        : root.syncDotShown ? "syncing"
+        : root._offline ? "offline"
+        : root._errors > 0 ? "error"
+        : "synced"
+    readonly property string syncWord: root.syncState === "syncing" ? I18n.t("sync.ind.syncing")
+        : root.syncState === "offline" ? I18n.t("sync.ind.offline")
+        : root.syncState === "error" ? I18n.count(root._errors, "sync.ind.errors")
+        : ""
+    function _syncTip() {
+        const note = root._syncNote();
+        return note.length > 0 ? note : I18n.t("sync.ind.open");
+    }
+
     Row {
         id: row
         anchors.verticalCenter: parent.verticalCenter
         anchors.right: parent.right
         spacing: Theme.spSm
+        layoutDirection: Qt.RightToLeft
 
         Item {
             id: syncDot
             objectName: "sidebar-sync-dot"
-            // Quiet has no profile dot (DG-006); a running sync still shows.
-            visible: Style.fills || root.syncDotShown || root.compact
-            width: Theme.spLg
+            readonly property bool profileDot: root.syncState === "none"
+            readonly property bool filledMark: profileDot || root.syncState === "synced"
+                || (Style.urgency && (root.syncState === "syncing" || root.syncState === "error"))
+            // Quiet has no profile dot (DG-006); the sync state still shows.
+            visible: profileDot ? (Style.fills || root.compact) : true
+            width: stateRow.implicitWidth
             height: root.height
-            Rectangle {
-                anchors.centerIn: parent
-                width: Theme.spSm
-                height: Theme.spSm
-                radius: height / 2
-                color: root.syncDotShown ? (syncDotMA.hovered ? Theme.withAlpha(Theme.live, 0.7) : Theme.live)
-                                         : (root.active.color || Theme.accent)
+            Row {
+                id: stateRow
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Theme.spXs
+                Item {
+                    width: Theme.spLg
+                    height: Theme.spLg
+                    anchors.verticalCenter: parent.verticalCenter
+                    Rectangle {
+                        objectName: "sidebar-sync-mark-dot"
+                        // Bold: a coloured dot for synced / running / an
+                        // error; quiet: a dot only when synced, shapes else.
+                        visible: syncDot.filledMark
+                        anchors.centerIn: parent
+                        width: Theme.spSm
+                        height: Theme.spSm
+                        radius: height / 2
+                        color: syncDot.profileDot ? (root.active.color || Theme.accent)
+                             : !Style.urgency ? Theme.textMuted
+                             : root.syncState === "syncing" ? Theme.warning
+                             : root.syncState === "error" ? Theme.danger : Theme.success
+                    }
+                    Icon {
+                        objectName: "sidebar-sync-mark-icon"
+                        visible: !syncDot.filledMark
+                        anchors.centerIn: parent
+                        size: Theme.px(10)
+                        name: root.syncState === "syncing" ? "progress" : root.syncState === "offline" ? "pending" : "ring"
+                        color: !Style.urgency ? Theme.textMuted
+                             : root.syncState === "syncing" ? Theme.warning
+                             : root.syncState === "error" ? Theme.danger
+                             : Theme.warning
+                        RotationAnimator on rotation {
+                            running: root.syncState === "syncing" && !Theme.reducedMotion
+                            from: 0; to: 360; duration: Theme.durSpin
+                            loops: Animation.Infinite
+                        }
+                    }
+                }
+                Text {
+                    objectName: "sidebar-sync-word"
+                    visible: !root.compact && root.syncWord.length > 0
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root.syncWord
+                    color: Theme.textMuted
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsXs
+                }
             }
             ClickArea {
                 id: syncDotMA
                 objectName: "sidebar-sync-dot-area"
-                enabled: root.syncDotShown
-                label: I18n.t("topbar.syncing")
-                tip: I18n.t("topbar.syncing.tip")
+                enabled: !syncDot.profileDot
+                label: I18n.t("sync.ind.open")
+                tip: root.syncState === "synced" ? root._syncTip() : I18n.t("sync.ind.open")
                 onActivated: root.syncStatusRequested()
             }
         }

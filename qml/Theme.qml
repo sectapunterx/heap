@@ -489,6 +489,8 @@ QtObject {
     // three; it does not run at all with "Reduce motion" on.
     readonly property int durPulse:  reducedMotion ? 0 : 600
     readonly property int easePulse: Easing.InOutQuad
+    // The sync mark turning while a pull runs: slowly (X/N-Ntf-Toasts).
+    readonly property int durSpin: reducedMotion ? 0 : 2400
 
     // ── Typography — Brand defaults, overrideable via settings ───────
     // Golos Text and JetBrains Mono ship inside the app (platform/BundledFonts),

@@ -103,6 +103,7 @@
 #include <QScopedValueRollback>
 #include <QScopeGuard>
 #include <QStandardPaths>
+#include <QStorageInfo>
 #include <QSysInfo>
 #include <QSystemTrayIcon>
 #include <QThread>
@@ -584,6 +585,19 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"storage.writeFailed",
        {"Not saved: writing %1 failed (%2). Your changes are kept in memory and lowkey keeps retrying.",
         "Не сохранено: запись %1 не удалась (%2). Изменения в памяти, lowkey повторяет попытки."}},
+      // The storage strip's lead (R2-037), and "Save a copy elsewhere…".
+      {"storage.reason.noSpace", {"no space left on disk %1", "на диске %1 нет места"}},
+      {"storage.reason.readOnly", {"the disk is read-only", "диск только для чтения"}},
+      {"storage.reason.noAccess", {"no permission to write the data folder", "нет прав на запись в папку данных"}},
+      {"storage.reason.locked", {"the data file is busy or unavailable", "файл данных занят или недоступен"}},
+      {"storage.copySaved", {"A copy is saved: %1", "Копия сохранена: %1"}},
+      {"storage.copyFailed", {"The copy was not saved (%1)", "Копия не сохранилась (%1)"}},
+      {"task.conflictMixed", {"%1: your choice is applied", "%1: выбор применён"}},
+      {"task.keptLocal", {"%1 kept as your own task", "%1 оставлена у вас"}},
+      {"task.keptLocal.note", {"Was %1 in %2 (deleted there).", "Была %1 в %2 (там удалена)."}},
+      {"keychain.name.win", {"Windows Credential Manager", "Диспетчер учётных данных Windows"}},
+      {"keychain.name.mac", {"macOS Keychain", "Связка ключей macOS"}},
+      {"keychain.name.linux", {"The system keyring", "Системное хранилище ключей"}},
       {"storage.dirUnwritable",
        {"Not saved: the data folder is not writable (%1). Nothing you change is saved.",
         "Не сохранено: папка данных недоступна для записи (%1). Изменения не сохраняются."}},
@@ -797,6 +811,8 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.profile.exportMd.desc",
        {"Puts a markdown summary of the active profile into the clipboard.", "Кладёт markdown-выжимку активного профиля в буфер."}},
       {"shortcut.profile.weeklyReport.label", {"Weekly shipped report", "Недельный отчёт"}},
+      {"shortcut.sync.all.label", {"Sync everything", "Синхронизировать всё"}},
+      {"shortcut.sync.all.desc", {"Pulls every connected tracker now.", "Забирает данные всех подключённых трекеров сейчас."}},
       {"shortcut.profile.weeklyReport.desc",
        {"Copies a Markdown report of tasks marked done in the last 7 days, with tracked time.",
         "Копирует Markdown-отчёт задач, завершённых за последние 7 дней, с учётом времени."}},
@@ -1168,6 +1184,10 @@ AppController::AppController(QObject* parent) :
   connect(this, &AppController::languageChanged, this, [this]() {
     seedShortcutCatalog();
     emit updateStatusChanged();
+    // The storage line was worded when it was raised — often at load, before
+    // the saved language was known (R2-039). It follows the language now.
+    recomposeStorageMessage();
+    emit integrationHealthChanged();
   });
 
   loadStateOnStart();
@@ -1181,7 +1201,7 @@ AppController::AppController(QObject* parent) :
     QString why;
     if(m_storageState == QLatin1String("ok") && !heap::storage::probeWritableDir(heap::paths::dataDir(), &why)) {
       qWarning("data directory is not writable: %s", qUtf8Printable(why));
-      setStorageState(QStringLiteral("writeFailed"), tr_("storage.dirUnwritable").arg(why));
+      setStorageStateT(QStringLiteral("writeFailed"), {{QStringLiteral("storage.dirUnwritable"), {why}}});
     }
   }
 
@@ -1322,6 +1342,21 @@ AppController::AppController(QObject* parent) :
 
   // ---- Tracker sync (HEAP-74/75) ----
   m_secretStore = new heap::integrations::SecretStore(this);
+  // The keychain refused a sign-in (R2-040): the token lives only in memory
+  // until the user picks the file or a retry, so the card asks.
+  connect(
+      m_secretStore, &heap::integrations::SecretStore::keychainWriteFailed, this, [this](const QString& providerId, const QString& error) {
+        const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
+        m_keychainProblem = QVariantMap{
+            {QStringLiteral("provider"), providerId},
+            {QStringLiteral("name"), d ? d->displayName : providerId},
+            {QStringLiteral("error"), error},
+        };
+        emit keychainProblemChanged();
+      });
+  // Connecting or disconnecting a tracker changes the sources the sync
+  // indicator lists.
+  connect(this, &AppController::appSettingsJsonChanged, this, &AppController::integrationHealthChanged);
   m_syncTimer = new QTimer(this);
   m_syncTimer->setSingleShot(false);
   connect(m_syncTimer, &QTimer::timeout, this, [this]() {
@@ -8903,6 +8938,24 @@ QString AppController::issueReportBody() const {
   return body;
 }
 
+QString AppController::issueReportPreview() const {
+  const auto scrubbed = [](const QString& text) {
+    return heap::diag::scrubPersonalPaths(text, QDir::homePath(), heap::diag::currentUserName());
+  };
+  // The form's preview (X/N-Err-Storage): the facts on one line, then the
+  // short log tail, scrubbed as for the URL (PLAT-28).
+  QString out = QStringLiteral("lowkey %1 · %2 · Qt %3").arg(appVersion(), QSysInfo::prettyProductName(), QString::fromLatin1(qVersion()));
+  const QString tail = heap::diag::tailLines(scrubbed(heap::logging::logTail()), 25, 1500);
+  if(!tail.trimmed().isEmpty()) {
+    out += QChar('\n') + tail;
+  }
+  const QString recovery = heap::diag::tailLines(scrubbed(heap::recovery::tail()), 8, 600);
+  if(!recovery.trimmed().isEmpty()) {
+    out += QChar('\n') + recovery;
+  }
+  return out;
+}
+
 QString AppController::issueDiagnostics() const {
   const auto scrubbed = [](const QString& text) {
     return heap::diag::scrubPersonalPaths(text, QDir::homePath(), heap::diag::currentUserName());
@@ -8943,6 +8996,19 @@ void AppController::reportAnIssue() {
   QUrlQuery query;
   query.addQueryItem(QStringLiteral("title"), QStringLiteral("[bug] "));
   query.addQueryItem(QStringLiteral("body"), body);
+  url.setQuery(query);
+  QDesktopServices::openUrl(url);
+}
+
+void AppController::openIssueReport(const QString& body) const {
+  QUrl url(QStringLiteral("https://github.com/sectapunterx/heap/issues/new"));
+  QUrlQuery query;
+  query.addQueryItem(QStringLiteral("title"), QStringLiteral("[bug] "));
+  // What the person saw in the preview, under a line for their own words.
+  const QString text = body.trimmed().isEmpty()
+                           ? QString()
+                           : QStringLiteral("<!-- Describe the problem above this line. -->\n\n```\n") + body + QStringLiteral("\n```\n");
+  query.addQueryItem(QStringLiteral("body"), text);
   url.setQuery(query);
   QDesktopServices::openUrl(url);
 }
@@ -9628,6 +9694,8 @@ void AppController::setSyncInFlight(const QString& providerId, bool inFlight) {
   if(was != !m_syncInFlight.isEmpty()) {
     emit syncingChanged();
   }
+  // Per source: the indicator's popover and the first-load panel.
+  emit integrationHealthChanged();
 }
 
 QHash<QString, QString> AppController::statusOverridesFor(const QString& providerId) const {
@@ -10900,6 +10968,14 @@ QVariantList AppController::integrationHealthAt(const QDateTime& now) const {
   using namespace heap::integrations;
   const bool ru = m_language == QStringLiteral("ru");
   const QVariantMap integrations = settingsMap().value(QStringLiteral("integrations")).toMap();
+  // Status moves waiting for the tracker, per provider: the offline line
+  // says how many changes wait (X-Err-Tracker).
+  QHash<QString, int> waiting;
+  for(const Task& t : m_tasks.items()) {
+    if(!t.externalProvider.isEmpty() && t.externalMeta.pushQueued && !t.externalMeta.unsyncedStatus.isEmpty()) {
+      ++waiting[t.externalProvider];
+    }
+  }
   QVariantList out;
   for(const ProviderDescriptor& d : providerCatalog()) {
     const QVariantMap cfg = integrations.value(d.id).toMap();
@@ -10908,6 +10984,7 @@ QVariantList AppController::integrationHealthAt(const QDateTime& now) const {
     }
     const ProviderHealth h = m_syncHealth.value(d.id);
     const bool failing = h.failing();
+    static const char* const kKinds[] = {"", "auth", "forbidden", "notFound", "rateLimited", "server", "network", "other"};
     out.append(QVariantMap{
         {QStringLiteral("id"), d.id},
         {QStringLiteral("name"), d.displayName},
@@ -10919,6 +10996,16 @@ QVariantList AppController::integrationHealthAt(const QDateTime& now) const {
         {QStringLiteral("errorAge"), failing ? relativeAge(h.lastFailureAt, now, ru) : QString()},
         {QStringLiteral("expiry"), expiryText(expiryFromString(cfg.value(QStringLiteral("tokenExpiresAt")).toString()), now, ru)},
         {QStringLiteral("offline"), m_offlineProviders.contains(d.id)},
+        // For the problem strip and the sync indicator (R2-035/036/048):
+        // what kind of failure, when (clock time), whether a pull is out now,
+        // whether this tracker ever answered, and the moves waiting for it.
+        {QStringLiteral("kind"), failing ? QString::fromLatin1(kKinds[static_cast<int>(h.lastFailure)]) : QString()},
+        {QStringLiteral("failedAt"),
+         failing && h.lastFailureAt.isValid() ? heap::text::formatTime(h.lastFailureAt.time(), twelveHourClock()) : QString()},
+        {QStringLiteral("failedAtMs"), failing && h.lastFailureAt.isValid() ? double(h.lastFailureAt.toMSecsSinceEpoch()) : 0.0},
+        {QStringLiteral("inFlight"), m_syncInFlight.contains(d.id)},
+        {QStringLiteral("everOk"), h.lastOk.isValid()},
+        {QStringLiteral("waiting"), waiting.value(d.id)},
     });
   }
   return out;
@@ -10939,6 +11026,7 @@ void AppController::setProviderOffline(const QString& providerId, bool offline) 
     emit toast(tr_("int.backOnline").arg(label));
   }
   emit integrationStatesChanged();
+  emit integrationHealthChanged();
 }
 
 void AppController::scheduleRefreshRetry(const QString& providerId) {
@@ -11084,25 +11172,44 @@ bool applyConflictChoice(Task& t, const QString& field, bool useTracker, bool ru
 }  // namespace
 
 void AppController::resolveTrackerConflictFields(const QString& taskId, const QStringList& fields, bool useTracker) {
+  if(useTracker) {
+    resolveTrackerConflictChoices(taskId, {}, fields);
+  } else {
+    resolveTrackerConflictChoices(taskId, fields, {});
+  }
+}
+
+void AppController::resolveTrackerConflictChoices(const QString& taskId, const QStringList& mine, const QStringList& theirs) {
   const int row = m_tasks.indexOfId(taskId);
   if(row < 0) {
     return;
   }
   Task t = m_tasks.items().at(row);
-  QStringList pending;
-  for(const QString& f : fields) {
-    if(t.externalMeta.conflicts.contains(f)) {
-      pending.append(f);
+  QStringList keep;
+  QStringList take;
+  for(const QString& f : mine) {
+    if(t.externalMeta.conflicts.contains(f) && !keep.contains(f)) {
+      keep.append(f);
     }
   }
-  if(pending.isEmpty()) {
+  for(const QString& f : theirs) {
+    if(t.externalMeta.conflicts.contains(f) && !keep.contains(f) && !take.contains(f)) {
+      take.append(f);
+    }
+  }
+  if(keep.isEmpty() && take.isEmpty()) {
     return;
   }
+  const bool useTracker = keep.isEmpty();
   bool send = false;
   {
     const UndoScope scope(this, tr_("task.editUndone").arg(taskId));
-    for(const QString& f : pending) {
-      send = applyConflictChoice(t, f, useTracker, m_language == QStringLiteral("ru")) || send;
+    const bool ru = m_language == QStringLiteral("ru");
+    for(const QString& f : take) {
+      applyConflictChoice(t, f, true, ru);
+    }
+    for(const QString& f : keep) {
+      send = applyConflictChoice(t, f, false, ru) || send;
     }
     if(send && !trackerWriteEnabled(t.externalProvider)) {
       // Nothing is written to this tracker: keeping mine keeps it here only,
@@ -11118,7 +11225,98 @@ void AppController::resolveTrackerConflictFields(const QString& taskId, const QS
     pushStatusToTracker(taskId, t.status);
   }
   emit trackerConflictResolved(taskId);
-  emit toast(tr_(useTracker ? "task.conflictTookTracker" : "task.conflictKeptMine").arg(externalKeyOf(t)));
+  const char* key = useTracker ? "task.conflictTookTracker" : (take.isEmpty() ? "task.conflictKeptMine" : "task.conflictMixed");
+  emit toast(tr_(key).arg(externalKeyOf(t)));
+}
+
+QString AppController::lastLocalEditAt(const QString& taskId) const {
+  QDateTime best;
+  for(const heap::history::HistoryEvent& e : m_history.events(activeProfileId(), taskId)) {
+    if(!e.sync && (!best.isValid() || e.at > best)) {
+      best = e.at;
+    }
+  }
+  return best.isValid() ? best.toString(Qt::ISODate) : QString();
+}
+
+void AppController::keepGoneTicketLocally(const QString& taskId) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return;
+  }
+  Task t = m_tasks.items().at(row);
+  if(t.externalProvider.isEmpty() || !t.externalMeta.goneUpstream) {
+    return;
+  }
+  const QString key = externalKeyOf(t);
+  const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(t.externalProvider);
+  const QString tracker = d ? d->displayName : t.externalProvider;
+  {
+    const UndoScope scope(this, tr_("task.keptLocal").arg(key));
+    // Where it came from stays readable in the task's own notes.
+    QString line = tr_("task.keptLocal.note").arg(key, tracker);
+    if(!t.externalUrl.isEmpty()) {
+      line += QStringLiteral(" ") + t.externalUrl;
+    }
+    heap::local::appendNote(t.local, line);
+    t.externalProvider.clear();
+    t.externalId.clear();
+    t.externalUrl.clear();
+    t.externalMeta = ExternalMeta{};
+    m_tasks.upsert(t);
+    scheduleSave();
+  }
+  emit integrationStatesChanged();
+  emit undoableToast(tr_("task.keptLocal").arg(key), 5);
+}
+
+QVariantMap AppController::runningTimer() const {
+  for(const Task& t : m_tasks.items()) {
+    if(t.timerStartedAt.isValid()) {
+      int secs = t.trackedSeconds + static_cast<int>(t.timerStartedAt.secsTo(QDateTime::currentDateTime()));
+      return QVariantMap{
+          {QStringLiteral("id"), t.id},
+          {QStringLiteral("title"), t.title},
+          {QStringLiteral("key"), t.externalProvider.isEmpty() ? t.id : externalKeyOf(t)},
+          {QStringLiteral("seconds"), qMax(0, secs)},
+      };
+    }
+  }
+  return {};
+}
+
+void AppController::keepSecretsInFile() {
+  const QString providerId = m_keychainProblem.value(QStringLiteral("provider")).toString();
+  if(m_secretStore && !providerId.isEmpty()) {
+    m_secretStore->keepInFile(providerId);
+  }
+  dismissKeychainProblem();
+}
+
+void AppController::retryKeychain() {
+  const QString providerId = m_keychainProblem.value(QStringLiteral("provider")).toString();
+  dismissKeychainProblem();
+  if(m_secretStore && !providerId.isEmpty()) {
+    m_secretStore->retryKeychain(providerId);
+  }
+}
+
+void AppController::dismissKeychainProblem() {
+  if(m_keychainProblem.isEmpty()) {
+    return;
+  }
+  m_keychainProblem.clear();
+  emit keychainProblemChanged();
+}
+
+QString AppController::keychainName() const {
+#if defined(Q_OS_WIN)
+  return tr_("keychain.name.win");
+#elif defined(Q_OS_MACOS)
+  return tr_("keychain.name.mac");
+#else
+  return tr_("keychain.name.linux");
+#endif
 }
 
 void AppController::archiveOutOfScope(const QString& providerId) {
@@ -11841,20 +12039,7 @@ QString AppController::quarantineCorruptState(const QString& path, const QByteAr
   return {};
 }
 
-void AppController::saveStateNow() {
-  // m_saveBlocked is re-checked here, not only in scheduleSave(): flushSave()
-  // and the quit path call this directly.
-  if(m_loading || m_saveBlocked) {
-    return;
-  }
-  const heap::frame::Span span("saveStateNow");
-
-  // Push live model state back into the active profile.
-  snapshotActiveProfile();
-
-  // Everything below the settings object is a snapshot: implicitly shared
-  // copies, a refcount bump each. The worker serializes them (PLAT-23), so
-  // the UI thread no longer pays ~200 ms per save on a 10k-task profile.
+QJsonObject AppController::buildStateHead() {
   QJsonObject s = m_settingsExtra;
   s["theme"] = m_theme;
   s["density"] = m_density;
@@ -11876,6 +12061,7 @@ void AppController::saveStateNow() {
   s["welcomeSeen"] = m_welcomeSeen;
   s["demoActive"] = m_demoActive;
   s["trackerWriteNotice"] = m_trackerWriteNoticeDone;
+  s["lastRunVersion"] = appVersion();
   icsUidDomain();  // mints the id on the first save
   s["installId"] = m_installId;
 
@@ -11911,6 +12097,46 @@ void AppController::saveStateNow() {
   head["activeProfileId"] = m_activeProfileId;
   head["settings"] = s;
   head["taskSeq"] = seq;
+  return head;
+}
+
+bool AppController::saveStateCopyTo(const QUrl& fileUrl) {
+  const QString path = fileUrl.isLocalFile() ? fileUrl.toLocalFile() : fileUrl.toString();
+  if(path.isEmpty() || m_loading) {
+    return false;
+  }
+  snapshotActiveProfile();
+  QJsonObject root = buildStateHead();
+  QJsonArray profilesArr;
+  for(const Profile& p : m_profiles) {
+    profilesArr.append(heap::state::profileToJson(p));
+  }
+  root["profiles"] = profilesArr;
+  root["events"] = heap::state::eventsToJson(m_events.items());
+  if(!m_history.isEmpty()) {
+    root["taskHistory"] = m_history.toJson();
+  }
+  QString error;
+  const bool ok = heap::storage::writeAtomically(path, QJsonDocument(root).toJson(QJsonDocument::Indented), &error);
+  emit toast(ok ? tr_("storage.copySaved").arg(QDir::toNativeSeparators(path)) : tr_("storage.copyFailed").arg(error));
+  return ok;
+}
+
+void AppController::saveStateNow() {
+  // m_saveBlocked is re-checked here, not only in scheduleSave(): flushSave()
+  // and the quit path call this directly.
+  if(m_loading || m_saveBlocked) {
+    return;
+  }
+  const heap::frame::Span span("saveStateNow");
+
+  // Push live model state back into the active profile.
+  snapshotActiveProfile();
+
+  // Everything below the settings object is a snapshot: implicitly shared
+  // copies, a refcount bump each. The worker serializes them (PLAT-23), so
+  // the UI thread no longer pays ~200 ms per save on a 10k-task profile.
+  const QJsonObject head = buildStateHead();
 
   const QDateTime now = QDateTime::currentDateTime();
   const bool backupDue = backupDueNow(now);
@@ -11984,10 +12210,12 @@ void AppController::onSaveFinished(const heap::storage::SaveOutcome& outcome) {
   if(outcome.generation < m_saveGeneration && m_storageState == QLatin1String("ok")) {
     return;
   }
-  setStorageState(QStringLiteral("writeFailed"), tr_("storage.writeFailed").arg(QDir::toNativeSeparators(stateFilePath()), outcome.error));
+  setStorageStateT(QStringLiteral("writeFailed"),
+                   {{QStringLiteral("storage.writeFailed"), {QDir::toNativeSeparators(stateFilePath()), outcome.error}}});
   // Keep trying on a backoff: the usual cause (a sync client or AV scan
   // holding the file) goes away by itself, and the edits are still in memory.
-  static const int kRetryMs[] = {2000, 5000, 15000, 30000, 60000};
+  // Every 30 s at most, as the strip says (X-Err-Storage).
+  static const int kRetryMs[] = {2000, 5000, 15000, 30000};
   const int step = qMin(m_saveRetryStep, static_cast<int>(std::size(kRetryMs)) - 1);
   ++m_saveRetryStep;
   if(m_saveRetryTimer && !m_saveBlocked) {
@@ -11995,7 +12223,59 @@ void AppController::onSaveFinished(const heap::storage::SaveOutcome& outcome) {
   }
 }
 
+void AppController::setStorageStateT(const QString& state, const QVector<QPair<QString, QStringList>>& spec) {
+  m_storageSpec = spec;
+  QString message;
+  for(const auto& part : spec) {
+    QString text = tr_(part.first);
+    for(const QString& a : part.second) {
+      text = text.arg(a);
+    }
+    message += (message.isEmpty() ? QString() : QStringLiteral(" ")) + text;
+  }
+  m_storageReason = state == QLatin1String("writeFailed") ? classifyWriteFailure() : QString();
+  setStorageState(state, message);
+}
+
+void AppController::recomposeStorageMessage() {
+  if(m_storageSpec.isEmpty() || m_storageState == QLatin1String("ok")) {
+    return;
+  }
+  const QString before = m_storageMessage;
+  const QString reason = m_storageReason;
+  setStorageStateT(m_storageState, m_storageSpec);
+  if(m_storageMessage == before && m_storageReason != reason) {
+    emit storageStateChanged();
+  }
+}
+
+QString AppController::classifyWriteFailure() const {
+  // A few words for the strip's lead (X-Err-Storage): the disk, the
+  // folder's rights, or the file itself. Facts read now, not guessed.
+  const QString dir = heap::paths::dataDir();
+  const QStorageInfo info(dir);
+  if(info.isValid() && info.bytesAvailable() >= 0 && info.bytesAvailable() < 8LL * 1024 * 1024) {
+    QString drive = QDir::toNativeSeparators(info.rootPath());
+    while(drive.size() > 1 && (drive.endsWith(QLatin1Char('\\')) || drive.endsWith(QLatin1Char('/')))) {
+      drive.chop(1);
+    }
+    return tr_("storage.reason.noSpace").arg(drive);
+  }
+  if(info.isValid() && info.isReadOnly()) {
+    return tr_("storage.reason.readOnly");
+  }
+  const QFileInfo fi(dir);
+  if(fi.exists() && !fi.isWritable()) {
+    return tr_("storage.reason.noAccess");
+  }
+  return tr_("storage.reason.locked");
+}
+
 void AppController::setStorageState(const QString& state, const QString& message) {
+  if(state == QLatin1String("ok")) {
+    m_storageSpec.clear();
+    m_storageReason.clear();
+  }
   if(state == m_storageState && message == m_storageMessage) {
     return;
   }
@@ -12029,7 +12309,7 @@ void AppController::retryStorage() {
   }
   const heap::storage::ReadResult probe = heap::storage::readWithRetry(stateFilePath(), {});
   if(probe.kind == heap::storage::ReadResult::Unreadable) {
-    setStorageState(m_storageState, tr_("storage.unreadable").arg(QDir::toNativeSeparators(stateFilePath()), probe.error));
+    setStorageStateT(m_storageState, {{QStringLiteral("storage.unreadable"), {QDir::toNativeSeparators(stateFilePath()), probe.error}}});
     emit toast(tr_("storage.stillLocked"));
     return;
   }
@@ -12091,7 +12371,7 @@ void AppController::enterUnreadableMode(const QString& error) {
   }
   m_editsWhileBlocked = false;
   if(m_profiles.isEmpty()) {
-    Profile p = makeStartingProfile(QStringLiteral("heap"), QString());
+    Profile p = makeStartingProfile(tr_("profile.personal"), QString());
     p.id = QStringLiteral("default");
     m_profiles.push_back(p);
     m_activeProfileId = p.id;
@@ -12101,11 +12381,11 @@ void AppController::enterUnreadableMode(const QString& error) {
     emit profilesChanged();
     emit activeProfileChanged();
   }
-  QString message = tr_("storage.unreadable").arg(QDir::toNativeSeparators(path), error);
+  QVector<QPair<QString, QStringList>> spec{{QStringLiteral("storage.unreadable"), {QDir::toNativeSeparators(path), error}}};
   if(!shown.isEmpty()) {
-    message += QChar(' ') + tr_("storage.showingBackup").arg(shown);
+    spec.append({QStringLiteral("storage.showingBackup"), {shown}});
   }
-  setStorageState(QStringLiteral("unreadable"), message);
+  setStorageStateT(QStringLiteral("unreadable"), spec);
   // The usual cause is a lock that lifts by itself. Until the user has typed
   // something into this read-only session, open the real file as soon as it
   // can be read.
@@ -12162,7 +12442,7 @@ void AppController::loadStateOnStart() {
       // damaged file went to look for it. A newer-schema backup has already
       // raised its own read-only banner, which says more.
       if(m_storageState == QLatin1String("ok")) {
-        setStorageState(QStringLiteral("recovered"), tr_("data.recovered").arg(QFileInfo(recoveredFrom).fileName(), kept));
+        setStorageStateT(QStringLiteral("recovered"), {{QStringLiteral("data.recovered"), {QFileInfo(recoveredFrom).fileName(), kept}}});
       }
     } else {
       // No usable backup. The damaged file is preserved under a distinct name.
@@ -12171,7 +12451,7 @@ void AppController::loadStateOnStart() {
       // working on in sample data (PLAT-6).
       heap::recovery::append(QString::fromLatin1(heap::recovery::kUnrecovered),
                              {{QStringLiteral("path"), path}, {QStringLiteral("reason"), shapeError}});
-      Profile p = makeStartingProfile(QStringLiteral("heap"), QString());
+      Profile p = makeStartingProfile(tr_("profile.personal"), QString());
       p.id = QStringLiteral("default");
       m_profiles.push_back(p);
       m_activeProfileId = p.id;
@@ -12181,7 +12461,7 @@ void AppController::loadStateOnStart() {
       emit onboardingChanged();
       emit profilesChanged();
       emit activeProfileChanged();
-      setStorageState(QStringLiteral("damaged"), tr_("data.corruptKept").arg(kept));
+      setStorageStateT(QStringLiteral("damaged"), {{QStringLiteral("data.corruptKept"), {kept}}});
       // Written now, so the next launch opens this workspace too rather than
       // taking the missing file for a first run. The damaged bytes are safe in
       // the quarantined copy.
@@ -12219,7 +12499,9 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
     // a banner that stays up, not a toast that is gone in two seconds.
     m_saveBlocked = true;
     retainPreMigrationBackup(path, onDiskSchema);
-    setStorageState(QStringLiteral("tooNew"), tr_("data.schemaTooNew").arg(onDiskSchema).arg(heap::state::kSchemaVersion));
+    setStorageStateT(
+        QStringLiteral("tooNew"),
+        {{QStringLiteral("data.schemaTooNew"), {QString::number(onDiskSchema), QString::number(heap::state::kSchemaVersion)}}});
     heap::recovery::append(QString::fromLatin1(heap::recovery::kSchemaTooNew),
                            {{QStringLiteral("onDisk"), onDiskSchema}, {QStringLiteral("supported"), heap::state::kSchemaVersion}});
     qWarning("state.json schema v%d is newer than this build's v%d — saving disabled", onDiskSchema, heap::state::kSchemaVersion);
@@ -12249,6 +12531,16 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
   // ----- settings (global) -----
   if(root.contains("settings")) {
     const QJsonObject s = root["settings"].toObject();
+    // "What's new" once after an update to a new release line (R2-054): the
+    // line this data was last run with, or — for a file from 0.7.x, which
+    // did not record it — its schema says it came from before 0.8.
+    if(!viewOnly) {
+      const auto lineOf = [](const QString& v) {
+        return v.section(QLatin1Char('.'), 0, 1);
+      };
+      const QString prev = s.value(QStringLiteral("lastRunVersion")).toString();
+      m_whatsNewDue = prev.isEmpty() ? onDiskSchema < 12 : lineOf(prev) != lineOf(appVersion());
+    }
     if(s.contains("theme")) {
       m_theme = s["theme"].toString();
       emit themeChanged();
@@ -12942,7 +13234,8 @@ bool AppController::replaceStateFile(const QByteArray& bytes) {
   }
   QString error;
   if(!heap::storage::writeAtomically(stateFilePath(), bytes, &error)) {
-    setStorageState(QStringLiteral("writeFailed"), tr_("storage.writeFailed").arg(QDir::toNativeSeparators(stateFilePath()), error));
+    setStorageStateT(QStringLiteral("writeFailed"),
+                     {{QStringLiteral("storage.writeFailed"), {QDir::toNativeSeparators(stateFilePath()), error}}});
     return false;
   }
   // Reload from disk. The undo history described the state that was just
@@ -13561,6 +13854,8 @@ void AppController::seedShortcutCatalog() {
   add("profile.prev", "Ctrl+[");
   add("profile.exportMd", "Ctrl+Shift+E");
   add("profile.weeklyReport", "Ctrl+Shift+W");
+  // Every tracker now (the sync indicator's popover, R2-048).
+  add("sync.all", "Ctrl+Shift+R");
   add("tweaks.open", "");
   // The cheat sheet (APP-272): "?" and Ctrl+/; changing keys is its own mode.
   add("hotkeys.open", "Ctrl+/");

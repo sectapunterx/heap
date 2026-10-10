@@ -3,6 +3,7 @@
 #include <QHash>
 #include <QObject>
 #include <QPair>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -53,6 +54,21 @@ class SecretStore : public QObject {
   static QString protectForFile(const QString& plain);
   static QString unprotectFromFile(const QString& stored);
 
+  // The keychain refused to store a provider's sign-in (R2-040). The user
+  // chooses: keep that provider's tokens in secrets.json in the data folder
+  // (DPAPI-wrapped on Windows) from now on, or try the keychain again.
+  void keepInFile(const QString& providerId);
+  void retryKeychain(const QString& providerId);
+
+  bool keptInFile(const QString& providerId) const {
+    return m_fileProviders.contains(providerId);
+  }
+
+ signals:
+  // One per provider until the next retry: the value is only in memory and
+  // would be gone after a restart.
+  void keychainWriteFailed(const QString& providerId, const QString& error);
+
  private:
   static QString cacheKey(const QString& providerId, const QString& field);
   QString fallbackPath() const;
@@ -68,6 +84,11 @@ class SecretStore : public QObject {
   QHash<QString, QString> m_cache;
   QHash<QString, int> m_chunkCounts;  // cache key → number of "#n" parts in the keychain
   bool m_keychain = false;
+  // Keychain builds: providers whose tokens live in the file by the user's
+  // choice, and providers already reported as failing.
+  QSet<QString> m_fileProviders;
+  QSet<QString> m_failedReported;
+  static QString providerOf(const QString& key);
 };
 
 }  // namespace heap::integrations

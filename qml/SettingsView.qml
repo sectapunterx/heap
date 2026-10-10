@@ -3633,7 +3633,11 @@ Item {
                     label: I18n.t("settings.help.report")
                     hint: I18n.t("settings.help.report.hint")
                     actions: [ ({ value: "open", label: I18n.t("settings.help.open") }) ]
-                    onTriggered: AppController.reportAnIssue()
+                    // The form first: what goes in, shown before it leaves (R2-040).
+                    onTriggered: {
+                        if (typeof settingsBus !== "undefined" && settingsBus.openReportIssue) settingsBus.openReportIssue();
+                        else AppController.reportAnIssue();
+                    }
                 }
             }
         }
@@ -3709,7 +3713,12 @@ Item {
                     label: I18n.t("settings.about.whatsNew")
                     hint: I18n.t("settings.about.whatsNew.hint")
                     actions: [ ({ value: "open", label: I18n.t("settings.help.open") }) ]
-                    onTriggered: Qt.openUrlExternally("https://github.com/sectapunterx/heap/releases")
+                    // This release line's notes in the app (R2-054); the full
+                    // history stays on GitHub.
+                    onTriggered: {
+                        if (typeof settingsBus !== "undefined" && settingsBus.openWhatsNew && settingsBus.openWhatsNew()) return;
+                        Qt.openUrlExternally("https://github.com/sectapunterx/heap/releases");
+                    }
                 }
                 ActRow {
                     objectName: "settings-licenses"

@@ -144,6 +144,9 @@ class AppController : public QObject {
   // data" banner should offer to start fresh. Both persist in the settings blob.
   Q_PROPERTY(bool welcomeSeen READ welcomeSeen NOTIFY onboardingChanged)
   Q_PROPERTY(bool demoActive READ demoActive NOTIFY onboardingChanged)
+  // An update to a new release line since the last run (R2-054): the
+  // "What's new" card is due once. ackWhatsNew() puts it away.
+  Q_PROPERTY(bool whatsNewDue READ whatsNewDue NOTIFY onboardingChanged)
 
   Q_PROPERTY(QVariantList profiles READ profiles NOTIFY profilesChanged)
   // Calendars read from a link (APP-118), with how their last fetch went.
@@ -214,6 +217,13 @@ class AppController : public QObject {
   // storageMessage is the localized banner text, reason included.
   Q_PROPERTY(QString storageState READ storageState NOTIFY storageStateChanged)
   Q_PROPERTY(QString storageMessage READ storageMessage NOTIFY storageStateChanged)
+  // The write failure's cause in a few words ("на диске C: нет места"), or
+  // "" (R2-037); the strip leads with it.
+  Q_PROPERTY(QString storageReason READ storageReason NOTIFY storageStateChanged)
+  // The file names the message carries (the damaged copy, the backup shown).
+  Q_PROPERTY(QStringList storageArgs READ storageArgs NOTIFY storageStateChanged)
+  Q_PROPERTY(QVariantList syncSources READ syncSources NOTIFY integrationHealthChanged)
+  Q_PROPERTY(QVariantMap keychainProblem READ keychainProblem NOTIFY keychainProblemChanged)
 
  public:
   explicit AppController(QObject* parent = nullptr);
@@ -251,6 +261,18 @@ class AppController : public QObject {
   QString storageMessage() const {
     return m_storageMessage;
   }
+
+  QString storageReason() const {
+    return m_storageReason;
+  }
+
+  QStringList storageArgs() const {
+    return m_storageSpec.isEmpty() ? QStringList() : m_storageSpec.first().second;
+  }
+
+  // The strip's "Save a copy elsewhere…" (R2-037): the whole state as it is
+  // in memory, written to `fileUrl`. True when it landed.
+  Q_INVOKABLE bool saveStateCopyTo(const QUrl& fileUrl);
 
   // The banner's Retry: re-reads an unreadable state.json (and loads it), or
   // writes a failed save again now.
@@ -689,6 +711,20 @@ class AppController : public QObject {
   // One field of it ("title" | "body" | "priority" | "status"). Keeping my
   // status sends it to the tracker; taking the tracker's drops the unsent move.
   Q_INVOKABLE void resolveTrackerConflictField(const QString& taskId, const QString& field, bool useTracker);
+  // The conflict sheet's "Apply choice" (R2-032): the fields in `mine` keep
+  // the local value, the fields in `theirs` take the tracker's — one undo
+  // step, one toast. Keeping my status sends it only where writes are on.
+  Q_INVOKABLE void resolveTrackerConflictChoices(const QString& taskId, const QStringList& mine, const QStringList& theirs);
+  // The newest local edit of the task (ISO, "" = none known): the "you —
+  // 14:58" half of the conflict sheet's subtitle.
+  Q_INVOKABLE QString lastLocalEditAt(const QString& taskId) const;
+  // A card whose issue is gone from the tracker, kept as the user's own
+  // task (R2-034 "оставить у себя"): the tracker link goes, the key and the
+  // address go into its notepad, everything local stays. Undoable.
+  Q_INVOKABLE void keepGoneTicketLocally(const QString& taskId);
+  // The task whose timer runs in the active profile: { id, title, key,
+  // seconds }, or an empty map (R2-052, the sidebar's timer line).
+  Q_INVOKABLE QVariantMap runningTimer() const;
   // Archive every card of this tracker the current filter no longer covers.
   Q_INVOKABLE void archiveOutOfScope(const QString& providerId);
   // Settings → Integrations → Health (APP-164): one row per connected
@@ -697,6 +733,36 @@ class AppController : public QObject {
   // language. Read-only.
   Q_INVOKABLE QVariantList integrationHealth() const;
   QVariantList integrationHealthAt(const QDateTime& now) const;
+
+  // The same rows as a property, for bindings (R2-035/036/048); also
+  // { kind, failedAt, failedAtMs, inFlight, everOk, waiting }.
+  QVariantList syncSources() const {
+    return integrationHealth();
+  }
+
+  // The keychain refused a sign-in (R2-040): { provider, name, error }, or
+  // empty. keepSecretsInFile() keeps that tracker's tokens in secrets.json
+  // in the data folder (DPAPI on Windows); retryKeychain() writes them to the
+  // keychain again; dismissKeychainProblem() puts the card away.
+  QVariantMap keychainProblem() const {
+    return m_keychainProblem;
+  }
+
+  bool whatsNewDue() const {
+    return m_whatsNewDue;
+  }
+
+  Q_INVOKABLE void ackWhatsNew() {
+    if(m_whatsNewDue) {
+      m_whatsNewDue = false;
+      emit onboardingChanged();
+    }
+  }
+
+  Q_INVOKABLE void keepSecretsInFile();
+  Q_INVOKABLE void retryKeychain();
+  Q_INVOKABLE void dismissKeychainProblem();
+  Q_INVOKABLE QString keychainName() const;
 
   // ---- Sync visibility (APP-180/186/187) ----
   bool syncing() const {
@@ -971,6 +1037,12 @@ class AppController : public QObject {
   // The longer log and recovery tails, scrubbed the same way, for the
   // clipboard.
   Q_INVOKABLE QString issueDiagnostics() const;
+  // "Report a problem" form (R2-040): a GitHub "new issue" page with the
+  // body the user saw in the preview, nothing added.
+  Q_INVOKABLE void openIssueReport(const QString& body) const;
+  // The form's preview: "lowkey <version> · <OS> · Qt <version>", then the
+  // short log and recovery tails, scrubbed.
+  Q_INVOKABLE QString issueReportPreview() const;
 
   // How much one pull actually changed. An issue that came back identical
   // counts as neither, so a quiet auto-sync writes nothing and says so.
@@ -1771,6 +1843,7 @@ class AppController : public QObject {
 
  signals:
   void storageStateChanged();
+  void keychainProblemChanged();
   void selectedDateChanged();
   void todayChanged();
   void themeChanged();
@@ -2292,6 +2365,16 @@ class AppController : public QObject {
   // ---- Storage health + background save (PLAT-1/4/5/23) ----
   QString m_storageState = QStringLiteral("ok");
   QString m_storageMessage;
+  QString m_storageReason;
+  // How the message is worded: string keys with their arguments, so a
+  // language switch re-words it (R2-039).
+  QVector<QPair<QString, QStringList>> m_storageSpec;
+  void setStorageStateT(const QString& state, const QVector<QPair<QString, QStringList>>& spec);
+  void recomposeStorageMessage();
+  QString classifyWriteFailure() const;
+  QJsonObject buildStateHead();
+  QVariantMap m_keychainProblem;
+  bool m_whatsNewDue = false;
   void setStorageState(const QString& state, const QString& message);
   // state.json exists but could not be read: show the newest backup (or an
   // empty workspace) read-only and never write over the file.

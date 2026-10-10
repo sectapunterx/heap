@@ -247,3 +247,45 @@ progressive disclosure, content priority, state preservation). One entry each.
   listed in the cheat sheet. "в Example ▾" opens the profile list; picking one switches the app to
   it, and the task lands there.
 - **DG-003 · ⤢ / ⤡** in the document are the `expand` / `collapse` line icons.
+
+## Errors & sync (0.8.1 r3)
+
+- **R2-032 · Conflict rows start on "Yours".** Nothing changes until "Применить выбор" / "Всё моё" /
+  "Всё из Jira"; "Позже" keeps the card flagged. The "In Jira" status cell shows the column name
+  (the sheet's "Ревью"), not the raw tracker status. The subtitle names times only: who changed
+  the issue upstream is not recorded, so "(Олег Т.)" is left out; "Вы — …" appears only when the
+  task history has a local edit. The keyboard cursor ring shows after an arrow key, the picked
+  outline always (focus-visible semantics; ux: focus-states).
+- **R2-033 · Whose ticket.** "Тикет назначен: <name>." (colon: names are not declined), or
+  "Тикет вне вашего фильтра <Tracker>." when no assignee is known; "Только у меня" is the default.
+- **R2-034 · The mark gets its own line under the key.** Inline after the key it wrapped letter by
+  letter beside the date and priority (ux: truncation-strategy). "оставить у себя" turns the gone
+  issue into the user's own task (tracker link dropped, key + address written into its notes,
+  undoable); "убрать" archives it. Bold: amber edge = waiting/not sent, red = conflict; quiet:
+  a plain line; outside the filter = dashed card in both.
+- **R2-035 · Only lines with facts behind them.** Sign-in expired (time of the failure), 429,
+  other failures, offline (queued status moves counted). "загружено 38 из 41" is not shown: a pull
+  is one request, no partial count exists. A 429 says "при следующей синхронизации" — no
+  Retry-After time is kept. × hides a line until that failure changes (session only).
+- **R2-036 · No "120 из ~400".** A pull returns all at once; the panel shows the header, skeleton
+  rows and "Можно работать дальше…" while a tracker's first pull runs (ux: progressive-loading;
+  no invented numbers).
+- **R2-037 · Snapshot choice.** Up to two time-machine snapshots taken before this launch and not
+  empty; snapshots carry no "before closing" tag, so the second reads "Снимок — <when>". After an
+  automatic backup recovery the last row is "Оставить бэкап <file>". Closing the card keeps what is
+  open (snapshots stay in Ctrl K → time machine). The write-failure retry is capped at 30 s so the
+  strip's "пробуем каждые 30 с" is true.
+- **R2-038 · Damaged-file workspace** is named like a fresh one ("Личное"/"Personal", the language
+  known at load).
+- **R2-040 · Keychain copy states the real protection.** On Windows the file is DPAPI-wrapped, so
+  the card says only this Windows account can read it, not "не зашифрован" (elsewhere it says it is
+  not encrypted). "Названия задач" in the report form = titles of tasks in progress, off by default.
+- **R2-048 · Sync popover** lists trackers and calendar links; "Синхронизировать всё" is a new
+  catalogue key `sync.all` = Ctrl Shift R. With no tracker connected the profile dot stays as before.
+- **R2-053 · Update toasts removed** in favour of the persistent sidebar line ("доступна · обновить /
+  скачать", "загружается… N%", "готова · перезапустить"); "что нового" there opens the release
+  page, since its notes are not in this build. Settings → О программе keeps the full controls.
+- **R2-054 · "Что нового"** uses the owner's default: «Насыщенный» по умолчанию, «Тихий» в
+  Настройки → Внешний вид (the sheet's "Тихий по умолчанию" predates that decision). Shown once
+  when the data last ran with an older release line (`settings.lastRunVersion`, or a pre-v12 file);
+  a fresh install never sees it; Settings → О программе → Что нового opens it any time.
