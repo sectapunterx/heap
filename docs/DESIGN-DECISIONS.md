@@ -355,3 +355,24 @@ progressive disclosure, content priority, state preservation). One entry each.
   Настройки → Внешний вид (the sheet's "Тихий по умолчанию" predates that decision). Shown once
   when the data last ran with an older release line (`settings.lastRunVersion`, or a pre-v12 file);
   a fresh install never sees it; Settings → О программе → Что нового opens it any time.
+
+## r4 · Knowledge, capture, menus, keys, settings (DESIGN-GAPS-0.8.1-r3)
+
+- **R3-098 · Capture chips without ×.** The sheet draws parsed chips plain; rejecting a parsed
+  span stays possible: Delete on the focused chip, and a small × badge over the chip's corner on
+  hover or keyboard focus (overlaid, so the chip row never reflows). Not hover-only, no layout shift.
+- **R3-097 · "из ветки … — связать?"** A click sets the new task's `branch` to the checked-out
+  branch (a toggle, shown as "связана с веткой … ✓"); nothing is linked or written anywhere else.
+  The person confirms a fact; lowkey does not guess a relation between tasks.
+- **R3-089 · Reference tags.** Only a short code (≤ 4 chars: RFC, ISO, sh) is a tag; a longer
+  first word becomes "API" when it ends in API, otherwise "REF" — never a cut word ("Open").
+- **R3-103 · Tray menu** stays the OS-native menu (a tray menu has to be), now with the sheet's
+  rows in the app's language: header, Новая задача… / Быстрая заметка… with their global keys, the
+  running timer's stop row, the next meeting (inactive), Открыть lowkey, Не беспокоить 1 ч, Выход.
+  "Не беспокоить 1 ч" holds notifications as quiet hours do until `notifications.dndUntil`.
+- **R3-095 · Git "working on" line off by default**, as the sheet says; a profile that never
+  touched the switch no longer shows it after the update (one click in Settings → Git).
+- **R3-106 · "→ В работу".** Column names are the user's, so only the default "В работе" is put in
+  the accusative; a column the user named is written as named.
+- **R3-085 · Quiet task refs** are underlined text with the ring, external links plain (sheet);
+  bold keeps the filled pill and the underlined link.

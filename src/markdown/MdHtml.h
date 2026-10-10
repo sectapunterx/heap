@@ -37,6 +37,11 @@ struct MdHtmlPalette {
   QString ticket;
   QString tag;
   QString math;
+  // CSS text-decoration of a [[task]] reference and of an external link.
+  // Empty keeps the defaults (none / the browser's underline); the quiet
+  // sheet underlines a task and leaves a link plain (R3-085).
+  QString taskDecoration;
+  QString linkDecoration;
 };
 
 struct MdHtmlOptions {

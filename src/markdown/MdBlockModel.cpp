@@ -306,9 +306,13 @@ void MdBlockModel::setDocument(const MdSourceMap& src, const MdAst& ast, const M
           const ResolvedImage resolved = resolveImage(image->href, options.imageBaseDir);
           row.imageSource = (resolved.blocked || resolved.remote || resolved.url.isEmpty()) ? image->href : resolved.url;
           row.imageIsRemote = resolved.blocked || resolved.remote;
-          row.imageAlt = image->text.isEmpty() ? image->href : image->text;
+          // The words between the brackets; the path only when there are none
+          // (the path used to lead every alt: "a.pngRetry flow").
           for(const int child : image->children) {
             row.imageAlt += ast.inlines.at(child).text;
+          }
+          if(row.imageAlt.isEmpty()) {
+            row.imageAlt = image->text.isEmpty() ? image->href : image->text;
           }
           rows.append(row);
           return;

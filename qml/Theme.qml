@@ -31,8 +31,9 @@ QtObject {
     // "system" (Settings → Language, DG-100): the clock of the system's locale.
     readonly property bool twelveHour: timeFormat === "12h"
         || (timeFormat === "system" && /a/i.test(Qt.locale().timeFormat(Locale.ShortFormat)))
-    // Settings → Git "working on …" line over the view (DG-099), on by default.
-    readonly property bool gitWorkingLine: !(_settings && _settings.git && _settings.git.workingOnLine === false)
+    // Settings → Git "working on …" line over the view (DG-099); off by default
+    // (sheet N/X-Oth-Knowledge "выключена по умолчанию", R3-095).
+    readonly property bool gitWorkingLine: !!(_settings && _settings.git && _settings.git.workingOnLine === true)
     // An explicit undefined check, not `??`: qmlcachegen 6.9.1 (what CI
     // builds with) segfaults AOT-compiling Main.qml when a singleton
     // property it resolves uses the nullish operator. Same shape as
@@ -196,6 +197,9 @@ QtObject {
 
     // ── Alerts ────────────────────────────────────────────────────────
     readonly property color danger:      _c.danger
+    // The quiet style's destructive menu row (R3-102): the danger hue
+    // pulled toward the text colour, a muted salmon rather than a red.
+    readonly property color dangerMuted: Qt.tint(_c.danger, withAlpha(_c.text, 0.35))
     readonly property color warning:     _c.warning
     readonly property color success:     _c.success
     readonly property color info:        _c.info
@@ -262,8 +266,12 @@ QtObject {
     })
     readonly property var mdPalette: ({
         "text": text, "dim": textDim, "link": mdLink, "code": mdCode,
-        "codeBackground": mdCodeBg, "codeFont": fontMono, "codeSize": String(fsMd), "highlightBackground": mdHighlight,
-        "mention": mdMention, "ticket": mdTicket, "tag": mdTag, "math": mdMath
+        // Quiet draws a [[task]] as underlined text, not a filled pill, and
+        // an external link plain (Q-Knowledge, R3-085); the pill is the only
+        // use of codeBackground while inline code has its own face.
+        "codeBackground": Style.fills ? String(mdCodeBg) : "", "codeFont": fontMono, "codeSize": String(fsMd), "highlightBackground": mdHighlight,
+        "mention": mdMention, "ticket": mdTicket, "tag": mdTag, "math": mdMath,
+        "taskDecoration": Style.fills ? "" : "underline", "linkDecoration": Style.fills ? "" : "none"
     })
 
     // What every colour picker offers for columns, labels, people and
@@ -463,6 +471,10 @@ QtObject {
     readonly property int fsDayTitle:    Style.fills ? px(30) : px(26)
     // Bold titles are 600, quiet ones 500 (the same sheets).
     readonly property int fwScreenTitle: Style.fills ? Font.DemiBold : Font.Medium
+    // A note in Knowledge (H2/Q-Knowledge, R3-084): the title 30 / 28,
+    // a "##" section 18 / 16, at the screen title's weight.
+    readonly property int fsNoteTitle:   Style.fills ? px(30) : px(28)
+    readonly property int fsNoteHeading: Style.fills ? px(18) : px(16)
 
     // ── Accessibility / motion ───────────────────────────────────────
     readonly property bool reducedMotion: !!_appearance.reducedMotion
