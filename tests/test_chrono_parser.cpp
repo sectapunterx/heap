@@ -1195,3 +1195,28 @@ TEST_F(Chrono, DottedDatesStillParseNextToVersionGuard) {
   EXPECT_DATE(r, 2026, 5, 22);
   EXPECT_EQ(r.consumed, QStringLiteral("on 22.05"));
 }
+
+// ── Identifiers with dashed numbers are not times (DATA-4) ────────────────
+TEST_F(Chrono, EnDashedIdentifierIsNotATimeRange) {
+  for(const char* s : {"merge feature-12-3", "kill-1-3", "fix-2-4 login", "bump v1-2", "auth-v2"}) {
+    auto r = parserEn.parse(QString::fromUtf8(s), kRef);
+    EXPECT_FALSE(r.ok) << s;
+  }
+}
+
+TEST_F(Chrono, RuDashedIdentifierIsNotATimeRange) {
+  for(const char* s : {"смёржить фича-12-3", "починить баг-2-4 логин", "обновить v1-2"}) {
+    auto r = parserRu.parse(QString::fromUtf8(s), kRef);
+    EXPECT_FALSE(r.ok) << s;
+  }
+}
+
+TEST_F(Chrono, SpacedTimeRangeStillParsesNextToIdentifier) {
+  auto r = parserEn.parse(QString::fromUtf8("merge feature-12 at 2-3pm"), kRef);
+  EXPECT_OK(r);
+  EXPECT_TIME(r, 14, 0);
+  EXPECT_TRUE(r.hasTime);
+  auto ru = parserRu.parse(QString::fromUtf8("созвон по фича-12 в 9-10"), kRef);
+  EXPECT_OK(ru);
+  EXPECT_TIME(ru, 9, 0);
+}

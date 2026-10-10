@@ -41,6 +41,10 @@ TestCase {
         doc.open(id);
         verify(doc.opened);
         const title = findChild(doc, "task-doc-title");
+        // A task with a title opens on the document, where its keys work
+        // (d, /, i); i or a click puts the caret in the title.
+        tryVerify(() => doc.activeFocus && !title.activeFocus, 1000, "the document did not get the keyboard");
+        doc.focusTitle();
         tryVerify(() => title.activeFocus, 1000, "the title did not get the keyboard");
         typeText(" two");
         tryVerify(() => AppController.taskById(id).title === "doc probe two", 3000, "the title was not saved");

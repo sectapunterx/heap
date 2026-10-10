@@ -590,16 +590,22 @@ ApplicationWindow {
         }
         if (win._focusWasInPopup) {
             win._focusWasInPopup = false;
-            if (it !== win._focusHome) {
+            // Back on an empty header search is not "home" either (PERO-1):
+            // returnFocusHome() sends the keyboard on to the view.
+            if (it !== win._focusHome || win._isIdleSearch(it)) {
                 const landed = it;
+                // Qt may pass through the window's root on its way back to
+                // the empty search; either place is handed on.
                 Qt.callLater(function () {
-                    if (win.activeFocusItem === landed && !win._focusInPopup) win.returnFocusHome();
+                    const f = win.activeFocusItem;
+                    if ((f === landed || win._isIdleSearch(f)) && !win._focusInPopup) win.returnFocusHome();
                 });
             }
             return;
         }
         win._focusHome = it;
     }
+    function _isIdleSearch(it) { return !!it && it.objectName === "topbar-search" && (it.text || "").length === 0; }
     function returnFocusHome() {
         const h = win._focusHome;
         // An empty header search is not where anyone was working: it only
@@ -1610,6 +1616,9 @@ ApplicationWindow {
     property string _docSection: AppController.currentSection
     function showTask(t) {
         if (!t) return;
+        // Made just now from a capture (Tab): the title is what was being
+        // typed, so the caret stays in it.
+        const fresh = !!t._isNew;
         if (t._isNew) {
             const d = Object.assign({}, t);
             if (String(d.title || "").trim().length === 0 || !AppController.saveTask(d)) {
@@ -1618,7 +1627,7 @@ ApplicationWindow {
             }
             t = d;
         }
-        if (t.id) taskDoc.open(t.id);
+        if (t.id) taskDoc.open(t.id, fresh);
     }
     // The example profile (APP-271): opened, it is the active profile and
     // Today shows its day; a second "Open the example" only switches to it.

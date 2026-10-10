@@ -53,13 +53,14 @@ FocusScope {
     readonly property var _badge: root._isTicket ? (AppController.providerBadges[root._ticket.provider] || ({})) : ({})
 
     // ── opening and closing ──
-    function open(id) {
+    function open(id, intoTitle) {
         if (root.opened && id !== root.taskId) root.flush();
         root._loadedId = "";
         root._profileId = AppController.activeProfileId;
         root.taskId = id;
         root._load();
-        root.takeFocus();
+        if (intoTitle === true) root.focusTitle();
+        else root.takeFocus();
     }
     // Where the keyboard goes in the document: a task with no title yet into
     // its title; any other onto the document, where its keys work at once —
