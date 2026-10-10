@@ -1,11 +1,11 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import { GITHUB_URL } from './src/lib/site.ts';
+import { BASE } from './repo.mjs';
 
-// Served from GitHub Pages as a project site: https://sectapunterx.github.io/heap/
-// The path follows the repository name; when the repository is renamed, change `base` here and
-// REPO in src/lib/site.ts (the one place the repository is named).
-const base = '/heap';
+// Served from GitHub Pages as a project site: https://sectapunterx.github.io/<repository>/.
+// The path follows the repository name (repo.mjs), so a rename moves it on the next build.
+const base = BASE;
 const repo = GITHUB_URL;
 
 // Pages of the heap 0.7 site that the one-page site replaced. Old links (the README, posts)
