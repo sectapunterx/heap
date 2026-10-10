@@ -42,7 +42,7 @@ Popup {
         const now = new Date();
         if (d.start === undefined && day.toDateString() === now.toDateString()) {
             const step = Math.max(1, Theme.snapMinutes) / 60;
-            start = Math.max(start, Math.ceil((now.getHours() + now.getMinutes() / 60) / step) * step);
+            start = Math.min(24 - step, Math.max(start, Math.ceil((now.getHours() + now.getMinutes() / 60) / step) * step));
         }
         const end = d.end !== undefined && Number(d.end) > start ? Number(d.end) : start + 1;
         root.slot = { date: day, start: start, end: end };
