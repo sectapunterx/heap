@@ -240,7 +240,8 @@ QSet<QString> TaskQuery::statusIds() const {
   return out;
 }
 
-TaskQuery TaskQuery::compile(const QString& text, const QDate& today, const QVariantList& statuses, const QStringList& newIds, bool strictStatus) {
+TaskQuery TaskQuery::compile(
+    const QString& text, const QDate& today, const QVariantList& statuses, const QStringList& newIds, bool strictStatus) {
   TaskQuery q;
   q.m_today = today;
   q.m_newIds = QSet<QString>(newIds.cbegin(), newIds.cend());
