@@ -11,7 +11,7 @@ SmallDialog {
     // Not `palette`: that is QQuickPopup's own property, which every
     // Control inside this dialog resolves its colours through.
     // The sheet offers eight.
-    readonly property var swatches: Theme.swatches.slice(0, 8)
+    readonly property var swatches: Theme.profileSwatches
 
     property string mode: "create"      // "create" | "rename" | "duplicate"
     property string profileId: ""       // for rename / duplicate
