@@ -151,3 +151,39 @@ TEST_F(Capture, AWeekdayNamedOnThatDayIsNextWeek) {
   EXPECT_EQ(parse(QStringLiteral("ревью сегодня"), chrono, friday).when.date(), QDate(2026, 5, 22)) << "today is today";
   EXPECT_EQ(parse(QStringLiteral("ревью в 15:00"), chrono, friday).when.date(), QDate(2026, 5, 22)) << "a bare time is today";
 }
+
+// ── The 0.8.4 acceptance run (IDIOT-TASKS-5…8) ──
+
+namespace {
+Parsed at(const QString& text, const QDateTime& now) {
+  static heap::chrono::ChronoParser en{QLocale(QLocale::English, QLocale::UnitedStates)};
+  return parse(text, en, now, {});
+}
+}  // namespace
+
+TEST(CaptureAcceptance, TheFifteenthIsADayOfTheMonthNotThursday) {
+  const Parsed r = at(QStringLiteral("pay rent on the 15th"), QDateTime(QDate(2026, 1, 31), QTime(12, 0)));
+  EXPECT_EQ(r.when.date(), QDate(2026, 2, 15));
+  EXPECT_EQ(r.title, QStringLiteral("pay rent"));
+  const Parsed late = at(QStringLiteral("pay rent on the 15th"), QDateTime(QDate(2026, 12, 31), QTime(12, 0)));
+  EXPECT_EQ(late.when.date(), QDate(2027, 1, 15));
+}
+
+TEST(CaptureAcceptance, ADayAndMonthAlreadyPastIsNextYears) {
+  const QDateTime nye(QDate(2026, 12, 31), QTime(12, 0));
+  EXPECT_EQ(at(QStringLiteral("25.10 release"), nye).when.date(), QDate(2027, 10, 25));
+  EXPECT_EQ(at(QStringLiteral("release 25 october"), nye).when.date(), QDate(2027, 10, 25));
+  EXPECT_EQ(at(QStringLiteral("release 25.10.2026"), nye).when.date(), QDate(2026, 10, 25)) << "a typed year is taken as said";
+}
+
+TEST(CaptureAcceptance, EndOfMonthOnTheLastDayIsNotAWeekLater) {
+  const Parsed r = at(QStringLiteral("end of month invoice"), QDateTime(QDate(2026, 1, 31), QTime(12, 0)));
+  EXPECT_LT(r.when.date(), QDate(2026, 2, 7));
+}
+
+TEST(CaptureAcceptance, ThisSaturdayTakesThisAndTwoHoursIsNoClock) {
+  const QDateTime sat(QDate(2026, 10, 10), QTime(12, 0));
+  EXPECT_EQ(at(QStringLiteral("clean this sat"), sat).title, QStringLiteral("clean"));
+  const Parsed est = at(QStringLiteral("estimate 2h fix"), sat);
+  EXPECT_FALSE(est.whenHasTime && est.when.time() == QTime(2, 0));
+}

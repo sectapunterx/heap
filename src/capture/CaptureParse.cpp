@@ -61,7 +61,10 @@ QDateTime weekdayNotToday(const heap::chrono::ParseResult& r, const QDateTime& n
   }
   static const QRegularExpression kWeekday(
       QStringLiteral(R"((?<!\p{L})(пн|вт|ср|чт|пт|сб|вс|понед\p{L}*|вторн\p{L}*|сред\p{L}*|четв\p{L}*|пятн\p{L}*|субб\p{L}*|воскр\p{L}*|)"
-                     R"(mon\p{L}*|tue\p{L}*|wed\p{L}*|thu\p{L}*|fri\p{L}*|sat\p{L}*|sun\p{L}*)(?!\p{L}))"),
+                     // Whole English words (IDIOT-TASKS-7): "mon\p{L}*" took "month",
+                     // and "end of month" on the 31st went a week ahead.
+                     R"(mon|monday|tue|tues|tuesday|wed|weds|wednesday|thu|thur|thurs|thursday|)"
+                     R"(fri|friday|sat|saturday|sun|sunday)(?!\p{L}))"),
       QRegularExpression::CaseInsensitiveOption | QRegularExpression::UseUnicodePropertiesOption);
   return kWeekday.match(r.consumed).hasMatch() ? r.start.addDays(7) : r.start;
 }
