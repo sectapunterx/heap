@@ -832,7 +832,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
        {"Smaller text and spacing, one step of Settings → Appearance → Scale.",
         "Мельче текст и отступы — на шаг шкалы «Внешний вид → Масштаб»."}},
       {"shortcut.zoom.reset.label", {"Reset zoom", "Сбросить масштаб"}},
-      {"shortcut.zoom.reset.desc", {"Back to 100 %.", "Вернуть 100 %."}},
+      {"shortcut.zoom.reset.desc", {"Back to the default size.", "Вернуть размер по умолчанию."}},
       {"shortcut.profile.next.label", {"Next profile", "Следующий профиль"}},
       {"shortcut.profile.next.desc", {"Cycle forward through profiles.", "Циклит по списку профилей вперёд."}},
       {"shortcut.profile.prev.label", {"Previous profile", "Предыдущий профиль"}},
@@ -14824,6 +14824,17 @@ double AppController::stepUiScale(int direction, const QVariantList& steps) {
   const auto [lo, hi] = std::minmax_element(values.cbegin(), values.cend());
   QJsonObject settings = QJsonDocument::fromJson(m_appSettingsJson.toUtf8()).object();
   QJsonObject appearance = settings.value(QStringLiteral("appearance")).toObject();
+  // Reset is the size the app starts at — what the system's text size asks
+  // for (110 % on many screens), not 100 %, which the keyboard could then
+  // never get back from (IDIOT-SHELL-14, PERSONA-22).
+  if(direction == 0) {
+    if(appearance.contains(QStringLiteral("uiScale"))) {
+      appearance.remove(QStringLiteral("uiScale"));
+      settings.insert(QStringLiteral("appearance"), appearance);
+      setAppSettingsJson(QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact)));
+    }
+    return systemUiScale(steps);
+  }
   // Read the way Theme.scale does: unset is what the system's text size
   // asks for, anything outside the steps' range is 1.
   const QJsonValue stored = appearance.value(QStringLiteral("uiScale"));

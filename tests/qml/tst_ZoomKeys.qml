@@ -99,7 +99,9 @@ TestCase {
         compare(Theme.scale, 1.25);
         keyClick(Qt.Key_0, Qt.ControlModifier);
         compare(Theme.scale, 1);
-        compare(storedScale(), 1);
+        // Reset is the default size (the system's), not a pick of 100 %
+        // (IDIOT-SHELL-14).
+        compare(storedScale(), undefined);
         keyClick(Qt.Key_Minus, Qt.ControlModifier);
         keyClick(Qt.Key_Minus, Qt.ControlModifier);
         compare(Theme.scale, 0.9, "the bottom end stays put");
