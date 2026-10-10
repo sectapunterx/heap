@@ -219,4 +219,70 @@ TestCase {
             verify(cmds.some(e => e.commandId === id), id + " missing from the palette");
         }
     }
+
+    function _probeTask(title) {
+        const d = AppController.newTaskDraft("todo");
+        d._isNew = true;
+        d.title = title;
+        verify(AppController.saveTask(d));
+        return d.id;
+    }
+
+    // IDIOT-SHELL-8: Ctrl+K then an impatient Enter marked the card under the
+    // cursor Done — the selection starts below the task's actions.
+    function test_empty_line_does_not_start_on_a_task_action() {
+        const id = _probeTask("palprobe context card");
+        const cp = make('import TodoCpp; CommandPalette { }');
+        cp.contextProvider = function () { return [id]; };
+        cp.open();
+        tryCompare(cp, "opened", true);
+        verify(cp._matches.length > 0 && cp._matches[0].kind === "action", "no task actions on the empty line");
+        const sel = cp._matches[cp._selectedIdx];
+        verify(!sel || sel.kind !== "action", "the empty line starts on " + (sel && sel.label));
+        cp.close();
+        AppController.deleteTask(id);
+        AppController.clearPendingUndo();
+    }
+
+    // PERSONA-24: a command whose name starts with the words beats a task
+    // that only mentions them. PERSONA-19: a setting's description is not
+    // its key (it pushed the title out).
+    function test_command_named_by_the_words_comes_first() {
+        const cp = make('import TodoCpp; CommandPalette { }');
+        cp._refresh();
+        const cmd = cp._entries.filter(e => e.kind === "command" && e.commandId === "theme.toggle")[0];
+        verify(!!cmd);
+        const word = String(cmd.label).split(/\s+/)[0];
+        const id = _probeTask(word + " palprobe something");
+        cp.openWith(word);
+        tryCompare(cp, "opened", true);
+        tryVerify(function () { return cp._matches.length > 0; });
+        compare(cp._matches[0].kind === "command" || cp._matches[0].kind === "setting", true,
+                "first row is " + cp._matches[0].kind + " " + cp._matches[0].label);
+        cp.openWith(">" + I18n.t("settings.section.tasks.title"));
+        tryVerify(function () { return cp._matches.some(m => m.kind === "setting"); });
+        const st = cp._matches.filter(m => m.kind === "setting")[0];
+        compare(st.keys, "", "a setting's description went to the key column");
+        cp.close();
+        AppController.deleteTask(id);
+        AppController.clearPendingUndo();
+    }
+
+    // SHELL-1: ":" and a date goes to that date.
+    function test_colon_and_a_date_goes_there() {
+        const cp = make('import TodoCpp; CommandPalette { }');
+        const was = AppController.selectedDate;
+        const view = AppController.currentView;
+        cp.openWith(">2031-03-12");
+        tryCompare(cp, "opened", true);
+        tryVerify(function () { return cp._matches.length > 0; });
+        compare(cp._matches[0].commandId, "goto-date");
+        cp.activateSelected();
+        tryVerify(function () {
+            const d = AppController.selectedDate;
+            return d.getFullYear() === 2031 && d.getMonth() === 2 && d.getDate() === 12;
+        }, 1000, "the date was not opened");
+        AppController.selectedDate = was;
+        AppController.currentView = view;
+    }
 }

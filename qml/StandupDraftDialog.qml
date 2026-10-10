@@ -96,7 +96,6 @@ Popup {
                 objectName: "standup-draft-copy"
                 text: I18n.t("standup.copy")
                 primary: true
-                solid: Style.fills
                 onClicked: root.copy()
             }
             PillButton {

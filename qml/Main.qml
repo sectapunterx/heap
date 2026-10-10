@@ -221,9 +221,9 @@ ApplicationWindow {
     readonly property int _sideRailMinWidth: Theme.compactWindowWidth
     property bool _sideRailWanted: _settingsObject().sideRailExpanded !== false
     property bool _sideRailOnNarrow: false
-    readonly property bool sideRailExpanded: win.width < _sideRailMinWidth ? _sideRailOnNarrow : _sideRailWanted
+    readonly property bool sideRailExpanded: Theme.compactAt(win.width) ? _sideRailOnNarrow : _sideRailWanted
     function toggleSideRail() {
-        if (win.width < _sideRailMinWidth) {
+        if (Theme.compactAt(win.width)) {
             _sideRailOnNarrow = !_sideRailOnNarrow;
             return;
         }
@@ -573,6 +573,11 @@ ApplicationWindow {
     // focus still sits where Qt dropped it.
     property Item _focusHome: null
     property bool _focusWasInPopup: false
+    // A popup that closed on Return leaves the rest of that key press — a
+    // hurried second Enter — to the view, where board.open opened the card
+    // under the cursor with the caret in its title (IDIOT-SHELL-1). Return
+    // stands down for a moment after focus leaves any popup.
+    property real _returnGuardUntil: 0
     onActiveFocusItemChanged: {
         const it = win.activeFocusItem;
         if (!it) return;
@@ -590,6 +595,7 @@ ApplicationWindow {
         }
         if (win._focusWasInPopup) {
             win._focusWasInPopup = false;
+            win._returnGuardUntil = Date.now() + 400;
             // Back on an empty header search is not "home" either (PERO-1):
             // returnFocusHome() sends the keyboard on to the view.
             if (it !== win._focusHome || win._isIdleSearch(it)) {
@@ -984,9 +990,14 @@ ApplicationWindow {
             // Undo takes back the action this toast names — not whatever was
             // done last, which after a silent reorder is something else.
             const serial = AppController.undoSerialForToast();
-            toast.showWithAction(msg, I18n.t("undo.action"), secs, function () {
+            toast.showUndo(msg, I18n.t("undo.action"), secs, function () {
                 AppController.undoEntry(serial)
             }, "success", AppController.shortcutText("undo"));
+        }
+        // No history left behind an Undo toast: it stops offering the button
+        // (IDIOT-SHELL-4).
+        function onPendingUndoChanged() {
+            if (!AppController.hasPendingUndo) toast.dropUndo();
         }
         // "Done" with no column of that stage: a card with the two ways out
         // (APP-268, R3-137).
@@ -2012,6 +2023,7 @@ ApplicationWindow {
         if (id === "region.next" || id === "region.prev") return !win._modalOpen;
         const routed = KeyRules.isRouterSequence(AppController.shortcutFor(id));
         const base = KeyRules.baseId(id);
+        if (base === "board.open" && Date.now() < win._returnGuardUntil) return false;
         if (routed && win._panelOpen && win._docTaskKeys.indexOf(base) >= 0)
             return taskDoc.opened && win._focusInPanel && !win._typing && !win._focusInPopup && !win._overlayOpen
                 && !hotkeys.isCapturing;
@@ -2032,7 +2044,9 @@ ApplicationWindow {
         if (base === "task.schedule" && win._keyTaskIds().length === 0)
             return ["day", "week", "month"].indexOf(v) >= 0 && !!b && b.cursorVisible === true;
         if (base.indexOf("notes.") === 0) return v === "notes";
-        if (base.indexOf("savedView.") === 0) return Number(base.slice(10)) <= AppController.savedViews.length;
+        if (base.indexOf("savedView.") === 0)
+            return Number(base.slice(10)) <= AppController.savedViews.length && !win._typing;  // IDIOT-SHELL-7
+        if (base === "profile.next" || base === "profile.prev") return !win._typing;
         if (base.indexOf("task.") === 0 && base !== "task.new")
             return win._keyTaskIds().length > 0;
         switch (base) {
@@ -2308,7 +2322,7 @@ ApplicationWindow {
         case "cal.taskLaterWeek": win._moveViewTask(7, 0); return;
         case "cal.taskTimeEarlier": win._moveViewTask(0, -1); return;
         case "cal.taskTimeLater": win._moveViewTask(0, 1); return;
-        case "undo": AppController.undo(); return;
+        case "undo": if (taskDoc.opened && win._focusInPanel) taskDoc.undo(); else AppController.undo(); return;
         case "redo": AppController.redo(); return;
         }
         win.runCommand(base);
@@ -2450,17 +2464,27 @@ ApplicationWindow {
         enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: profileEditor.showCreate()
     }
+    // Ctrl+[ is Esc to a Vim hand, and the keymap is Vim-based: while a field
+    // takes typed text it leaves the field, and neither profile key switches
+    // the workspace under the caret (IDIOT-SHELL-7).
     Shortcut {
         sequence: _kbd("profile.next")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && win._globalKeysOn
+        enabled: sequence.length > 0 && win._globalKeysOn && !win._typing
         onActivated: win._cycleProfile(1)
     }
     Shortcut {
         sequence: _kbd("profile.prev")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && win._globalKeysOn
+        enabled: sequence.length > 0 && win._globalKeysOn && !win._typing
         onActivated: win._cycleProfile(-1)
+    }
+    Shortcut {
+        objectName: "vim-escape"
+        sequence: "Ctrl+["
+        context: Qt.ApplicationShortcut
+        enabled: win._typing && !win._focusInPopup && !win._modalOpen && !hotkeys.isCapturing
+        onActivated: win.focusActiveView()
     }
     Shortcut {
         sequence: _kbd("profile.exportMd")
@@ -2605,7 +2629,8 @@ ApplicationWindow {
         // field Ctrl+Z belongs to the field, which takes it first.
         enabled: sequence.length > 0 && win._globalKeysOn && AppController.hasPendingUndo && !win._overlayOpen
             && !(boardLoader.item && boardLoader.item.dialogOpen === true)
-        onActivated: AppController.undo()
+        // In the open document it is the document's undo (IDIOT-DOC-17).
+        onActivated: if (taskDoc.opened && win._focusInPanel) taskDoc.undo(); else AppController.undo()
     }
     Shortcut {
         sequence: _kbd("redo")
@@ -3295,7 +3320,9 @@ ApplicationWindow {
     }
     KeyCheatSheet {
         id: cheatSheet
-        onEditRequested: Qt.callLater(function () { rail.openHotkeys(rail.hotkeysAnchor); })
+        // "Change a key — Settings > Keys" lands there, as it says
+        // (IDIOT-SHELL-15); it opened the sidebar popover.
+        onEditRequested: Qt.callLater(function () { win.runCommand("settings:shortcuts"); })
     }
 
     // "g …": the first key of a sequence waits for its second (keymap rule 3).
@@ -3331,6 +3358,10 @@ ApplicationWindow {
         onFinished: {
             if (Theme.reducedMotion) splash.visible = false;
             else splashFade.start();
+            // The view takes the keyboard at launch — on the first run that
+            // is the one input on screen, which looked ready and was not
+            // (IDIOT-SHELL-9). A key or a dialog that got there first keeps it.
+            if (!win._focusInPopup && !win._typing) win.focusActiveView();
         }
         onReportRequested: reportIssue.showNow()
         // The first frame is on screen: the scene is ready.

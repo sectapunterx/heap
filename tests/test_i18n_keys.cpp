@@ -83,6 +83,31 @@ TEST(I18n, Dict_EnglishAndRussian_HaveTheSameKeys) {
   EXPECT_TRUE(onlyRu.isEmpty()) << "missing in en: " << onlyRu.join(QStringLiteral(", ")).toStdString();
 }
 
+// A key written twice in one table: the later one wins in a JS object
+// literal, so saving a task with no title said "Give the event a title."
+// (SHELL-5).
+TEST(I18n, Dict_NoKeyIsWrittenTwice) {
+  const QString src = readFile(QStringLiteral(HEAP_QML_DIR "/I18n.qml"));
+  const qsizetype en = src.indexOf(QStringLiteral("\n        en: {"));
+  const qsizetype ru = src.indexOf(QStringLiteral("\n        ru: {"));
+  ASSERT_GE(en, 0);
+  ASSERT_GT(ru, en);
+  static const QRegularExpression rx(QStringLiteral(R"re(^\s*"([^"]+)"\s*:)re"), QRegularExpression::MultilineOption);
+  for(const QString& block : {src.mid(en, ru - en), src.mid(ru)}) {
+    QSet<QString> seen;
+    QStringList twice;
+    auto it = rx.globalMatch(block);
+    while(it.hasNext()) {
+      const QString key = it.next().captured(1);
+      if(seen.contains(key)) {
+        twice.append(key);
+      }
+      seen.insert(key);
+    }
+    EXPECT_TRUE(twice.isEmpty()) << "written twice: " << twice.join(QStringLiteral(", ")).toStdString();
+  }
+}
+
 // The C++ side has its own EN/RU table (AppController::tr_). A key missing
 // there reaches the toast as the raw key, in both languages.
 TEST(I18n, Tr_EveryKeyUsedInAppController_IsInTheTable) {

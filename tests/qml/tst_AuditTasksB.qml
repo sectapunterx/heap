@@ -109,6 +109,75 @@ TestCase {
         compare(f.title, tc.probe + " fresh ticket");
     }
 
+    // ── IDIOT-SHELL-3: Esc keeps what was typed for the next open ──
+    function test_quick_capture_keeps_its_draft_on_escape() {
+        const qc = make('import TodoCpp; QuickCapturePopup { }');
+        qc.open();
+        tryVerify(() => qc.opened);
+        const input = findChild(qc, "qc-input");
+        input.forceActiveFocus();
+        input.text = tc.probe + " call the bank";
+        keyClick(Qt.Key_Escape);
+        tryVerify(() => !qc.opened);
+        qc.open();
+        tryVerify(() => qc.opened);
+        compare(input.text, tc.probe + " call the bank");
+        // A created task leaves no draft behind.
+        input.cursorPosition = input.text.length;
+        keyClick(Qt.Key_Return);
+        tryVerify(() => !qc.opened);
+        const made = probeTasks()[tc.probe + " call the bank"];
+        verify(!!made, "Enter made no task");
+        tc.seeded.push(made.id);
+        qc.open();
+        tryVerify(() => qc.opened);
+        compare(input.text, "");
+        qc.close();
+    }
+
+    // ── IDIOT-SHELL-6: the "N lines" question answers to Enter / Shift+Enter ──
+    function test_pasted_lines_are_answered_from_the_keyboard() {
+        const qc = make('import TodoCpp; QuickCapturePopup { }');
+        qc.open();
+        tryVerify(() => qc.opened);
+        const input = findChild(qc, "qc-input");
+        input.forceActiveFocus();
+        input.text = tc.probe + " one
+" + tc.probe + " two
+" + tc.probe + " three";
+        input.cursorPosition = input.text.length;
+        keyClick(Qt.Key_Return);
+        verify(qc._askLines, "the question did not come up");
+        keyClick(Qt.Key_Tab);
+        verify(qc.opened, "Tab made one task behind the question");
+        input.forceActiveFocus();
+        keyClick(Qt.Key_Return);
+        tryVerify(() => !qc.opened);
+        const got = probeTasks();
+        for (const w of ["one", "two", "three"]) {
+            verify(!!got[tc.probe + " " + w], "no task for line " + w);
+            tc.seeded.push(got[tc.probe + " " + w].id);
+        }
+    }
+
+    // ── IDIOT-SHELL-16: a wall of text is not a title; spaces get a word ──
+    function test_quick_capture_caps_the_title_and_hints_on_blank() {
+        const qc = make('import TodoCpp; QuickCapturePopup { }');
+        qc.open();
+        tryVerify(() => qc.opened);
+        const input = findChild(qc, "qc-input");
+        input.forceActiveFocus();
+        input.text = "   ";
+        keyClick(Qt.Key_Return);
+        verify(qc.opened);
+        verify(findChild(qc, "qc-hint").text.length > 0, "Enter on spaces said nothing");
+        qc.close();
+        tryVerify(() => !qc.opened);
+        const t = capture(tc.probe + " " + "x".repeat(400));
+        compare(t.title.length, qc.maxTitleLength);
+        verify(t.desc.length > 100, "the rest did not go to the description");
+    }
+
     // ── TASKS-1: a keyboard move under a sort leaves the manual order alone ──
     function test_shift_k_under_a_sort_keeps_the_manual_order() {
         const k1 = addTask("todo", { title: "kb one", priority: "P1" });

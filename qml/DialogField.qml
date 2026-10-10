@@ -41,12 +41,9 @@ ColumnLayout {
         font.pixelSize: root.mono ? Theme.fsSm : Theme.fsMd
         selectByMouse: true
         Accessible.name: root.label
-        background: Rectangle {
-            radius: Theme.radiusMd
-            color: "transparent"
-            border.width: 1
-            border.color: input.activeFocus ? Theme.borderStrong : Theme.fieldBorder
-        }
+        // The focus ring with the keyboard, like every FieldFrame field: the
+        // focused outline was the same 1 px as the rest (EYES-13).
+        background: FieldFrame { color: "transparent" }
         onAccepted: root.accepted()
     }
 }

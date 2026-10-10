@@ -506,6 +506,7 @@ qt_add_qml_module(heap_core
         qml/Search.js
         qml/SettingsIndex.js
         qml/PopupStack.js
+        qml/ArmGuard.js
         qml/KeyRules.js
     SOURCES
         src/AppController.h

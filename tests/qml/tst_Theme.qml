@@ -988,4 +988,25 @@ TestCase {
             AppController.appSettingsJson = saved;
         }
     }
+
+    // EYES-12: "small" is measured unscaled — a 1312 px window at 150 % is
+    // small, at 100 % it is not.
+    function test_compact_follows_the_scale() {
+        const saved = AppController.appSettingsJson;
+        function withScale(sc) {
+            const o = JSON.parse(saved || "{}");
+            o.appearance = Object.assign({}, o.appearance || {}, { uiScale: sc });
+            AppController.appSettingsJson = JSON.stringify(o);
+        }
+        try {
+            withScale(1);
+            verify(!Theme.compactAt(1312));
+            verify(Theme.compactAt(1000));
+            verify(!Theme.compactAt(0), "an unknown width is not small");
+            withScale(1.5);
+            verify(Theme.compactAt(1312));
+        } finally {
+            AppController.appSettingsJson = saved;
+        }
+    }
 }

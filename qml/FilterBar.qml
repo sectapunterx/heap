@@ -370,9 +370,9 @@ Rectangle {
             Layout.minimumWidth: 0
             Layout.maximumWidth: implicitWidth
             ToolTip.visible: countHover.hovered
-            ToolTip.text: I18n.t("filter.counts")
-                    .arg(root.totalCount).arg(root.activeCount)
-                    .arg(root.blockedCount).arg(root.reviewCount)
+            // The count with its plural ("1 задача", not "1 задач", SHELL-4).
+            ToolTip.text: I18n.tasks(root.totalCount) + " · " + I18n.t("filter.counts.rest")
+                    .arg(root.activeCount).arg(root.blockedCount).arg(root.reviewCount)
             ToolTip.delay: 500
             HoverHandler { id: countHover }
         }

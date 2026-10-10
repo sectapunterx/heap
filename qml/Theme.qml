@@ -337,7 +337,8 @@ QtObject {
     readonly property real scale: {
         const raw = _appearance.uiScale;
         const v = Number(raw);
-        if (raw === undefined || raw === null) return Math.max(defaultScale, systemScale());
+        // One rule with the zoom keys (SHELL-3): AppController.defaultUiScale.
+        if (raw === undefined || raw === null) return AppController.defaultUiScale(scaleSteps);
         return isFinite(v) && v >= 0.9 && v <= 1.5 ? v : 1;
     }
     function px(n) { return Math.round(n * scale); }
@@ -374,6 +375,10 @@ QtObject {
     // Today's side column goes under the day. The sheet's own note puts it at
     // "~1100 px"; at 1360 a 1280-1360 window lost the sidebar for no reason.
     readonly property int compactWindowWidth: 1100
+    // Whether a window `w` logical px wide is small. Measured in unscaled px:
+    // at 150 % a 1312 px window holds what 875 px do at 100 %, and kept the
+    // full sidebar while Today's rows elided to two words (EYES-12).
+    function compactAt(w) { return w > 0 && w / scale < compactWindowWidth; }
     readonly property int chipH:       px(28)
     readonly property int chipHSmall:  px(24)
     readonly property int chipMaxW:    px(240)

@@ -94,4 +94,29 @@ TestCase {
         // A run of keys reads as one: "1…4".
         compare(s.keysOf({ range: true, ids: ["task.priority0", "task.priority1", "task.priority2", "task.priority3"] }), ["1…4"]);
     }
+
+    // PERSONA-12: "статус" finds the column move; a search that finds
+    // nothing says so. PERSONA-8: Ctrl+Enter ticks a checklist item, on the
+    // sheet. IDIOT-SHELL-15: the key that opens the sheet closes it.
+    function test_search_words_nothing_found_and_closing_key() {
+        const s = make();
+        verify(s.matches({ label: "keys.row.moveColumn", words: "keys.words.moveColumn", ids: ["board.moveLeft"] },
+                         I18n.t("keys.words.moveColumn").split(" ")[0]));
+        compare(s.keysOf({ label: "keys.row.toggleItem", ids: [], fixed: "Ctrl+Return" }), [AppController.keyText("Ctrl+Return")]);
+        s.open();
+        tryCompare(s, "opened", true);
+        s.query = "zzqqxx";
+        wait(50);
+        verify(s.nothingFound);
+        verify(findChild(s.contentItem, "key-sheet-nothing").visible);
+        s.query = "";
+        verify(!s.nothingFound);
+        const seq = AppController.shortcutFor("hotkeys.open");
+        if (seq === "Ctrl+/") {
+            keyClick(Qt.Key_Slash, Qt.ControlModifier);
+            tryCompare(s, "opened", false);
+        } else {
+            s.close();
+        }
+    }
 }

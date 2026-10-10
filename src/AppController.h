@@ -1683,6 +1683,11 @@ class AppController : public QObject {
   Q_INVOKABLE void deleteProfile(const QString& id);
   Q_INVOKABLE QString duplicateProfile(const QString& id, const QString& newName);
   Q_INVOKABLE QVariantMap profileById(const QString& id) const;
+  // Whether a profile other than `exceptId` is already called `name`
+  // (ignoring case): the editor says so inline (IDIOT-SHELL-12).
+  Q_INVOKABLE bool profileNameTaken(const QString& name, const QString& exceptId) const;
+  // The longest profile name kept (IDIOT-SHELL-16).
+  static constexpr int kMaxProfileName = 64;
 
   // Rewrite every task id that starts with `oldPrefix-<digits>` to use
   // `newPrefix-<digits>`. CalEvent.taskId backlinks are kept in sync so
@@ -1829,6 +1834,11 @@ class AppController : public QObject {
   // How much the system already scales the primary screen (1 at 100 %,
   // 1.25 at 125 %): the default interface scale is not stacked on top.
   Q_INVOKABLE double systemPixelRatio() const;
+  // The scale the app is drawn at while the user has not picked one — what
+  // Theme.scale shows and what the zoom keys step from (SHELL-3): 110 % on a
+  // screen that does not scale itself, 100 % where it does, or the system's
+  // text size when that is larger.
+  Q_INVOKABLE double defaultUiScale(const QVariantList& steps) const;
   // Paints a window's own title bar dark or light to match the theme; the
   // OS otherwise follows its own app mode (a white bar over a dark heap).
   Q_INVOKABLE void setWindowFrameDark(QObject* window, bool dark) const;
@@ -1848,6 +1858,9 @@ class AppController : public QObject {
   // Undo/redo the last recorded operation. undoLastDeletion() is the old name,
   // kept because QML and several tests call it.
   Q_INVOKABLE void undo();
+  // Whether the step Ctrl+Z would take back next is the one that made task
+  // \p id — undoing it deletes the task (IDIOT-DOC-17).
+  Q_INVOKABLE bool undoWouldRemoveTask(const QString& id) const;
   Q_INVOKABLE void redo();
 
   Q_INVOKABLE void undoLastDeletion() {
@@ -2532,7 +2545,6 @@ class AppController : public QObject {
   int statusIndexOf(const QString& id) const;
   // Whether another column (not `exceptId`) already carries `name`, ignoring case.
   bool statusNameTaken(const QString& name, const QString& exceptId) const;
-  bool profileNameTaken(const QString& name, const QString& exceptId) const;
   // `base`, or "base (N)" with the first N no profile uses.
   QString uniqueProfileName(const QString& base) const;
   // moveTask(), with the card's rank in its new column set in the same model
@@ -2615,6 +2627,9 @@ class AppController : public QObject {
   void applyUndoEntry(const heap::undo::Entry& entry, bool backward);
   // Hands the open note's unsaved keystrokes to it before an undo or redo.
   void flushNotesForUndo();
+  // Drops the undo history of the workspace being left; a profile removal
+  // stays (IDIOT-SHELL-2).
+  void clearWorkspaceUndo();
 
   // Selection state
   QSet<QString> m_selectedTaskIds;

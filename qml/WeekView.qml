@@ -1343,9 +1343,16 @@ Item {
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: AppController.selectedDate = headCol.modelData.date
-                                ToolTip.visible: (headMA.containsMouse || headMA.cursorHere) && headMA.loadText.length > 0
-                                ToolTip.delay: 400
-                                ToolTip.text: headMA.loadText
+                                // Below the day header, inside the grid: above
+                                // it, it covered the День/Неделя/Месяц switch
+                                // (EYES-7).
+                                ToolTip {
+                                    objectName: "week-load-tip"
+                                    visible: (headMA.containsMouse || headMA.cursorHere) && headMA.loadText.length > 0
+                                    delay: 400
+                                    text: headMA.loadText
+                                    y: headMA.height + Theme.spXs
+                                }
                             }
                             Row {
                                 id: headLine

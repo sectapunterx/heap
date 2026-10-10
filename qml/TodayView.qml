@@ -59,7 +59,7 @@ FocusScope {
 
     // A small window (X-Oth-Small, DG-008): the side goes under the day, its
     // blocks side by side in three columns, the rows one line each.
-    readonly property bool stacked: Window.width > 0 && Window.width < Theme.compactWindowWidth
+    readonly property bool stacked: Theme.compactAt(Window.width)
     // The quiet drawing of the day and of the side (DG-012, DG-013).
     readonly property bool plain: Style.plainRows || root.stacked
     readonly property bool cards: Style.sideCards && !root.stacked
@@ -323,7 +323,9 @@ FocusScope {
                 // H2-Today-Calm): the date alone heads the day.
                 RowLayout {
                     visible: !Style.plainRows && (!root.stacked || !root.isToday || root.dayData.workday === false)
-                    spacing: Theme.spMd
+                    // One space's width before the dot, as after it: spMd
+                    // plus the "· " read as a double gap (EYES-9).
+                    spacing: Theme.spXs
                     Text {
                         objectName: "today-label"
                         text: root.isToday ? I18n.t("sidebar.today")

@@ -278,6 +278,10 @@ TestCase {
         btn.activated();
         verify(AppController.attachmentUrl(stored[0].id).toString().length > 0, "the first press only asks");
         verify(String(btn.text).indexOf(I18n.t("att.cleanup.button")) < 0, "the button now says what it will delete");
+        // A double-click is not a second decision (IDIOT-SHELL-5).
+        btn.activated();
+        verify(AppController.attachmentUrl(stored[0].id).toString().length > 0, "a double-click deleted the files");
+        wait(650);
         btn.activated();
         compare(String(AppController.attachmentUrl(stored[0].id)), "", "the second press deletes");
         compare(AppController.unusedAttachments().count, 0);

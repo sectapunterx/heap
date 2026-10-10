@@ -408,6 +408,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"event.seriesDeleted", {"Deleted series: %1", "Удалена серия: %1"}},
       {"event.followingDeleted", {"Deleted this and following: %1", "Удалены это и следующие: %1"}},
       {"undo.redone", {"Redone", "Повторено"}},
+      {"undo.gone", {"Can't undo that any more", "Это уже не отменить"}},
       {"shortcut.cal.today.label", {"Calendar: today", "Календарь: сегодня"}},
       {"shortcut.cal.today.desc", {"Jump the calendar back to today.", "Вернуть календарь к сегодняшнему дню."}},
       {"shortcut.cal.prev.label", {"Calendar: previous", "Календарь: назад"}},
@@ -831,7 +832,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
        {"Smaller text and spacing, one step of Settings → Appearance → Scale.",
         "Мельче текст и отступы — на шаг шкалы «Внешний вид → Масштаб»."}},
       {"shortcut.zoom.reset.label", {"Reset zoom", "Сбросить масштаб"}},
-      {"shortcut.zoom.reset.desc", {"Back to 100 %.", "Вернуть 100 %."}},
+      {"shortcut.zoom.reset.desc", {"Back to the default size.", "Вернуть размер по умолчанию."}},
       {"shortcut.profile.next.label", {"Next profile", "Следующий профиль"}},
       {"shortcut.profile.next.desc", {"Cycle forward through profiles.", "Циклит по списку профилей вперёд."}},
       {"shortcut.profile.prev.label", {"Previous profile", "Предыдущий профиль"}},
@@ -9084,6 +9085,9 @@ bool AppController::undoEntry(double serialValue) {
   const auto serial = static_cast<quint64>(serialValue);
   const heap::undo::Entry* top = m_undo.peekUndo();
   if(top == nullptr) {
+    // The stack went with a profile switch: say so rather than nothing
+    // (IDIOT-SHELL-4).
+    emit toast(tr_("undo.gone"), QStringLiteral("warning"));
     return false;
   }
   // The common case — nothing happened since the toast — is a plain undo.
@@ -9093,11 +9097,15 @@ bool AppController::undoEntry(double serialValue) {
   }
   const heap::undo::Entry* found = m_undo.findUndoable(serial);
   if(found == nullptr) {
-    return false;  // already undone (Ctrl+Z got there first) or evicted
+    // Already undone (Ctrl+Z got there first) or evicted.
+    emit toast(tr_("undo.gone"), QStringLiteral("warning"));
+    return false;
   }
   const heap::undo::Entry copy = *found;
   if(copy.profileRemoved) {
-    return false;  // a profile swap only makes sense off the top of the stack
+    // A profile swap only makes sense off the top of the stack.
+    emit toast(tr_("undo.changedSince"), QStringLiteral("warning"));
+    return false;
   }
   // Reversing one operation out of order is only safe while nothing it
   // touched has changed again since; otherwise the later edit would be
@@ -9144,6 +9152,12 @@ void AppController::endUndoGroup() {
   }
 }
 
+void AppController::clearWorkspaceUndo() {
+  if(m_undo.clearKeepingProfileRemoval()) {
+    emit pendingUndoChanged();
+  }
+}
+
 void AppController::clearPendingUndo() {
   if(!m_undo.canUndo() && !m_undo.canRedo()) {
     return;
@@ -9161,6 +9175,16 @@ void AppController::flushNotesForUndo() {
   emit flushEditorsRequested();
   adoptOrphanNotesState();
   syncActiveNoteBody();
+}
+
+bool AppController::undoWouldRemoveTask(const QString& id) const {
+  const heap::undo::Entry* top = m_undo.peekUndo();
+  if(top == nullptr || id.isEmpty()) {
+    return false;
+  }
+  return std::any_of(top->tasks.cbegin(), top->tasks.cend(), [&id](const heap::undo::Edit<::Task>& e) {
+    return e.id == id && !e.existedBefore && e.existsAfter;
+  });
 }
 
 void AppController::undo() {
@@ -11993,7 +12017,9 @@ int AppController::profileIndexOf(const QString& id) const {
 
 QString AppController::makeProfileId(const QString& name) const {
   QString slug;
-  for(const QChar c : name.toLower()) {
+  // The id is a key everywhere (state.json, the switcher, the CLI): a pasted
+  // 10 000-character name made a 10 000-character id (IDIOT-SHELL-16).
+  for(const QChar c : name.toLower().left(kMaxProfileName)) {
     slug.append(c.isLetterOrNumber() ? c : QChar('-'));
   }
   while(slug.contains("--")) {
@@ -13172,8 +13198,9 @@ void AppController::setActiveProfileId(const QString& id) {
   snapshotActiveProfile();
   // Undo is scoped to the workspace it was recorded in (PLAT-15/TASKS-1): the
   // entries are diffs of the active models, and replaying one onto another
-  // profile's models deleted or duplicated that profile's tasks.
-  clearPendingUndo();
+  // profile's models deleted or duplicated that profile's tasks. A deleted
+  // profile stays restorable (IDIOT-SHELL-2).
+  clearWorkspaceUndo();
   m_activeProfileId = id;
   applyProfileToModels(m_profiles[next]);
   emit activeProfileChanged();
@@ -13203,7 +13230,8 @@ QString AppController::uniqueProfileName(const QString& base) const {
   return candidate;
 }
 
-QString AppController::createProfile(const QString& name, const QString& color) {
+QString AppController::createProfile(const QString& rawName, const QString& color) {
+  const QString name = rawName.trimmed().left(kMaxProfileName);
   if(name.trimmed().isEmpty()) {
     return QString();
   }
@@ -13213,7 +13241,7 @@ QString AppController::createProfile(const QString& name, const QString& color) 
   }
   // Snapshot current active before creating so we don't lose unsaved edits.
   snapshotActiveProfile();
-  clearPendingUndo();  // undo is scoped to the active workspace
+  clearWorkspaceUndo();  // undo is scoped to the active workspace
   Profile p = makeStartingProfile(name.trimmed(), color);
   p.id = makeProfileId(name.trimmed());
   m_profiles.push_back(p);
@@ -13226,7 +13254,8 @@ QString AppController::createProfile(const QString& name, const QString& color) 
   return p.id;
 }
 
-void AppController::renameProfile(const QString& id, const QString& newName) {
+void AppController::renameProfile(const QString& id, const QString& rawName) {
+  const QString newName = rawName.trimmed().left(kMaxProfileName);
   const int i = profileIndexOf(id);
   if(i < 0 || newName.trimmed().isEmpty()) {
     return;
@@ -13270,6 +13299,9 @@ void AppController::deleteProfile(const QString& id) {
     return;  // never let the app run out of profiles
   }
   snapshotActiveProfile();
+  // The dialog promises a snapshot to restore from (IDIOT-SHELL-2): the
+  // in-memory undo is only good until the app closes.
+  takeSnapshotNow(QStringLiteral("profile"));
   // The history of the workspace being deleted must not be replayed onto the
   // one that takes its place (PLAT-15); only the deletion itself stays undoable.
   if(id == m_activeProfileId) {
@@ -13455,7 +13487,7 @@ QString AppController::duplicateProfile(const QString& id, const QString& newNam
     snapshotActiveProfile();
   }
   Profile copy = m_profiles[i];
-  copy.name = uniqueProfileName(newName.trimmed().isEmpty() ? (m_profiles[i].name + " copy") : newName.trimmed());
+  copy.name = uniqueProfileName(newName.trimmed().isEmpty() ? (m_profiles[i].name + " copy") : newName.trimmed().left(kMaxProfileName));
   copy.id = makeProfileId(copy.name);
   copy.createdAt = QDateTime::currentDateTime();
   // Events live in the global pool, attributed to a profile by id: the copy
@@ -14815,6 +14847,11 @@ double AppController::systemUiScale(const QVariantList& steps) const {
   return heap::ui::uiScaleForTextScale(m_systemTextScale, uiScaleSteps(steps));
 }
 
+double AppController::defaultUiScale(const QVariantList& steps) const {
+  const double byScreen = systemPixelRatio() > 1.05 ? 1.0 : 1.1;
+  return std::max(byScreen, systemUiScale(steps));
+}
+
 double AppController::stepUiScale(int direction, const QVariantList& steps) {
   const QList<double> values = uiScaleSteps(steps);
   if(values.isEmpty()) {
@@ -14823,10 +14860,22 @@ double AppController::stepUiScale(int direction, const QVariantList& steps) {
   const auto [lo, hi] = std::minmax_element(values.cbegin(), values.cend());
   QJsonObject settings = QJsonDocument::fromJson(m_appSettingsJson.toUtf8()).object();
   QJsonObject appearance = settings.value(QStringLiteral("appearance")).toObject();
-  // Read the way Theme.scale does: unset is what the system's text size
-  // asks for, anything outside the steps' range is 1.
+  // Reset is the size the app starts at — what the system's text size asks
+  // for (110 % on many screens), not 100 %, which the keyboard could then
+  // never get back from (IDIOT-SHELL-14, PERSONA-22).
+  if(direction == 0) {
+    if(appearance.contains(QStringLiteral("uiScale"))) {
+      appearance.remove(QStringLiteral("uiScale"));
+      settings.insert(QStringLiteral("appearance"), appearance);
+      setAppSettingsJson(QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact)));
+    }
+    return defaultUiScale(steps);
+  }
+  // Read the way Theme.scale does: unset is the default on screen (the first
+  // Ctrl+= stored the 110 % already shown, SHELL-3), anything outside the
+  // steps' range is 1.
   const QJsonValue stored = appearance.value(QStringLiteral("uiScale"));
-  double current = stored.isDouble() ? stored.toDouble() : systemUiScale(steps);
+  double current = stored.isDouble() ? stored.toDouble() : defaultUiScale(steps);
   if(!std::isfinite(current) || current < *lo - 1e-6 || current > *hi + 1e-6) {
     current = 1.0;
   }

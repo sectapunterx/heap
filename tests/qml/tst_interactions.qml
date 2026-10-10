@@ -238,7 +238,8 @@ TestCase {
         findChild(qc, "qc-input").text = "   ";
         qc._submit();
         compare(AppController.tasks.rowCount(), before);
-        compare(qc._hint, "");
+        // Nothing is made, and it says why (IDIOT-SHELL-16).
+        compare(qc._hint, I18n.t("quick.hint.empty"));
     }
 
     // The same text makes the same task from every input (APP-266): the

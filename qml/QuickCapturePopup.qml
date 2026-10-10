@@ -61,6 +61,13 @@ Popup {
     property string _lastAdded: ""
     // Enter with nothing but a date ("tomorrow") used to do nothing at all.
     property string _hint: ""
+    // What was typed when the input closed without making anything (Esc, a
+    // click beside it): back on the next open, as in the note capture
+    // (IDIOT-SHELL-3).
+    property string _draft: ""
+    // A title longer than this keeps its first part; the rest becomes the
+    // description (IDIOT-SHELL-16).
+    readonly property int maxTitleLength: 200
 
     // Single source of truth lives in heap::text::extractMeta (C++) and is
     // unit-tested. QML just forwards.
@@ -289,7 +296,11 @@ Popup {
             root._askLines = true;
             return;
         }
-        if (inputField.text.trim().length === 0) return;
+        if (inputField.text.trim().length === 0) {
+            // Spaces and Enter did nothing without a word (IDIOT-SHELL-16).
+            root._hint = I18n.t("quick.hint.empty");
+            return;
+        }
         if (_title.length === 0) {
             // Say why nothing happened: a date alone is not a task.
             root._hint = (_preview && _preview.ok) ? I18n.t("quick.hint.onlyDate") : "";
@@ -341,7 +352,7 @@ Popup {
         // Title, "// description", priority, #labels, the parsed date (clock
         // time included, HEAP-115) and recurrence (HEAP-77): built in C++, the
         // same draft `heap add` saves from the command line (APP-173).
-        const draft = AppController.quickTaskDraft(inputField.text, new Date(), root._rejected);
+        const draft = root._capTitle(AppController.quickTaskDraft(inputField.text, new Date(), root._rejected));
         draft.status = root._status;
         if (root.linkBranch && root._branch.length > 0) draft.branch = root._branch;
         // A meeting is a task and its calendar event: one undo step for both.
@@ -398,6 +409,19 @@ Popup {
         }
     }
 
+    // A pasted wall of text is not a title: the first part stays, the rest
+    // goes in front of the description (IDIOT-SHELL-16).
+    function _capTitle(draft) {
+        const t = String(draft.title || "");
+        if (t.length <= root.maxTitleLength) return draft;
+        const rest = t.substring(root.maxTitleLength).trim();
+        draft.title = t.substring(0, root.maxTitleLength).trim();
+        draft.desc = rest + (draft.desc ? "
+
+" + draft.desc : "");
+        return draft;
+    }
+
     // ── several lines ──
     function _lineCount() {
         return inputField.text.split("\n").filter(l => l.trim().length > 0).length;
@@ -409,7 +433,7 @@ Popup {
         let last = "";
         try {
             for (const line of lines) {
-                const d = AppController.quickTaskDraft(line, new Date());
+                const d = root._capTitle(AppController.quickTaskDraft(line, new Date()));
                 if (String(d.title).length === 0) continue;
                 d.status = root._status;
                 AppController.saveTask(d);
@@ -462,7 +486,11 @@ Popup {
         root._openText = text || "";
         root.open();
     }
+    // Kept unless the close made something: _finish clears the field first.
+    onAboutToHide: root._draft = inputField.text.trim().length > 0 ? inputField.text : ""
     onOpened: {
+        const draft = root._draft;
+        root._draft = "";
         inputField.text = "";
         _preview = {ok: false};
         _parsed = ({});
@@ -481,6 +509,9 @@ Popup {
         at.dismiss();
         if (_openText.length > 0) {
             inputField.text = _openText;
+            inputField.cursorPosition = inputField.length;
+        } else if (draft.length > 0) {
+            inputField.text = draft;
             inputField.cursorPosition = inputField.length;
         }
         _openText = "";
@@ -675,6 +706,15 @@ Popup {
                         e.accepted = true;
                         const ctrl = (e.modifiers & Qt.ControlModifier) !== 0;
                         const shift = (e.modifiers & Qt.ShiftModifier) !== 0;
+                        // The "N lines" question answered from the keyboard:
+                        // Enter asked it again, and only the mouse reached
+                        // the two answers (IDIOT-SHELL-6).
+                        if (root._askLines) {
+                            at.dismiss();
+                            if (shift && !ctrl) root._submitAsOne();
+                            else root._submitEachLine();
+                            return;
+                        }
                         if (shift && !ctrl) {
                             inputField.newLine();
                             return;
@@ -685,11 +725,14 @@ Popup {
                     }
                     // Tab: the task document with what was typed; outside the
                     // app it leaves the field, as from a one-line one.
-                    if (e.key === Qt.Key_Tab && !root.standalone && inputField.text.trim().length > 0) {
+                    // Not while the "N lines" question waits for its answer:
+                    // Tab made one task of them behind it (IDIOT-SHELL-6).
+                    if (e.key === Qt.Key_Tab && !root.standalone && !root._askLines && inputField.text.trim().length > 0) {
                         e.accepted = true;
                         root._refreshPreview();
                         const draft = AppController.quickTaskDraft(inputField.text, new Date(), root._rejected);
                         draft.status = root._status;
+                        inputField.clear();  // it goes on in the document, not as a draft
                         root.close();
                         root.openFullRequested(draft);
                         return;

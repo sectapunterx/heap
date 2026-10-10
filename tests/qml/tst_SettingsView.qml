@@ -581,4 +581,50 @@ TestCase {
         verify(hit.length >= 1, "JQL found nothing");
         compare(hit[0].objectName, "int-card-jira");
     }
+
+    // The row of Settings > Keys that is recording, if any.
+    function _recording(sv) {
+        const hint = I18n.t("settings.keys.recordHint");
+        const walk = function (it) {
+            if (!it) return false;
+            if (it.text === hint && it.visible) return true;
+            const kids = it.children || [];
+            for (let i = 0; i < kids.length; i++) if (walk(kids[i])) return true;
+            return false;
+        };
+        return walk(sv);
+    }
+
+    // IDIOT-SHELL-11: Enter answers the conflict box (Replace) instead of
+    // being recorded; Backspace clears what was heard and unbinds nothing.
+    // IDIOT-SHELL-10: leaving the row stops the recording.
+    function test_key_recording_conflict_and_leaving() {
+        AppController.resetAllShortcuts();
+        const sv = make();
+        sv.activeSection = "shortcuts";
+        tryVerify(function () { return findChild(sv, "hotkey-chip-palette.open") !== null; }, 3000);
+        const chip = findChild(sv, "hotkey-chip-palette.open");
+        const taken = AppController.shortcutFor("task.new");
+        verify(taken.length > 0);
+        chip.forceActiveFocus();
+        keyClick(Qt.Key_Return);
+        verify(_recording(sv), "Enter did not start recording");
+        keyClick(Qt.Key_Backspace);
+        verify(AppController.shortcutFor("palette.open").length > 0, "Backspace took the key off");
+        verify(_recording(sv));
+        keyClick(Qt.Key_N, Qt.ControlModifier);
+        tryVerify(function () { return findChild(sv, "settings-keys-conflict").visible; }, 1000, "no conflict box");
+        keyClick(Qt.Key_Return);
+        compare(AppController.shortcutFor("palette.open"), "Ctrl+N", "Enter did not replace");
+        verify(!_recording(sv));
+        AppController.resetAllShortcuts();
+        wait(50);
+        const chip2 = findChild(sv, "hotkey-chip-palette.open");
+        chip2.forceActiveFocus();
+        keyClick(Qt.Key_Return);
+        verify(_recording(sv));
+        findChild(sv, "settings-keys-search").forceActiveFocus();
+        tryVerify(function () { return !_recording(sv); }, 1000, "the recording stayed armed after focus left");
+        AppController.resetAllShortcuts();
+    }
 }

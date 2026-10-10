@@ -143,9 +143,10 @@ progressive disclosure, content priority, state preservation). One entry each.
 - **DG-007 · "Example" in both languages.** The sheets name the example profile "Example" in
   the Russian UI too. A profile already stored as "Пример" keeps its name (it is the user's data);
   starter views whose names were never changed follow the UI language.
-- **DG-008 · Small is below 1360 px of window width.** The sheet draws the small layout at
-  1280×720 (its note says ~1100, its frame is 1280). 1280 folds, 1366 (the common laptop width)
-  keeps the full sidebar.
+- **DG-008 · Small is below 1100 px of window width, at 100 % scale.** The sheet's note puts the
+  small layout at ~1100 px (its frame is 1280×720). A 1280–1360 window kept losing the sidebar for
+  no reason at 1360, so the line is 1100. The width is measured unscaled (window width / interface
+  scale): at 150 % a 1312 px window holds what 875 px do and folds (EYES-12).
 
 ## Dialogs group
 

@@ -81,6 +81,11 @@ Rectangle {
         return AppController.keyText(String(seq));
     }
     // A count as the list shows it: nothing for 0, "999+" past that.
+    // "1 task", "3 tasks" — with the plural; "999+" stays a figure (SHELL-2).
+    function savedCountText(c) {
+        const n = Number(c);
+        return isFinite(n) && String(n) === String(c) ? I18n.tasks(n) : I18n.t("siderail.saved.count").arg(c);
+    }
     function countText(n) {
         if (n === undefined || n === null || n <= 0) return "";
         return n > 999 ? "999+" : String(n);
@@ -747,7 +752,7 @@ Rectangle {
         Accessible.role: Accessible.Button
         Accessible.name: vr.modelData.name
             + (vr._problems.length > 0 ? ", " + I18n.t("topbar.searchUnknown").arg(vr._problems.join("  "))
-               : vr._count.length > 0 ? ", " + I18n.t("siderail.saved.count").arg(vr._count) : "")
+               : vr._count.length > 0 ? ", " + root.savedCountText(vr._count) : "")
         Accessible.onPressAction: root.savedViewActivated(vr.modelData.id)
 
         Keys.onReturnPressed: root.savedViewActivated(vr.modelData.id)
@@ -878,7 +883,7 @@ Rectangle {
                              && (!root.expanded || vrName.truncated || vr._problems.length > 0)
             ToolTip.delay: 400
             ToolTip.text: vr._fullName
-                + (!root.expanded && vr._count.length > 0 ? "  ·  " + I18n.t("siderail.saved.count").arg(vr._count) : "")
+                + (!root.expanded && vr._count.length > 0 ? "  ·  " + root.savedCountText(vr._count) : "")
         }
     }
 }

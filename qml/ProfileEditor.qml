@@ -18,6 +18,9 @@ SmallDialog {
     property string presetName: ""
     property string presetColor: ""
     property int selectedIndex: 0
+    // Why Enter did not close it: a taken or empty name, said under the field
+    // with the name still there (IDIOT-SHELL-12).
+    property string nameError: ""
 
     title: root.mode === "create" ? I18n.t("editor.profile.new")
          : root.mode === "rename" ? I18n.t("editor.profile.rename")
@@ -33,6 +36,7 @@ SmallDialog {
     function showCreate() {
         mode = "create"; profileId = "";
         nameField.text = "";
+        root.nameError = "";
         root.selectedIndex = 0;
         open();
         nameField.focusField();
@@ -40,6 +44,7 @@ SmallDialog {
     function showRename(id, name, color) {
         mode = "rename"; profileId = id;
         nameField.text = name;
+        root.nameError = "";
         root.selectedIndex = root._indexOf(color);
         open();
         nameField.focusField();
@@ -47,6 +52,7 @@ SmallDialog {
     function showDuplicate(id, sourceName, sourceColor) {
         mode = "duplicate"; profileId = id;
         nameField.text = sourceName + " copy";
+        root.nameError = "";
         root.selectedIndex = root._indexOf(sourceColor);
         open();
         nameField.focusField();
@@ -54,7 +60,18 @@ SmallDialog {
 
     function activate() {
         const name = nameField.text.trim();
-        if (name.length === 0) return;
+        if (name.length === 0) {
+            root.nameError = I18n.t("profile.err.empty");
+            return;
+        }
+        // A duplicate gets "(2)" on its own; a create or rename with a taken
+        // name closed the dialog and did nothing (IDIOT-SHELL-12).
+        if (root.mode !== "duplicate"
+                && AppController.profileNameTaken(name, root.mode === "rename" ? root.profileId : "")) {
+            root.nameError = I18n.t("profile.err.taken");
+            nameField.focusField();
+            return;
+        }
         const color = root.swatches[root.selectedIndex];
         if (root.mode === "create") {
             AppController.createProfile(name, color);
@@ -74,7 +91,19 @@ SmallDialog {
         fieldName: "profile-name-field"
         label: I18n.t("common.title")
         placeholderText: I18n.t("profile.ph.name")
+        maximumLength: 64  // AppController.kMaxProfileName (IDIOT-SHELL-16)
         onAccepted: root.activate()
+        onTextChanged: root.nameError = ""
+    }
+    Text {
+        objectName: "profile-name-error"
+        Layout.fillWidth: true
+        visible: root.nameError.length > 0
+        text: root.nameError
+        color: Theme.warning
+        font.family: Theme.fontUi
+        font.pixelSize: Theme.fsXs
+        wrapMode: Text.WordWrap
     }
     Row {
         id: colorSwatch

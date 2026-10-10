@@ -531,6 +531,12 @@ TEST_F(AppControllerTest, StepUiScaleWritesTheAppearanceSetting) {
   settings.insert(QStringLiteral("appearance"), appearance);
   app_->setAppSettingsJson(QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact)));
 
+  // Unset, the keys step from the default on screen, not from 100 % (SHELL-3).
+  const double def = app_->defaultUiScale(steps);
+  EXPECT_DOUBLE_EQ(app_->stepUiScale(1, steps), def > 1.05 ? 1.25 : 1.1);
+  appearance.insert(QStringLiteral("uiScale"), 1.0);
+  settings.insert(QStringLiteral("appearance"), appearance);
+  app_->setAppSettingsJson(QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact)));
   EXPECT_DOUBLE_EQ(app_->stepUiScale(1, steps), 1.1);
   EXPECT_DOUBLE_EQ(stored().toDouble(), 1.1);
   EXPECT_DOUBLE_EQ(app_->stepUiScale(1, steps), 1.25);
@@ -538,8 +544,9 @@ TEST_F(AppControllerTest, StepUiScaleWritesTheAppearanceSetting) {
   QSignalSpy changed(app_.get(), &AppController::appSettingsJsonChanged);
   EXPECT_DOUBLE_EQ(app_->stepUiScale(1, steps), 1.5);
   EXPECT_EQ(changed.count(), 0);  // at the top nothing changes
-  EXPECT_DOUBLE_EQ(app_->stepUiScale(0, steps), 1.0);
-  EXPECT_DOUBLE_EQ(stored().toDouble(), 1.0);
+  EXPECT_DOUBLE_EQ(app_->stepUiScale(0, steps), def);
+  EXPECT_FALSE(stored().isDouble()) << "reset is the default, not a pick of 100 % (IDIOT-SHELL-14)";
+  app_->stepUiScale(-1, steps);
   EXPECT_DOUBLE_EQ(app_->stepUiScale(-1, steps), 0.9);
   EXPECT_DOUBLE_EQ(app_->stepUiScale(-1, steps), 0.9);
   // The rest of the appearance group is left alone.
@@ -552,6 +559,8 @@ TEST_F(AppControllerTest, StepUiScaleWritesTheAppearanceSetting) {
             QStringLiteral("keep-me"));
 
   // A stored value Theme.scale would not use (out of range) reads as 100 %.
+  appearance = QJsonDocument::fromJson(app_->appSettingsJson().toUtf8()).object().value(QStringLiteral("appearance")).toObject();
+  settings = QJsonDocument::fromJson(app_->appSettingsJson().toUtf8()).object();
   appearance.insert(QStringLiteral("uiScale"), 3.0);
   settings.insert(QStringLiteral("appearance"), appearance);
   app_->setAppSettingsJson(QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact)));
@@ -581,7 +590,8 @@ TEST_F(AppControllerTest, UnsetUiScaleStartsFromTheSystemTextSize) {
   // Once picked, the pick wins over the system.
   EXPECT_DOUBLE_EQ(large.stepUiScale(-1, steps), 1.25);
   EXPECT_DOUBLE_EQ(large.stepUiScale(-1, steps), 1.1);
-  large.stepUiScale(0, steps);
+  // Reset goes back to where it started, not to 100 % (IDIOT-SHELL-14).
+  EXPECT_DOUBLE_EQ(large.stepUiScale(0, steps), 1.25);
 }
 
 TEST_F(AppControllerTest, ResetShortcutRestoresAndSwaps) {

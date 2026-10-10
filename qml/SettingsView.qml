@@ -15,6 +15,7 @@ import QtQuick.Controls
 import QtQuick.Controls.Basic
 import TodoCpp
 import "SettingsIndex.js" as Idx
+import "ArmGuard.js" as ArmGuard
 
 Item {
     id: root
@@ -2311,9 +2312,24 @@ Item {
             }
             // A key heard while recording. Enter with nothing heard keeps the
             // old key; a conflict waits for the box below.
+            readonly property bool pending: keysRoot.conflictId.length > 0 || keysRoot.reserved.length > 0
+            readonly property bool canReplace: keysRoot.reserved.length === 0 && !keysRoot.conflictBuiltin
             function hear(event) {
                 if (event.key === Qt.Key_Escape) { keysRoot.cancel(); return; }
-                if (event.key === Qt.Key_Backspace || event.key === Qt.Key_Delete) {
+                // The box asks "Replace?": Enter answers it, as offered —
+                // it was recorded as the new key instead (IDIOT-SHELL-11).
+                const enter = event.key === Qt.Key_Return || event.key === Qt.Key_Enter;
+                if (keysRoot.pending && enter && !(event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.ShiftModifier))) {
+                    if (keysRoot.canReplace) keysRoot.commit();
+                    return;
+                }
+                // Backspace clears what was heard, as in the Hotkeys panel; only
+                // Delete takes the key off (IDIOT-SHELL-11).
+                if (event.key === Qt.Key_Backspace) {
+                    keysRoot.candidate = ""; keysRoot.conflictId = ""; keysRoot.reserved = "";
+                    return;
+                }
+                if (event.key === Qt.Key_Delete) {
                     const id = keysRoot.capturingId;
                     keysRoot.cancel();
                     AppController.setShortcut(id, "");
@@ -2427,9 +2443,24 @@ Item {
                                         }
                                         return;
                                     }
+                                    // Tab reaches the box's buttons while it asks
+                                    // (IDIOT-SHELL-11).
+                                    if (keysRoot.pending && (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab)) {
+                                        (keysRoot.canReplace ? replaceBtn : otherBtn).forceActiveFocus(Qt.TabFocusReason);
+                                        event.accepted = true;
+                                        return;
+                                    }
                                     keysRoot.hear(event);
                                     event.accepted = true;
                                 }
+                                // Leaving the row stops the recording: it stayed
+                                // armed with every global key dead (IDIOT-SHELL-10).
+                                // The box under the row is part of it.
+                                onActiveFocusChanged: if (!activeFocus && keyRow.rec) Qt.callLater(function () {
+                                    for (let p = capFocus.Window.activeFocusItem; p; p = p.parent)
+                                        if (p === keyItem) return;
+                                    if (keyRow.rec) keysRoot.cancel();
+                                })
                             }
                             MouseArea {
                                 anchors.fill: parent
@@ -2490,6 +2521,7 @@ Item {
                             RowLayout {
                                 spacing: Theme.spMd
                                 PillButton {
+                                    id: replaceBtn
                                     objectName: "settings-keys-replace"
                                     visible: keysRoot.reserved.length === 0 && !keysRoot.conflictBuiltin
                                     text: I18n.t("settings.keys.replace")
@@ -2497,9 +2529,13 @@ Item {
                                     onClicked: keysRoot.commit()
                                 }
                                 PillButton {
+                                    id: otherBtn
                                     objectName: "settings-keys-other"
                                     text: I18n.t("settings.keys.other")
-                                    onClicked: { keysRoot.candidate = ""; keysRoot.conflictId = ""; keysRoot.reserved = ""; }
+                                    onClicked: {
+                                        keysRoot.candidate = ""; keysRoot.conflictId = ""; keysRoot.reserved = "";
+                                        capFocus.forceActiveFocus();  // and listen again
+                                    }
                                 }
                             }
                         }
@@ -2522,11 +2558,30 @@ Item {
                     checked: !(root.settings.shortcuts && root.settings.shortcuts.mouseHints === false)
                     onToggled: (checked) => root.set("shortcuts", "mouseHints", checked)
                 }
+                // Every custom binding at once: the same two-step as the
+                // Hotkeys panel's reset-all, it went on one click
+                // (IDIOT-SHELL-13).
                 ActRow {
+                    id: keysResetAll
                     objectName: "settings-keys-reset-all"
+                    property bool armed: false
+                    property real armedAt: 0
                     label: I18n.t("settings.keys.resetAll")
-                    actions: [ ({ value: "reset", label: I18n.t("settings.keys.resetAllButton") }) ]
-                    onTriggered: AppController.resetAllShortcuts()
+                    actions: [ ({ value: "reset", label: keysResetAll.armed ? I18n.t("hotkeys.allClear.confirm")
+                                                                            : I18n.t("settings.keys.resetAllButton") }) ]
+                    onTriggered: {
+                        if (!keysResetAll.armed) {
+                            keysResetAll.armed = true;
+                            keysResetAll.armedAt = Date.now();
+                            keysResetDisarm.restart();
+                            return;
+                        }
+                        if (ArmGuard.tooSoon(keysResetAll.armedAt)) return;  // a double-click (IDIOT-SHELL-5)
+                        keysResetAll.armed = false;
+                        keysResetDisarm.stop();
+                        AppController.resetAllShortcuts();
+                    }
+                    Timer { id: keysResetDisarm; interval: 4000; onTriggered: keysResetAll.armed = false }
                 }
             }
         }
@@ -3450,17 +3505,19 @@ Item {
                     delegate: SettingsRow {
                         required property var modelData
                         label: modelData.mtime
-                        hint: modelData.fileName + "  ·  " + modelData.sizeKb + " KB"
+                        hint: modelData.fileName + "  ·  " + I18n.t("common.kb").arg(modelData.sizeKb)  // КБ in Russian (SHELL-4)
                         ActionButton {
                             id: restoreBtn
                             objectName: "settings-restore-backup"
+                            property real armedAt: 0
                             text: restoreBtn.armed ? I18n.t("settings.data.restore.confirm") : I18n.t("settings.data.restore.button")
                             Timer { id: restoreDisarm; interval: 3500; onTriggered: restoreBtn.armed = false }
                             onActivated: {
                                 if (!restoreBtn.armed) {
                                     restoreBtn.armed = true;
+                                    restoreBtn.armedAt = Date.now();
                                     restoreDisarm.restart();
-                                } else {
+                                } else if (!ArmGuard.tooSoon(restoreBtn.armedAt)) {  // not a double-click (IDIOT-SHELL-5)
                                     restoreBtn.armed = false;
                                     restoreDisarm.stop();
                                     AppController.restoreFromBackup(modelData.fileName);
@@ -3484,6 +3541,7 @@ Item {
                     label: I18n.t("att.cleanup.title")
                     property var unused: ({ count: 0, bytes: 0, sizeText: "" })
                     property bool armed: false
+                    property real armedAt: 0
                     function refresh() { attCleanup.unused = AppController.unusedAttachments(); attCleanup.armed = false; }
                     Component.onCompleted: attCleanup.refresh()
                     hint: attCleanup.unused.count > 0
@@ -3498,9 +3556,11 @@ Item {
                         onActivated: {
                             if (!attCleanup.armed) {
                                 attCleanup.armed = true;
+                                attCleanup.armedAt = Date.now();
                                 attCleanupDisarm.restart();
                                 return;
                             }
+                            if (ArmGuard.tooSoon(attCleanup.armedAt)) return;  // a double-click (IDIOT-SHELL-5)
                             attCleanupDisarm.stop();
                             AppController.cleanUpUnusedAttachments();
                             attCleanup.refresh();

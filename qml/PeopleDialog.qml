@@ -20,7 +20,9 @@ Dialog {
     parent: Overlay.overlay
     padding: Theme.inset
     width: Math.min(Theme.px(720), (parent ? parent.width : 800) - 2 * Theme.sp3xl)
-    height: Math.min(Theme.px(520), (parent ? parent.height : 600) - 2 * Theme.sp3xl)
+    // As tall as what it shows, up to 520: with four people a fixed 520
+    // left a block of nothing under the list (EYES-11).
+    height: Math.min(Math.max(implicitHeight, Theme.px(240)), Theme.px(520), (parent ? parent.height : 600) - 2 * Theme.sp3xl)
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
     signal editRequested(string id)
@@ -115,6 +117,7 @@ Dialog {
                     // "+ человек" follows the last person, not the dialog's
                     // bottom (R4-042); a long list still scrolls.
                     Layout.maximumHeight: Math.max(list.contentHeight, Theme.px(120))
+                    Layout.preferredHeight: Math.max(list.contentHeight, Theme.px(120))
                     clip: true
                     spacing: Theme.sp2xs
                     model: AppController.activePeople
