@@ -412,7 +412,9 @@ TestCase {
         const a = mkView("Alpha", "svprobe card 0");
         const b = mkView("Beta", "svprobe card 1");
         const c = mkView("Gamma", "svprobe card 2");
+        tc.win.requestActivate();
         railRow(0).forceActiveFocus(Qt.TabFocusReason);
+        tryVerify(function () { return railRow(0).activeFocus; }, 1000, "the row did not take the keyboard");
         KeyTest.press(tc.win, Qt.Key_Delete, 0, "", false);
         for (let i = 0; i < 4; i++) {
             wait(20);
