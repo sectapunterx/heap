@@ -218,4 +218,24 @@ TestCase {
         for (let i = 0; i < v._items().length + 2; i++) v.moveCursor(0, 1);
         compare(v.cursorKey, v._items()[v._items().length - 1].key, "the walk ends on the last row");
     }
+
+    // IDIOT-CAL-10: a task planned for the day without a time is on that
+    // day's Today, as on the week's column, and the cursor reaches it.
+    function test_a_date_only_task_is_on_its_day() {
+        const day = tc.probeDay();
+        const d = AppController.newTaskDraft("todo");
+        d._isNew = true;
+        d.title = "date only probe";
+        d.scheduledAt = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0);
+        d.scheduledHasTime = false;
+        verify(AppController.saveTask(d));
+        tc.tasks.push(d.id);
+        const data = AppController.todayData(day, false);
+        verify((data.dayOnly || []).some(t => t.id === d.id), "listed for the day");
+        compare(data.facts.planned, 1);
+        AppController.selectedDate = day;
+        const v = createTemporaryQmlObject('import TodoCpp; TodayView { anchors.fill: parent }', host);
+        verify(!v.dayEmpty);
+        verify(v._items().some(it => it.kind === "task" && it.id === d.id), "a cursor stop");
+    }
 }

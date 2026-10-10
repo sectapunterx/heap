@@ -4665,6 +4665,7 @@ QVariantMap AppController::todayData(const QDate& date, bool allProfiles) const 
 
   // In progress, deadlines, overdue, undated.
   QVariantList inProgress;
+  QVariantList dayOnly;
   QVariantList deadlines;
   QVariantList overdue;
   int dueToday = 0;
@@ -4713,8 +4714,22 @@ QVariantMap AppController::todayData(const QDate& date, bool allProfiles) const 
     if(!t.someday && !due.isValid() && !t.scheduledAt.isValid()) {
       ++undated;
     }
+    // Planned for the day without a time (IDIOT-CAL-10): "fix login
+    // tomorrow" showed on the week's column and nowhere on Today.
+    if(t.scheduledAt.isValid() && !t.scheduledHasTime && t.scheduledAt.date() == date) {
+      dayOnly.append(QVariantMap{{"kind", "task"},
+                                 {"id", t.id},
+                                 {"title", t.title},
+                                 {"status", t.status},
+                                 {"category", cat},
+                                 {"dayOnly", true},
+                                 {"waiting", s.own ? waitingName.value(t.id) : QString()},
+                                 {"profileName", s.profileName}});
+      ++planned;
+    }
   }
   out["inProgress"] = inProgress;
+  out["dayOnly"] = dayOnly;
   // Today's before tomorrow's, each by the hour (H2-Today "Сроки").
   std::stable_sort(deadlines.begin(), deadlines.end(), [](const QVariant& a, const QVariant& b) {
     const QVariantMap ma = a.toMap();
