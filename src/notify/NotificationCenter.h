@@ -93,6 +93,15 @@ class NotificationCenter : public QObject {
   // skip producing actions when this is false to avoid misleading toasts.
   virtual bool supportsActions() const = 0;
 
+  // The tray icon's menu (sheet N/X-Menus-Other "Меню в трее", R3-103),
+  // written by the app in its own language: each item a map with `id`,
+  // `text`, optional `key` (shown as the accelerator), `enabled` (default
+  // true), `separator` or `header`. A pick comes back as trayCommand(id).
+  // Backends without a tray ignore it.
+  virtual void setTrayMenu(const QVariantList& items) {
+    Q_UNUSED(items);
+  }
+
   // A heap://notify URI a click came back with (Windows protocol activation,
   // forwarded by the launch the shell started). Emits activated() or
   // actionInvoked() and returns true; false for anything else.
@@ -108,6 +117,8 @@ class NotificationCenter : public QObject {
   // and exit for real on "Quit". Backends without a tray never emit them.
   void showWindowRequested();
   void quitRequested();
+  // A row of the menu set with setTrayMenu() was picked.
+  void trayCommand(const QString& id);
 
  protected:
   using QObject::QObject;

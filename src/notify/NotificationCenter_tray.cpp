@@ -6,6 +6,7 @@
 #include <QMenu>
 #include <QStyleHints>
 #include <QSystemTrayIcon>
+#include <QVariantMap>
 
 namespace heap::notify {
 
@@ -88,6 +89,40 @@ class TrayBackend : public NotificationCenter {
     m_lastId = n.id;
     const int ms = n.durationSec > 0 ? n.durationSec * 1000 : 5000;
     m_tray->showMessage(n.title, n.body, QSystemTrayIcon::Information, ms);
+  }
+
+  void setTrayMenu(const QVariantList& items) override {
+    if(!m_menu || items.isEmpty()) {
+      return;
+    }
+    m_menu->clear();
+    for(const QVariant& v : items) {
+      const QVariantMap m = v.toMap();
+      if(m.value(QStringLiteral("separator")).toBool()) {
+        m_menu->addSeparator();
+        continue;
+      }
+      QString text = m.value(QStringLiteral("text")).toString();
+      // "&" is a mnemonic marker in a QMenu; a task title may hold one.
+      text.replace(QLatin1Char('&'), QStringLiteral("&&"));
+      const QString key = m.value(QStringLiteral("key")).toString();
+      if(!key.isEmpty()) {
+        text += QLatin1Char('\t') + key;
+      }
+      QAction* action = m_menu->addAction(text);
+      if(m.value(QStringLiteral("header")).toBool()) {
+        action->setEnabled(false);
+        QFont f = action->font();
+        f.setBold(true);
+        action->setFont(f);
+        continue;
+      }
+      action->setEnabled(m.value(QStringLiteral("enabled"), true).toBool());
+      const QString id = m.value(QStringLiteral("id")).toString();
+      connect(action, &QAction::triggered, this, [this, id]() {
+        emit trayCommand(id);
+      });
+    }
   }
 
   void dismiss(const QString& /*id*/) override {

@@ -1066,6 +1066,15 @@ AppController::AppController(QObject* parent) :
     connect(m_notifier.get(), &heap::notify::NotificationCenter::quitRequested, this, []() {
       QCoreApplication::quit();
     });
+    connect(m_notifier.get(), &heap::notify::NotificationCenter::trayCommand, this, [this](const QString& id) {
+      if(id == QLatin1String("quit")) {
+        QCoreApplication::quit();
+      } else if(id == QLatin1String("open")) {
+        emit showWindowRequested();
+      } else {
+        emit trayCommand(id);
+      }
+    });
   }
 
   // Route notification(...) → native toast + in-app toast bar, respecting
@@ -4373,6 +4382,41 @@ QVector<heap::plan::EventIn> dayEvents(const QVector<CalEvent>& all, const QDate
 }
 
 }  // namespace
+
+QVariantMap AppController::nextEventAfter(const QDateTime& now) const {
+  const double hour = now.time().hour() + now.time().minute() / 60.0;
+  const heap::plan::EventIn* best = nullptr;
+  const QVector<heap::plan::EventIn> events = dayEvents(m_events.items(), now.date());
+  for(const heap::plan::EventIn& e : events) {
+    if(e.allDay || e.date != now.date() || e.start < hour) {
+      continue;
+    }
+    if(!best || e.start < best->start) {
+      best = &e;
+    }
+  }
+  if(!best) {
+    return {};
+  }
+  const int mins = static_cast<int>(std::lround(best->start * 60.0));
+  return {{QStringLiteral("id"), best->id},
+          {QStringLiteral("title"), best->title},
+          {QStringLiteral("time"), QDateTime(now.date(), QTime(mins / 60 % 24, mins % 60))}};
+}
+
+void AppController::setTrayMenu(const QVariantList& items) {
+  if(m_notifier) {
+    m_notifier->setTrayMenu(items);
+  }
+}
+
+void AppController::doNotDisturbFor(int minutes, const QDateTime& now) {
+  QVariantMap s = settingsMap();
+  QVariantMap notif = s.value(QStringLiteral("notifications")).toMap();
+  notif.insert(QStringLiteral("dndUntil"), now.addSecs(qint64(qMax(0, minutes)) * 60).toString(Qt::ISODate));
+  s.insert(QStringLiteral("notifications"), notif);
+  setAppSettingsJson(QString::fromUtf8(QJsonDocument(QJsonObject::fromVariantMap(s)).toJson(QJsonDocument::Compact)));
+}
 
 QVariantMap AppController::todayData(const QDate& date, bool allProfiles) const {
   QVariantMap out;
@@ -15000,6 +15044,11 @@ void AppController::notify(const QString& title, const QString& body, const QStr
 bool AppController::inQuietHours(const QDateTime& when) const {
   const QVariantMap s = settingsMap();
   const QVariantMap notif = s.value("notifications").toMap();
+  // "Не беспокоить 1 ч" from the tray holds everything until it runs out.
+  const QDateTime dnd = QDateTime::fromString(notif.value("dndUntil").toString(), Qt::ISODate);
+  if(dnd.isValid() && when < dnd) {
+    return true;
+  }
   if(!notif.value("quietHours", true).toBool()) {
     return false;
   }
