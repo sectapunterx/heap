@@ -30,6 +30,9 @@ Item {
     // fill, no outline. Transparent = the plain chip.
     property color tone: "transparent"
     readonly property bool _toned: root.tone.a > 0
+    // A parsed value (quick capture, sheets N/X-Oth-Capture, R4-074): a dim
+    // hairline, no fill and a regular value in either style.
+    property bool outlined: false
 
     signal clicked()
     signal removed()
@@ -42,9 +45,9 @@ Item {
         radius: Theme.radiusMd
         visible: !root.add
         color: root._toned ? Theme.withAlpha(root.tone, area.hovered ? 0.24 : 0.16)
-             : area.hovered ? Theme.surfaceCardHover : Theme.chipBg
+             : area.hovered ? Theme.surfaceCardHover : root.outlined ? "transparent" : Theme.chipBg
         border.width: root._toned ? 0 : 1
-        border.color: Theme.chipBorder
+        border.color: root.outlined ? Theme.border : Theme.chipBorder
     }
     // "+ property": a dashed outline
     Canvas {
@@ -103,10 +106,11 @@ Item {
                             - (root._inlineRemove ? Theme.iconSize + Theme.spXs : 0))
             elide: Text.ElideRight
             text: root.add ? "+ " + root.value : root.value
-            color: root.add ? Theme.textDim : root._toned ? Qt.tint(Theme.text, Theme.withAlpha(root.tone, 0.3)) : root.valueColor
+            color: root.add ? Theme.textDim : root._toned ? Qt.tint(Theme.text, Theme.withAlpha(root.tone, 0.3))
+                 : root.outlined && root.valueColor === Theme.text ? Theme.textMuted : root.valueColor
             font.family: Theme.fontUi
             font.pixelSize: root.small ? Theme.fsXs : Theme.fsSm
-            font.weight: root.add ? Theme.fwBody : Theme.fwTitle
+            font.weight: root.add || root.outlined ? Theme.fwBody : Theme.fwTitle
         }
         TextMetrics {
             id: keyMetrics

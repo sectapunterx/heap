@@ -202,6 +202,8 @@ Popup {
             }
             Text {
                 Layout.fillWidth: true
+                // The sheet wraps it at ~900px, not the panel's width (R4-082).
+                Layout.maximumWidth: Theme.px(900)
                 text: I18n.t("keys.sheet.intro")
                 wrapMode: Text.WordWrap
                 color: Theme.textMuted
@@ -287,9 +289,13 @@ Popup {
                                             anchors.right: keyRow.left
                                             anchors.rightMargin: Theme.spMd
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: root._label(row.modelData)
+                                            // A label and its "было …" are each one unit, so the line
+                                            // breaks between them, never inside (sheet N-Keys, R4-083).
+                                            readonly property string _nb: row.modelData.was ? "&nbsp;" : " "
+                                            text: root._label(row.modelData).replace(/ /g, rowLabel._nb)
                                                   + (row.modelData.note ? "&nbsp;&nbsp;<font color=\"" + Theme.textDim + "\">" + I18n.t(row.modelData.note) + "</font>" : "")
-                                                  + (row.modelData.was ? "&nbsp;&nbsp;<font color=\"" + Theme.textDim + "\">" + I18n.t(row.modelData.was) + "</font>" : "")
+                                                  + (row.modelData.was ? "&nbsp; <font color=\"" + Theme.textDim + "\">"
+                                                                         + I18n.t(row.modelData.was).replace(/ /g, "&nbsp;") + "</font>" : "")
                                             textFormat: Text.StyledText
                                             wrapMode: Text.WordWrap
                                             color: Theme.text

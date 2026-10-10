@@ -379,8 +379,8 @@ TEST_F(KnowAuditTest, Know6_HashAndBarTitlesLinkAndSurviveRename) {
   EXPECT_EQ(app_->notes()->items().at(row).title, QStringLiteral("A|B options"));
 }
 
-// KNOW-17 (audit 2026-09-30): quick capture into the open note while the
-// editor still holds unflushed keystrokes keeps them.
+// KNOW-17 (audit 2026-09-30): quick capture while the editor still holds
+// unflushed keystrokes keeps them.
 TEST_F(KnowAuditTest, Know17_QuickCaptureFlushesTheEditorFirst) {
   const QString id = app_->newNote(QStringLiteral("QN target"));
   // The editor's pending text, written to notesState when asked to flush.
@@ -392,9 +392,11 @@ TEST_F(KnowAuditTest, Know17_QuickCaptureFlushesTheEditorFirst) {
 
   app_->appendNoteEntry(QStringLiteral("from quick capture"));
 
+  // The typing stays in the open note; the entry goes to the Inbox (R4-073).
   const QString body = app_->noteBody(id);
   EXPECT_TRUE(body.contains(QStringLiteral("typing"))) << body.toStdString();
-  EXPECT_TRUE(body.contains(QStringLiteral("from quick capture"))) << body.toStdString();
+  const QString inbox = app_->noteBody(app_->inboxNoteId());
+  EXPECT_TRUE(inbox.contains(QStringLiteral("from quick capture"))) << inbox.toStdString();
 }
 
 TEST_F(KnowAuditTest, KnowC_TitleFollowsTheH1WhileTheyAgree) {

@@ -2205,10 +2205,51 @@ QStringList AppController::noteFolders() const {
   return out;
 }
 
+QString AppController::inboxNoteId() const {
+  // The Inbox is the root-level note by that name, in either language, so a
+  // language switch does not start a second one.
+  const QString en = QStringLiteral("Inbox");
+  const QString ru = QStringLiteral("Входящие");
+  const QString cur = tr_("notes.inbox");
+  for(const Note& n : m_notes.items()) {
+    if(n.folder.isEmpty() && (n.title.compare(cur, Qt::CaseInsensitive) == 0 || n.title.compare(en, Qt::CaseInsensitive) == 0 ||
+                              n.title.compare(ru, Qt::CaseInsensitive) == 0)) {
+      return n.id;
+    }
+  }
+  return {};
+}
+
 QString AppController::quickNoteTarget() const {
-  // Where appendNoteEntry() will write: the open note, or Inbox.
-  const int row = m_notes.indexOfId(m_activeNoteId);
+  // Where appendNoteEntry() will write: always the Inbox.
+  const int row = m_notes.indexOfId(inboxNoteId());
   return row >= 0 ? m_notes.items().at(row).title : tr_("notes.inbox");
+}
+
+QVariantMap AppController::quickNoteDraft() const {
+  const QJsonObject d = m_settingsExtra.value(QStringLiteral("quickNoteDraft")).toObject();
+  if(d.value(QStringLiteral("text")).toString().isEmpty()) {
+    return {};
+  }
+  return {{QStringLiteral("text"), d.value(QStringLiteral("text")).toString()},
+          {QStringLiteral("attachId"), d.value(QStringLiteral("attachId")).toString()}};
+}
+
+void AppController::setQuickNoteDraft(const QString& text, const QString& attachId) {
+  const QJsonValue was = m_settingsExtra.value(QStringLiteral("quickNoteDraft"));
+  if(text.trimmed().isEmpty()) {
+    if(was.isUndefined()) {
+      return;
+    }
+    m_settingsExtra.remove(QStringLiteral("quickNoteDraft"));
+  } else {
+    const QJsonObject next{{QStringLiteral("text"), text}, {QStringLiteral("attachId"), attachId}};
+    if(was.toObject() == next) {
+      return;
+    }
+    m_settingsExtra.insert(QStringLiteral("quickNoteDraft"), next);
+  }
+  scheduleSave();
 }
 
 void AppController::appendNoteEntry(const QString& text) {
@@ -2220,40 +2261,49 @@ void AppController::appendNoteEntry(const QString& text) {
   // appended to notesState, and the view diffs the editor against it, so text
   // typed in the last 250 ms was erased (KNOW-17, audit 2026-09-30).
   emit aboutToChangeActiveNote();
-  // Quick capture with no note open goes to Inbox, found or made. It used to
-  // write into `notesState` with no note behind it, where it was shown in the
-  // editor, listed nowhere, and dropped on the next save.
+  // Text in the editor with no note behind it becomes a note before the
+  // Inbox is looked at, so it is neither lost nor taken for the Inbox.
   adoptOrphanNotesState();
-  if(m_notes.indexOfId(m_activeNoteId) < 0) {
-    const QString inbox = tr_("notes.inbox");
-    QString found;
-    for(const Note& n : m_notes.items()) {
-      if(n.folder.isEmpty() && n.title.compare(inbox, Qt::CaseInsensitive) == 0) {
-        found = n.id;
-        break;
-      }
-    }
-    if(found.isEmpty()) {
-      m_notesState.clear();
-      createActiveNote(inbox);
-    } else {
-      m_activeNoteId = found;
-      m_notesState = m_notes.items().at(m_notes.indexOfId(found)).body;
-      emit activeNoteChanged();
-    }
+  syncActiveNoteBody();
+  QString inboxId = inboxNoteId();
+  if(inboxId.isEmpty()) {
+    // Made on first use, beside the open note — the open note stays open.
+    Note n;
+    n.id = QStringLiteral("note-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+    n.title = tr_("notes.inbox");
+    n.created = QDateTime::currentDateTime();
+    n.updated = n.created;
+    m_notes.upsert(n);
+    inboxId = n.id;
   }
+  // With no note open the Inbox opens, so the editor shows where it went.
+  if(m_notes.indexOfId(m_activeNoteId) < 0) {
+    m_activeNoteId = inboxId;
+    m_notesState = noteBody(inboxId);
+    emit activeNoteChanged();
+  }
+  const bool open = inboxId == m_activeNoteId;
+  const QString was = open ? m_notesState : noteBody(inboxId);
   const QString stamp = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm");
   QString next;
-  if(m_notesState.trimmed().isEmpty()) {
+  if(was.trimmed().isEmpty()) {
     next = QStringLiteral("### %1\n\n%2").arg(stamp, body);
   } else {
-    next = m_notesState;
+    next = was;
     while(next.endsWith(QLatin1Char('\n'))) {
       next.chop(1);
     }
     next += QStringLiteral("\n\n----\n### %1\n\n%2").arg(stamp, body);
   }
-  setNotesState(next);
+  if(open) {
+    setNotesState(next);
+    return;
+  }
+  Note n = m_notes.items().at(m_notes.indexOfId(inboxId));
+  n.body = next;
+  n.updated = QDateTime::currentDateTime();
+  m_notes.upsert(n);
+  scheduleSave();
 }
 
 QStringList AppController::noteHeadings(const QString& markdown) const {

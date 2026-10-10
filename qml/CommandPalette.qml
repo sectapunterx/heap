@@ -102,7 +102,11 @@ Popup {
         return _contextual.indexOf(id) >= 0 || id.indexOf("board.") === 0 || id.indexOf("savedView.") === 0
             || id.indexOf("cal.") === 0 || id.indexOf("selection.") === 0 || id.indexOf("cursor.") === 0
             || id.indexOf("nav.") === 0 || /\.alt\d*$/.test(id)
-            || (id.indexOf("task.") === 0 && id !== "task.new");
+            || (id.indexOf("task.") === 0 && id !== "task.new")
+            // Docs and Notes are one place now: "Перейти в «Знания»" is the
+            // one way there (sheet H2-Command, R4-077); their old ids only
+            // keep a key someone bound.
+            || id === "view.docs" || id === "view.notes";
     }
 
     // Catalog actions whose palette name says more than their hotkey label.
@@ -808,6 +812,8 @@ Popup {
                                 objectName: "cmd-chip-" + chip.index
                                 small: !root._quiet
                                 removable: true
+                                // Plain chips; × only under the pointer (sheet H2/Q-Command, R4-078).
+                                removeOnHover: true
                                 key: root.chipKey(chip.modelData)
                                 value: root.chipValue(chip.modelData)
                                 tone: root.chipTone(chip.modelData)

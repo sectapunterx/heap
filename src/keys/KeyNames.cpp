@@ -204,8 +204,8 @@ QString keyName(const QString& key, bool mac, bool withMods) {
   if(key.size() == 1 && isAsciiLetter(key.at(0))) {
     return withMods ? key.toUpper() : key.toLower();
   }
-  static const QHash<QString, QString> kNames = {{QStringLiteral("Return"), QStringLiteral("Enter")},
-                                                 {QStringLiteral("Enter"), QStringLiteral("Enter")},
+  static const QHash<QString, QString> kNames = {{QStringLiteral("Return"), QStringLiteral("↵")},
+                                                 {QStringLiteral("Enter"), QStringLiteral("↵")},
                                                  {QStringLiteral("Escape"), QStringLiteral("Esc")},
                                                  {QStringLiteral("Delete"), QStringLiteral("Del")},
                                                  {QStringLiteral("PgDown"), QStringLiteral("PgDn")},

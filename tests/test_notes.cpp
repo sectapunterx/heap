@@ -40,6 +40,9 @@ class NotesAppendTest : public ::testing::Test {
  protected:
   void SetUp() override {
     app_ = std::make_unique<AppController>();
+    // Quick notes go to the Inbox; with it open, notesState is its body.
+    app_->notes()->reset({});
+    app_->newNote(QStringLiteral("Inbox"));
     app_->setNotesState(QString());
   }
 
@@ -342,6 +345,40 @@ TEST_F(NotesTest, AppendingAnEntryReachesTheActiveNote) {
   app_->appendNoteEntry(QStringLiteral("something captured"));
 
   EXPECT_TRUE(app_->noteBody(id).contains(QStringLiteral("something captured")));
+}
+
+// R4-073 (sheet N/X-Oth-Capture: "быстрая заметка → «Входящие»"): a quick
+// note goes to the Inbox, not into whichever note happens to be open, and the
+// open note stays open.
+TEST_F(NotesTest, AQuickNoteGoesToTheInboxNotTheOpenNote) {
+  const QString open = app_->newNote(QStringLiteral("Design"));
+  EXPECT_TRUE(app_->inboxNoteId().isEmpty());
+
+  app_->appendNoteEntry(QStringLiteral("captured elsewhere"));
+
+  const QString inbox = app_->inboxNoteId();
+  ASSERT_FALSE(inbox.isEmpty()) << "the Inbox is made on first use";
+  EXPECT_NE(inbox, open);
+  EXPECT_EQ(app_->activeNoteId(), open);
+  EXPECT_FALSE(app_->noteBody(open).contains(QStringLiteral("captured elsewhere")));
+  EXPECT_TRUE(app_->noteBody(inbox).contains(QStringLiteral("captured elsewhere")));
+  EXPECT_EQ(app_->quickNoteTarget(), titleOf(inbox));
+
+  app_->appendNoteEntry(QStringLiteral("second"));
+  EXPECT_EQ(app_->inboxNoteId(), inbox) << "one Inbox, reused";
+  EXPECT_EQ(app_->noteBody(inbox).count(QStringLiteral("----")), 1);
+}
+
+// R2-069: the quick note's draft and its task are kept in settings until
+// saved, so a quit or a crash does not take them.
+TEST_F(NotesTest, TheQuickNoteDraftIsKeptUntilCleared) {
+  EXPECT_TRUE(app_->quickNoteDraft().isEmpty());
+  app_->setQuickNoteDraft(QStringLiteral("half a thought"), QStringLiteral("APP-101"));
+  QVariantMap d = app_->quickNoteDraft();
+  EXPECT_EQ(d.value(QStringLiteral("text")).toString(), QStringLiteral("half a thought"));
+  EXPECT_EQ(d.value(QStringLiteral("attachId")).toString(), QStringLiteral("APP-101"));
+  app_->setQuickNoteDraft(QStringLiteral("  "), QString());
+  EXPECT_TRUE(app_->quickNoteDraft().isEmpty());
 }
 
 // ── Deleting ──
@@ -885,14 +922,17 @@ TEST_F(OrphanNoteTest, QuickCaptureReusesInbox) {
   EXPECT_TRUE(app_->noteBody(inbox).contains(QStringLiteral("second capture")));
 }
 
-// With a note open, capture still goes where it always went.
-TEST_F(OrphanNoteTest, QuickCaptureWithANoteOpenWritesThere) {
+// With a note open, capture goes to the Inbox all the same (R4-073); the
+// open note keeps its text and stays open.
+TEST_F(OrphanNoteTest, QuickCaptureWithANoteOpenGoesToTheInbox) {
   const QString open = app_->newNote(QStringLiteral("Standup"));
 
-  app_->appendNoteEntry(QStringLiteral("added to the open note"));
+  app_->appendNoteEntry(QStringLiteral("captured while Standup is open"));
 
-  EXPECT_TRUE(app_->noteBody(open).contains(QStringLiteral("added to the open note")));
-  EXPECT_EQ(app_->notes()->rowCount(), 1);
+  EXPECT_FALSE(app_->noteBody(open).contains(QStringLiteral("captured while Standup is open")));
+  EXPECT_TRUE(app_->noteBody(app_->inboxNoteId()).contains(QStringLiteral("captured while Standup is open")));
+  EXPECT_EQ(app_->activeNoteId(), open);
+  EXPECT_EQ(app_->notes()->rowCount(), 2);
 }
 
 // The second half of the report: "+" after writing erased what was written.

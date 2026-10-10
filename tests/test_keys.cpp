@@ -110,7 +110,7 @@ TEST(KeyDisplay, KeymapNotation) {
   EXPECT_EQ(displayKeys(QStringLiteral("Shift+S"), false), QStringLiteral("Shift S"));
   EXPECT_EQ(displayKeys(QStringLiteral("G, B"), false), QStringLiteral("g b"));
   EXPECT_EQ(displayKeys(QStringLiteral("Ctrl+K"), false), QStringLiteral("Ctrl K"));
-  EXPECT_EQ(displayKeys(QStringLiteral("Return"), false), QStringLiteral("Enter"));
+  EXPECT_EQ(displayKeys(QStringLiteral("Return"), false), QStringLiteral("↵"));
   EXPECT_EQ(displayKeys(QStringLiteral("Esc"), false), QStringLiteral("Esc"));
   EXPECT_EQ(displayKeys(QStringLiteral("Del"), false), QStringLiteral("Del"));
   EXPECT_EQ(displayKeys(QStringLiteral("Ctrl+Shift+Space"), false), QStringLiteral("Ctrl Shift Space"));

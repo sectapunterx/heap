@@ -114,6 +114,7 @@ TestCase {
     // R2-069: a press beside closes the quick note like Esc, and the text
     // stays as the next open's draft — nothing is dropped, so nothing asks.
     function test_a_press_beside_a_note_with_text_keeps_the_draft() {
+        AppController.setQuickNoteDraft("", "");
         const qc = _make("QuickCaptureNotesPopup { }");
         qc.open();
         tryCompare(qc, "opened", true);
@@ -123,6 +124,8 @@ TestCase {
         _pressBeside();
         tryCompare(qc, "opened", false);
         compare(ed.text, "an idea", "the draft was dropped");
+        compare(AppController.quickNoteDraft().text, "an idea", "and stored, so a quit keeps it");
         ed.text = "";
+        AppController.setQuickNoteDraft("", "");
     }
 }

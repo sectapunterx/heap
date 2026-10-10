@@ -777,7 +777,8 @@ Item {
                 Layout.leftMargin: root._docInset + root._mdSide
                 Layout.rightMargin: root._docInset
                 Layout.topMargin: Style.quiet ? Theme.px(40) : Theme.px(26)
-                Layout.bottomMargin: Theme.spXs
+                // 18px down to the title (sheets H2/Q-Knowledge, R4-067).
+                Layout.bottomMargin: Theme.spXs + Theme.sp2xl
                 text: root._metaLine
                 color: Theme.textDim
                 font.pixelSize: Theme.fsSm
