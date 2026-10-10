@@ -39,9 +39,9 @@ TestCase {
         const b = make('import TodoCpp; PillButton { text: "ok" }');
         compare(b.primary, false);
         compare(b.danger, false);
-        compare(b.padding, 8);
-        compare(b.leftPadding, 12);
-        compare(b.rightPadding, 12);
+        compare(b.padding, Theme.spMd);
+        compare(b.leftPadding, Theme.spXl);
+        compare(b.rightPadding, Theme.spXl);
     }
 
     // contentItem mirrors the button's text, initially and on change.

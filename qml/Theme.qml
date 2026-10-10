@@ -324,13 +324,16 @@ QtObject {
     // heights follow it live; hairlines, radii and icon cells stay put.
     // Until the user picks one, the system's text size picks it (APP-183):
     // Windows "Make text bigger" at 150 % starts heap at 150 %.
-    readonly property var scaleSteps: [0.9, 1, 1.1, 1.25, 1.5]
+    readonly property var scaleSteps: [0.9, 1, 1.15, 1.25, 1.5]
+    // Unset, 115 %: at 100 % the sheets' 13 px body read as too small on a
+    // desktop screen (owner, 0.8.2); body text is ~15 px, spacing follows.
+    readonly property real defaultScale: 1.15
     // A function, not a property: the system is asked only when needed.
     function systemScale() { return AppController.systemUiScale(scaleSteps); }
     readonly property real scale: {
         const raw = _appearance.uiScale;
         const v = Number(raw);
-        if (raw === undefined || raw === null) return systemScale();
+        if (raw === undefined || raw === null) return Math.max(defaultScale, systemScale());
         return isFinite(v) && v >= 0.9 && v <= 1.5 ? v : 1;
     }
     function px(n) { return Math.round(n * scale); }

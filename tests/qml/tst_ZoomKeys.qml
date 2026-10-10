@@ -88,8 +88,8 @@ TestCase {
 
     function test_keys_step_the_scale() {
         keyClick(Qt.Key_Equal, Qt.ControlModifier);
-        tryCompare(Theme, "scale", 1.1);
-        compare(storedScale(), 1.1);
+        tryCompare(Theme, "scale", 1.15);
+        compare(storedScale(), 1.15);
         keyClick(Qt.Key_Equal, Qt.ControlModifier);
         keyClick(Qt.Key_Equal, Qt.ControlModifier);
         compare(Theme.scale, 1.5);
@@ -107,7 +107,7 @@ TestCase {
 
     function test_aliases() {
         keyClick(Qt.Key_Plus, Qt.ControlModifier);
-        compare(Theme.scale, 1.1, "Ctrl++");
+        compare(Theme.scale, 1.15, "Ctrl++");
         keyClick(Qt.Key_Equal, Qt.ControlModifier | Qt.ShiftModifier);
         compare(Theme.scale, 1.25, "Ctrl+Shift+=");
         keyClick(Qt.Key_Plus, Qt.ControlModifier | Qt.KeypadModifier);
@@ -124,7 +124,7 @@ TestCase {
         compare(Theme.scale, 1.25);
         setScale(1.2);
         keyClick(Qt.Key_Minus, Qt.ControlModifier);
-        compare(Theme.scale, 1.1);
+        compare(Theme.scale, 1.15);
     }
 
     function test_one_toast_replaced() {
@@ -132,7 +132,7 @@ TestCase {
         verify(t !== null);
         keyClick(Qt.Key_Equal, Qt.ControlModifier);
         tryCompare(t, "count", 1);
-        compare(t.message, I18n.t("toast.uiScale").arg(110));
+        compare(t.message, I18n.t("toast.uiScale").arg(115));
         keyClick(Qt.Key_Equal, Qt.ControlModifier);
         keyClick(Qt.Key_Equal, Qt.ControlModifier);
         compare(t.count, 1, "pressed again, the toast is replaced");
@@ -152,7 +152,7 @@ TestCase {
         }, 3000, "no scale row");
         compare(seg.value, "100");
         keyClick(Qt.Key_Equal, Qt.ControlModifier);
-        tryCompare(seg, "value", "110");
+        tryCompare(seg, "value", "115");
         // And the other way: the row's choice is where the keys go on from.
         seg.selected("125");
         compare(Theme.scale, 1.25);
@@ -172,7 +172,7 @@ TestCase {
         search.text = "";
         verify(tc.win._typing);
         keyClick(Qt.Key_Equal, Qt.ControlModifier);
-        compare(Theme.scale, 1.1);
+        compare(Theme.scale, 1.15);
         compare(search.text, "", "the key did not type into the field");
         keyClick(Qt.Key_0, Qt.ControlModifier);
         compare(Theme.scale, 1);
@@ -224,7 +224,7 @@ TestCase {
             compare(hit.sub, AppController.shortcutText(id));
         }
         tc.win.runCommand("zoom.in");
-        compare(Theme.scale, 1.1);
+        compare(Theme.scale, 1.15);
         tc.win.runCommand("zoom.reset");
         compare(Theme.scale, 1);
     }

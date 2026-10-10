@@ -1261,6 +1261,30 @@ ApplicationWindow {
                         }
                     }
                     Component.onCompleted: win.activateCurrentView()
+                    // Under an open panel the view steps back and a click on
+                    // it closes the panel, as on a sheet over a page: the
+                    // board read as live and a click there did nothing.
+                    Rectangle {
+                        id: panelScrim
+                        objectName: "panel-scrim"
+                        readonly property bool shown: (taskDoc.opened && !taskDoc.full) || eventEditor.opened
+                        anchors.fill: parent
+                        z: 59
+                        color: Theme.withAlpha("#000000", Theme.dark ? 0.5 : 0.28)
+                        visible: opacity > 0
+                        opacity: shown ? 1 : 0
+                        Behavior on opacity { NumberAnimation { duration: Theme.durPop; easing.type: Theme.easeEnter } }
+                        MouseArea {
+                            anchors.fill: parent
+                            enabled: panelScrim.shown
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                            onClicked: {
+                                if (eventEditor.opened) eventEditor.close();
+                                if (taskDoc.opened) taskDoc.close();
+                            }
+                            onWheel: (wheel) => wheel.accepted = true
+                        }
+                    }
                     // The task document (APP-265): a panel over the right
                     // of the view, or the whole width.
                     // Full, it replaces the whole content area, the Tasks

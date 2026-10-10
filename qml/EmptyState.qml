@@ -10,6 +10,8 @@ Column {
     id: root
     // A brand icon by name ("heap-05-archive"), from qrc:/brand/icons.
     property string icon: ""
+    // Or a line glyph from Icon.qml, drawn in thin dim strokes.
+    property string glyph: ""
     property string title: ""
     property string line: ""
     property bool compact: false
@@ -35,6 +37,14 @@ Column {
         height: root._iconSize
         sourceSize.width: root._iconSize
         sourceSize.height: root._iconSize
+        color: Theme.textDim
+    }
+    Icon {
+        objectName: "empty-state-glyph"
+        visible: root.glyph.length > 0 && root.icon.length === 0
+        anchors.horizontalCenter: parent.horizontalCenter
+        name: root.glyph
+        size: root._iconSize
         color: Theme.textDim
     }
     Text {

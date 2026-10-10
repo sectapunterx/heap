@@ -28,6 +28,10 @@ Item {
     // The Knowledge document type (MdView.noteType).
     property bool noteType: false
     property real paragraphLineHeight: 0
+    // The whole source opens as one field on a click anywhere in it, the
+    // caret on the clicked line (the task document): block by block, the
+    // text opened in pieces and read as not editable.
+    property bool wholeDocument: false
     // Drawn under the last block, inside the scroll (the task document's
     // plan and hint, DG-062): the item gets `width` set to the text column.
     property Component tail: null
@@ -95,9 +99,12 @@ Item {
         const t = src.text;
         const last = Math.max(0, root._lineCount(t) - 1);
         line = Math.max(0, Math.min(line, last));
-        const row = root._rowFor(t, line);
+        const row = root.wholeDocument ? (view.count > 0 ? 0 : -1) : root._rowFor(t, line);
         let first = line, lastLine = line;
-        if (row >= 0) {
+        if (root.wholeDocument) {
+            first = 0;
+            lastLine = last;
+        } else if (row >= 0) {
             first = Math.max(0, doc.firstLineOfRow(row));
             lastLine = Math.max(first, doc.lastLineOfRow(row));
         }
@@ -110,7 +117,10 @@ Item {
         root._fieldLoading = true;
         field.text = t.substring(root._lineStart(t, first), root._lineEnd(t, lastLine));
         root._fieldLoading = false;
-        field.cursorPosition = atStart ? 0 : field.length;
+        if (root.wholeDocument)
+            field.cursorPosition = atStart ? root._lineStart(t, line) : root._lineEnd(t, line);
+        else
+            field.cursorPosition = atStart ? 0 : field.length;
         field.forceActiveFocus();
         Qt.callLater(root._reveal);
     }
@@ -142,7 +152,7 @@ Item {
         }
         view.editLast = view.editFirst + root._lineCount(field.text) - 1;
         doc.flush();
-        view.editRow = root._rowFor(src.text, view.editFirst);
+        view.editRow = root.wholeDocument ? (view.count > 0 ? 0 : -1) : root._rowFor(src.text, view.editFirst);
     }
     function _reveal() {
         const y = field._contentY;
@@ -261,7 +271,9 @@ Item {
             z: 2
             visible: root.editing
             readonly property Item _host: view.editRow >= 0 ? view.itemAtIndex(view.editRow) : null
-            readonly property real _contentY: _host ? _host.y : (view.count > 0 && view.itemAtIndex(view.count - 1)
+            // The whole document opens at its top; the host row can be
+            // missing while the rows are rebuilt, and the field fell to the end.
+            readonly property real _contentY: root.wholeDocument ? 0 : _host ? _host.y : (view.count > 0 && view.itemAtIndex(view.count - 1)
                                   ? view.itemAtIndex(view.count - 1).y + view.itemAtIndex(view.count - 1).height : 0)
             x: view.x + view.sideMargin - leftPadding
             y: view.y + view.contentItem.y + _contentY
