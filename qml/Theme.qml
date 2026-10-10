@@ -337,7 +337,8 @@ QtObject {
     readonly property real scale: {
         const raw = _appearance.uiScale;
         const v = Number(raw);
-        if (raw === undefined || raw === null) return Math.max(defaultScale, systemScale());
+        // One rule with the zoom keys (SHELL-3): AppController.defaultUiScale.
+        if (raw === undefined || raw === null) return AppController.defaultUiScale(scaleSteps);
         return isFinite(v) && v >= 0.9 && v <= 1.5 ? v : 1;
     }
     function px(n) { return Math.round(n * scale); }

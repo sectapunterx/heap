@@ -14825,6 +14825,11 @@ double AppController::systemUiScale(const QVariantList& steps) const {
   return heap::ui::uiScaleForTextScale(m_systemTextScale, uiScaleSteps(steps));
 }
 
+double AppController::defaultUiScale(const QVariantList& steps) const {
+  const double byScreen = systemPixelRatio() > 1.05 ? 1.0 : 1.1;
+  return std::max(byScreen, systemUiScale(steps));
+}
+
 double AppController::stepUiScale(int direction, const QVariantList& steps) {
   const QList<double> values = uiScaleSteps(steps);
   if(values.isEmpty()) {
@@ -14842,12 +14847,13 @@ double AppController::stepUiScale(int direction, const QVariantList& steps) {
       settings.insert(QStringLiteral("appearance"), appearance);
       setAppSettingsJson(QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact)));
     }
-    return systemUiScale(steps);
+    return defaultUiScale(steps);
   }
-  // Read the way Theme.scale does: unset is what the system's text size
-  // asks for, anything outside the steps' range is 1.
+  // Read the way Theme.scale does: unset is the default on screen (the first
+  // Ctrl+= stored the 110 % already shown, SHELL-3), anything outside the
+  // steps' range is 1.
   const QJsonValue stored = appearance.value(QStringLiteral("uiScale"));
-  double current = stored.isDouble() ? stored.toDouble() : systemUiScale(steps);
+  double current = stored.isDouble() ? stored.toDouble() : defaultUiScale(steps);
   if(!std::isfinite(current) || current < *lo - 1e-6 || current > *hi + 1e-6) {
     current = 1.0;
   }
