@@ -335,4 +335,66 @@ TestCase {
         keyClick(Qt.Key_J);
         verify(b.cursorVisible && b.cursorTaskId.length > 0, "j puts the cursor on a card");
     }
+
+    // IDIOT-CAL-3: z d zooms the week to the day, as z w and z m switch.
+    function test_z_d_zooms_to_the_day() {
+        openView("week");
+        keyClick(Qt.Key_Z);
+        keyClick(Qt.Key_D);
+        tryCompare(AppController, "currentView", "day");
+    }
+
+    // IDIOT-TASKS-3: 1 on a selection is one bulk edit, one Ctrl+Z.
+    function test_priority_on_a_selection_is_one_undo() {
+        for (const id of ["KCUR-2", "KCUR-3"]) {
+            const t = AppController.newTaskDraft("todo");
+            t._isNew = true;
+            t.id = id;
+            t.title = "kcur bulk " + id;
+            t.priority = "P3";
+            AppController.saveTask(t);
+            tc.tasks.push(id);
+        }
+        openView("board");
+        AppController.clearSelection();
+        AppController.toggleTaskSelection("KCUR-2");
+        AppController.toggleTaskSelection("KCUR-3");
+        keyClick(Qt.Key_1);
+        tryVerify(function () {
+            return AppController.taskById("KCUR-2").priority === "P0" && AppController.taskById("KCUR-3").priority === "P0";
+        }, 2000);
+        AppController.clearSelection();
+        keyClick(Qt.Key_Z, Qt.ControlModifier);
+        tryVerify(function () {
+            return AppController.taskById("KCUR-2").priority === "P3" && AppController.taskById("KCUR-3").priority === "P3";
+        }, 2000);
+    }
+
+    // IDIOT-CAL-14: Shift L on a series occurrence moves the cursor only once
+    // the scope is answered; Esc leaves it where it was.
+    function test_moving_a_series_occurrence_waits_for_the_scope() {
+        const ev = AppController.newEventDraft(15, tc.day);
+        ev.title = "kcur series";
+        ev.date = tc.day;
+        ev.start = 15;
+        ev.end = 16;
+        ev.rrule = "FREQ=DAILY;COUNT=4";
+        AppController.saveEvent(ev);
+        tc.events.push(ev.id);
+        const v = openView("week");
+        keyClick(Qt.Key_J);
+        const items = v._dayItems(v.cursorDay);
+        const at = items.findIndex(it => it.ev && it.ev.occ && it.ev.occ.title === "kcur series");
+        verify(at >= 0);
+        v.cursorKey = items[at].key;
+        v._cursorIdx = at;
+        const key = v.cursorKey;
+        keyClick(Qt.Key_L, Qt.ShiftModifier);
+        tryVerify(function () { return v.scopePrompt.opened; }, 2000);
+        verify(sameDay(AppController.selectedDate, tc.day), "the day waits for the answer");
+        keyClick(Qt.Key_Escape);
+        tryVerify(function () { return !v.scopePrompt.opened; }, 2000);
+        verify(sameDay(AppController.selectedDate, tc.day));
+        compare(v.cursorKey, key, "the cursor stays on the occurrence");
+    }
 }

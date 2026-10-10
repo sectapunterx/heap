@@ -2056,8 +2056,10 @@ ApplicationWindow {
             return ["today", "week", "month"].indexOf(v) >= 0;
         case "cal.today": case "cal.prevDay": case "cal.nextDay": case "cal.goToDate":
             return win._dayViews.indexOf(v) >= 0;
+        // No view defines setZoom: the catalogue's z d did nothing while the
+        // CalKey under it was shadowed (IDIOT-CAL-3). It switches, as z w does.
         case "cal.zoomDay":
-            return (v === "week" || v === "month") && !!b && typeof b.setZoom === "function";
+            return v === "week" || v === "month";
         case "cal.newEvent":
             return !win._overlayOpen;
         case "cal.taskEarlier": case "cal.taskLater": case "cal.taskEarlierWeek": case "cal.taskLaterWeek":
@@ -2313,7 +2315,7 @@ ApplicationWindow {
             return;
         }
         case "cal.goToDate": goToDatePopup.openAt(AppController.selectedDate, win.contentItem); return;
-        case "cal.zoomDay": call("setZoom", "day"); return;
+        case "cal.zoomDay": AppController.currentView = "day"; return;
         case "cal.newEvent": {
             const day = AppController.selectedDate;
             eventCapture.openAt({ date: day });
