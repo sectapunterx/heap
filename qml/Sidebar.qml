@@ -389,15 +389,16 @@ Rectangle {
         // ── My views ──
         // Empty, bold shows the head and "Появятся, когда сохраните фильтр";
         // quiet shows no block at all (H2-First / Q-First, R2-058).
+        // Folded shows only the sections (N/X-Oth-Small, R3-015); the views
+        // stay on their Alt keys and in Ctrl K.
         Item {
-            visible: root._savedViews.length > 0 || !Style.plainRows
+            visible: root.expanded && (root._savedViews.length > 0 || !Style.plainRows)
             Layout.fillWidth: true
             Layout.topMargin: Theme.spLg
-            Layout.preferredHeight: root.expanded ? viewsHead.implicitHeight + Theme.spXs : Theme.spSm
+            Layout.preferredHeight: viewsHead.implicitHeight + Theme.spXs
             Text {
                 id: viewsHead
                 objectName: "sidebar-views-head"
-                visible: root.expanded
                 anchors.left: parent.left; anchors.leftMargin: Theme.spMd
                 anchors.verticalCenter: parent.verticalCenter
                 text: I18n.t("sidebar.myViews")
@@ -406,11 +407,6 @@ Rectangle {
                 font.pixelSize: Theme.fsXs
                 Accessible.role: Accessible.Heading
                 Accessible.name: text
-            }
-            Rectangle {
-                visible: !root.expanded
-                anchors.centerIn: parent
-                width: 24; height: 1; color: Theme.border
             }
         }
         Text {
@@ -428,6 +424,7 @@ Rectangle {
         ListView {
             id: viewsList
             objectName: "sidebar-views-list"
+            visible: root.expanded
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
@@ -438,6 +435,7 @@ Rectangle {
             ScrollBar.vertical: ThinScrollBar { objectName: "sidebar-views-scrollbar" }
             delegate: ViewRow {}
         }
+        Item { visible: !root.expanded; Layout.fillHeight: true }
 
         NavRow {
             id: settingsRow

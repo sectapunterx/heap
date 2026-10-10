@@ -73,6 +73,25 @@ TestCase {
         compare(v.dayData.load.tasks, 90);
     }
 
+    // R3-001: a task due today that also has a block in the day is still
+    // listed under the deadlines, as the facts line counts it.
+    function test_a_planned_deadline_is_still_listed() {
+        const day = tc.probeDay();
+        const d = AppController.newTaskDraft("todo");
+        d._isNew = true;
+        d.title = "planned and due probe";
+        d.scheduledAt = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 11, 0);
+        d.scheduledHasTime = true;
+        d.dueAt = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 18, 0);
+        d.dueHasTime = true;
+        verify(AppController.saveTask(d));
+        tc.tasks.push(d.id);
+        const data = AppController.todayData(day, false);
+        verify(data.blocks.some(b => b.id === d.id), "the task has a block in the day");
+        verify(data.deadlines.some(t => t.id === d.id), "and is listed under the deadlines");
+        verify(data.facts.dueToday >= 1);
+    }
+
     function test_an_empty_day_says_so_in_one_line() {
         AppController.selectedDate = tc.probeDay();
         const v = createTemporaryQmlObject('import TodoCpp; TodayView { anchors.fill: parent }', host);

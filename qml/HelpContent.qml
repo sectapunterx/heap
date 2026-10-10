@@ -40,18 +40,21 @@ Item {
         {anchor: "help-tips", label: root.tr2("Tips & non-obvious things", "Советы и неочевидные вещи")}
     ]
 
-    component HelpCard: Rectangle {
+    // A section of the guide: plain text on the reader's own surface, a
+    // hairline between sections — no card inside the card (R3-012).
+    component HelpCard: Item {
         Layout.fillWidth: true
-        radius: Theme.radiusLg
-        color: Theme.panel
-        border.color: Theme.border
-        border.width: 1
         default property alias content: inner.data
-        implicitHeight: inner.implicitHeight + 24
+        implicitHeight: inner.implicitHeight + Theme.sp2xl
+        Rectangle {
+            anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+            height: 1
+            color: Theme.border
+        }
         ColumnLayout {
             id: inner
-            anchors.fill: parent
-            anchors.margins: Theme.sp2xl
+            anchors.left: parent.left
+            anchors.right: parent.right
             spacing: Theme.spLg
         }
     }
@@ -59,43 +62,43 @@ Item {
     component H2: Text {
         color: Theme.text
         font.pixelSize: Theme.fsLg
-        font.weight: Theme.fwTitle
-        font.family: Theme.fontMono
+        font.weight: Theme.fwHeading
+        font.family: Theme.fontUi
         Layout.fillWidth: true
     }
 
     component H3: Text {
-        color: Theme.accentStrong
+        color: Theme.text
         font.pixelSize: Theme.fsMd
-        font.family: Theme.fontMono
+        font.family: Theme.fontUi
         font.weight: Theme.fwTitle
         Layout.fillWidth: true
         Layout.topMargin: Theme.spSm
     }
 
     component Body: Text {
-        color: Theme.text
+        color: Theme.textMuted
+        font.family: Theme.fontUi
         font.pixelSize: Theme.fsMd
         wrapMode: Text.WordWrap
-        lineHeight: 1.35
+        lineHeight: 1.5
         Layout.fillWidth: true
     }
 
     component Hint: Text {
-        color: Theme.textMuted
+        color: Theme.textDim
+        font.family: Theme.fontUi
         font.pixelSize: Theme.fsSm
         wrapMode: Text.WordWrap
-        font.italic: true
         Layout.fillWidth: true
     }
 
     component Kbd: Text {
         property string keys: ""
         text: keys
-        color: Theme.accentStrong
+        color: Theme.textMuted
         font.family: Theme.fontMono
         font.pixelSize: Theme.fsSm
-        font.weight: Theme.fwTitle
     }
 
     ColumnLayout {
@@ -106,33 +109,22 @@ Item {
 
         // ─────────────────────────────────────────── Intro
         HelpCard {
-            RowLayout {
-                spacing: Theme.spXl
+            ColumnLayout {
+                spacing: Theme.sp2xs
                 Layout.fillWidth: true
-                Rectangle {
-                    width: 36; height: 36; radius: Theme.radius
-                    color: Theme.accent
-                    Text {
-                        anchors.centerIn: parent
-                        text: "?"
-                        color: Theme.textOnAccent
-                        font.pixelSize: Theme.fsXl
-                        font.weight: Theme.fwTitle
-                    }
+                Text {
+                    text: root.tr2("Getting started", "С чего начать")
+                    color: Theme.text
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsXl
+                    font.weight: Theme.fwHeading
                 }
-                ColumnLayout {
-                    spacing: Theme.sp2xs
-                    Layout.fillWidth: true
-                    H2 {
-                        text: root.tr2("lowkey help",
-                                      "Справка lowkey")
-                    }
-                    Text {
-                        text: root.tr2("Everything the app can do, in one place.",
-                                      "Всё, что умеет приложение, в одном месте.")
-                        color: Theme.textMuted
-                        font.pixelSize: Theme.fsSm
-                    }
+                Text {
+                    text: root.tr2("Everything the app can do, in one place.",
+                                  "Всё, что умеет приложение, в одном месте.")
+                    color: Theme.textDim
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
                 }
             }
             Body {
@@ -149,33 +141,21 @@ Item {
             }
             Repeater {
                 model: root.tocModel
-                delegate: Rectangle {
+                delegate: Item {
                     id: tocRow
                     required property var modelData
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 28
-                    radius: Theme.radiusMd
-                    color: tocMa.hovered ? Theme.panel2 : "transparent"
-                    border.color: tocMa.hovered ? Theme.border : "transparent"
-                    border.width: 1
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: Theme.spLg
-                        anchors.rightMargin: Theme.spLg
-                        spacing: Theme.spMd
-                        Text {
-                            text: "›"
-                            color: Theme.accentStrong
-                            font.family: Theme.fontMono
-                            font.pixelSize: Theme.fsMd
-                        }
-                        Text {
-                            text: modelData.label
-                            color: tocMa.hovered ? Theme.accentStrong : Theme.text
-                            font.pixelSize: Theme.fsMd
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
-                        }
+                    Layout.preferredHeight: Theme.px(18)
+                    Text {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: tocRow.modelData.label
+                        color: tocMa.hovered ? Theme.text : Theme.textMuted
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsMd
+                        font.underline: tocMa.hovered
+                        elide: Text.ElideRight
                     }
                     ClickArea {
                         id: tocMa
