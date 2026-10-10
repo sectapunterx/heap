@@ -252,6 +252,29 @@ jobs:
   # published (release.yml gates publishing on a pushed tag). The grants match
   # what release.yml's jobs declare; its publish job does not run here.
   # ──────────────────────────────────────────────────────────────────
+  # ──────────────────────────────────────────────────────────────────
+  # Keep the 10 GB Actions cache to what the next runs restore: the newest
+  # entry of each kind on master and feature. Older copies, tags' and
+  # stale PR/branch entries go (see .github/scripts/prune_caches.py).
+  # ──────────────────────────────────────────────────────────────────
+  prune-caches:
+    name: prune caches
+    # After the jobs above have saved tonight's entries.
+    needs: [full-ci, latest-qt, coverage, benchmarks, deep-fuzz]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Prune
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/prune_caches.py "${{ github.repository }}"
+
   release-dry-run:
     name: release dry run
     uses: ./.github/workflows/release.yml

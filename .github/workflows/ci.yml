@@ -318,39 +318,44 @@ jobs:
       # Linux + macOS. Windows builds inside MSYS2 with MSYS2's own ccache, so
       # it only needs the cache directory carried between runs (below).
       #
-      # Only pushes (master, feature) save a ccache; a PR restores its base
-      # branch's. Every PR saving its own pushed the repository past GitHub's
-      # 10 GB cache limit, the oldest entries — master's and feature's among
-      # them — were evicted, and the next build started cold: 20 minutes for
-      # Windows instead of one.
+      # Only branch runs (pushes to master/feature, nightly) save a ccache; a
+      # PR restores its base branch's, a tag saves nothing (no one could read
+      # it). Every PR saving its own pushed the repository past GitHub's 10 GB
+      # cache limit, the oldest entries — master's and feature's among them —
+      # were evicted, and the next build started cold: 20 minutes for Windows
+      # instead of one. And only a ccache that missed enough is saved again
+      # ("Save ccache" below); nightly prunes the older copies.
       - name: Setup ccache (linux, macos)
         if: runner.os != 'Windows'
         uses: hendrikmuhs/ccache-action@f09c25b45002a07be2955cbe52e8cee55643f89d # v1.2.24
         with:
           key: ${{ runner.os }}-ccache
-          save: ${{ github.event_name == 'push' }}
+          save: false
 
       # Without this the MSYS2 ccache starts empty on every run and only adds
-      # overhead. Unique key per commit; restore-keys picks up the newest one
-      # the run can see. Saved by pushes only (below), as on Linux and macOS.
+      # overhead. Unique key per run; restore-keys picks up the newest one
+      # the run can see. Saved as on Linux and macOS (below).
       - name: Restore ccache (windows)
         if: runner.os == 'Windows'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ github.workspace }}/.ccache
-          key: ${{ runner.os }}-ccache-${{ github.sha }}
+          key: ${{ runner.os }}-ccache-${{ github.run_id }}
           restore-keys: ${{ runner.os }}-ccache-
 
-      # Same update policy and Qt package set as release.yml's package-windows,
-      # so CI tests the Qt that ships. qt6-svg and qtkeychain were missing here;
-      # a release without Qt6Svg (v0.4.3) went unnoticed partly because of it.
+      # Same Qt package set as release.yml's package-windows, so CI tests the
+      # Qt that ships. qt6-svg and qtkeychain were missing here; a release
+      # without Qt6Svg (v0.4.3) went unnoticed partly because of it. The full
+      # tier (nightly, release tags) updates MSYS2 first as the release does;
+      # the fast one takes the cached packages as they are, which saves a
+      # minute and a half (a Qt update reaches PRs a night later).
       - name: Setup MSYS2 (windows)
         id: msys2
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
         with:
           msystem: UCRT64
-          update: true
+          update: ${{ needs.changes.outputs.full == 'true' }}
           install: >-
             mingw-w64-ucrt-x86_64-qt6-base
             mingw-w64-ucrt-x86_64-qt6-declarative
@@ -392,6 +397,7 @@ jobs:
       - name: Build (macos)
         if: runner.os == 'macOS'
         run: |
+          ccache -z
           cmake --build build --parallel --target heap heap_all_tests
 
       - name: Configure (linux)
@@ -406,6 +412,7 @@ jobs:
       - name: Build (linux)
         if: runner.os == 'Linux'
         run: |
+          ccache -z
           cmake --build build --parallel --target heap heap_all_tests
 
       - name: Configure (windows)
@@ -432,12 +439,30 @@ jobs:
           cmake --build build --parallel --target heap heap_all_tests
           ccache -s
 
-      - name: Save ccache (windows)
-        if: runner.os == 'Windows' && github.event_name == 'push'
+      # How stale the restored ccache was: a copy that hit nearly everything
+      # is not worth another few hundred MB of the 10 GB cache.
+      - name: Count ccache misses
+        id: ccache-misses
+        shell: bash
+        env:
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then export PATH="$(cygpath -u '${{ steps.msys2.outputs.msys2-location }}')/ucrt64/bin:$PATH"; fi
+          misses=$(ccache --print-stats 2>/dev/null | awk -F'\t' '$1 == "cache_miss" { print $2 }')
+          # Unreadable stats: save rather than let the cache go stale.
+          echo "misses=${misses:-9999}" >> "$GITHUB_OUTPUT"
+          echo "ccache misses: ${misses:-unknown}"
+
+      - name: Save ccache
+        if: >-
+          ${{ github.event_name != 'pull_request' && github.ref_type == 'branch'
+              && fromJSON(steps.ccache-misses.outputs.misses) > 30 }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ github.workspace }}/.ccache
-          key: ${{ runner.os }}-ccache-${{ github.sha }}
+          # The prefixes the restores above look for: hendrikmuhs/ccache-action
+          # puts "ccache-" in front of its key.
+          key: ${{ runner.os == 'Windows' && 'Windows-ccache' || format('ccache-{0}-ccache', runner.os) }}-${{ github.run_id }}
 
       # Tests run on the runner that built them. A separate test job meant a
       # tarred build tree up and down, a second Qt / MSYS2 install, and — via
@@ -639,8 +664,8 @@ jobs:
           key: ${{ runner.os }}-asan-ccache
           # -g + sanitizer objects are several times larger than Release ones.
           max-size: 1G
-          # Pushes only, see the build job.
-          save: ${{ github.event_name == 'push' }}
+          # Branch runs only, see the build job.
+          save: ${{ github.event_name != 'pull_request' && github.ref_type == 'branch' }}
 
       - name: Configure with sanitizers
         run: |
