@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import TodoCpp
+import "ArmGuard.js" as ArmGuard
 
 // The time machine (APP-162, X-Dlg-TimeMachine): the snapshots in
 // <dataDir>/history, and a way back to any of them. First what would change,
@@ -463,6 +464,7 @@ Popup {
                     id: restoreAllBtn
                     objectName: "time-machine-restore-all"
                     property bool armed: false
+                    property real armedAt: 0
                     primary: true
                     solid: Style.fills
                     text: restoreAllBtn.armed ? I18n.t("tm.restoreAll.confirm") : I18n.t("tm.restoreAll")
@@ -470,9 +472,11 @@ Popup {
                         if (!root.current) return;
                         if (!restoreAllBtn.armed) {
                             restoreAllBtn.armed = true;
+                            restoreAllBtn.armedAt = Date.now();
                             disarm.restart();
                             return;
                         }
+                        if (ArmGuard.tooSoon(restoreAllBtn.armedAt)) return;  // a double-click (IDIOT-SHELL-5)
                         restoreAllBtn.armed = false;
                         if (AppController.restoreSnapshot(root.current.name)) root.close();
                     }

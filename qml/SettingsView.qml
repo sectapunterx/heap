@@ -15,6 +15,7 @@ import QtQuick.Controls
 import QtQuick.Controls.Basic
 import TodoCpp
 import "SettingsIndex.js" as Idx
+import "ArmGuard.js" as ArmGuard
 
 Item {
     id: root
@@ -2522,11 +2523,30 @@ Item {
                     checked: !(root.settings.shortcuts && root.settings.shortcuts.mouseHints === false)
                     onToggled: (checked) => root.set("shortcuts", "mouseHints", checked)
                 }
+                // Every custom binding at once: the same two-step as the
+                // Hotkeys panel's reset-all, it went on one click
+                // (IDIOT-SHELL-13).
                 ActRow {
+                    id: keysResetAll
                     objectName: "settings-keys-reset-all"
+                    property bool armed: false
+                    property real armedAt: 0
                     label: I18n.t("settings.keys.resetAll")
-                    actions: [ ({ value: "reset", label: I18n.t("settings.keys.resetAllButton") }) ]
-                    onTriggered: AppController.resetAllShortcuts()
+                    actions: [ ({ value: "reset", label: keysResetAll.armed ? I18n.t("hotkeys.allClear.confirm")
+                                                                            : I18n.t("settings.keys.resetAllButton") }) ]
+                    onTriggered: {
+                        if (!keysResetAll.armed) {
+                            keysResetAll.armed = true;
+                            keysResetAll.armedAt = Date.now();
+                            keysResetDisarm.restart();
+                            return;
+                        }
+                        if (ArmGuard.tooSoon(keysResetAll.armedAt)) return;  // a double-click (IDIOT-SHELL-5)
+                        keysResetAll.armed = false;
+                        keysResetDisarm.stop();
+                        AppController.resetAllShortcuts();
+                    }
+                    Timer { id: keysResetDisarm; interval: 4000; onTriggered: keysResetAll.armed = false }
                 }
             }
         }
@@ -3454,13 +3474,15 @@ Item {
                         ActionButton {
                             id: restoreBtn
                             objectName: "settings-restore-backup"
+                            property real armedAt: 0
                             text: restoreBtn.armed ? I18n.t("settings.data.restore.confirm") : I18n.t("settings.data.restore.button")
                             Timer { id: restoreDisarm; interval: 3500; onTriggered: restoreBtn.armed = false }
                             onActivated: {
                                 if (!restoreBtn.armed) {
                                     restoreBtn.armed = true;
+                                    restoreBtn.armedAt = Date.now();
                                     restoreDisarm.restart();
-                                } else {
+                                } else if (!ArmGuard.tooSoon(restoreBtn.armedAt)) {  // not a double-click (IDIOT-SHELL-5)
                                     restoreBtn.armed = false;
                                     restoreDisarm.stop();
                                     AppController.restoreFromBackup(modelData.fileName);
@@ -3484,6 +3506,7 @@ Item {
                     label: I18n.t("att.cleanup.title")
                     property var unused: ({ count: 0, bytes: 0, sizeText: "" })
                     property bool armed: false
+                    property real armedAt: 0
                     function refresh() { attCleanup.unused = AppController.unusedAttachments(); attCleanup.armed = false; }
                     Component.onCompleted: attCleanup.refresh()
                     hint: attCleanup.unused.count > 0
@@ -3498,9 +3521,11 @@ Item {
                         onActivated: {
                             if (!attCleanup.armed) {
                                 attCleanup.armed = true;
+                                attCleanup.armedAt = Date.now();
                                 attCleanupDisarm.restart();
                                 return;
                             }
+                            if (ArmGuard.tooSoon(attCleanup.armedAt)) return;  // a double-click (IDIOT-SHELL-5)
                             attCleanupDisarm.stop();
                             AppController.cleanUpUnusedAttachments();
                             attCleanup.refresh();

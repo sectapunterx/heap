@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import TodoCpp
+import "ArmGuard.js" as ArmGuard
 
 Popup {
     id: root
@@ -40,12 +41,15 @@ Popup {
     // "↺ all" wipes every custom binding. The first press arms it, the
     // second (within 4 s) resets — the same two-step as Start fresh.
     property bool resetAllArmed: false
+    property real _resetAllArmedAt: 0
     function _pressResetAll() {
         if (!resetAllArmed) {
             resetAllArmed = true;
+            _resetAllArmedAt = Date.now();
             resetAllDisarm.restart();
             return;
         }
+        if (ArmGuard.tooSoon(_resetAllArmedAt)) return;  // a double-click (IDIOT-SHELL-5)
         resetAllArmed = false;
         resetAllDisarm.stop();
         capturingId = "";

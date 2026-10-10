@@ -15,6 +15,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import TodoCpp
 import "ThemePresets.js" as Presets
+import "ArmGuard.js" as ArmGuard
 
 ColumnLayout {
     id: ts
@@ -315,11 +316,13 @@ ColumnLayout {
             id: delBtn
             objectName: "theme-delete"
             property bool armed: false
+            property real armedAt: 0
             visible: !ts.currentIsBuiltin
             danger: true
             text: armed ? I18n.t("settings.theme.deleteConfirm") : I18n.t("common.delete")
             onClicked: {
-                if (!armed) { armed = true; disarm.restart(); return; }
+                if (!armed) { armed = true; armedAt = Date.now(); disarm.restart(); return; }
+                if (ArmGuard.tooSoon(armedAt)) return;  // a double-click (IDIOT-SHELL-5)
                 armed = false;
                 ts.remove(ts.currentId);
             }
