@@ -389,7 +389,7 @@ TEST_F(AppControllerTest, KeysAreWrittenTheKeymapWay) {
   EXPECT_EQ(app_->shortcutText(QStringLiteral("task.done")), QStringLiteral("d"));
 #ifndef Q_OS_MACOS
   EXPECT_EQ(app_->shortcutText(QStringLiteral("task.due")), QStringLiteral("Shift S"));
-  EXPECT_EQ(app_->shortcutText(QStringLiteral("board.open")), QStringLiteral("Enter"));
+  EXPECT_EQ(app_->shortcutText(QStringLiteral("board.open")), QStringLiteral("↵"));
   EXPECT_EQ(app_->shortcutText(QStringLiteral("palette.open")), QStringLiteral("Ctrl K"));
 #endif
   // A rebinding shows at once.

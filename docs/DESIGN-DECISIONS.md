@@ -468,3 +468,24 @@ progressive disclosure, content priority, state preservation). One entry each.
   (the Russian key, R3-136, plus p0).
 
 - Lead (2026-10-10, r4 merge): two groups each built the "no Done column" card (R3-137) and the menu column/danger ink; one of each stays (DoneColumnDialog; the tasks group's menu rule). Line height keeps both: notes 1.7 (R3-083), the task document 1.65 (R3-038).
+
+## 0.8.1 r5 — Knowledge, command line, keys
+
+- **R4-073 · The quick note always goes to «Входящие».** The Inbox is the root-level note named
+  "Входящие"/"Inbox" (either language, so a language switch does not start a second one), made on
+  first use. The open note stays open (state-preservation, back-stack-integrity); the toast
+  "Добавлено в «Входящие»" says where it went. With no note open the Inbox opens.
+- **R2-069 · The quick-note draft is stored, not kept in the popup.** `settings.quickNoteDraft`
+  = {text, attachId}: written 0.6 s after typing stops (a crash keeps it) and on close, read on
+  every open (the main window and the capture window share it), removed on save. A draft brings
+  back its own task; with no draft the focused/branch task is preselected as before.
+- **R4-077 · One way to Knowledge.** "Перейти к докам" / "Перейти к заметкам" leave the command
+  line; "Перейти в «Знания»" is the command. Their catalogue ids stay so a key someone bound keeps
+  working, and Settings → Клавиши lists them only while they hold a key (no duplicate rows,
+  no lost binding).
+- **R4-080 · Enter is written ↵ in every key label** (keyText, so the cheat sheet, menus and
+  Settings agree with the sheets' hints).
+- **R4-081 · No "Панель дня Ctrl \" row.** The day panel was removed by decision; the cheat sheet
+  does not list a key for something that no longer exists.
+- **R4-082 · Cheat sheet footer** reads "Изменить сочетание — Настройки → Клавиши" and stays a
+  link to that section (keyboard-reachable); the intro wraps at ~900px.
