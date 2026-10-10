@@ -332,6 +332,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"local.tagDeleted", {"Tag #%1 removed from %2 card(s)", "Метка #%1 снята с карточек: %2"}},
       {"local.itemToCard", {"%1: now a card of its own", "%1: теперь своя карточка"}},
       {"local.cardBack", {"%1 is a list item again", "%1 снова пункт списка"}},
+      {"local.blockCycle", {"%1 already blocks %2: the link would make a loop", "%1 уже блокирует %2: связь замкнула бы круг"}},
       {"local.cardBackTimed", {"%1 has tracked time: it stays a card", "У %1 есть учтённое время: она остаётся карточкой"}},
       {"local.cardBackRefused",
        {"%1 holds its own text, labels or links: it stays a card", "В %1 есть свой текст, метки или связи: она остаётся карточкой"}},

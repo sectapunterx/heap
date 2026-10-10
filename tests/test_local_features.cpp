@@ -410,3 +410,16 @@ int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
+
+TEST_F(LocalFeatures, ABlockingLoopIsRefused) {
+  // IDIOT-TASKS-14.
+  addLocal(QStringLiteral("B-1"));
+  addLocal(QStringLiteral("B-2"));
+  addLocal(QStringLiteral("B-3"));
+  ASSERT_TRUE(app_->addBlockLink(QStringLiteral("B-1"), QStringLiteral("B-2"), true));
+  ASSERT_TRUE(app_->addBlockLink(QStringLiteral("B-2"), QStringLiteral("B-3"), true));
+  QSignalSpy toasts(app_.get(), &AppController::toast);
+  EXPECT_FALSE(app_->addBlockLink(QStringLiteral("B-3"), QStringLiteral("B-1"), true));
+  EXPECT_EQ(toasts.count(), 1);
+  EXPECT_TRUE(task("B-3")->links.isEmpty());
+}

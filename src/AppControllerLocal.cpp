@@ -842,6 +842,27 @@ bool AppController::addBlockLink(const QString& id, const QString& ref, bool blo
       return true;
     }
   }
+  // A path back from `blocked` to `blocker` makes a cycle neither side can
+  // ever leave (IDIOT-TASKS-14): refused, with the reason.
+  QSet<QString> seen;
+  QStringList queue{blocked};
+  while(!queue.isEmpty()) {
+    const QString at = queue.takeFirst();
+    if(at == blocker) {
+      emit toast(tr_("local.blockCycle").arg(blocked, blocker), QStringLiteral("warning"));
+      return false;
+    }
+    const int r = m_tasks.indexOfId(at);
+    if(r < 0 || seen.contains(at)) {
+      continue;
+    }
+    seen.insert(at);
+    for(const TaskLink& l : m_tasks.items().at(r).links) {
+      if(l.type == QStringLiteral("blocks")) {
+        queue << l.targetId;
+      }
+    }
+  }
   const UndoScope scope(this, tr_("task.editUndone").arg(id));
   t.links.append(TaskLink{QStringLiteral("blocks"), blocked});
   m_tasks.upsert(t);
