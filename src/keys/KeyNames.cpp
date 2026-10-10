@@ -407,16 +407,27 @@ QString reservedReason(const QString& seq) {
 bool isRepeatableAction(const QString& id) {
   // A bare u is undone once per press (IDIOT-TASKS-4); Ctrl+Z repeats as
   // every editor's does.
-  static const QStringList kExact = {QStringLiteral("undo"), QStringLiteral("redo"), QStringLiteral("redo.alt"),
-                                     QStringLiteral("cal.prev"), QStringLiteral("cal.next"),
-                                     QStringLiteral("cal.prevDay"), QStringLiteral("cal.nextDay"),
-                                     QStringLiteral("zoom.in"), QStringLiteral("zoom.out"),
-                                     QStringLiteral("notes.next"), QStringLiteral("notes.prev"),
-                                     QStringLiteral("nav.back"), QStringLiteral("nav.forward"),
-                                     QStringLiteral("region.next"), QStringLiteral("region.prev")};
-  static const QStringList kPrefixes = {QStringLiteral("board.cursor"), QStringLiteral("board.move"),
-                                        QStringLiteral("board.select"), QStringLiteral("cursor."),
-                                        QStringLiteral("cal.task"),     QStringLiteral("cal.longer"),
+  static const QStringList kExact = {QStringLiteral("undo"),
+                                     QStringLiteral("redo"),
+                                     QStringLiteral("redo.alt"),
+                                     QStringLiteral("cal.prev"),
+                                     QStringLiteral("cal.next"),
+                                     QStringLiteral("cal.prevDay"),
+                                     QStringLiteral("cal.nextDay"),
+                                     QStringLiteral("zoom.in"),
+                                     QStringLiteral("zoom.out"),
+                                     QStringLiteral("notes.next"),
+                                     QStringLiteral("notes.prev"),
+                                     QStringLiteral("nav.back"),
+                                     QStringLiteral("nav.forward"),
+                                     QStringLiteral("region.next"),
+                                     QStringLiteral("region.prev")};
+  static const QStringList kPrefixes = {QStringLiteral("board.cursor"),
+                                        QStringLiteral("board.move"),
+                                        QStringLiteral("board.select"),
+                                        QStringLiteral("cursor."),
+                                        QStringLiteral("cal.task"),
+                                        QStringLiteral("cal.longer"),
                                         QStringLiteral("cal.shorter")};
   if(kExact.contains(id)) {
     return true;
