@@ -37,13 +37,13 @@ Copy lives in `src/data/i18n.ts`; section names below follow the page.
 |---|---|---|---|---|
 | 12 | Repositories are added in Settings → Git; the branch is read from `.git/HEAD` | `GitWatcher.cpp` ("Watched repositories") | built | ☐ |
 | 13 | A branch name with a task id (APP-112) puts that task at the top of the window | `TopBar.qml` "Working on %1" | built | ☐ |
-| 14 | Heading: "the right task is already highlighted" | the top bar names the task; the board card itself is **not** highlighted (`focusedTaskId` is used nowhere else) | **gap** — highlight the card in 0.8.0, or reword to "is already at the top" | ☐ |
+| 14 | Heading: "the right task is already highlighted" | the top bar names the task, and that one board card carries a branch icon + the branch name (`TaskCard.qml` `tc-branch`, APP-281 A3; re-verified 0.8.1 r5) | built | ☐ |
 | 15 | PR state from your own `gh` / `glab`, about once a minute; on the card under the cursor | `GitWatcher.cpp:517`, `TaskCard.qml:761`; "Pull PR state (gh / glab)" | built | ☐ |
 | 16 | On a branch switch the task moves to In Progress; off in Settings → Git | "Move task to In Progress", on by default | built | ☐ |
 | 17 | No bindings, no plugins | matching by id in the branch name; no IDE plugin | built | ☐ |
 | 18 | The scene uses `git switch APP-112-…` (an existing branch), not `git switch -c` | a new branch has no PR yet, so the PR line would be false with `-c` | — | — |
 
-The branch name is deliberately not drawn on the card: cards show no branch by design (`TaskCard.qml:296`).
+Only the card whose branch is checked out shows it (branch icon + name); every other card shows no branch (DG-023).
 
 ## Keyboard (per `New heap design/keymap.md`)
 
