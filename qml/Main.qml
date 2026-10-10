@@ -3086,7 +3086,7 @@ ApplicationWindow {
     FileDialog {
         id: exportJsonDialog
         fileMode: FileDialog.SaveFile
-        nameFilters: ["heap. profile (*.json)", "All files (*)"]
+        nameFilters: ["lowkey profile (*.json)", "All files (*)"]
         defaultSuffix: "json"
         title: I18n.t("dialog.exportProfile.title")
         onAccepted: {
