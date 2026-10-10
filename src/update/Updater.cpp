@@ -20,7 +20,7 @@ namespace {
 
 // GitHub REST endpoint for the newest *published* (non-draft, non-prerelease)
 // release of the repo.
-constexpr auto kLatestReleaseUrl = "https://api.github.com/repos/sectapunterx/heap/releases/latest";
+constexpr auto kLatestReleaseUrl = "https://api.github.com/repos/sectapunterx/lowkey/releases/latest";
 // A check that has not answered by then is not going to; without a limit a
 // dead network held "Checking for updates…" on screen for minutes.
 constexpr int kCheckTimeoutMs = 15 * 1000;

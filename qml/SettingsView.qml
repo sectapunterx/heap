@@ -3717,7 +3717,7 @@ Item {
                     // history stays on GitHub.
                     onTriggered: {
                         if (typeof settingsBus !== "undefined" && settingsBus.openWhatsNew && settingsBus.openWhatsNew()) return;
-                        Qt.openUrlExternally("https://github.com/sectapunterx/heap/releases");
+                        Qt.openUrlExternally("https://github.com/sectapunterx/lowkey/releases");
                     }
                 }
                 ActRow {
@@ -3725,7 +3725,7 @@ Item {
                     label: I18n.t("settings.about.licenses")
                     hint: I18n.t("settings.about.licenses.hint")
                     actions: [ ({ value: "open", label: I18n.t("settings.help.open") }) ]
-                    onTriggered: Qt.openUrlExternally("https://github.com/sectapunterx/heap/blob/master/THIRD_PARTY_NOTICES.md")
+                    onTriggered: Qt.openUrlExternally("https://github.com/sectapunterx/lowkey/blob/master/THIRD_PARTY_NOTICES.md")
                 }
             }
             MoreBlock {

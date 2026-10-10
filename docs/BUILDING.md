@@ -1,7 +1,7 @@
 # Building heap. from source
 
 Prebuilt binaries for Windows, macOS and Linux are attached to every
-[GitHub release](https://github.com/sectapunterx/heap/releases). Build from source if you want to hack on heap. or
+[GitHub release](https://github.com/sectapunterx/lowkey/releases). Build from source if you want to hack on heap. or
 run an unreleased commit.
 
 You need **Qt 6.9+** (what CI builds and tests) and a **C++20** toolchain. On any platform:

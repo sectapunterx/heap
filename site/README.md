@@ -1,6 +1,6 @@
 # lowkey website
 
-The site at <https://sectapunterx.github.io/heap/>: one page in two languages — `/` English, `/ru/` Russian —
+The site at <https://sectapunterx.github.io/lowkey/>: one page in two languages — `/` English, `/ru/` Russian —
 plus a download page for each (`/download/`, `/ru/download/`) and a 404. Pages of the heap 0.7 site
 (`/demo/`, `/docs/…`, `/features/…`, `/compare/`, `/privacy/`, `/changelog/`, `/brand/`) redirect to the
 closest place (`astro.config.mjs`).

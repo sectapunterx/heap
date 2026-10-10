@@ -151,7 +151,7 @@ which is unsafe to embed. `heap.` uses the **Device Authorization Grant** instea
 - **Enable Device Flow** is checked; scope `repo`.
 
 To recreate: <https://github.com/settings/applications/new> → name `heap`,
-homepage `https://github.com/sectapunterx/heap`, callback `http://127.0.0.1:51789/`,
+homepage `https://github.com/sectapunterx/lowkey`, callback `http://127.0.0.1:51789/`,
 tick **Enable Device Flow** → Register → copy the **Client ID** into
 `HEAP_OAUTH_GITHUB_CLIENT_ID` in `OAuthClients.h`.
 

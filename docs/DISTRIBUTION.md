@@ -1,6 +1,6 @@
 # Distribution channels
 
-`heap.` ships from [GitHub Releases](https://github.com/sectapunterx/heap/releases).
+`heap.` ships from [GitHub Releases](https://github.com/sectapunterx/lowkey/releases).
 Package-manager manifests reuse those same release assets. This doc tracks each
 free channel, the manifest that feeds it, and the exact steps to submit/update.
 
@@ -20,7 +20,7 @@ external accounts. See "Not yet done" below.
 This repository is a Scoop bucket (`bucket/heap.json`). Users install with:
 
 ```powershell
-scoop bucket add heap https://github.com/sectapunterx/heap
+scoop bucket add heap https://github.com/sectapunterx/lowkey
 scoop install heap
 ```
 
@@ -49,7 +49,7 @@ Manifests live in `packaging/winget/` (schema 1.6.0):
    ```
    or manually fork [`microsoft/winget-pkgs`](https://github.com/microsoft/winget-pkgs),
    copy the three files to
-   `manifests/s/sectapunterx/heap/0.4.2/`, and open a PR.
+   `manifests/s/sectapunterx/lowkey/0.4.2/`, and open a PR.
 3. On each release, bump `PackageVersion` + `InstallerUrl` + `InstallerSha256`
    (`sha256sum heap-<ver>-windows-setup.exe`) and repeat. `wingetcreate update`
    automates this.

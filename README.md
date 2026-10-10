@@ -7,15 +7,15 @@
 <p align="center">A developer’s workday in one window — tickets, meetings and notes, from the keyboard.</p>
 
 <p align="center">
-  <a href="https://github.com/sectapunterx/heap/releases/latest"><b>Download</b></a> ·
-  <a href="https://sectapunterx.github.io/heap/">Website — the tour</a> ·
+  <a href="https://github.com/sectapunterx/lowkey/releases/latest"><b>Download</b></a> ·
+  <a href="https://sectapunterx.github.io/lowkey/">Website — the tour</a> ·
   <a href="#documentation">Docs</a>
 </p>
 
 <div align="center">
 
-[![Release](https://img.shields.io/github/v/release/sectapunterx/heap?sort=semver)](https://github.com/sectapunterx/heap/releases)
-[![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](https://github.com/sectapunterx/heap/releases/latest)
+[![Release](https://img.shields.io/github/v/release/sectapunterx/lowkey?sort=semver)](https://github.com/sectapunterx/lowkey/releases)
+[![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](https://github.com/sectapunterx/lowkey/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-blue)](#license)
 
 </div>
@@ -23,12 +23,12 @@
 lowkey is a personal desktop app: your tickets from GitHub, GitLab, Jira and nine more trackers, your meetings, and
 your notes, in one window you drive from the keyboard. It keeps everything in a file on your disk, needs no
 account, and writes nothing to your trackers unless you switch that on. What it looks like and why it exists is on
-the [website](https://sectapunterx.github.io/heap/); this page is about getting it running and finding your way
+the [website](https://sectapunterx.github.io/lowkey/); this page is about getting it running and finding your way
 around.
 
 ## Install
 
-Download from [Releases](https://github.com/sectapunterx/heap/releases/latest):
+Download from [Releases](https://github.com/sectapunterx/lowkey/releases/latest):
 
 | System | File | Then |
 | --- | --- | --- |

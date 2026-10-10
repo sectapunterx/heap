@@ -50,7 +50,7 @@ workflow refuses to publish if the two disagree.
 
 Every asset is listed in `SHA256SUMS` and, in the same form, in a collapsed
 "SHA-256 checksums" block of the release notes; each also has a build-provenance
-attestation (`gh attestation verify <file> --repo sectapunterx/heap`).
+attestation (`gh attestation verify <file> --repo sectapunterx/lowkey`).
 
 ## In-app update (APP-125)
 
@@ -172,7 +172,7 @@ so every release so far shipped unsigned (`Get-AuthenticodeSignature` →
    wait for approval. MFA must be on for the GitHub and SignPath accounts.
 2. In SignPath: create the project (slug e.g. `heap`), a signing policy (e.g.
    `release-signing`), link the **GitHub.com** trusted build system and install
-   the SignPath GitHub App on `sectapunterx/heap`.
+   the SignPath GitHub App on `sectapunterx/lowkey`.
 3. Add the two artifact configurations from `packaging/windows/signpath/`.
 4. Create an API token for a user with *submitter* rights on that policy.
 5. In GitHub → Settings → Secrets and variables → Actions: secret

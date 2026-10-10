@@ -7,7 +7,7 @@ Open `index.html` for the visual browser with previews and one-click downloads, 
 
 ## Repo path map
 
-| Export file                              | Target path in `sectapunterx/heap`                     |
+| Export file                              | Target path in `sectapunterx/lowkey`                     |
 |------------------------------------------|--------------------------------------------------------|
 | `files/icon/heap-icon.svg`               | `design/brand-export/icon/heap-icon.svg`               |
 | `files/icon/favicon.svg`                 | `design/brand-export/icon/favicon.svg`                 |

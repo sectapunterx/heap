@@ -9092,7 +9092,7 @@ void AppController::reportAnIssue() {
     emit toast(tr_("issue.logCopied"));
   }
 
-  QUrl url(QStringLiteral("https://github.com/sectapunterx/heap/issues/new"));
+  QUrl url(QStringLiteral("https://github.com/sectapunterx/lowkey/issues/new"));
   QUrlQuery query;
   query.addQueryItem(QStringLiteral("title"), QStringLiteral("[bug] "));
   query.addQueryItem(QStringLiteral("body"), body);
@@ -9101,7 +9101,7 @@ void AppController::reportAnIssue() {
 }
 
 void AppController::openIssueReport(const QString& body) const {
-  QUrl url(QStringLiteral("https://github.com/sectapunterx/heap/issues/new"));
+  QUrl url(QStringLiteral("https://github.com/sectapunterx/lowkey/issues/new"));
   QUrlQuery query;
   query.addQueryItem(QStringLiteral("title"), QStringLiteral("[bug] "));
   // What the person saw in the preview, under a line for their own words.

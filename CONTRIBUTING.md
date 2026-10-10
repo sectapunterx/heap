@@ -7,7 +7,7 @@ Thanks for taking a look. This page covers building, testing, what CI checks, an
 Toolchain setup per platform is in [docs/BUILDING.md](docs/BUILDING.md). Once Qt 6.9+ is in place:
 
 ```sh
-git clone https://github.com/sectapunterx/heap && cd heap
+git clone https://github.com/sectapunterx/lowkey && cd lowkey
 cmake -S . -B build && cmake --build build -j        # app
 cmake --build build --target heap_all_tests          # tests
 ctest --test-dir build/tests --output-on-failure
