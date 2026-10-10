@@ -35,7 +35,15 @@ Popup {
     function openAt(draft) {
         const d = draft || {};
         const day = d.date && d.date.getFullYear ? d.date : AppController.selectedDate;
-        const start = d.start !== undefined ? Number(d.start) : AppController.nextFreeSlot(day, 1);
+        let start = d.start !== undefined ? Number(d.start) : AppController.nextFreeSlot(day, 1);
+        // Late in the evening the free-slot search falls back to 23:00, a
+        // slot already begun (IDIOT-CAL-8): from now, rounded up, instead;
+        // the end may run into the next day.
+        const now = new Date();
+        if (d.start === undefined && day.toDateString() === now.toDateString()) {
+            const step = Math.max(1, Theme.snapMinutes) / 60;
+            start = Math.max(start, Math.ceil((now.getHours() + now.getMinutes() / 60) / step) * step);
+        }
         const end = d.end !== undefined && Number(d.end) > start ? Number(d.end) : start + 1;
         root.slot = { date: day, start: start, end: end };
         input.text = "";
