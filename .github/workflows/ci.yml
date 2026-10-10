@@ -158,114 +158,6 @@ jobs:
         run: python3 .github/scripts/date_format_check.py qml src
 
   # ──────────────────────────────────────────────────────────────────
-  # 3. clang-tidy on the changed lines (PR only).
-  # Fails on any finding in a line the PR changed; the rest of a touched file
-  # is left alone. readability-identifier-naming stays off: the legacy code
-  # predates the naming rules and a changed line that merely uses an old name
-  # would be flagged. Pinned to clang-tidy 18, the same as clang-format.
-  # ──────────────────────────────────────────────────────────────────
-  tidy:
-    name: clang-tidy
-    needs: changes
-    # Pushes (master, feature) only warm the build cache below for the PRs.
-    if: >-
-      ${{ (github.event_name == 'pull_request' && needs.changes.outputs.code == 'true')
-          || (github.event_name == 'push' && github.ref_type == 'branch') }}
-    runs-on: ubuntu-24.04
-    # A release PR (feature -> master) touches hundreds of files; 25 minutes
-    # cut it off before it finished.
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 2
-
-      # Qt from the Actions cache, the version the build job uses: Ubuntu's
-      # Qt 6 dev packages came through apt in 20 s on a good day and in four
-      # and a half minutes on a slow mirror. clang-tidy 18, cmake and ninja
-      # ship with the runner image; apt is the fallback.
-      - name: Install system libs
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev libxcb1-dev
-          if ! command -v clang-tidy-18 >/dev/null || ! command -v clang-tidy-diff-18.py >/dev/null || ! command -v ninja >/dev/null; then
-            sudo apt-get install -y --no-install-recommends clang-tidy-18 ninja-build
-          fi
-
-      - name: Install Qt6
-        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
-        with:
-          version: "6.9.1"
-          cache: true
-          modules: qtnetworkauth
-
-      # Generating every target's moc/qmltyperegistrations output took three
-      # of the job's four minutes. The build tree a push left behind is
-      # restored instead, and only what changed since is generated again.
-      # Pushes save it; a PR only restores (see the ccache note in `build`).
-      - name: Restore the build tree
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: build
-          key: tidy-build-qt6.9.1-${{ github.sha }}
-          restore-keys: tidy-build-qt6.9.1-
-
-      # A checkout stamps every file with the current time, which would make
-      # ninja take all of the restored tree as out of date. Every tracked file
-      # is dated far back instead, and those that changed since the commit the
-      # tree was built from are dated now, so exactly they are regenerated.
-      # Without that commit to compare with, everything is regenerated.
-      - name: Date the sources for ninja
-        run: |
-          set -uo pipefail
-          from=$(cat build/.source-sha 2>/dev/null || true)
-          [ -n "$from" ] || { echo "no restored build tree"; exit 0; }
-          if ! git fetch --quiet --depth=1 origin "$from"; then
-            echo "commit $from is gone: regenerating everything"; exit 0
-          fi
-          git ls-files -z | xargs -0 touch -h -d '2000-01-01 00:00:00'
-          git diff --name-only -z "$from" HEAD | xargs -0 -r touch -h -c --
-          echo "changed since $from: $(git diff --name-only "$from" HEAD | wc -l) files"
-
-      # Tests included, so test sources have compile commands too; every
-      # target's moc/autogen output must exist or clang-tidy cannot parse it.
-      - name: Configure (compile_commands.json)
-        run: |
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Debug \
-            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-          ninja -C build -t targets all | sed -nE 's/^([A-Za-z0-9_]+_(autogen|qmltyperegistrations)):.*/\1/p' \
-            | sort -u | xargs ninja -C build
-          git rev-parse HEAD > build/.source-sha
-
-      - name: Save the build tree
-        if: github.event_name == 'push' && github.ref_type == 'branch'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: build
-          key: tidy-build-qt6.9.1-${{ github.sha }}
-
-      - name: Check the changed lines
-        if: github.event_name == 'pull_request'
-        run: |
-          set -uo pipefail
-          # clang-tidy-diff exits non-zero on its own findings; the verdict is
-          # taken from the log below, so the step must not stop here first.
-          # Windows- and macOS-only sources (*_win.cpp, *.mm) are not in this
-          # Linux compile database; tidy would only report their system
-          # headers as missing, so they are left to their own platforms.
-          git diff -U0 HEAD^1 -- '*.cpp' '*.h' \
-            | clang-tidy-diff-18.py -p1 -path build -iregex '(?!.*_win\.cpp$).*\.cpp' \
-                -clang-tidy-binary clang-tidy-18 -j "$(nproc)" -quiet \
-                -checks='-readability-identifier-naming' > tidy.log 2>&1 || true
-          cat tidy.log
-          if grep -qE ': (warning|error): ' tidy.log; then
-            echo "::error::clang-tidy found issues in changed lines (above)"
-            exit 1
-          fi
-
-  # ──────────────────────────────────────────────────────────────────
   # 5. Build + test matrix (Linux, Windows, macOS).
   # ──────────────────────────────────────────────────────────────────
   build:
@@ -406,6 +298,7 @@ jobs:
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DHEAP_WARNINGS_AS_ERRORS=ON \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
@@ -542,6 +435,46 @@ jobs:
         # --perf-log: the startup timings (perf: lines) land in this log for
         # trend-watching; logged only, never judged (APP-161).
         run: build/lowkey --smoke --perf-log --data-dir "$RUNNER_TEMP/smoke"
+
+      # ──────────────────────────────────────────────────────────────────
+      # clang-tidy on the changed lines (PR only), on this job's build tree.
+      # Fails on any finding in a line the PR changed; the rest of a touched
+      # file is left alone. readability-identifier-naming stays off: the
+      # legacy code predates the naming rules and a changed line that merely
+      # uses an old name would be flagged. Pinned to clang-tidy 18 (on the
+      # runner image), the same as clang-format. It was a job of its own,
+      # which spent three to six minutes generating the moc output this build
+      # already has.
+      # ──────────────────────────────────────────────────────────────────
+      - name: Generate the remaining moc output (linux)
+        if: github.event_name == 'pull_request' && runner.os == 'Linux'
+        # The targets this job does not build (CLI, updater) need theirs too,
+        # or clang-tidy cannot parse their sources.
+        run: |
+          ninja -C build -t targets all | sed -nE 's/^([A-Za-z0-9_]+_(autogen|qmltyperegistrations)):.*/\1/p' \
+            | sort -u | xargs ninja -C build
+
+      - name: clang-tidy on the changed lines (linux)
+        if: github.event_name == 'pull_request' && runner.os == 'Linux'
+        run: |
+          set -uo pipefail
+          if ! command -v clang-tidy-18 >/dev/null || ! command -v clang-tidy-diff-18.py >/dev/null; then
+            sudo apt-get install -y --no-install-recommends clang-tidy-18
+          fi
+          # clang-tidy-diff exits non-zero on its own findings; the verdict is
+          # taken from the log below, so the step must not stop here first.
+          # Windows- and macOS-only sources (*_win.cpp, *.mm) are not in this
+          # Linux compile database; tidy would only report their system
+          # headers as missing, so they are left to their own platforms.
+          git diff -U0 HEAD^1 -- '*.cpp' '*.h' \
+            | clang-tidy-diff-18.py -p1 -path build -iregex '(?!.*_win\.cpp$).*\.cpp' \
+                -clang-tidy-binary clang-tidy-18 -j "$(nproc)" -quiet \
+                -checks='-readability-identifier-naming' -extra-arg=-Wno-error > tidy.log 2>&1 || true
+          cat tidy.log
+          if grep -qE ': (warning|error): ' tidy.log; then
+            echo "::error::clang-tidy found issues in changed lines (above)"
+            exit 1
+          fi
 
       # The portable bundle exactly as release.yml assembles it (windeployqt +
       # copy-deps + UCRT), started with a PATH that has no MSYS2 on it — so a DLL
@@ -716,7 +649,7 @@ jobs:
   # below.
   #
   # `if: always()` ensures this job runs even when a dependency fails or is
-  # skipped (PR-only jobs like format-cpp/tidy are skipped on push). The
+  # skipped (PR-only jobs like format-cpp are skipped on push). The
   # gating logic treats `skipped` and `success` as OK and only fails on
   # `failure` or `cancelled` — so the check is green on push (where the
   # PR-only jobs don't run) and on PRs alike.
@@ -730,7 +663,6 @@ jobs:
       - lint-actions
       - ui-tokens
       - format-cpp
-      - tidy
       - build
       - sanitizers
     runs-on: ubuntu-24.04
