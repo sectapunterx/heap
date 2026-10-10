@@ -88,17 +88,6 @@ Menu {
     // each row's naturalWidth, which does not depend on the row's own width,
     // so the menu's width and its rows' widths do not chase each other.
     property int minWidth: 200
-    // The check / glyph column is drawn only when a row of this menu uses
-    // it (R3-101): a menu of plain actions starts its labels at the row's
-    // padding, as the sheets draw every menu without marks.
-    readonly property bool glyphColumn: {
-        for (let i = 0; i < menu.count; i++) {
-            const it = menu.itemAt(i) as AppMenuItem;
-            if (it && it.visible && (it.glyph.length > 0 || it.ring.length > 0 || it.marked || it.checkable))
-                return true;
-        }
-        return false;
-    }
     readonly property int maxWidth: 360
     contentWidth: {
         let w = menu.minWidth - menu.leftPadding - menu.rightPadding;
