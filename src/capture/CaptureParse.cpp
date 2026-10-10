@@ -160,6 +160,10 @@ Parsed parse(const QString& text, const heap::chrono::ChronoParser& chrono, cons
       out.whenPast = isPast(out.when, r.hasTime, now);
       if(r.end.isValid() && r.end > r.start) {
         out.whenEnd = r.end;
+      } else if(r.end.isValid() && r.hasTime && r.end.time() < r.start.time()) {
+        // "22:00-01:00" ends the next morning (IDIOT-CAL-11); the end was
+        // dropped and the meeting got the default length.
+        out.whenEnd = QDateTime(out.when.date().addDays(1), r.end.time());
       }
     }
     if(!r.recurrence.isEmpty() && out.recurrence.isEmpty()) {

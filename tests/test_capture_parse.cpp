@@ -187,3 +187,10 @@ TEST(CaptureAcceptance, ThisSaturdayTakesThisAndTwoHoursIsNoClock) {
   const Parsed est = at(QStringLiteral("estimate 2h fix"), sat);
   EXPECT_FALSE(est.whenHasTime && est.when.time() == QTime(2, 0));
 }
+
+TEST(CaptureAcceptance, ARangePastMidnightEndsTheNextMorning) {
+  // IDIOT-CAL-11.
+  const Parsed r = at(QStringLiteral("release 22:00-01:00"), QDateTime(QDate(2026, 10, 10), QTime(12, 0)));
+  EXPECT_EQ(r.when, QDateTime(QDate(2026, 10, 10), QTime(22, 0)));
+  EXPECT_EQ(r.whenEnd, QDateTime(QDate(2026, 10, 11), QTime(1, 0)));
+}
