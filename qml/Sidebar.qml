@@ -187,8 +187,30 @@ Rectangle {
                     onActivated: root.toggleRequested()
                 }
             }
+            // Folded, the mark sits on top (X-Oth-Small) and opens the
+            // sidebar again: folding by the wordmark had no way back but a key.
+            Item {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Theme.chipH
+                visible: !root.expanded
+                BrandLogo {
+                    anchors.centerIn: parent
+                    height: 18
+                    variant: "mark"
+                    theme: Theme.dark ? "dark" : "light"
+                }
+                ClickArea {
+                    objectName: "sidebar-expand"
+                    label: I18n.t("sidebar.expand")
+                    shortcutId: "rail.toggle"
+                    showTip: true
+                    onActivated: root.toggleRequested()
+                }
+            }
             ProfileSwitcher {
                 id: profile
+                // Folded, the rail has the mark on top and no profile (X-Oth-Small).
+                visible: root.expanded
                 Layout.fillWidth: true
                 // What is left beside the wordmark, not the name's own width:
                 // a long name elides instead of running off the sidebar.
@@ -230,7 +252,8 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 text: I18n.t("sidebar.newTask")
                 elide: Text.ElideRight
-                color: Theme.textMuted
+                // A prompt, not a label (H2-Today: #8f99a6).
+                color: Theme.textDim
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsMd
             }

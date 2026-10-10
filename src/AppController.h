@@ -1307,6 +1307,10 @@ class AppController : public QObject {
   // without `gitLineDefault`): an unset switch is written as on, a set one
   // stays. Returns whether `app` changed.
   static bool migrateGitWorkingLine(QJsonObject& app);
+  // 0.8.1: every profile moves to the lowkey look of the design references
+  // once — the dark slot to "heap-ink", the light one to "heap-light". The
+  // user's own themes stay in the list. Returns whether `app` changed.
+  static bool migrateLowkeyTheme(QJsonObject& app);
 
   // The tray menu as the OS shows it (R3-103): [{ id, text, hint, enabled }],
   // an empty id for a separator. For tests and capture harnesses.
@@ -2154,6 +2158,8 @@ class AppController : public QObject {
   // The one-time git "working on" migration ran (or the data is new): saved
   // as settings.gitLineDefault so it never runs again.
   bool m_gitLineDefaultDone = false;
+  // The one-time move to the lowkey themes ran: settings.themeLowkey.
+  bool m_themeLowkeyDone = false;
   // Drop the not-yet-started focus blocks planned for a task that is finished.
   void dropFutureFocusBlocks(const QString& taskId);
   void onTaskPushed(const QString& providerId,

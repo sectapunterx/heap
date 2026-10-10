@@ -4114,6 +4114,19 @@ bool AppController::migrateGitWorkingLine(QJsonObject& app) {
   return true;
 }
 
+bool AppController::migrateLowkeyTheme(QJsonObject& app) {
+  QJsonObject appearance = app.value(QStringLiteral("appearance")).toObject();
+  const QJsonObject before = appearance;
+  appearance.insert(QStringLiteral("darkPreset"), QStringLiteral("heap-ink"));
+  appearance.insert(QStringLiteral("lightPreset"), QStringLiteral("heap-light"));
+  appearance.remove(QStringLiteral("accent"));  // a pre-theme accent would tint it again
+  if(appearance == before) {
+    return false;
+  }
+  app.insert(QStringLiteral("appearance"), appearance);
+  return true;
+}
+
 QString AppController::mintEventId() {
   return QString("ev-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
 }
@@ -8518,6 +8531,7 @@ void AppController::seedStartingWorkspace() {
   }
   // New data starts on the new defaults (the git line off, R3-095).
   m_gitLineDefaultDone = true;
+  m_themeLowkeyDone = true;
   Profile p = makeStartingProfile(tr_("profile.personal"), QString());
   p.id = QStringLiteral("default");
   // No starter views (R2-058): "Мои виды" fills as filters are saved.
@@ -12361,6 +12375,7 @@ QJsonObject AppController::buildStateHead() {
   s["demoActive"] = m_demoActive;
   s["trackerWriteNotice"] = m_trackerWriteNoticeDone;
   s["gitLineDefault"] = m_gitLineDefaultDone;
+  s["themeLowkey"] = m_themeLowkeyDone;
   s["lastRunVersion"] = appVersion();
   icsUidDomain();  // mints the id on the first save
   s["installId"] = m_installId;
@@ -12938,6 +12953,10 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
         appChanged = true;
       }
       m_gitLineDefaultDone = true;
+      if(!s.value(QStringLiteral("themeLowkey")).toBool() && migrateLowkeyTheme(app)) {
+        appChanged = true;
+      }
+      m_themeLowkeyDone = true;
     }
     if(appChanged) {
       m_appSettingsJson = QJsonDocument(app).toJson(QJsonDocument::Compact);
@@ -12949,8 +12968,10 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
     emit onboardingChanged();
     if(!viewOnly) {
       m_gitLineDefaultDone = true;
+      m_themeLowkeyDone = true;
       QJsonObject app;
-      if(migrateGitWorkingLine(app)) {
+      const bool themed = migrateLowkeyTheme(app);
+      if(migrateGitWorkingLine(app) || themed) {
         m_appSettingsJson = QJsonDocument(app).toJson(QJsonDocument::Compact);
         emit appSettingsJsonChanged();
       }
