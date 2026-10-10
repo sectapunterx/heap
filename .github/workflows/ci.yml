@@ -447,7 +447,10 @@ jobs:
         env:
           CCACHE_DIR: ${{ github.workspace }}/.ccache
         run: |
-          if [ "$RUNNER_OS" = Windows ]; then export PATH="$(cygpath -u '${{ steps.msys2.outputs.msys2-location }}')/ucrt64/bin:$PATH"; fi
+          if [ "$RUNNER_OS" = Windows ]; then
+            msys=$(cygpath -u '${{ steps.msys2.outputs.msys2-location }}')
+            export PATH="$msys/ucrt64/bin:$PATH"
+          fi
           misses=$(ccache --print-stats 2>/dev/null | awk -F'\t' '$1 == "cache_miss" { print $2 }')
           # Unreadable stats: save rather than let the cache go stale.
           echo "misses=${misses:-9999}" >> "$GITHUB_OUTPUT"
