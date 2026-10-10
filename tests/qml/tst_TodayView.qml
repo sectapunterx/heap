@@ -194,4 +194,28 @@ TestCase {
         compare(spy.count, 1);
         compare(spy.signalArguments[0][1], Qt.formatDate(day, "yyyy-MM-dd"));
     }
+
+    // IDIOT-CAL-7: the two parts of an overnight meeting are two cursor stops;
+    // j walks down to the evening part and stops there.
+    function test_j_reaches_the_evening_part_of_an_overnight_meeting() {
+        const day = tc.probeDay();
+        const first = new Date(day); first.setDate(first.getDate() - 3);
+        const ev = AppController.newEventDraft(23, first);
+        ev.title = "overnight probe";
+        ev.start = 23;
+        ev.end = 1;
+        ev.date = first;
+        ev.endDate = new Date(first.getFullYear(), first.getMonth(), first.getDate() + 1);
+        ev.rrule = "FREQ=DAILY";
+        AppController.saveEvent(ev);
+        tc.events.push(ev.id);
+        AppController.selectedDate = day;
+        const v = createTemporaryQmlObject('import TodoCpp; TodayView { anchors.fill: parent }', host);
+        const parts = v._items().filter(it => it.id === ev.id);
+        compare(parts.length, 2, "the 00:00 part and the 23:00 one");
+        verify(parts[0].key !== parts[1].key);
+        v.moveCursor(0, 0);
+        for (let i = 0; i < v._items().length + 2; i++) v.moveCursor(0, 1);
+        compare(v.cursorKey, v._items()[v._items().length - 1].key, "the walk ends on the last row");
+    }
 }

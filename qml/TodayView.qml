@@ -176,7 +176,10 @@ FocusScope {
     readonly property bool cardMenuOpen: menuHost.menuOpen
     function _rowKey(r) {
         if (!r || !r.block) return "";
-        return (r.kind === "task" ? "task:" : "event:") + r.block.id;
+        // One key per row (IDIOT-CAL-7): the two parts of a meeting across
+        // midnight share an id, and j looped back to the first of them.
+        const b = r.block;
+        return (r.kind === "task" ? "task:" : "event:") + b.id + (b.fromPrevDay ? ":prev" : "") + (b.toNextDay ? ":next" : "");
     }
     function _items() {
         const out = [];
