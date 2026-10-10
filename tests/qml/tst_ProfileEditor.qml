@@ -60,6 +60,30 @@ TestCase {
         tryCompare(pe, "opened", false);
     }
 
+    // IDIOT-SHELL-12: a taken name keeps the dialog open with the name and a
+    // line saying why; an empty one says so too.
+    function test_taken_name_stays_open_with_an_error() {
+        const pe = make('import TodoCpp; ProfileEditor { }');
+        const taken = String(AppController.profiles[0].name);
+        const before = AppController.profiles.length;
+        pe.showCreate();
+        tryCompare(pe, "opened", true);
+        const field = findChild(pe.contentItem, "profile-name-field");
+        field.text = taken.toUpperCase();
+        pe.activate();
+        verify(pe.opened, "the dialog closed on a taken name");
+        compare(AppController.profiles.length, before);
+        compare(field.text, taken.toUpperCase());
+        verify(pe.nameError.length > 0);
+        field.text = "   ";
+        compare(pe.nameError, "", "typing clears the line");
+        pe.activate();
+        verify(pe.opened);
+        verify(pe.nameError.length > 0, "an empty name said nothing");
+        pe.close();
+        tryCompare(pe, "opened", false);
+    }
+
     // showRename(id, name, color) arms rename mode for the given profile.
     function test_show_rename_presets() {
         const pe = make('import TodoCpp; ProfileEditor { }');

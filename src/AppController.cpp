@@ -11983,7 +11983,9 @@ int AppController::profileIndexOf(const QString& id) const {
 
 QString AppController::makeProfileId(const QString& name) const {
   QString slug;
-  for(const QChar c : name.toLower()) {
+  // The id is a key everywhere (state.json, the switcher, the CLI): a pasted
+  // 10 000-character name made a 10 000-character id (IDIOT-SHELL-16).
+  for(const QChar c : name.toLower().left(kMaxProfileName)) {
     slug.append(c.isLetterOrNumber() ? c : QChar('-'));
   }
   while(slug.contains("--")) {
@@ -13194,7 +13196,8 @@ QString AppController::uniqueProfileName(const QString& base) const {
   return candidate;
 }
 
-QString AppController::createProfile(const QString& name, const QString& color) {
+QString AppController::createProfile(const QString& rawName, const QString& color) {
+  const QString name = rawName.trimmed().left(kMaxProfileName);
   if(name.trimmed().isEmpty()) {
     return QString();
   }
@@ -13217,7 +13220,8 @@ QString AppController::createProfile(const QString& name, const QString& color) 
   return p.id;
 }
 
-void AppController::renameProfile(const QString& id, const QString& newName) {
+void AppController::renameProfile(const QString& id, const QString& rawName) {
+  const QString newName = rawName.trimmed().left(kMaxProfileName);
   const int i = profileIndexOf(id);
   if(i < 0 || newName.trimmed().isEmpty()) {
     return;
@@ -13449,7 +13453,8 @@ QString AppController::duplicateProfile(const QString& id, const QString& newNam
     snapshotActiveProfile();
   }
   Profile copy = m_profiles[i];
-  copy.name = uniqueProfileName(newName.trimmed().isEmpty() ? (m_profiles[i].name + " copy") : newName.trimmed());
+  copy.name = uniqueProfileName(newName.trimmed().isEmpty() ? (m_profiles[i].name + " copy")
+                                                           : newName.trimmed().left(kMaxProfileName));
   copy.id = makeProfileId(copy.name);
   copy.createdAt = QDateTime::currentDateTime();
   // Events live in the global pool, attributed to a profile by id: the copy

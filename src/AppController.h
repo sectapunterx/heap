@@ -1683,6 +1683,11 @@ class AppController : public QObject {
   Q_INVOKABLE void deleteProfile(const QString& id);
   Q_INVOKABLE QString duplicateProfile(const QString& id, const QString& newName);
   Q_INVOKABLE QVariantMap profileById(const QString& id) const;
+  // Whether a profile other than `exceptId` is already called `name`
+  // (ignoring case): the editor says so inline (IDIOT-SHELL-12).
+  Q_INVOKABLE bool profileNameTaken(const QString& name, const QString& exceptId) const;
+  // The longest profile name kept (IDIOT-SHELL-16).
+  static constexpr int kMaxProfileName = 64;
 
   // Rewrite every task id that starts with `oldPrefix-<digits>` to use
   // `newPrefix-<digits>`. CalEvent.taskId backlinks are kept in sync so
@@ -2531,7 +2536,6 @@ class AppController : public QObject {
   int statusIndexOf(const QString& id) const;
   // Whether another column (not `exceptId`) already carries `name`, ignoring case.
   bool statusNameTaken(const QString& name, const QString& exceptId) const;
-  bool profileNameTaken(const QString& name, const QString& exceptId) const;
   // `base`, or "base (N)" with the first N no profile uses.
   QString uniqueProfileName(const QString& base) const;
   // moveTask(), with the card's rank in its new column set in the same model
