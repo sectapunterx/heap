@@ -134,3 +134,21 @@ TEST(KeyReserved, SystemAndNavigationKeys) {
   EXPECT_TRUE(reservedReason(QStringLiteral("Ctrl+K")).isEmpty());
   EXPECT_TRUE(reservedReason(QStringLiteral("G, B")).isEmpty());
 }
+
+// Held keys (IDIOT-TASKS-2/18): walking repeats, acting on a task does not.
+TEST(KeyRepeat, OnlyMovesRepeat) {
+  EXPECT_TRUE(isRepeatableAction(QStringLiteral("board.cursorDown")));
+  EXPECT_TRUE(isRepeatableAction(QStringLiteral("board.moveLeft")));
+  EXPECT_TRUE(isRepeatableAction(QStringLiteral("board.selectUp")));
+  EXPECT_TRUE(isRepeatableAction(QStringLiteral("cursor.pageDown")));
+  EXPECT_TRUE(isRepeatableAction(QStringLiteral("cal.next")));
+  EXPECT_TRUE(isRepeatableAction(QStringLiteral("cal.taskLater")));
+  EXPECT_TRUE(isRepeatableAction(QStringLiteral("undo")));
+  EXPECT_FALSE(isRepeatableAction(QStringLiteral("undo.alt")));
+  EXPECT_FALSE(isRepeatableAction(QStringLiteral("board.archive")));
+  EXPECT_FALSE(isRepeatableAction(QStringLiteral("board.open")));
+  EXPECT_FALSE(isRepeatableAction(QStringLiteral("task.done")));
+  EXPECT_FALSE(isRepeatableAction(QStringLiteral("task.priority0")));
+  EXPECT_FALSE(isRepeatableAction(QStringLiteral("selection.deleteSel")));
+  EXPECT_FALSE(isRepeatableAction(QStringLiteral("selection.clearSel")));
+}

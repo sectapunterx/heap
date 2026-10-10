@@ -39,6 +39,10 @@ class KeyRouter : public QObject, public QQmlParserStatus {
   // Catalogue ids a Qt Shortcut in Main already runs: left to it, unless the
   // key came from a layout that does not type Latin letters.
   Q_PROPERTY(QStringList qtOwned READ qtOwned WRITE setQtOwned NOTIFY qtOwnedChanged)
+  // Swallow a printable catalogue key that has nothing to act on, instead of
+  // letting it go on to type-to-search (IDIOT-TASKS-4). Main binds it to
+  // whether type-to-search is on.
+  Q_PROPERTY(bool holdUnlive READ holdUnlive WRITE setHoldUnlive NOTIFY holdUnliveChanged)
   // The first key of a two-key sequence, waiting for the second
   // (PortableText, "G"); empty when nothing waits.
   Q_PROPERTY(QString pending READ pending NOTIFY pendingChanged)
@@ -85,6 +89,12 @@ class KeyRouter : public QObject, public QQmlParserStatus {
 
   void setQtOwned(const QStringList& ids);
 
+  bool holdUnlive() const {
+    return m_holdUnlive;
+  }
+
+  void setHoldUnlive(bool on);
+
   QString pending() const {
     return m_pending;
   }
@@ -112,6 +122,7 @@ class KeyRouter : public QObject, public QQmlParserStatus {
   void bindingsChanged();
   void handlerChanged();
   void qtOwnedChanged();
+  void holdUnliveChanged();
   void pendingChanged();
   void timeoutMsChanged();
   void layoutChanged();
@@ -133,10 +144,13 @@ class KeyRouter : public QObject, public QQmlParserStatus {
   bool latinLayout() const;
   // Decides and, unless dry, runs. True when the key is taken.
   bool decide(QKeyEvent* ke, bool focusTyping);
+  // A key that types one visible character (what type-to-search would take).
+  static bool typesText(const QKeyEvent* ke);
   QString callHandler(const QStringList& ids, bool dry);
   void setPending(const QString& chord);
 
   bool m_enabled = true;
+  bool m_holdUnlive = false;
   QPointer<QObject> m_window;
   QVariantList m_bindings;
   QList<Binding> m_parsed;

@@ -573,6 +573,10 @@ ApplicationWindow {
     // focus still sits where Qt dropped it.
     property Item _focusHome: null
     property bool _focusWasInPopup: false
+    // Until when a Return is still the one that closed a popup: the second
+    // of two quick Returns in a board dialog opened the cursor's task
+    // (IDIOT-TASKS-6).
+    property real _returnGuardUntil: 0
     onActiveFocusItemChanged: {
         const it = win.activeFocusItem;
         if (!it) return;
@@ -590,6 +594,7 @@ ApplicationWindow {
         }
         if (win._focusWasInPopup) {
             win._focusWasInPopup = false;
+            win._returnGuardUntil = Date.now() + 400;
             // Back on an empty header search is not "home" either (PERO-1):
             // returnFocusHome() sends the keyboard on to the view.
             if (it !== win._focusHome || win._isIdleSearch(it)) {
@@ -1703,9 +1708,9 @@ ApplicationWindow {
         if (v && v.hoveredTaskId) return [v.hoveredTaskId];
         return [];
     }
-    // D (APP-268): nothing under the key, nothing happens. A second d on the
-    // same tasks within half a second is Vim's "dd" habit, not "take it
-    // back" (keymap rule 6).
+    // D (APP-268): nothing under the key, nothing happens. A second d within
+    // half a second is Vim's "dd" habit, not "take it back" (keymap rule 6),
+    // whichever card is under the key by then (IDIOT-TASKS-18).
     function markDone() {
         const ids = win._keyTaskIds();
         if (ids.length === 0) return;
@@ -2024,6 +2029,7 @@ ApplicationWindow {
             return !!b && typeof b.focusedHeaderStatus === "function" && b.focusedHeaderStatus().length > 0;
         // One cursor in every view that has one (APP-276): the board, the
         // list, Today, the calendar, the notes.
+        if (base === "board.open" && Date.now() < win._returnGuardUntil) return false;
         if (base.indexOf("board.") === 0)
             return win._cursorOn(b);
         if (base.indexOf("cursor.") === 0)
@@ -2321,6 +2327,7 @@ ApplicationWindow {
         enabled: !hotkeys.isCapturing && !win._captureActive
         bindings: AppController.shortcuts
         qtOwned: win._qtOwned
+        holdUnlive: boardTypeAhead.enabled
         handler: function (ids, dry) { return win._routeKey(ids, dry); }
         // The old keys of 0.7 say once where their action went (APP-281 A4).
         onChordPressed: (chord) => { if (AppController.hasKeymapNotice()) AppController.noteKeyPressed(chord); }
