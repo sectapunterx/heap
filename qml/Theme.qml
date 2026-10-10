@@ -203,9 +203,11 @@ QtObject {
     // pulled toward the text colour, a muted salmon rather than a red.
     readonly property color dangerMuted: Qt.tint(_c.danger, withAlpha(_c.text, 0.35))
     // A destructive menu row's label: the danger colour in bold; quiet
-    // softens it toward the text (X-Menus-*: #d8a09c beside #ef6b63, R3-045).
+    // softens it toward the text (X-Menus-*: #d8a09c beside #ef6b63, R3-045),
+    // held at AA 4.5:1 on the menu and its highlighted row in every theme.
     readonly property color dangerInk: Style.urgency ? danger
-        : Qt.rgba((danger.r + text.r) * 0.46, (danger.g + text.g) * 0.46, (danger.b + text.b) * 0.46, 1)
+        : Presets.ensureContrast(String(Qt.rgba((danger.r + text.r) * 0.46, (danger.g + text.g) * 0.46, (danger.b + text.b) * 0.46, 1)),
+                                 [String(popupFill), String(rowHighlight)], 4.5)
     readonly property color warning:     _c.warning
     readonly property color success:     _c.success
     readonly property color info:        _c.info
