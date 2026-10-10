@@ -400,3 +400,42 @@ TEST(TaskQueryPlanning, MyTagsAndMyLayer) {
     EXPECT_TRUE(heap::query::queryFields().contains(QLatin1String(f))) << f;
   }
 }
+
+// ─── Done is a kind of column (IDIOT-TASKS-10) ───
+
+TEST(TaskQuery, AUserDoneKindColumnIsDoneForIsOpenIsDoneAndOverdue) {
+  const QVariantList statuses{
+      QVariantMap{{"id", "todo"}, {"name", "To Do"}, {"category", "todo"}},
+      QVariantMap{{"id", "shipped"}, {"name", "Shipped"}, {"category", "done"}},
+  };
+  Task shipped = mk(QStringLiteral("S"), QStringLiteral("shipped"));
+  shipped.dueAt = QDateTime(kToday.addDays(-3), QTime(12, 0));
+  Task open = mk(QStringLiteral("O"), QStringLiteral("todo"));
+  open.dueAt = QDateTime(kToday.addDays(-3), QTime(12, 0));
+
+  const TaskQuery isOpen = TaskQuery::compile(QStringLiteral("is:open"), kToday, statuses);
+  EXPECT_FALSE(isOpen.matches(shipped));
+  EXPECT_TRUE(isOpen.matches(open));
+  const TaskQuery isDone = TaskQuery::compile(QStringLiteral("is:done"), kToday, statuses);
+  EXPECT_TRUE(isDone.matches(shipped));
+  EXPECT_FALSE(isDone.matches(open));
+  const TaskQuery overdue = TaskQuery::compile(QStringLiteral("is:overdue"), kToday, statuses);
+  EXPECT_FALSE(overdue.matches(shipped));
+  EXPECT_TRUE(overdue.matches(open));
+  const TaskQuery dl = TaskQuery::compile(QStringLiteral("deadline:overdue"), kToday, statuses);
+  EXPECT_FALSE(dl.matches(shipped));
+}
+
+TEST(TaskQuery, TheDoneIdGivenAnotherStageIsNotDone) {
+  const QVariantList statuses{QVariantMap{{"id", "done"}, {"name", "Done?"}, {"category", "review"}}};
+  const TaskQuery isDone = TaskQuery::compile(QStringLiteral("is:done"), kToday, statuses);
+  EXPECT_FALSE(isDone.matches(mk(QStringLiteral("D"), QStringLiteral("done"))));
+  // With no board at all "done" still reads as done.
+  EXPECT_TRUE(q(QStringLiteral("is:done")).matches(mk(QStringLiteral("D"), QStringLiteral("done"))));
+}
+
+TEST(TaskQuery, IsArchivedAsksForTheArchivedCards) {
+  EXPECT_TRUE(q(QStringLiteral("is:archived")).asksArchived());
+  EXPECT_FALSE(q(QStringLiteral("-is:archived")).asksArchived());
+  EXPECT_FALSE(q(QStringLiteral("is:open")).asksArchived());
+}

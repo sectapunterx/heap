@@ -2187,6 +2187,7 @@ class AppController : public QObject {
   bool m_soundMuted = false;
   int m_soundPending = -1;
   void completionSoundOnMove_(const QString& fromStatus, const QString& toStatus);
+  bool stopTimersInOtherProfiles_(const QString& onlyId = {});
   // Plays `cue` (a heap::platform::SoundCue) if the Sound settings, quiet
   // hours (judged at `at`, the wall clock when invalid), focus mode and the
   // system allow it.

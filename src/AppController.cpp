@@ -42,6 +42,7 @@
 #include "integrations/TrackerMerge.h"
 #include "keys/KeyNames.h"
 #include "local/Effective.h"
+#include "local/Sessions.h"
 #include "markdown/MdHtml.h"
 #include "markdown/MdOutline.h"
 #include "notes/ChecklistItems.h"
@@ -2765,13 +2766,19 @@ void AppController::moveTaskRanked(const QString& id, const QString& newStatus, 
   // column marked so), and the future ones dropped when it leaves one — for
   // Done, and equally for a card put back in To Do.
   focusBlockOnStatusChange(taskId, prevStatus, newStatus);
-  if(newStatus == QStringLiteral("done")) {
+  // Any column of the Done kind finishes the task, not only the one whose id
+  // is "done" (IDIOT-CAL-4): a "Shipped" column ended a weekly series.
+  const bool finished = statusCategory(newStatus) == QStringLiteral("done");
+  const bool wasFinished = statusCategory(prevStatus) == QStringLiteral("done");
+  if(finished) {
     dropFutureFocusBlocks(taskId);
+    // A finished task tracks no more time (IDIOT-CAL-6).
+    m_tasks.stopTiming(taskId);
   }
 
   // Recurring task completed → spawn the next occurrence (HEAP-77).
   QString recursNote;
-  if(newStatus == QStringLiteral("done") && !recurrence.isEmpty()) {
+  if(finished && !wasFinished && !recurrence.isEmpty()) {
     const QDate today = QDate::currentDate();
     const QDate base = recurBase.isValid() ? recurBase : today;
     // The first occurrence still ahead: a weekly task finished three weeks
@@ -2788,7 +2795,7 @@ void AppController::moveTaskRanked(const QString& id, const QString& newStatus, 
     bool alreadySpawned = false;
     const QRegularExpression series(QStringLiteral("^%1(-r\\d+)?$").arg(QRegularExpression::escape(stem)));
     for(const Task& other : m_tasks.items()) {
-      if(other.id == taskId || other.archived || other.status == QStringLiteral("done") || other.recurrence != recurrence ||
+      if(other.id == taskId || other.archived || statusCategory(other.status) == QStringLiteral("done") || other.recurrence != recurrence ||
          !series.match(other.id).hasMatch()) {
         continue;
       }
@@ -8460,11 +8467,37 @@ void AppController::copyWeeklyReportToClipboard() {
   emit toast(tr_("profile.weeklyCopied"));
 }
 
+// Stops the timers running in the profiles that are not active, each one
+// recorded as a session the way TaskModel::stopTiming does. Returns whether
+// any was running. `onlyId` limits it to one task.
+bool AppController::stopTimersInOtherProfiles_(const QString& onlyId) {
+  bool any = false;
+  for(Profile& p : m_profiles) {
+    if(p.id == m_activeProfileId) {
+      continue;
+    }
+    for(Task& t : p.tasks) {
+      if(!t.timerStartedAt.isValid() || (!onlyId.isEmpty() && t.id != onlyId)) {
+        continue;
+      }
+      heap::local::sessions::adoptTotal(t.local.sessions, t.trackedSeconds);
+      heap::local::sessions::record(t.local.sessions, t.timerStartedAt, QDateTime::currentDateTime());
+      t.trackedSeconds = heap::local::sessions::total(t.local.sessions);
+      t.timerStartedAt = QDateTime();
+      any = true;
+    }
+  }
+  return any;
+}
+
 void AppController::startTaskTimer(const QString& id) {
   if(m_tasks.indexOfId(id) < 0) {
     return;
   }
   const UndoScope scope(this, tr_("undo.timer").arg(id));
+  // Only one task tracks at a time, across profiles too (IDIOT-CAL-6): a timer
+  // left running in another profile double-counted the hours.
+  stopTimersInOtherProfiles_();
   m_tasks.startTiming(id);
   scheduleSave();
   refreshTray();
@@ -8472,6 +8505,11 @@ void AppController::startTaskTimer(const QString& id) {
 
 void AppController::stopTaskTimer(const QString& id) {
   if(m_tasks.indexOfId(id) < 0) {
+    // The timer the sidebar shows may run in another profile (IDIOT-CAL-6).
+    if(stopTimersInOtherProfiles_(id)) {
+      scheduleSave();
+      refreshTray();
+    }
     return;
   }
   const UndoScope scope(this, tr_("undo.timer").arg(id));
@@ -9872,7 +9910,7 @@ AppController::MergeStats AppController::settleMissingIssues(const QString& prov
       t.externalMeta.outOfScope = true;
       // A closed issue that moved to Done is the news; an open one that left
       // the filter is "outside filter", as for a changed filter (INT-1).
-      if(t.status != QStringLiteral("done")) {
+      if(statusCategory(t.status) != QStringLiteral("done")) {
         ++stats.outOfScope;
       }
       m_tasks.upsert(t);
@@ -11620,6 +11658,25 @@ QVariantMap AppController::runningTimer() const {
           {QStringLiteral("key"), t.externalProvider.isEmpty() ? t.id : externalKeyOf(t)},
           {QStringLiteral("seconds"), qMax(0, secs)},
       };
+    }
+  }
+  // A timer started before a profile switch keeps running there; show it with
+  // the profile's name instead of nothing (IDIOT-CAL-6).
+  for(const Profile& p : m_profiles) {
+    if(p.id == m_activeProfileId) {
+      continue;
+    }
+    for(const Task& t : p.tasks) {
+      if(t.timerStartedAt.isValid()) {
+        const int secs = t.trackedSeconds + static_cast<int>(t.timerStartedAt.secsTo(QDateTime::currentDateTime()));
+        return QVariantMap{
+            {QStringLiteral("id"), t.id},
+            {QStringLiteral("title"), t.title},
+            {QStringLiteral("key"), t.externalProvider.isEmpty() ? t.id : externalKeyOf(t)},
+            {QStringLiteral("seconds"), qMax(0, secs)},
+            {QStringLiteral("profile"), p.name},
+        };
+      }
     }
   }
   return {};
@@ -15745,9 +15802,12 @@ void AppController::runAutomationAt(const QDateTime& now) {
     // the time-zone arithmetic a QDateTime difference costs, every minute,
     // for every task.
     const qint64 lastDueDay = leadHours / 24 + 2;
+    // Finished = a column of the Done kind on that task's own board
+    // (IDIOT-CAL-4): a "Shipped" card kept nagging about its deadline.
+    QSet<QString> doneIds = heap::board::doneColumnIds(m_statuses);
     const auto consider = [&](const QString& profileId, const Task& t) {
       const QDateTime dueAt = heap::local::effectiveDueAt(t);
-      if(t.archived || !dueAt.isValid() || t.status == QLatin1String("done")) {
+      if(t.archived || !dueAt.isValid() || doneIds.contains(t.status)) {
         return;
       }
       const qint64 days = today.daysTo(dueAt.date());
@@ -15767,6 +15827,7 @@ void AppController::runAutomationAt(const QDateTime& now) {
     }
     for(const Profile& p : m_profiles) {
       if(p.id != m_activeProfileId) {
+        doneIds = heap::board::doneColumnIds(p.statuses);
         for(const Task& t : p.tasks) {
           consider(p.id, t);
         }
@@ -16144,7 +16205,8 @@ void AppController::onGitBranchChanged(const QString& repo, const QString& branc
   const Task& task = m_tasks.items().at(row);
   const int at = statusIndexOf(task.status);
   const int prog = statusIndexOf(QStringLiteral("prog"));
-  const bool finished = task.archived || task.status == QLatin1String("done") || task.status == QLatin1String("review") ||
+  const QString cat = statusCategory(task.status);
+  const bool finished = task.archived || cat == QLatin1String("done") || cat == QLatin1String("review") ||
                         (at >= 0 && at == m_statuses.size() - 1);
   if(finished) {
     return;

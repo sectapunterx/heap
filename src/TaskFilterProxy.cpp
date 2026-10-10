@@ -34,8 +34,8 @@ void TaskFilterProxy::refilter() {
   // `is:blocked` is a fact about other rows: taken from the model now.
   if(m_query.usesBlocked()) {
     if(const auto* tasks = qobject_cast<const TaskModel*>(sourceModel()); tasks != nullptr) {
-      m_query.setBlockedIds(heap::query::openlyBlockedIds(tasks->items(), [](const Task& t) {
-        return t.status == QStringLiteral("done");
+      m_query.setBlockedIds(heap::query::openlyBlockedIds(tasks->items(), [this](const Task& t) {
+        return m_query.isDone(t);
       }));
     }
   }

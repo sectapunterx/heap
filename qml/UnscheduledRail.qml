@@ -72,7 +72,7 @@ Rectangle {
         const list = AppController.calendarTasks(first, last, false);
         for (let i = 0; i < list.length; i++) {
             const t = list[i];
-            if (t.status === "done" || t.dueDay < 0) continue;
+            if (AppController.statusCategory(t.status) === "done" || t.dueDay < 0) continue;
             const due = t.deadline;
             if (!due || !due.getFullYear || !inRange[root._dayKey(due)]) continue;
             // Either clock puts it on the grid already (schema v10 keeps one per field).

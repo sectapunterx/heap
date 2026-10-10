@@ -481,7 +481,8 @@ Item {
     function yToHour(y)   { return root.hoursStart + y / root.hourH; }
     function clampHour(h) { return Math.max(root.hoursStart, Math.min(root.hoursEnd, h)); }
     function passesFilter(t) {
-        if (t.status === "done") return false;
+        // Any column of the Done kind, not only "done" (IDIOT-CAL-4).
+        if (AppController.statusCategory(t.status) === "done") return false;
         // Clauses filter structurally, leftover words stay a substring test.
         if (!Search.accepts(AppController, root.searchText, root.taskRev + ":" + AppController.today, t)) return false;
         let any = false;

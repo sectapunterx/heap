@@ -11,7 +11,7 @@ CompiledView compile(const SavedView& v, const QDate& today, const QVariantList&
   c.freeText = c.query.freeText();
   c.priorities = v.priorities;
   c.archivedOnly = v.view == QLatin1String("archive");
-  c.showArchived = v.archived || c.archivedOnly;
+  c.showArchived = v.archived || c.archivedOnly || c.query.asksArchived();
   c.hideDone = v.view == QLatin1String("timeline") && !v.showDone;
   return c;
 }
@@ -20,7 +20,7 @@ bool accepts(const CompiledView& c, const Task& t, const QString& haystack) {
   if(c.archivedOnly ? !t.archived : (!c.showArchived && t.archived)) {
     return false;
   }
-  if(c.hideDone && t.status == QLatin1String("done")) {
+  if(c.hideDone && c.query.isDone(t)) {
     return false;
   }
   if(!c.priorities.isEmpty() && !c.priorities.contains(heap::local::effectivePriority(t))) {
@@ -47,8 +47,9 @@ QHash<QString, int> countMatches(const QVector<SavedView>& views,
     compiled.append(compile(v, today, statuses));
     if(compiled.last().query.usesBlocked()) {
       if(!blocked) {
-        blocked = heap::query::openlyBlockedIds(tasks.items(), [](const Task& t) {
-          return t.status == QLatin1String("done");
+        const heap::query::TaskQuery& q = compiled.last().query;
+        blocked = heap::query::openlyBlockedIds(tasks.items(), [&q](const Task& t) {
+          return q.isDone(t);
         });
       }
       compiled.last().query.setBlockedIds(*blocked);

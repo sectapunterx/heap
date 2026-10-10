@@ -99,6 +99,17 @@ class TaskQuery {
     m_blocked = std::move(ids);
   }
 
+  // `is:archived` asks for the archived cards the callers otherwise drop
+  // before the query sees them; the board lets them through (IDIOT-TASKS-9).
+  bool asksArchived() const {
+    return m_asksArchived;
+  }
+
+  // Is the task in a column of the Done kind, as `statuses` told compile()?
+  bool isDone(const Task& t) const {
+    return m_doneIds.contains(t.status);
+  }
+
  private:
   struct Clause {
     QString field;
@@ -122,8 +133,11 @@ class TaskQuery {
   QDate m_today;
   QSet<QString> m_newIds;
   QSet<QString> m_blocked;
+  // The board's columns of the Done kind (IDIOT-TASKS-10).
+  QSet<QString> m_doneIds{QStringLiteral("done")};
   bool m_isQuery = false;
   bool m_usesBlocked = false;
+  bool m_asksArchived = false;
 };
 
 // The fields a clause may name, for the UI to hint with. Sorted.

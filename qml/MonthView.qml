@@ -70,7 +70,8 @@ Item {
         return p === "P0" ? Theme.p0 : p === "P1" ? Theme.p1 : p === "P2" ? Theme.p2 : Theme.p3;
     }
     function passesFilter(t) {
-        if (t.status === "done") return false;
+        // Any column of the Done kind, not only "done" (IDIOT-CAL-4).
+        if (AppController.statusCategory(t.status) === "done") return false;
         // Clauses filter structurally, leftover words stay a substring test.
         if (!Search.accepts(AppController, root.searchText, root.taskRev + ":" + AppController.today, t)) return false;
         let any = false;

@@ -2,6 +2,8 @@
 // that put them off or open what they are about (APP-155).
 #include "AppController.h"
 
+#include "board/ColumnCategory.h"
+
 #include "cal/EventClamp.h"
 #include "cal/Occurrences.h"
 #include "notify/NotificationCenter.h"
@@ -268,7 +270,13 @@ void AppController::fireDueSnoozes(const QDateTime& now) {
   // profile: reminders cover them all.
   const auto stillOpen = [this](const QString& ref) {
     const ReminderTask r = reminderTask(ref);
-    return !r.profileId.isEmpty() && !r.task.archived && r.task.status != QStringLiteral("done");
+    if(r.profileId.isEmpty() || r.task.archived) {
+      return false;
+    }
+    // Done is a kind of column on that task's own board (IDIOT-CAL-4).
+    const int p = profileIndexOf(r.profileId);
+    const QVariantList& statuses = r.profileId == m_activeProfileId || p < 0 ? m_statuses : m_profiles.at(p).statuses;
+    return !heap::board::doneColumnIds(statuses).contains(r.task.status);
   };
   for(const heap::notify::SnoozedReminder& s : due) {
     const auto [kind, ref] = heap::notify::parseRoutingId(s.id);

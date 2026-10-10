@@ -49,7 +49,7 @@ Rectangle {
     // `visible`, not `opened`: opened only turns true once the fade-in ends,
     // and a key pressed during it would still reach the board.
     readonly property bool menuOpen: menuHost.menuOpen
-    readonly property bool _done: !!(card.task && card.task.status === "done")
+    readonly property bool _done: !!(card.task && AppController.statusCategory(card.task.status) === "done")
     signal clicked()
 
     // Open the card's menu from the keyboard (board key M, or the Menu key),
