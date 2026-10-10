@@ -67,10 +67,25 @@ Popup {
             if (p.whenHasTime) {
                 const len = root.slot.end - root.slot.start;
                 out.start = root._hours(p.when);
-                out.end = root._valid(p.whenEnd) && root._hours(p.whenEnd) > out.start ? root._hours(p.whenEnd) : out.start + len;
+                out.end = out.start + len;
+                if (root._valid(p.whenEnd)) {
+                    // An end at or before the start is the next morning
+                    // (IDIOT-CAL-11): "22:00-01:00" lost its end for an hour.
+                    let e = root._hours(p.whenEnd);
+                    const nextDay = p.whenEnd.getDate() !== p.when.getDate() || e <= out.start;
+                    if (nextDay && e > 0) e += 24;
+                    else if (e === 0) e = 24;
+                    out.end = e;
+                }
             }
         }
-        if (x.minutes > 0) out.end = Math.min(24, out.start + x.minutes / 60);
+        if (x.minutes > 0) out.end = out.start + x.minutes / 60;
+        // Past midnight the meeting ends on the next day, as the editor stores
+        // it, instead of being cut at 24:00 (IDIOT-CAL-11).
+        if (out.end > 24) {
+            out.end = Math.min(out.end - 24, out.start);
+            out.endDate = new Date(out.date.getFullYear(), out.date.getMonth(), out.date.getDate() + 1);
+        }
         return out;
     }
     function markWords(raw, ws0) {
@@ -87,7 +102,7 @@ Popup {
     }
     function whenText(r) {
         return I18n.fmtDate(r.date, "weekdayDay") + " · " + AppController.eventHourLabel(r.start)
-               + "–" + AppController.eventHourLabel(r.end);
+               + "–" + (r.endDate ? I18n.fmtDate(r.endDate, "weekdayDay") + " · " : "") + AppController.eventHourLabel(r.end);
     }
 
     function submit() {
@@ -99,6 +114,7 @@ Popup {
         d.start = r.start;
         d.end = r.end;
         d.date = r.date;
+        d.endDate = r.endDate || r.date;
         d.rrule = r.rule;
         AppController.saveEvent(d);
         root.close();

@@ -229,6 +229,35 @@ TestCase {
         AppController.deleteEvent(made);
     }
 
+    // IDIOT-CAL-11: a meeting past midnight ends on the next day instead of
+    // being cut at 24:00.
+    function test_one_line_input_keeps_an_overnight_end() {
+        const cap = make('import TodoCpp; EventCapture { }');
+        const day = new Date();
+        day.setDate(day.getDate() + 445);
+        day.setHours(0, 0, 0, 0);
+        cap.openAt({ date: day, start: 9, end: 10 });
+        tryVerify(() => cap.opened);
+        const input = findChild(cap.contentItem, "event-capture-input");
+        input.text = "overnight probe 22:00-01:00";
+        compare(cap.parsed.start, 22);
+        compare(cap.parsed.end, 1);
+        verify(!!cap.parsed.endDate, "ends the next day");
+        compare(cap.parsed.endDate.getDate(), new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1).getDate());
+        input.text = "overnight probe 23:00 for 2h";
+        compare(cap.parsed.start, 23);
+        compare(cap.parsed.end, 1);
+        let made = "";
+        cap.created.connect((id) => made = id);
+        cap.submit();
+        tryVerify(() => made.length > 0);
+        const ev = AppController.eventById(made);
+        compare(ev.end, 1);
+        compare(Qt.formatDate(ev.endDate, "yyyy-MM-dd"),
+                Qt.formatDate(new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1), "yyyy-MM-dd"));
+        AppController.deleteEvent(made);
+    }
+
     // Typing in the attendee field offers contacts; Enter takes the highlighted
     // one and leaves the caret ready for the next name. The trailing separator
     // is not saved.
