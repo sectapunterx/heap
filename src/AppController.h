@@ -425,12 +425,15 @@ class AppController : public QObject {
   // nor a failure. Keys: imported, updated, unchanged, kept (edited here, not
   // on disk), conflicts (edited in both: the file arrives as a copy), skipped,
   // files, folder, warnings. The whole import is one undo step.
-  Q_INVOKABLE QVariantMap importNotesFolder(const QUrl& folderUrl);
+  Q_INVOKABLE QVariantMap importNotesFolder(const QUrl& folderUrl, bool checklistTasks = false);
   // The same summary without changing anything, for a confirm step.
   Q_INVOKABLE QVariantMap previewNotesFolder(const QUrl& folderUrl);
   // Writes into a new folder inside `folderUrl` — named `subfolder`, or dated
   // when that is empty, with a suffix when the name is taken — so an export
   // never overwrites a file. Keys: written, skipped, folder.
+  // One note as a .md file (R2-062 "Экспорт в .md"), the same contents a
+  // folder export writes for it. False when the file cannot be written.
+  Q_INVOKABLE bool exportNoteToFile(const QString& id, const QUrl& fileUrl);
   Q_INVOKABLE QVariantMap exportNotesFolder(const QUrl& folderUrl, const QString& subfolder = QString());
 
   // ── Links between notes ──
@@ -1343,6 +1346,10 @@ class AppController : public QObject {
   Q_INVOKABLE void setPersonState(const QString& id, const QString& state);
   Q_INVOKABLE QVariantMap newPersonDraft() const;
   Q_INVOKABLE QVariantMap personById(const QString& id) const;
+  // What lowkey knows links to the person (DG-002): tasks waiting on them
+  // ({id, key, title}) and their upcoming meetings ({id, date, start, allDay,
+  // title}), matched on the meeting's attendees line.
+  Q_INVOKABLE QVariantMap personLinks(const QString& id) const;
   // The person an "@handle" in a note names, or empty.
   Q_INVOKABLE QString personIdForHandle(const QString& handle) const;
   // Finding someone by what was typed (heap::text::personMatchRank): the id,

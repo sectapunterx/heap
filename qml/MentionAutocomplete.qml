@@ -48,8 +48,8 @@ Popup {
     closePolicy: Popup.NoAutoClose
     parent: Overlay.overlay
     visible: _suggestions.length > 0
-    width: 320
-    height: Math.min(Math.max(_suggestions.length, 1), maxRows) * 28 + 4
+    width: Theme.px(260)
+    height: Math.min(Math.max(_suggestions.length, 1), maxRows + 1) * Theme.px(30) + 2 * Theme.spXs
 
     function _text() {
         return target ? (target.text || "") : "";
@@ -105,7 +105,12 @@ Popup {
         const hits = AppController.matchPeople(q, maxRows);
         const out = [];
         for (let i = 0; i < hits.length; ++i)
-            out.push({id: String(hits[i].id || ""), name: String(hits[i].name || "")});
+            out.push({id: String(hits[i].id || ""), name: String(hits[i].name || ""), role: String(hits[i].role || "")});
+        // The last row adds the typed word as a person (R2-042, X-Dlg-Small).
+        // Not for "@first last": past a space the query is a name being
+        // matched, and nobody matching closes the list.
+        if (q.length > 0 && q.indexOf(" ") < 0)
+            out.push({id: "", name: q, role: "", add: true});
         return out;
     }
 
@@ -145,11 +150,24 @@ Popup {
         if (_suggestions.length > 0) _reposition();
     }
 
-    function accept() {
+    function accept(clicked) {
         if (!isOpen || !target) return false;
         const r = _currentTriggerRange();
         if (!r) return false;
         const pick = _suggestions[_selectedIdx];
+        if (pick.add) {
+            // Enter or Tab on an untouched list never makes a person; the
+            // arrows or a click do.
+            if (!navigated && !clicked) return false;
+            const name = r.prefix.charAt(0).toUpperCase() + r.prefix.slice(1);
+            const draft = AppController.newPersonDraft();
+            draft.name = name;
+            draft.id = AppController.suggestPersonId(name);
+            draft.state = "idle";
+            if (!AppController.savePerson(draft)) return false;
+            pick.id = draft.id;
+            pick.name = name;
+        }
         // Notes write a person as @Their_Name (NotesView does the same), task
         // text as the id the task parser matches.
         const token = (insertNames && r.trigger === "@") ? String(pick.name || pick.id).replace(/\s+/g, "_") : pick.id;
@@ -199,34 +217,43 @@ Popup {
         clip: true
         model: ac._suggestions
         interactive: false
+        topMargin: Theme.spXs
         delegate: Rectangle {
+            id: acRow
             required property var modelData
             required property int index
-            width: ListView.view.width
-            height: 28
-            color: index === ac._selectedIdx
-                ? Theme.withAlpha(Theme.accent, 0.18)
-                : (rowMA.containsMouse ? Theme.withAlpha(Theme.accent, 0.08) : "transparent")
-            Row {
-                anchors.fill: parent
-                anchors.leftMargin: Theme.spLg
-                anchors.rightMargin: Theme.spLg
-                spacing: Theme.spMd
-                Text {
-                    text: ac._trigger + modelData.id
-                    color: Theme.accentStrong
-                    font.family: Theme.fontMono
-                    font.pixelSize: Theme.fsSm
-                    anchors.verticalCenter: parent.verticalCenter
-                }
-                Text {
-                    visible: (modelData.name || "").length > 0
-                    text: "· " + modelData.name
-                    color: Theme.textMuted
-                    font.pixelSize: Theme.fsSm
-                    anchors.verticalCenter: parent.verticalCenter
-                    elide: Text.ElideRight
-                }
+            readonly property bool on: index === ac._selectedIdx
+            x: Theme.spXs
+            width: ListView.view.width - 2 * Theme.spXs
+            height: Theme.px(30)
+            radius: Theme.radiusSm
+            color: acRow.on ? Theme.panel3 : (rowMA.containsMouse ? Theme.withAlpha(Theme.text, 0.04) : "transparent")
+            // A person: the name, the role on the right (sheet X-Dlg-Small).
+            // A task: its id and title. The add row: one dim line.
+            Text {
+                id: acName
+                anchors.left: parent.left
+                anchors.leftMargin: Theme.spMd
+                anchors.right: acRole.left
+                anchors.rightMargin: Theme.spMd
+                anchors.verticalCenter: parent.verticalCenter
+                text: acRow.modelData.add ? I18n.t("mention.addPerson").arg(acRow.modelData.name)
+                    : ac._trigger === "#" ? acRow.modelData.id + " · " + acRow.modelData.name
+                    : acRow.modelData.name
+                color: acRow.modelData.add ? Theme.textMuted : Theme.text
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsMd
+                elide: Text.ElideRight
+            }
+            Text {
+                id: acRole
+                anchors.right: parent.right
+                anchors.rightMargin: Theme.spMd
+                anchors.verticalCenter: parent.verticalCenter
+                text: acRow.modelData.role || ""
+                color: Theme.textDim
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsXs
             }
             MouseArea {
                 id: rowMA
@@ -234,8 +261,8 @@ Popup {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
-                    ac._selectedIdx = index;
-                    ac.accept();
+                    ac._selectedIdx = acRow.index;
+                    ac.accept(true);
                     if (ac.target && ac.target.forceActiveFocus) {
                         ac.target.forceActiveFocus();
                     }

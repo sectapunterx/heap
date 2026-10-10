@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -10,10 +12,11 @@ import "PopupStack.js" as PopupStack
 //  • Enter, Shift+Enter → newline in the editor (APP-209: the same keys
 //                      as the task capture)
 //  • @<token>        → people autocomplete via MentionAutocomplete
-//  • Esc (empty)     → close silently
-//  • Esc (non-empty) → discard-confirm child popup
-//      ↳ Enter → drop the note and close both popups
-//      ↳ Esc   → cancel the discard, return focus to the editor
+//  • Esc             → close; the text stays as a draft for the next open
+//                      (R2-069, sheet X-Oth-Capture: "Esc — черновик
+//                      сохранится")
+//  • "прикрепить к …" → the entry links the task ([[id]]), so the task's
+//                      backlinks list it
 Popup {
     id: root
     // Standalone it is the whole window — there is nothing behind it to
@@ -23,8 +26,7 @@ Popup {
     // We own all key handling (the discard-confirm flow needs to intercept
     // Esc), so the popup must NOT auto-close on Escape.
     closePolicy: Popup.NoAutoClose
-    padding: 0
-    width: 600
+    width: Theme.px(600)
     // Standalone: hosted by CaptureWindow — see QuickCapturePopup.
     property bool standalone: false
     anchors.centerIn: root.standalone ? undefined : Overlay.overlay
@@ -40,6 +42,13 @@ Popup {
     signal captured(string title, string body, string taskId)
 
     readonly property bool hasText: editor.text.trim().length > 0
+    // The task the entry is attached to ("" = none): the one the git branch
+    // names by default, or one picked from the list.
+    property string attachId: ""
+    readonly property var attachTask: root.attachId.length ? AppController.taskById(root.attachId) : ({})
+    function _taskLabel(t) {
+        return t ? (t.externalKey || t.title || "") : "";
+    }
 
     function _submit() {
         const body = editor.text;
@@ -50,20 +59,18 @@ Popup {
         // Named before the append: with no note open it lands in Inbox, and
         // the confirmation should say so, not "Note saved" somewhere unseen.
         const into = AppController.quickNoteTarget();
-        AppController.appendNoteEntry(body);
+        AppController.appendNoteEntry(root.attachId.length ? body.replace(/\s+$/, "") + " [[" + root.attachId + "]]" : body);
         editor.text = "";
         at.dismiss();
         root.close();
         const flat = body.trim().replace(/\s+/g, " ");
-        root.captured(I18n.t("quickNote.doneInto").arg(into), flat.length > 140 ? flat.substring(0, 139) + "…" : flat, "");
+        root.captured(I18n.t("quickNote.doneInto").arg(into), flat.length > 140 ? flat.substring(0, 139) + "…" : flat, root.attachId);
     }
 
+    // Esc or a press beside: close, the draft kept (onOpened leaves it).
     function _maybeDiscard() {
-        if (editor.text.trim().length === 0) {
-            root.close();
-            return;
-        }
-        confirmDiscard.open();
+        at.dismiss();
+        root.close();
     }
 
     property string _target: ""
@@ -72,36 +79,96 @@ Popup {
     onAboutToShow: AppController.perfMarkShown("capture-notes", contentItem)
     onOpened: {
         root._target = AppController.quickNoteTarget();
-        editor.text = "";
+        root.attachId = AppController.focusedTaskId || "";
         at.dismiss();
+        editor.cursorPosition = editor.length;
         editor.forceActiveFocus();
     }
 
     background: ModalSurface {}
 
+    padding: Theme.spLg
     contentItem: ColumnLayout {
-        spacing: Theme.spLg
+        spacing: Theme.spSm
 
-        Item {
-            Layout.preferredHeight: 6
-        }
-
-        Text {
-            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
-            objectName: "quick-note-target"
-            // Where it goes, before it goes there.
-            text: I18n.t("quickNote.titleInto").arg(root._target)
-            elide: Text.ElideRight
+        // "lowkey  быстрая заметка → «Входящие»   прикрепить к APP-101 ▾"
+        RowLayout {
             Layout.fillWidth: true
-            color: Theme.textDim
-            font.pixelSize: Theme.fsSm
-            font.weight: Theme.fwTitle
+            spacing: Theme.spMd
+            Item {
+                Layout.preferredWidth: qnLogo.implicitWidth
+                Layout.preferredHeight: qnLogo.height
+                BrandLogo {
+                    id: qnLogo
+                    anchors.verticalCenter: parent.verticalCenter
+                    variant: "wordmark"
+                    theme: Theme.dark ? "dark" : "light"
+                    height: Theme.fsSm
+                }
+            }
+            Text {
+                objectName: "quick-note-target"
+                Layout.fillWidth: true
+                // Where it goes, before it goes there.
+                text: I18n.t("quickNote.titleInto").arg(root._target)
+                elide: Text.ElideRight
+                color: Theme.textMuted
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsXs
+            }
+            Text {
+                objectName: "quick-note-attach"
+                text: (root.attachId.length ? I18n.t("quickNote.attachTo").arg(root._taskLabel(root.attachTask))
+                                            : I18n.t("quickNote.attach")) + " ▾"
+                color: attachCA.hovered ? Theme.text : Theme.textMuted
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsXs
+                ClickArea {
+                    id: attachCA
+                    label: I18n.t("quickNote.attach")
+                    onActivated: attachMenu.openList()
+                }
+                AppMenu {
+                    id: attachMenu
+                    property var tasks: []
+                    function openList() {
+                        const out = [];
+                        const seen = {};
+                        const add = (t) => { if (t && t.id && !seen[t.id] && out.length < 8) { seen[t.id] = true; out.push(t); } };
+                        if (AppController.focusedTaskId) add(AppController.taskById(AppController.focusedTaskId));
+                        if (root.attachId.length) add(root.attachTask);
+                        const day = AppController.todayData(new Date(), false);
+                        (day.inProgress || []).forEach(t => add(AppController.taskById(t.id)));
+                        attachMenu.tasks = out;
+                        attachMenu.popup();
+                    }
+                    Instantiator {
+                        model: attachMenu.tasks
+                        delegate: AppMenuItem {
+                            id: attachRow
+                            required property var modelData
+                            text: (attachRow.modelData.externalKey ? attachRow.modelData.externalKey + " · " : "") + (attachRow.modelData.title || "")
+                            marked: attachRow.modelData.id === root.attachId
+                            onTriggered: { root.attachId = attachRow.modelData.id; editor.forceActiveFocus(); }
+                        }
+                        onObjectAdded: (index, object) => attachMenu.insertItem(index, object)
+                        onObjectRemoved: (index, object) => attachMenu.removeItem(object)
+                    }
+                    AppMenuSeparator { visible: attachMenu.tasks.length > 0 }
+                    AppMenuItem {
+                        objectName: "quick-note-attach-none"
+                        text: I18n.t("quickNote.attachNone")
+                        marked: root.attachId.length === 0
+                        onTriggered: { root.attachId = ""; editor.forceActiveFocus(); }
+                    }
+                }
+            }
         }
 
         ScrollView {
             id: editorScroll
-            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
-            Layout.preferredHeight: 240
+            Layout.fillWidth: true
+            Layout.preferredHeight: Math.max(Theme.px(90), Math.min(Theme.px(240), editor.implicitHeight))
             clip: true
 
             TextArea {
@@ -109,17 +176,15 @@ Popup {
                 ContextMenu.menu: TextEditMenu { editor: editor }
                 objectName: "quicknote-editor"
                 wrapMode: TextEdit.Wrap
-                font.pixelSize: Theme.fsLg
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsMd
                 color: Theme.text
                 placeholderText: I18n.t("quickNote.placeholder")
                 placeholderTextColor: Theme.textDim
                 selectByMouse: true
-                background: Rectangle {
-                    radius: Theme.radiusMd
-                    color: Theme.panel2
-                    border.color: Theme.border
-                    border.width: 1
-                }
+                leftPadding: 0
+                rightPadding: 0
+                background: Item {}
 
                 onTextChanged: at.refresh()
                 onCursorPositionChanged: at.refresh()
@@ -173,7 +238,7 @@ Popup {
                         return;
                     }
 
-                    // Esc → discard-confirm flow (or silent close when empty).
+                    // Esc → close, the draft kept.
                     if (e.key === Qt.Key_Escape) {
                         root._maybeDiscard();
                         e.accepted = true;
@@ -183,29 +248,14 @@ Popup {
             }
         }
 
+        // The keys, no buttons (sheet X-Oth-Capture).
         Text {
-            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+            objectName: "quick-note-hint"
+            Layout.fillWidth: true
             text: I18n.t("quickNote.hint")
             color: Theme.textDim
+            font.family: Theme.fontUi
             font.pixelSize: Theme.fsXs
-        }
-
-        RowLayout {
-            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.bottomMargin: Theme.sp2xl
-            spacing: Theme.spMd
-            Item {
-                Layout.fillWidth: true
-            }
-            PillButton {
-                text: I18n.t("common.cancel")
-                onClicked: root._maybeDiscard()
-            }
-            PillButton {
-                text: I18n.t("common.save")
-                primary: true
-                enabled: editor.text.trim().length > 0
-                onClicked: root._submit()
-            }
         }
     }
 
@@ -215,90 +265,5 @@ Popup {
         // The text goes into a note, where the editor writes @Name_Like_This;
         // an id-style @o.t for the same person read as somebody else.
         insertNames: true
-    }
-
-    // ── Discard confirmation ──
-    // Modal child popup. Enter inside it commits the discard; Esc closes
-    // the confirm via Popup.CloseOnEscape and onClosed returns focus to
-    // the editor with text intact.
-    //
-    // Why a FocusScope content: Keys.onPressed attached directly to a
-    // Popup never fires — focus lives on the contentItem, not on the
-    // Popup. Wrapping in a FocusScope with `focus: true` makes the scope
-    // the activeFocus target so Enter is captured here.
-    Popup {
-        id: confirmDiscard
-        modal: !root.standalone
-        focus: true
-        closePolicy: Popup.CloseOnEscape
-        padding: 0
-        width: 360
-        anchors.centerIn: Overlay.overlay
-
-        Overlay.modal: ModalScrim {}
-
-        background: ModalSurface {}
-
-        function _commitDiscard() {
-            editor.text = "";
-            confirmDiscard.close();
-            root.close();
-        }
-
-        contentItem: FocusScope {
-            id: confirmScope
-            focus: true
-            implicitHeight: confirmCol.implicitHeight
-
-            Keys.onReturnPressed: confirmDiscard._commitDiscard()
-            Keys.onEnterPressed: confirmDiscard._commitDiscard()
-
-            ColumnLayout {
-                id: confirmCol
-                anchors.fill: parent
-                spacing: Theme.spLg
-
-                Item {
-                    Layout.preferredHeight: 6
-                }
-
-                Text {
-                    Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
-                    text: I18n.t("quickNote.discard.title")
-                    color: Theme.text
-                    font.pixelSize: Theme.fsMd
-                    font.weight: Theme.fwTitle
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
-                }
-
-                Text {
-                    Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
-                    text: I18n.t("quickNote.discard.hint")
-                    color: Theme.textDim
-                    font.pixelSize: Theme.fsXs
-                }
-
-                RowLayout {
-                    Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.bottomMargin: Theme.sp2xl
-                    spacing: Theme.spMd
-                    Item {
-                        Layout.fillWidth: true
-                    }
-                    PillButton {
-                        text: I18n.t("common.cancel")
-                        onClicked: confirmDiscard.close()
-                    }
-                    PillButton {
-                        text: I18n.t("common.delete")
-                        danger: true
-                        onClicked: confirmDiscard._commitDiscard()
-                    }
-                }
-            }
-        }
-
-        onOpened: confirmScope.forceActiveFocus()
-        onClosed: editor.forceActiveFocus()
     }
 }

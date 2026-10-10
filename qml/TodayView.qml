@@ -39,6 +39,8 @@ FocusScope {
     signal exampleRequested()
     // "Кому написать" in full, on this person (DG-002).
     signal peopleRequested(string id)
+    // The person menu's "Изменить вопрос…" (R2-063).
+    signal personEditRequested(string id)
 
     property bool allProfiles: false
     function focusView() {
@@ -274,6 +276,12 @@ FocusScope {
         if (end - it.block.start < step - 1e-9) return false;
         return AppController.resizeTaskBlock(it.id, root.day, it.block.start, end);
     }
+    PersonMenu {
+        id: personMenu
+        onEditRequested: (id) => root.personEditRequested(id)
+        onLinksRequested: (id) => root.peopleRequested(id)
+    }
+
     TaskMenuHost {
         id: menuHost
         anchorItem: root
@@ -680,6 +688,11 @@ FocusScope {
                                 Layout.topMargin: root.cards ? Theme.spSm : 0
                                 Layout.bottomMargin: root.cards ? Theme.spSm : 0
                                 spacing: Theme.spMd
+                                TapHandler {
+                                    objectName: "today-person-menu-tap"
+                                    acceptedButtons: Qt.RightButton
+                                    onTapped: personMenu.openFor(pr.modelData)
+                                }
                                 Rectangle {
                                     visible: root.cards
                                     implicitWidth: Theme.px(28); implicitHeight: Theme.px(28)

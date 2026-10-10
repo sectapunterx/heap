@@ -22,7 +22,7 @@ Item {
     }
 
     readonly property var tocModel: [
-        {anchor: "help-views", label: root.tr2("Views — Board, Timeline, Week, Month, Archive, Docs, Notes, day panel", "Виды — доска, лента, неделя, месяц, архив, доки, заметки, панель дня")},
+        {anchor: "help-views", label: root.tr2("Views — Today, Tasks, Calendar (Week, Month), Archive, Knowledge", "Виды — сегодня, задачи, календарь (неделя, месяц), архив, знания")},
         {anchor: "help-tasks", label: root.tr2("Tasks — statuses, priorities, deadlines", "Задачи — статусы, приоритеты, сроки")},
         {anchor: "help-capture", label: root.tr2("Quick Capture — text parsing, @-mentions", "Быстрый ввод — разбор текста, @-упоминания")},
         {anchor: "help-calendar", label: root.tr2("Calendar — events, drag-create, focus blocks", "Календарь — события, создание перетаскиванием, фокус-блоки")},
@@ -136,8 +136,8 @@ Item {
                 }
             }
             Body {
-                text: root.tr2("A developer's workday in lowkey, laid out across widgets: board, timeline, week and month calendars, a day panel, notes and documentation. Everything stays local in JSON; nothing goes to the cloud unless you connect a tracker. Below — a tour of the sections. Click an item in the table of contents to jump to the topic you need.",
-                              "Рабочий день разработчика в lowkey, разложенный по виджетам: доска, лента, календари недели и месяца, панель дня, заметки и документация. Всё хранится локально в JSON; в облако ничего не уходит, пока вы сами не подключите трекер. Ниже — обзор разделов. Нажмите пункт оглавления, чтобы перейти к нужной теме.")
+                text: root.tr2("A developer's workday in lowkey, laid out across widgets: Today, tasks as a board or a list, week and month calendars, notes and documentation. Everything stays local in JSON; nothing goes to the cloud unless you connect a tracker. Below — a tour of the sections. Click an item in the table of contents to jump to the topic you need.",
+                              "Рабочий день разработчика в lowkey, разложенный по виджетам: «Сегодня», задачи доской или списком, календари недели и месяца, заметки и документация. Всё хранится локально в JSON; в облако ничего не уходит, пока вы сами не подключите трекер. Ниже — обзор разделов. Нажмите пункт оглавления, чтобы перейти к нужной теме.")
             }
         }
 
@@ -236,8 +236,8 @@ Item {
                 text: root.tr2("Month View", "Месяц")
             }
             Body {
-                text: root.tr2("A month grid of deadlines and events, the week start from settings. Clicking a day selects it for the day panel; the arrows step a month, T goes to today, G picks any date.",
-                              "Сетка месяца: сроки и события, начало недели — из настроек. Клик по дню выбирает его для панели дня; стрелки листают месяцы, T — к сегодняшнему дню, G — к любой дате.")
+                text: root.tr2("A month grid of deadlines and events, the week start from settings. Clicking a day selects it, and the week opens on it; the arrows step a month, T goes to today, G picks any date.",
+                              "Сетка месяца: сроки и события, начало недели — из настроек. Клик по дню выбирает его, и неделя открывается на нём; стрелки листают месяцы, T — к сегодняшнему дню, G — к любой дате.")
             }
 
             H3 {
@@ -249,12 +249,12 @@ Item {
             }
 
             H3 {
-                text: root.tr2("Day Calendar (right panel)",
-                              "Календарь дня (правая панель)")
+                text: root.tr2("Today",
+                              "Сегодня")
             }
             Body {
-                text: root.tr2("An hourly grid for the selected day. The current time is highlighted with a live line. Clicking an empty spot creates an hour-long event; a vertical drag — an event of the duration you need. Dropping a task card on the grid schedules a focus block for that hour.",
-                              "Почасовая сетка выбранного дня. Текущее время отмечено живой линией. Клик по пустому месту создаёт событие на час; вертикальное перетаскивание — событие нужной длительности. Карточка задачи, брошенная на сетку, ставит фокус-блок на этот час.")
+                text: root.tr2("The day on one screen: meetings and planned tasks in time order, free time between them, what is in progress, deadlines and “Who to write to”. The current time is a line across the plan. Arrows step to another day.",
+                              "День на одном экране: встречи и запланированные задачи по времени, свободное время между ними, что в работе, сроки и «Кому написать». Текущее время — линия поперёк плана. Стрелки листают дни.")
             }
             Hint {
                 text: root.tr2("Workday bounds (9–19 by default) are changed in Settings → Calendar.",
@@ -434,8 +434,8 @@ Item {
                               "Создание событий")
             }
             Body {
-                text: root.tr2("In Day Calendar and Week View, clicking an empty spot makes an hour-long event. If you hold and drag — the duration equals the height you dragged across. The snap step (15 min by default) is set in Settings → Calendar → Snap.",
-                              "В календаре дня и на неделе клик по пустому месту создаёт событие на час. Если зажать и потянуть — длительность равна протянутой высоте. Шаг привязки (по умолчанию 15 мин) задаётся в Настройки → Календарь → Привязка.")
+                text: root.tr2("In the week grid, clicking an empty spot makes an hour-long event. If you hold and drag — the duration equals the height you dragged across. The snap step (15 min by default) is set in Settings → Calendar → Snap.",
+                              "В сетке недели клик по пустому месту создаёт событие на час. Если зажать и потянуть — длительность равна протянутой высоте. Шаг привязки (по умолчанию 15 мин) задаётся в Настройки → Календарь → Привязка.")
             }
 
             H3 {
@@ -452,8 +452,8 @@ Item {
                               "Фокус-блок — автопостановка")
             }
             Body {
-                text: root.tr2("Drag a task from the kanban onto the Day Calendar — a focus block appears for that hour. The default length comes from Settings → Calendar → Focus duration (90 minutes). You can enable the 'Auto focus block' option — then the block is created as soon as you switch the git branch to the one linked to the task.",
-                              "Перетащите задачу с доски на календарь дня — на этот час появится фокус-блок. Длина по умолчанию — из Настройки → Календарь → Длительность фокуса (90 минут). Можно включить «Авто фокус-блок» — тогда блок создаётся, как только вы переключаетесь на git-ветку задачи.")
+                text: root.tr2("Pick a task in the week's “Without a date” tray and click an hour, or drag it there — it is planned for that hour. The default length comes from Settings → Calendar → Focus duration (90 minutes). You can enable the 'Auto focus block' option — then the block is created as soon as you switch the git branch to the one linked to the task.",
+                              "Выберите задачу в лотке недели «Без даты» и щёлкните по часу или перетащите её туда — она запланируется на этот час. Длина по умолчанию — из Настройки → Календарь → Длительность фокуса (90 минут). Можно включить «Авто фокус-блок» — тогда блок создаётся, как только вы переключаетесь на git-ветку задачи.")
             }
 
             H3 {
@@ -461,8 +461,8 @@ Item {
                               "Рабочий день и формат времени")
             }
             Body {
-                text: root.tr2("The workday is 9–19 by default — it is shaded on the Day Calendar, whose grid covers the whole day. Change it in Settings → Calendar. The time format switches between 12h and 24h. The week starts on Mon or Sun — also from settings. Snaps are 5/10/15/30 min.",
-                              "Рабочий день по умолчанию 9–19 — он затенён в календаре дня, сетка которого покрывает все сутки. Меняется в Настройки → Календарь. Формат времени переключается между 12 и 24 часами. Неделя начинается с понедельника или воскресенья — тоже в настройках. Привязка — 5/10/15/30 мин.")
+                text: root.tr2("The workday is 9–19 by default — it is shaded on the week grid, which covers the whole day. Change it in Settings → Calendar. The time format switches between 12h and 24h. The week starts on Mon or Sun — also from settings. Snaps are 5/10/15/30 min.",
+                              "Рабочий день по умолчанию 9–19 — он затенён в сетке недели, которая покрывает все сутки. Меняется в Настройки → Календарь. Формат времени переключается между 12 и 24 часами. Неделя начинается с понедельника или воскресенья — тоже в настройках. Привязка — 5/10/15/30 мин.")
             }
         }
 
@@ -474,8 +474,8 @@ Item {
                               "Люди — контакты и упоминания")
             }
             Body {
-                text: root.tr2("The list of people in the bottom-right panel — who you need to reply to or write to. Each has: a name, a handle (unique), a role, an avatar color, a current question.",
-                              "Список людей в правой нижней панели — кому нужно ответить или написать. У каждого: имя, уникальный ник, роль, цвет аватара и текущий вопрос.")
+                text: root.tr2("“Who to write to” on Today — who you need to reply to or write to; click a name for the full list. Each has: a name, a handle (unique), a role, an avatar color, a current question.",
+                              "«Кому написать» на «Сегодня» — кому нужно ответить или написать; клик по имени открывает полный список. У каждого: имя, уникальный ник, роль, цвет аватара и текущий вопрос.")
             }
 
             H3 {
@@ -866,8 +866,8 @@ Item {
                               "Авто фокус-блок")
             }
             Body {
-                text: root.tr2("An option: automatically books a focus block in the Day Calendar at the nearest free hour when you switch to the task's branch. The block length — from Settings → Calendar.",
-                              "Опция: при переключении на ветку задачи в календаре дня бронируется фокус-блок на ближайший свободный час. Длина блока — из Настройки → Календарь.")
+                text: root.tr2("An option: automatically books a focus block in the calendar at the nearest free hour when you switch to the task's branch. The block length — from Settings → Calendar.",
+                              "Опция: при переключении на ветку задачи в календаре бронируется фокус-блок на ближайший свободный час. Длина блока — из Настройки → Календарь.")
             }
 
             H3 {
@@ -1099,8 +1099,8 @@ Item {
             }
 
             H3 {
-                text: root.tr2("Day Calendar — drag empty area",
-                              "Календарь дня — перетаскивание по пустому месту")
+                text: root.tr2("Week grid — drag empty area",
+                              "Сетка недели — перетаскивание по пустому месту")
             }
             Body {
                 text: root.tr2("Not just a click — hold and drag vertically, and the duration of the new event will be exactly as far as you stretched it.",
@@ -1108,30 +1108,21 @@ Item {
             }
 
             H3 {
-                text: root.tr2("Drag TaskCard onto the calendar",
-                              "Карточка задачи на календарь")
+                text: root.tr2("A task onto the calendar",
+                              "Задача на календарь")
             }
             Body {
-                text: root.tr2("From the kanban/timeline you can drop a card straight into the Day Calendar — a focus block appears at the hour where you released it.",
-                              "С доски или ленты карточку можно бросить прямо в календарь дня — фокус-блок появится на часе, где вы её отпустили.")
+                text: root.tr2("A task from the week's “Without a date” tray dropped on an hour is planned there; dropped on a day of the month, it gets that date.",
+                              "Задача из лотка «Без даты», брошенная на час недели, планируется туда; брошенная на день месяца — получает эту дату.")
             }
 
             H3 {
-                text: root.tr2("MiniWeek dots",
-                              "Точки в мини-неделе")
+                text: root.tr2("The now line",
+                              "Линия «сейчас»")
             }
             Body {
-                text: root.tr2("The small dots under a date in the top panel are a marker that this day has at least one event. Handy for a quick scan of the week.",
-                              "Маленькие точки под датой на верхней панели — знак, что в этот день есть хотя бы одно событие. Удобно, чтобы быстро окинуть неделю взглядом. С клавиатуры: Tab на полосу дней, ←/→ — день, PgUp/PgDn — неделя.")
-            }
-
-            H3 {
-                text: root.tr2("Now-line in Day Calendar",
-                              "Линия «сейчас» в календаре дня")
-            }
-            Body {
-                text: root.tr2("The horizontal line — the current time. Updates once a minute. Visible only when today is selected.",
-                              "Горизонтальная линия — текущее время. Обновляется раз в минуту. Видна, только если выбран сегодняшний день.")
+                text: root.tr2("The horizontal line — the current time. Updates once a minute. On Today and in the week that holds today.",
+                              "Горизонтальная линия — текущее время. Обновляется раз в минуту. Видна на «Сегодня» и в неделе, где есть сегодняшний день.")
             }
 
             H3 {

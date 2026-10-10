@@ -142,6 +142,9 @@ Item {
         onActivated: root.openMenu()
     }
 
+    // "Удалить профиль…" asks first (DG-151).
+    ProfileDeleteDialog { id: deleteDialog }
+
     // The switcher: a search field over the list, the actions under it.
     QQC.Popup {
         id: picker
@@ -258,7 +261,7 @@ Item {
                 text: I18n.t("sidebar.profile.delete")
                 danger: true
                 enabled: AppController.profiles.length > 1
-                onTriggered: { picker.close(); AppController.deleteProfile(AppController.activeProfileId); }
+                onTriggered: { picker.close(); deleteDialog.openFor(AppController.activeProfileId); }
             }
         }
     }

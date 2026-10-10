@@ -111,14 +111,18 @@ TestCase {
         ed.close();
     }
 
-    function test_a_press_beside_a_note_with_text_asks_first() {
+    // R2-069: a press beside closes the quick note like Esc, and the text
+    // stays as the next open's draft — nothing is dropped, so nothing asks.
+    function test_a_press_beside_a_note_with_text_keeps_the_draft() {
         const qc = _make("QuickCaptureNotesPopup { }");
         qc.open();
         tryCompare(qc, "opened", true);
-        findChild(qc, "quicknote-editor").text = "an idea";
+        const ed = findChild(qc, "quicknote-editor");
+        ed.text = "an idea";
         verify(qc.hasText);
         _pressBeside();
-        verify(qc.opened, "the note was dropped without asking");
-        qc.close();
+        tryCompare(qc, "opened", false);
+        compare(ed.text, "an idea", "the draft was dropped");
+        ed.text = "";
     }
 }

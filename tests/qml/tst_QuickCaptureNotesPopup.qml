@@ -38,7 +38,7 @@ TestCase {
         compare(qc.modal, true, "notes popup must be modal");
         compare(qc.closePolicy, Popup.NoAutoClose,
                 "must not auto-close on Escape/outside-click");
-        compare(qc.padding, 0, "padding is 0 (margins are per-child)");
+        compare(qc.padding, Theme.spLg, "the card's own padding (R2-069)");
         compare(qc.width, 600, "fixed 600px width");
     }
 

@@ -172,7 +172,18 @@ void appendInline(const MdAst& ast, int index, const MdHtmlOptions& options, QSt
       }
       body += node.text;
       QString styled = QStringLiteral("<code>%1</code>").arg(escapeHtml(body));
-      if(!options.palette.codeBackground.isEmpty() || !options.palette.code.isEmpty()) {
+      if(!options.palette.codeFont.isEmpty()) {
+        // The face the view finds the span by; no-break spaces outside
+        // it leave room for the pill drawn under it (R2-020).
+        const QString size = options.palette.codeSize.isEmpty()
+                                 ? QString()
+                                 : QStringLiteral("font-size:%1px;").arg(options.palette.codeSize.toHtmlEscaped());
+        styled = QStringLiteral("&nbsp;<span style=\"font-family:'%1';%2color:%3;\">%4</span>&nbsp;")
+                     .arg(options.palette.codeFont.toHtmlEscaped(),
+                          size,
+                          colorOr(options.palette.code, QStringLiteral("inherit")),
+                          escapeHtml(body));
+      } else if(!options.palette.codeBackground.isEmpty() || !options.palette.code.isEmpty()) {
         styled = QStringLiteral("<span style=\"background-color:%1;color:%2;\">%3</span>")
                      .arg(colorOr(options.palette.codeBackground, QStringLiteral("transparent")),
                           colorOr(options.palette.code, QStringLiteral("inherit")),

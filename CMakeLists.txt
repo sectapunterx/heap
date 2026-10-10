@@ -277,6 +277,7 @@ qt_add_library(heap_core STATIC
     # ── audit-perf: begin ──
     # ── audit-perf: end ──
     src/markdown/MdDocument.cpp
+    src/markdown/InlineCodeFrames.cpp
     src/markdown/MarkdownEditorController.cpp
     src/markdown/MdHighlighter.cpp
     src/integrations/StatusMap.cpp
@@ -432,6 +433,8 @@ qt_add_qml_module(heap_core
         qml/PersonEditor.qml
         qml/PersonPicker.qml
         qml/PeopleDialog.qml
+        qml/PersonMenu.qml
+        qml/ProfileDeleteDialog.qml
         qml/Toast.qml
         qml/ToastTiming.js
         qml/AppMenu.qml
@@ -511,6 +514,7 @@ qt_add_qml_module(heap_core
         src/query/TaskQuery.h
         src/notes/NoteLinks.h
         src/markdown/MdDocument.h
+        src/markdown/InlineCodeFrames.h
         src/markdown/MarkdownEditorController.h
         src/markdown/MdHighlighter.h
         src/notify/NotificationCenter.h

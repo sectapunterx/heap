@@ -24,10 +24,23 @@ Dialog {
 
     signal editRequested(string id)
     signal addRequested()
+    signal taskRequested(string id)
+    signal meetingRequested(string id)
 
     property string currentId: ""
     property int _rev: 0
     readonly property var current: root._rev >= 0 && root.currentId.length ? AppController.personById(root.currentId) : ({})
+
+    readonly property var links: root._rev >= 0 && AppController.waitingOn && root.currentId.length
+                                 ? AppController.personLinks(root.currentId) : ({})
+    readonly property var linkedTasks: root.links.tasks || []
+    readonly property var meetings: root.links.meetings || []
+    // "пт 11:00", "Fri 11:00"; an all-day meeting is the day alone.
+    function meetingWhen(m) {
+        const d = new Date(m.date);
+        const day = I18n.dayName(d.getDay());
+        return m.allDay ? day : day + " " + Theme.fmtHour(m.start);
+    }
 
     function showFor(id) {
         root.currentId = id || "";
@@ -54,6 +67,13 @@ Dialog {
 
     contentItem: ColumnLayout {
         spacing: Theme.spLg
+
+        // Right-click on a row (R2-063); its tasks are already beside the list.
+        PersonMenu {
+            id: rowMenu
+            showLinks: false
+            onEditRequested: (id) => root.editRequested(id)
+        }
 
         Text {
             Layout.fillWidth: true
@@ -154,6 +174,10 @@ Dialog {
                             label: row.name
                             onActivated: { list.currentIndex = row.index; root.currentId = row.id; }
                         }
+                        TapHandler {
+                            acceptedButtons: Qt.RightButton
+                            onTapped: rowMenu.openFor({ id: row.id })
+                        }
                     }
                 }
 
@@ -208,6 +232,59 @@ Dialog {
                     wrapMode: Text.Wrap
                     color: Theme.text
                     font.pixelSize: Theme.fsSm
+                }
+                // What lowkey knows links to the person (DG-002): tasks
+                // waiting on them, their next meetings. A block with nothing
+                // in it is not drawn.
+                Text {
+                    Layout.topMargin: Theme.spMd
+                    visible: root.linkedTasks.length > 0
+                    text: I18n.t("people.dialog.tasks")
+                    color: Theme.textDim
+                    font.pixelSize: Theme.fsXs
+                }
+                Repeater {
+                    model: root.linkedTasks
+                    delegate: Text {
+                        id: lt
+                        required property var modelData
+                        objectName: "people-dialog-task"
+                        Layout.fillWidth: true
+                        text: (lt.modelData.key ? lt.modelData.key + " · " : "") + lt.modelData.title
+                        elide: Text.ElideRight
+                        color: ltCA.hovered ? Theme.text : Theme.textMuted
+                        font.pixelSize: Theme.fsSm
+                        ClickArea {
+                            id: ltCA
+                            label: lt.modelData.title
+                            onActivated: { root.close(); root.taskRequested(lt.modelData.id); }
+                        }
+                    }
+                }
+                Text {
+                    Layout.topMargin: Theme.spMd
+                    visible: root.meetings.length > 0
+                    text: I18n.t("people.dialog.meetings")
+                    color: Theme.textDim
+                    font.pixelSize: Theme.fsXs
+                }
+                Repeater {
+                    model: root.meetings
+                    delegate: Text {
+                        id: mt
+                        required property var modelData
+                        objectName: "people-dialog-meeting"
+                        Layout.fillWidth: true
+                        text: root.meetingWhen(mt.modelData) + " · " + mt.modelData.title
+                        elide: Text.ElideRight
+                        color: mtCA.hovered ? Theme.text : Theme.textMuted
+                        font.pixelSize: Theme.fsSm
+                        ClickArea {
+                            id: mtCA
+                            label: mt.modelData.title
+                            onActivated: { root.close(); root.meetingRequested(mt.modelData.id); }
+                        }
+                    }
                 }
                 RowLayout {
                     Layout.topMargin: Theme.spMd

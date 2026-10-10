@@ -6,6 +6,7 @@
 #include "Models.h"
 #include "StateSerializer.h"
 
+#include "people/AttendeeMatch.h"
 #include "platform/Paths.h"
 
 #include <QApplication>
@@ -406,6 +407,45 @@ TEST_F(SafetyNetTest, StandupDraftFromTheWorkspace) {
   // "Blockers" — and the draft changed nothing.
   EXPECT_LT(draft.indexOf(QStringLiteral("T-1 T-1 title")), draft.indexOf(QStringLiteral("T-9 T-9 title")));
   EXPECT_EQ(app_->tasks()->items().at(1).status, QStringLiteral("blocked"));
+}
+
+// ── DG-002: the people dialog's linked tasks and meetings ──
+
+TEST(AttendeeMatch, NamesAPersonByNameHandleOrFirstName) {
+  using heap::people::attendeesName;
+  EXPECT_TRUE(attendeesName(QStringLiteral("Олег Т."), QStringLiteral("Олег Т."), QStringLiteral("o.t")));
+  EXPECT_TRUE(attendeesName(QStringLiteral("Андрей, Виктор"), QStringLiteral("Виктор С."), QString()));
+  EXPECT_TRUE(attendeesName(QStringLiteral("team; @o.t"), QStringLiteral("Oleg T."), QStringLiteral("o.t")));
+  EXPECT_FALSE(attendeesName(QStringLiteral("Олег К."), QStringLiteral("Олег Т."), QString()));
+  EXPECT_FALSE(attendeesName(QStringLiteral("Команда продукта"), QStringLiteral("Олег Т."), QString()));
+  EXPECT_FALSE(attendeesName(QString(), QStringLiteral("Олег Т."), QStringLiteral("o.t")));
+}
+
+TEST_F(WaitingOnTest, PersonLinksListWaitingTasksAndUpcomingMeetings) {
+  app_->setWaitingOn(QStringLiteral("T-1"), QStringLiteral("oleg"));
+  CalEvent mine;
+  mine.id = QStringLiteral("ev-mine");
+  mine.title = QStringLiteral("1:1");
+  mine.start = 11.0;
+  mine.end = 11.5;
+  mine.attendees = QStringLiteral("Oleg");
+  mine.date = app_->today().addDays(1);
+  CalEvent other = mine;
+  other.id = QStringLiteral("ev-other");
+  other.attendees = QStringLiteral("Ann");
+  CalEvent past = mine;
+  past.id = QStringLiteral("ev-past");
+  past.date = app_->today().addDays(-1);
+  app_->events()->reset({mine, other, past});
+
+  const QVariantMap links = app_->personLinks(QStringLiteral("oleg"));
+  const QVariantList tasks = links.value(QStringLiteral("tasks")).toList();
+  ASSERT_EQ(tasks.size(), 1);
+  EXPECT_EQ(tasks.at(0).toMap().value(QStringLiteral("id")).toString(), QStringLiteral("T-1"));
+  const QVariantList meetings = links.value(QStringLiteral("meetings")).toList();
+  ASSERT_EQ(meetings.size(), 1);
+  EXPECT_EQ(meetings.at(0).toMap().value(QStringLiteral("id")).toString(), QStringLiteral("ev-mine"));
+  EXPECT_TRUE(app_->personLinks(QStringLiteral("nobody")).isEmpty());
 }
 
 int main(int argc, char** argv) {
