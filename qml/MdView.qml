@@ -613,21 +613,46 @@ ListView {
 
         Component {
             id: localImage
-            Image {
-                objectName: "mdImage"
-                source: rowItem.model.imageSource
-                asynchronous: true
-                fillMode: Image.PreserveAspectFit
-                horizontalAlignment: Image.AlignLeft
-                // Never upscale past the natural size, never overflow the pane.
-                sourceSize.width: Math.min(implicitWidth > 0 ? implicitWidth : width, width)
-                Text {
-                    anchors.centerIn: parent
-                    visible: parent.status === Image.Error
-                    text: I18n.t("notes.image.missing")
-                    color: Theme.textDim
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsMd
+            // A missing file keeps its place as a framed block with its name
+            // (sheet N/X-Oth-Knowledge, R4-071): the image had zero height and
+            // its "not found" line sat on top of the caption.
+            Item {
+                implicitHeight: img.status === Image.Error ? missingBox.implicitHeight : img.implicitHeight
+                Image {
+                    id: img
+                    objectName: "mdImage"
+                    width: parent.width
+                    height: parent.height
+                    visible: img.status !== Image.Error
+                    source: rowItem.model.imageSource
+                    asynchronous: true
+                    fillMode: Image.PreserveAspectFit
+                    horizontalAlignment: Image.AlignLeft
+                    // Never upscale past the natural size, never overflow the pane.
+                    sourceSize.width: Math.min(implicitWidth > 0 ? implicitWidth : width, width)
+                }
+                Rectangle {
+                    id: missingBox
+                    objectName: "mdImageMissing"
+                    visible: img.status === Image.Error
+                    width: parent.width
+                    implicitHeight: Theme.px(44)
+                    height: implicitHeight
+                    color: Theme.panel
+                    radius: Theme.radiusMd
+                    border.width: 1
+                    border.color: Theme.border
+                    Text {
+                        anchors.fill: parent
+                        anchors.leftMargin: Theme.spLg
+                        anchors.rightMargin: Theme.spLg
+                        verticalAlignment: Text.AlignVCenter
+                        elide: Text.ElideMiddle
+                        text: I18n.t("notes.image.missing") + " \u00b7 " + String(rowItem.model.imageSource || "").replace(/^.*[\\/]/, "")
+                        color: Theme.textDim
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsMd
+                    }
                 }
             }
         }

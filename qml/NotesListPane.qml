@@ -360,7 +360,7 @@ Rectangle {
             Text {
                 text: I18n.t("sidebar.knowledge")
                 color: Theme.text
-                font.pixelSize: Style.quiet ? Theme.fsXl : Theme.fsLg
+                font.pixelSize: Style.quiet ? Theme.fsXl : Theme.px(18)  // sheet H2-Knowledge: 18px (R4-066)
                 font.weight: Theme.fwHeading
                 Layout.fillWidth: true
             }
