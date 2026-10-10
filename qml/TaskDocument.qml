@@ -163,10 +163,14 @@ FocusScope {
             // One line, and not a pasted page (IDIOT-DOC-14): line breaks
             // become spaces, the title stops at 500 characters.
             const title = root._cleanTitle(titleField.text);
-            if (root._dirtyTitle && title.length > 0) d.title = title;
+            // An emptied title is not saved, and stays "not saved": the
+            // indicator said "Saved" over an empty field (IDIOT-DOC-15).
+            const titleOk = title.length > 0;
+            if (!root._dirtyBody && !titleOk) return;
+            if (root._dirtyTitle && titleOk) d.title = title;
             if (root._dirtyBody) d.desc = body.source.text;
             if (AppController.saveTask(d)) {
-                root._dirtyTitle = false;
+                if (titleOk) root._dirtyTitle = false;
                 root._dirtyBody = false;
             }
         }
@@ -265,6 +269,22 @@ FocusScope {
         }
         const r = AppController.parseDateTime(s, new Date());
         if (r && r.ok) AppController.rescheduleTask(root.taskId, field, r.start, r.hasTime);
+        else AppController.showToast(I18n.t("taskdoc.date.unknown").arg(s));  // it said nothing (IDIOT-DOC-15)
+    }
+    // Ctrl+Z with the keyboard in the document: the body's own steps first;
+    // never the app's step that made this task — that deleted the task
+    // under the caret (IDIOT-DOC-17).
+    function undo() {
+        if (body.source.canUndo) {
+            body.source.undo();
+            body.flush();
+            return;
+        }
+        if (AppController.undoWouldRemoveTask(root.taskId)) {
+            AppController.showToast(I18n.t("taskdoc.undo.wouldDelete"));
+            return;
+        }
+        AppController.undo();
     }
     // A single-letter key reads as the keymap writes it ("d", "t").
     function _keyOf(id) {
@@ -393,9 +413,11 @@ FocusScope {
                 // Saved, or saving while the typing settles.
                 Text {
                     objectName: "task-doc-saved"
+                    readonly property bool noTitle: root._cleanTitle(titleField.text).length === 0
                     readonly property bool pending: saveTimer.running || root._dirtyTitle || root._dirtyBody
-                    text: pending ? I18n.t("taskdoc.saving") : (root._quiet ? I18n.t("taskdoc.saved").toLowerCase() : I18n.t("taskdoc.saved"))
-                    color: pending || root._quiet ? Theme.textMuted : Theme.success
+                    text: noTitle ? I18n.t("taskdoc.needsTitle")
+                        : pending ? I18n.t("taskdoc.saving") : (root._quiet ? I18n.t("taskdoc.saved").toLowerCase() : I18n.t("taskdoc.saved"))
+                    color: noTitle ? Theme.warning : pending || root._quiet ? Theme.textMuted : Theme.success
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsSm
                 }
@@ -475,6 +497,12 @@ FocusScope {
                 placeholderText: I18n.t("taskdoc.titlePh")
                 placeholderTextColor: Theme.textDim
                 onTextChanged: if (!root._loading) { root._dirtyTitle = true; saveTimer.restart(); }
+                // Left empty, the stored title comes back into view rather
+                // than silently on the next open (IDIOT-DOC-15).
+                onActiveFocusChanged: if (!activeFocus && root.opened && root._exists && root._cleanTitle(titleField.text).length === 0) {
+                    root._loading = true; titleField.text = root.task.title; root._loading = false;
+                    root._dirtyTitle = false;
+                }
                 Keys.onReturnPressed: (e) => { body.focusEditor(); e.accepted = true; }
                 Keys.onEnterPressed: (e) => { body.focusEditor(); e.accepted = true; }
                 // Tab moves on, as in any form; it typed a tab into the

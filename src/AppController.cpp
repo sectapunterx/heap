@@ -9153,6 +9153,16 @@ void AppController::flushNotesForUndo() {
   syncActiveNoteBody();
 }
 
+bool AppController::undoWouldRemoveTask(const QString& id) const {
+  const heap::undo::Entry* top = m_undo.peekUndo();
+  if(top == nullptr || id.isEmpty()) {
+    return false;
+  }
+  return std::any_of(top->tasks.cbegin(), top->tasks.cend(), [&id](const heap::undo::Edit<::Task>& e) {
+    return e.id == id && !e.existedBefore && e.existsAfter;
+  });
+}
+
 void AppController::undo() {
   if(!m_undo.canUndo()) {
     return;

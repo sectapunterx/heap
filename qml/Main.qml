@@ -2322,7 +2322,7 @@ ApplicationWindow {
         case "cal.taskLaterWeek": win._moveViewTask(7, 0); return;
         case "cal.taskTimeEarlier": win._moveViewTask(0, -1); return;
         case "cal.taskTimeLater": win._moveViewTask(0, 1); return;
-        case "undo": AppController.undo(); return;
+        case "undo": if (taskDoc.opened && win._focusInPanel) taskDoc.undo(); else AppController.undo(); return;
         case "redo": AppController.redo(); return;
         }
         win.runCommand(base);
@@ -2629,7 +2629,8 @@ ApplicationWindow {
         // field Ctrl+Z belongs to the field, which takes it first.
         enabled: sequence.length > 0 && win._globalKeysOn && AppController.hasPendingUndo && !win._overlayOpen
             && !(boardLoader.item && boardLoader.item.dialogOpen === true)
-        onActivated: AppController.undo()
+        // In the open document it is the document's undo (IDIOT-DOC-17).
+        onActivated: if (taskDoc.opened && win._focusInPanel) taskDoc.undo(); else AppController.undo()
     }
     Shortcut {
         sequence: _kbd("redo")

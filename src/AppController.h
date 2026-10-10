@@ -1853,6 +1853,9 @@ class AppController : public QObject {
   // Undo/redo the last recorded operation. undoLastDeletion() is the old name,
   // kept because QML and several tests call it.
   Q_INVOKABLE void undo();
+  // Whether the step Ctrl+Z would take back next is the one that made task
+  // \p id — undoing it deletes the task (IDIOT-DOC-17).
+  Q_INVOKABLE bool undoWouldRemoveTask(const QString& id) const;
   Q_INVOKABLE void redo();
 
   Q_INVOKABLE void undoLastDeletion() {
