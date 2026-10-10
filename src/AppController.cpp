@@ -552,6 +552,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"profile.weeklyCopied", {"Weekly report copied to clipboard", "Недельный отчёт скопирован в буфер"}},
       {"profile.imported", {"Profile imported: %1", "Импортирован профиль: %1"}},
       {"tasks.renamed", {"Tasks renamed: %1", "Переименовано задач: %1"}},
+      {"tasks.renameTaken", {"Ids not renamed: %1 is already taken (%2 in all)", "Номера не переименованы: %1 уже занят (всего %2)"}},
       {"notify.meetingSoon", {"In %1 min", "Через %1 мин"}},
       {"notify.meetingNow", {"Starting now", "Начинается"}},
       {"notify.meetingSoonTitled", {"%1 in %2 min", "%1 через %2 мин"}},
@@ -13543,52 +13544,73 @@ int AppController::renameTaskIdPrefix(const QString& oldPrefix, const QString& n
     return 0;
   }
 
-  // Persist the live model back into the active profile so we walk a
-  // single source of truth — m_profiles holds the canonical list while
-  // m_tasks mirrors only the active one.
-  snapshotActiveProfile();
-
   const QRegularExpression rx(QStringLiteral("^") + QRegularExpression::escape(from) + QStringLiteral("-(\\d+)$"),
                               QRegularExpression::CaseInsensitiveOption);
 
-  QHash<QString, QString> remap;  // old id → new id, for CalEvent.taskId fix-up
-  int renamed = 0;
-
-  for(Profile& pr : m_profiles) {
-    for(Task& t : pr.tasks) {
-      const auto m = rx.match(t.id);
-      if(!m.hasMatch()) {
-        continue;
-      }
-      const QString next = to + QChar('-') + m.captured(1);
-      remap.insert(t.id, next);
-      t.id = next;
-      ++renamed;
+  // This profile's own tasks only (IDIOT-TASKS-2): the prefix is this
+  // profile's setting, and a tracker ticket keyed APP-123 is the tracker's.
+  QHash<QString, QString> remap;  // old id → new id
+  QSet<QString> kept;             // the ids that stay as they are
+  for(const Task& t : m_tasks.items()) {
+    const auto m = rx.match(t.id);
+    if(m.hasMatch() && t.externalProvider.isEmpty()) {
+      remap.insert(t.id, to + QChar('-') + m.captured(1));
+    } else {
+      kept.insert(t.id);
     }
   }
+  if(remap.isEmpty()) {
+    return 0;
+  }
+  // A new id another task already holds made two rows with one id, and a
+  // delete of one of them could not be undone (IDIOT-TASKS-1).
+  QStringList taken;
+  for(const QString& next : std::as_const(remap)) {
+    if(kept.contains(next)) {
+      taken << next;
+    }
+  }
+  if(!taken.isEmpty()) {
+    taken.sort();
+    emit toast(tr_("tasks.renameTaken").arg(taken.constFirst()).arg(taken.size()));
+    return 0;
+  }
 
-  if(!remap.isEmpty()) {
-    const auto& events = m_events.items();
-    for(const auto& event : events) {
-      const QString& tid = event.taskId;
-      auto it = remap.find(tid);
-      if(it == remap.end()) {
-        continue;
+  // One undo step, links included (IDIOT-TASKS-2).
+  const UndoScope scope(this, tr_("tasks.renamed").arg(remap.size()));
+  const auto mapped = [&remap](const QString& id) {
+    return remap.value(id, id);
+  };
+  QVector<Task> tasks = m_tasks.items();
+  for(Task& t : tasks) {
+    t.id = mapped(t.id);
+    for(TaskLink& l : t.links) {
+      l.targetId = mapped(l.targetId);
+    }
+    for(LocalLink& l : t.local.related) {
+      if(l.profileId.isEmpty() || l.profileId == m_activeProfileId) {
+        l.target = mapped(l.target);
       }
+    }
+    for(LocalCheckItem& c : t.local.checklist) {
+      if(!c.cardId.isEmpty()) {
+        c.cardId = mapped(c.cardId);
+      }
+    }
+    noteTaskIdUsed(t.id);
+  }
+  m_tasks.reset(tasks);
+  for(const CalEvent& event : m_events.items()) {
+    if(remap.contains(event.taskId)) {
       CalEvent copy = event;
-      copy.taskId = it.value();
+      copy.taskId = remap.value(event.taskId);
       m_events.upsert(copy);
     }
-
-    const int ai = profileIndexOf(m_activeProfileId);
-    if(ai >= 0) {
-      applyProfileToModels(m_profiles[ai]);
-    }
-    scheduleSave();
-    emit toast(tr_("tasks.renamed").arg(renamed));
   }
-
-  return renamed;
+  snapshotActiveProfile();
+  scheduleSave();
+  emit toast(tr_("tasks.renamed").arg(remap.size()));
+  return static_cast<int>(remap.size());
 }
 
 // ───────────────────────────────────────────────────── Backups API ──

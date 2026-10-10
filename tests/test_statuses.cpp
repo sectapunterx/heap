@@ -479,3 +479,48 @@ TEST_F(StatusTest, TheListLensSeesBlockedAndDoneByTheColumnsKind) {
   EXPECT_FALSE(ids(QStringLiteral("is:open")).contains(QStringLiteral("B-3")));
   EXPECT_TRUE(ids(QStringLiteral("is:done")).contains(QStringLiteral("B-3")));
 }
+
+// ── Renaming the id prefix (IDIOT-TASKS-1, TASKS-2) ──
+
+TEST_F(StatusTest, ThePrefixRenameRefusesAnIdAnotherTaskHolds) {
+  app_->tasks()->upsert(makeTask(QStringLiteral("APP-1"), QStringLiteral("todo")));
+  app_->tasks()->upsert(makeTask(QStringLiteral("APP-2"), QStringLiteral("todo")));
+  app_->tasks()->upsert(makeTask(QStringLiteral("WEB-2"), QStringLiteral("todo")));
+  EXPECT_EQ(app_->renameTaskIdPrefix(QStringLiteral("APP"), QStringLiteral("WEB")), 0);
+  EXPECT_GE(app_->tasks()->indexOfId(QStringLiteral("APP-2")), 0);
+  int web2 = 0;
+  for(const Task& t : app_->tasks()->items()) {
+    web2 += t.id == QStringLiteral("WEB-2") ? 1 : 0;
+  }
+  EXPECT_EQ(web2, 1) << "never two rows with one id";
+}
+
+TEST_F(StatusTest, ThePrefixRenameCarriesTheLinksAndIsOneUndo) {
+  Task a = makeTask(QStringLiteral("APP-1"), QStringLiteral("todo"));
+  a.links.append({QStringLiteral("blocks"), QStringLiteral("APP-2")});
+  LocalCheckItem item;
+  item.id = QStringLiteral("c1");
+  item.text = QStringLiteral("part");
+  item.cardId = QStringLiteral("APP-3");
+  a.local.checklist.append(item);
+  app_->tasks()->upsert(a);
+  app_->tasks()->upsert(makeTask(QStringLiteral("APP-2"), QStringLiteral("todo")));
+  app_->tasks()->upsert(makeTask(QStringLiteral("APP-3"), QStringLiteral("todo")));
+  Task ext = makeTask(QStringLiteral("APP-9"), QStringLiteral("todo"));
+  ext.externalProvider = QStringLiteral("jira");
+  app_->tasks()->upsert(ext);
+
+  EXPECT_EQ(app_->renameTaskIdPrefix(QStringLiteral("APP"), QStringLiteral("WEB")), 3);
+  const int row = app_->tasks()->indexOfId(QStringLiteral("WEB-1"));
+  ASSERT_GE(row, 0);
+  const Task& w = app_->tasks()->items().at(row);
+  ASSERT_EQ(w.links.size(), 1);
+  EXPECT_EQ(w.links.first().targetId, QStringLiteral("WEB-2"));
+  EXPECT_EQ(w.local.checklist.first().cardId, QStringLiteral("WEB-3"));
+  EXPECT_GE(app_->tasks()->indexOfId(QStringLiteral("APP-9")), 0) << "a tracker ticket keeps its key";
+
+  app_->undo();
+  EXPECT_GE(app_->tasks()->indexOfId(QStringLiteral("APP-1")), 0);
+  EXPECT_GE(app_->tasks()->indexOfId(QStringLiteral("APP-3")), 0);
+  EXPECT_LT(app_->tasks()->indexOfId(QStringLiteral("WEB-1")), 0);
+}

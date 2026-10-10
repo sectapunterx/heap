@@ -2250,8 +2250,9 @@ ApplicationWindow {
         case "task.due": win.openSchedule("due"); return;
         case "task.schedule": win.openSchedule("scheduled"); return;
         case "task.priority0": case "task.priority1": case "task.priority2": case "task.priority3": {
-            const p = "P" + base.slice(13);
-            win._eachKeyTask(function (t) { AppController.setTaskPriority(t.id, p); });
+            // One bulk edit, one undo step (IDIOT-TASKS-3): a step per card
+            // filled the undo stack and froze on a thousand cards.
+            win.priorityKeyTasks("P" + base.slice(13));
             return;
         }
         case "task.timer":
@@ -3115,8 +3116,10 @@ ApplicationWindow {
             AppController.scheduleTaskAtNextFreeSlot(ids[i], AppController.selectedDate);
     }
     function priorityKeyTasks(p) {
-        if (AppController.selectionCount > 0) { AppController.setSelectedTasksPriority(p); return; }
         const ids = win._keyTaskIds();
+        // The selection only when it is what the key acts on: with the panel
+        // open that is the open task alone.
+        if (!win._panelOpen && AppController.selectionCount > 0) { AppController.setSelectedTasksPriority(p); return; }
         if (ids.length > 0) AppController.setTaskPriority(ids[0], p);
     }
     readonly property bool _taskKeysOn: win._boardKeysOn
