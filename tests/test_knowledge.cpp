@@ -75,6 +75,68 @@ TEST_F(KnowledgeTest, TasksLinkingTheNoteAreBacklinks) {
   EXPECT_EQ(hits[1].toMap().value("id").toString(), QStringLiteral("APP-9"));
 }
 
+// KNOW-12: [[C\# basics]] names the note "C# basics"; splitting on '#'
+// missed it.
+TEST_F(KnowledgeTest, Know12_EscapedHashLinkIsListedAsLinking) {
+  AppController app;
+  const QString note = app.newNote(QStringLiteral("C# basics"));
+  app.tasks()->reset({makeTask(QStringLiteral("APP-1"), QStringLiteral("todo"), QStringLiteral("see [[C\\# basics]]"))});
+  ASSERT_EQ(app.tasksLinkingToNote(note).size(), 1);
+}
+
+// KNOW-4: a rename rewrites [[Old]] in task descriptions, local notes and doc
+// pages, in the same undo step as the notes.
+TEST_F(KnowledgeTest, Know4_RenameRetargetsTaskAndPageLinks) {
+  AppController app;
+  const QString note = app.newNote(QStringLiteral("Design Doc"));
+  Task local = makeTask(QStringLiteral("APP-3"), QStringLiteral("todo"));
+  local.local.notes = QStringLiteral("mine: [[design doc#Risks]]");
+  app.tasks()->reset({makeTask(QStringLiteral("APP-2"), QStringLiteral("todo"), QStringLiteral("spec: [[Design Doc]]")), local});
+  const QString page = app.newDocPage(QStringLiteral("Runbook"));
+  app.setDocPageBody(page, QStringLiteral("see [[Design Doc]]"));
+
+  ASSERT_TRUE(app.renameNote(note, QStringLiteral("Design Spec")));
+
+  EXPECT_EQ(app.taskById(QStringLiteral("APP-2")).value("desc").toString(), QStringLiteral("spec: [[Design Spec]]"));
+  EXPECT_EQ(app.tasksLinkingToNote(note).size(), 2);
+  EXPECT_EQ(app.docPageBody(page), QStringLiteral("see [[Design Spec]]"));
+  app.undo();
+  EXPECT_EQ(app.taskById(QStringLiteral("APP-2")).value("desc").toString(), QStringLiteral("spec: [[Design Doc]]"));
+}
+
+// IDIOT-KNOW-3: a rename onto another note's title in the same folder is
+// refused; links that meant that note keep meaning it.
+TEST_F(KnowledgeTest, IdiotKnow3_RenameOntoATakenTitleIsRefused) {
+  AppController app;
+  const QString alpha = app.newNote(QStringLiteral("Alpha"));
+  const QString beta = app.newNote(QStringLiteral("Beta"));
+  const QString gamma = app.newNote(QStringLiteral("Gamma"));
+  app.setNoteBody(gamma, QStringLiteral("See [[Alpha]] and [[Beta]]."));
+  EXPECT_TRUE(app.noteTitleTaken(QStringLiteral("beta"), QString(), alpha));
+  EXPECT_FALSE(app.noteTitleTaken(QStringLiteral("Beta"), QString(), beta)) << "its own name is not taken";
+  EXPECT_FALSE(app.renameNote(alpha, QStringLiteral("beta")));
+  EXPECT_EQ(app.noteBody(gamma), QStringLiteral("See [[Alpha]] and [[Beta]]."));
+  EXPECT_FALSE(app.renameNote(alpha, QStringLiteral("  ")));
+  EXPECT_TRUE(app.renameNote(alpha, QStringLiteral("Delta")));
+}
+
+// IDIOT-KNOW-14: a second "+" over the untouched new note opens it again,
+// and leaving it untouched leaves nothing behind; a note written in stays.
+TEST_F(KnowledgeTest, IdiotKnow14_UntouchedNewNotesDoNotPileUp) {
+  AppController app;
+  app.notes()->reset({});
+  const QString kept = app.newNote(QStringLiteral("Kept"));
+  const QString first = app.newNote();
+  EXPECT_EQ(app.newNote(), first);
+  EXPECT_EQ(app.notes()->rowCount(), 2);
+  app.setActiveNoteId(kept);
+  EXPECT_EQ(app.notes()->indexOfId(first), -1);
+  const QString written = app.newNote();
+  app.setNotesState(app.notesState() + QStringLiteral("words"));
+  app.setActiveNoteId(kept);
+  EXPECT_GE(app.notes()->indexOfId(written), 0);
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);

@@ -149,6 +149,11 @@ class MdDocument : public QObject {
   // markdown that is no longer a task at all.
   Q_INVOKABLE bool toggleTask(QQuickTextDocument* target, int row);
 
+  // Replace [start, end) of the editor's document with `text` as one undo
+  // step, for the same reason: the block editor's remove-then-insert made
+  // Ctrl+Z take back only the insert and blank the block (KNOW-1).
+  Q_INVOKABLE bool replaceRange(QQuickTextDocument* target, int start, int end, const QString& text);
+
  signals:
   void textChanged();
   void paletteChanged();
