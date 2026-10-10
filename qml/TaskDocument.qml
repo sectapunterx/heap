@@ -720,6 +720,9 @@ FocusScope {
                 // Код: hidden whole when there is nothing to say.
                 ColumnLayout {
                     objectName: "task-doc-code"
+                    // A layout in a layout fills by default; these sit at their
+                    // own height so the column reads top-down (R2-013).
+                    Layout.fillHeight: false
                     Layout.fillWidth: true
                     visible: String(root.task.branch || "").length > 0 || root._isTicket || root._prNumber > 0
                     spacing: root._quiet ? Theme.spXs : Theme.spMd
@@ -774,6 +777,7 @@ FocusScope {
                 // Упоминается в: notes that name the task.
                 ColumnLayout {
                     objectName: "task-doc-mentions"
+                    Layout.fillHeight: false
                     Layout.fillWidth: true
                     readonly property var notes: root._rev >= 0 ? AppController.notesMentioningTask(root.taskId) : []
                     visible: notes.length > 0
@@ -825,6 +829,7 @@ FocusScope {
                 ColumnLayout {
                     id: timeBox
                     objectName: "task-doc-time"
+                    Layout.fillHeight: false
                     Layout.fillWidth: true
                     spacing: root._quiet ? Theme.spXs : Theme.spMd
                     property int _tick: 0
@@ -903,6 +908,7 @@ FocusScope {
                 // История: the newest facts.
                 ColumnLayout {
                     objectName: "task-doc-history"
+                    Layout.fillHeight: false
                     Layout.fillWidth: true
                     visible: root._historyRows.length > 0
                     spacing: Theme.spXs

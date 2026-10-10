@@ -456,6 +456,13 @@ QtObject {
     readonly property int fsLg:  typeStep(1)   // dialog and section titles
     readonly property int fsXl:  typeStep(3)   // page headings
     readonly property int fs2xl: typeStep(5)   // display (welcome, empty hero)
+    // The title of a screen (R2-001/002): the sheets draw it off the scale.
+    // Bold: 24px on a section (H2-List/Board/Calendar/Settings), 30px for the
+    // day on Today (H2-Today); quiet: 26px for both (Q-*, H2-Today-Calm).
+    readonly property int fsScreenTitle: Style.fills ? px(24) : px(26)
+    readonly property int fsDayTitle:    Style.fills ? px(30) : px(26)
+    // Bold titles are 600, quiet ones 500 (the same sheets).
+    readonly property int fwScreenTitle: Style.fills ? Font.DemiBold : Font.Medium
 
     // ── Accessibility / motion ───────────────────────────────────────
     readonly property bool reducedMotion: !!_appearance.reducedMotion
@@ -523,6 +530,10 @@ QtObject {
     readonly property int fwBody:    Font.Normal    // descriptions, meta, inputs
     readonly property int fwTitle:   Font.Medium    // card titles, the active item, labels
     readonly property int fwHeading: Font.DemiBold  // only the title of a screen or a dialog
+    // A task's title on a card or a list row (R2-005/008): 600 in bold, where
+    // the title has to stand above the detail line (H2-Board, H2-List); quiet
+    // keeps the medium weight of its sheets.
+    readonly property int fwTaskTitle: Style.fills ? Font.DemiBold : Font.Medium
 
     function withAlpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a); }
 

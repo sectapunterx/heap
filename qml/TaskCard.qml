@@ -513,7 +513,7 @@ Rectangle {
             color: Theme.text
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
-            font.weight: Theme.fwTitle
+            font.weight: Theme.fwTaskTitle
             // Wrap, not WordWrap: a URL or a long identifier has no space to
             // break at and ran off the card (TASKS-27).
             wrapMode: Text.Wrap

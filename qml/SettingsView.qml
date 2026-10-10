@@ -259,8 +259,8 @@ Item {
                     Layout.leftMargin: Theme.spMd
                     text: I18n.t("settings.title")
                     color: Theme.text
-                    font.weight: root.quiet ? Theme.fwTitle : Theme.fwHeading
-                    font.pixelSize: Theme.fsXl
+                    font.weight: Theme.fwScreenTitle
+                    font.pixelSize: Theme.fsScreenTitle
                 }
 
                 // Bold: a field with a frame. Quiet: a line under the words.
