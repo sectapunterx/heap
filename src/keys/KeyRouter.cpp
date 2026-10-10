@@ -15,6 +15,12 @@ KeyRouter::KeyRouter(QObject* parent) : QObject(parent) {
   m_timeout.setSingleShot(true);
   m_timeout.setInterval(1000);
   connect(&m_timeout, &QTimer::timeout, this, &KeyRouter::cancel);
+  // A prefix waits for the next key where it was pressed: once the keyboard
+  // is somewhere else, "g" then a click into the query ate the b of "bug"
+  // (IDIOT-TASKS-17).
+  if(auto* app = qobject_cast<QGuiApplication*>(QCoreApplication::instance())) {
+    connect(app, &QGuiApplication::focusObjectChanged, this, &KeyRouter::cancel);
+  }
   QCoreApplication::instance()->installEventFilter(this);
 }
 
@@ -66,6 +72,14 @@ void KeyRouter::setBindings(const QVariantList& list) {
 void KeyRouter::setHandler(const QJSValue& fn) {
   m_handler = fn;
   emit handlerChanged();
+}
+
+void KeyRouter::setHoldUnlive(bool on) {
+  if(m_holdUnlive == on) {
+    return;
+  }
+  m_holdUnlive = on;
+  emit holdUnliveChanged();
 }
 
 void KeyRouter::setQtOwned(const QStringList& ids) {
@@ -189,9 +203,12 @@ bool KeyRouter::decide(QKeyEvent* ke, bool focusTyping) {
         ids << b.id;
       }
     }
-    callHandler(ids, false);
-    // A second key that continues nothing is dropped, as in Vim.
-    return true;
+    if(!ids.isEmpty()) {
+      callHandler(ids, false);
+      return true;
+    }
+    // A second key that continues nothing is a key of its own: Ctrl+K after
+    // g opens the palette, d marks done (IDIOT-TASKS-17).
   }
 
   // A single letter is the field's while the person types (keymap rule 1).
@@ -207,7 +224,8 @@ bool KeyRouter::decide(QKeyEvent* ke, bool focusTyping) {
       prefixed << b.id;
     }
   }
-  if(!prefixed.isEmpty() && !callHandler(prefixed, true).isEmpty()) {
+  const bool prefixLive = !prefixed.isEmpty() && !callHandler(prefixed, true).isEmpty();
+  if(prefixLive) {
     if(!ke->isAutoRepeat()) {
       setPending(chord);
       m_timeout.start();
@@ -231,11 +249,36 @@ bool KeyRouter::decide(QKeyEvent* ke, bool focusTyping) {
     }
     ids << b.id;
   }
-  return !callHandler(ids, false).isEmpty();
+  // Held down, a key walks and moves again and again, but acts once: each
+  // repeat of e archived the next card of the column (IDIOT-TASKS-2/18).
+  if(ke->isAutoRepeat() && !ids.isEmpty()) {
+    const QString live = callHandler(ids, true);
+    if(!live.isEmpty() && !heap::keys::isRepeatableAction(live)) {
+      return true;
+    }
+  }
+  if(!callHandler(ids, false).isEmpty()) {
+    return true;
+  }
+  // A catalogue key with nothing to act on does nothing: u with no history,
+  // d after its card left, [ on the board were typed into the filter
+  // (IDIOT-TASKS-4). Type-to-search gets only the letters that are nobody's.
+  return m_holdUnlive && (!ids.isEmpty() || !prefixed.isEmpty()) && typesText(ke);
+}
+
+bool KeyRouter::typesText(const QKeyEvent* ke) {
+  if((ke->modifiers() & (Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier)) != Qt::NoModifier) {
+    return false;
+  }
+  const QString text = ke->text();
+  return text.size() == 1 && text.at(0).isPrint() && !text.at(0).isSpace();
 }
 
 bool KeyRouter::eventFilter(QObject* watched, QEvent* event) {
   const QEvent::Type type = event->type();
+  if(type == QEvent::MouseButtonPress && !m_pending.isEmpty() && watched->isWindowType()) {
+    cancel();  // a click is somewhere else too (IDIOT-TASKS-17)
+  }
   if(!m_enabled || (type != QEvent::ShortcutOverride && type != QEvent::KeyPress)) {
     return QObject::eventFilter(watched, event);
   }

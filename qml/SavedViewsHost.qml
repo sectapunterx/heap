@@ -35,7 +35,7 @@ Item {
         const cur = AppController.currentView;
         const taskView = ["board", "list", "week", "month"].indexOf(cur) >= 0;
         return {
-            query: root.host.searchText,
+            query: root.uniqueClauses(root.host.searchText),
             priorities: root.host._activePriorities,
             sort: root.host.boardSortMode,
             archived: root.host.showArchived,
@@ -49,11 +49,42 @@ Item {
         };
     }
 
+    // A clause said twice is said once: a view was stored as "is:open
+    // priority:p1 priority:p1" (PERSONA-17). Words and OR queries stay as
+    // typed.
+    function uniqueClauses(q) {
+        const toks = String(q || "").match(/"[^"]*"|\S+/g) || [];
+        if (toks.indexOf("OR") >= 0 || toks.indexOf("|") >= 0) return String(q || "");
+        const seen = {};
+        return toks.filter(t => {
+            if (t.indexOf(":") <= 0) return true;
+            const k = t.toLowerCase();
+            if (seen[k]) return false;
+            seen[k] = true;
+            return true;
+        }).join(" ");
+    }
+
     readonly property bool modified: {
         if (!root.activeView || !root.host) return false;
         // currentState() reads the window's filters, so the binding follows
         // them; activeView follows AppController.savedViews.
         return AppController.savedViewDiffers(root.activeId, root.currentState());
+    }
+
+    // The query a view puts in the filter. A view saved on the archive of
+    // 0.8.0 opens on the list (DG-161/162) and keeps its "is:archived".
+    function appliedQuery(v) {
+        return v.view === "archive" && !/(^|\s)is:archived(\s|$)/i.test(v.query)
+            ? (v.query + " is:archived").trim() : v.query;
+    }
+    // While the filter is exactly the active view's query, a `status:` on a
+    // column deleted since matches nothing — on the board, in the list and in
+    // the sidebar count alike (IDIOT-TASKS-11). A typed query stays tolerant.
+    Binding {
+        target: AppController
+        property: "strictQuery"
+        value: root.activeView ? root.appliedQuery(root.activeView) : ""
     }
 
     function apply(id) {
@@ -64,9 +95,8 @@ Item {
         const chips = {};
         for (let j = 0; j < v.priorities.length; j++) chips[v.priorities[j]] = true;
         // A view saved on the archive or the timeline of 0.8.0 opens on the
-        // list (DG-161/162); the archive keeps its "is:archived".
-        root.host.searchText = v.view === "archive" && !/(^|\s)is:archived(\s|$)/i.test(v.query)
-            ? (v.query + " is:archived").trim() : v.query;
+        // list (DG-161/162).
+        root.host.searchText = root.appliedQuery(v);
         root.host.prioritiesFilter = chips;
         root.host.boardSortMode = v.sort;
         root.host.showArchived = v.archived;
@@ -104,6 +134,12 @@ Item {
         const words = parts.map(w => {
             let v = w.indexOf(":") > 0 && !/^https?:/i.test(w) ? w.slice(w.indexOf(":") + 1) : w;
             v = v.replace(/^"|"$/g, "");
+            // "is:open" in the language of the UI: "Open · P1" in a Russian
+            // one was English (PERSONA-18).
+            if (/^is:/i.test(w)) {
+                const said = I18n.t("query.is." + v.toLowerCase());
+                if (said.indexOf("query.") !== 0) v = said;
+            }
             return /^p[0-3]$/i.test(v) ? v.toUpperCase() : v;
         }).filter(v => v.length > 0);
         const out = words.join(" · ");

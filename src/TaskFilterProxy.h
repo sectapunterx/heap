@@ -56,6 +56,10 @@ class TaskFilterProxy : public QSortFilterProxyModel {
   Q_PROPERTY(QDate today READ today WRITE setToday NOTIFY filterChanged)
   // What `is:new` matches: bound to AppController.syncNewTaskIds (APP-180).
   Q_PROPERTY(QStringList newIds READ newIds WRITE setNewIds NOTIFY filterChanged)
+  // The applied saved view's stored query (AppController.strictQuery): while
+  // the search is exactly it, a `status:` on a deleted column matches nothing
+  // (IDIOT-TASKS-11). A typed query stays typo-tolerant.
+  Q_PROPERTY(QString strictQuery READ strictQuery WRITE setStrictQuery NOTIFY filterChanged)
 
  public:
   explicit TaskFilterProxy(QObject* parent = nullptr);
@@ -110,6 +114,12 @@ class TaskFilterProxy : public QSortFilterProxyModel {
 
   void setNewIds(const QStringList& v);
 
+  QString strictQuery() const {
+    return m_strictQuery;
+  }
+
+  void setStrictQuery(const QString& v);
+
   void setPriorities(const QStringList& v);
 
   QString sortMode() const {
@@ -158,5 +168,7 @@ class TaskFilterProxy : public QSortFilterProxyModel {
   heap::query::TaskQuery m_query;  // compiled once per keystroke
   QStringList m_priorities;
   QStringList m_newIds;
+  QString m_strictQuery;
+  heap::query::TaskQuery recompile_(const QString& text) const;
   QString m_sortMode = QStringLiteral("manual");
 };

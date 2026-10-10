@@ -575,8 +575,9 @@ ApplicationWindow {
     property bool _focusWasInPopup: false
     // A popup that closed on Return leaves the rest of that key press — a
     // hurried second Enter — to the view, where board.open opened the card
-    // under the cursor with the caret in its title (IDIOT-SHELL-1). Return
-    // stands down for a moment after focus leaves any popup.
+    // under the cursor with the caret in its title (IDIOT-SHELL-1, the second
+    // Return in a board dialog: IDIOT-TASKS-6). Return stands down for a
+    // moment after focus leaves any popup.
     property real _returnGuardUntil: 0
     onActiveFocusItemChanged: {
         const it = win.activeFocusItem;
@@ -591,6 +592,10 @@ ApplicationWindow {
             if (p === Overlay.overlay) { inPopup = true; break; }
         if (inPopup) {
             win._focusWasInPopup = true;
+            // A card dragged while the palette opens does not land behind it
+            // (IDIOT-TASKS-8).
+            const dv = win.activeViewItem();
+            if (dv && typeof dv.cancelDrag === "function") dv.cancelDrag();
             return;
         }
         if (win._focusWasInPopup) {
@@ -1501,9 +1506,18 @@ ApplicationWindow {
     }
     // A Tasks filter that found nothing: "сбросить фильтр · Esc" (DG-160)
     // clears the query and the priority filter.
+    // Back to the plain task list: the default "status not done" stays (the
+    // reset dropped it and done tasks flooded in, IDIOT-TASKS-5), and a saved
+    // view is left rather than shown as modified.
     function resetTaskFilter() {
-        win.searchText = "";
+        savedViewsHost.leave();
+        win.searchText = win.defaultQuery("", false);
         win.prioritiesFilter = ({});
+    }
+    // Ctrl+2, g b and Esc on the board leave a saved view: only the chip's ×
+    // did, so there was no keyboard way back (PERSONA-16).
+    function leaveSavedView() {
+        if (savedViewsHost.activeView) win.resetTaskFilter();
     }
     readonly property bool _taskFilterEmpty: {
         const v = AppController.currentSection === "tasks" ? win.activeViewItem() : null;
@@ -1512,7 +1526,8 @@ ApplicationWindow {
     Shortcut {
         sequence: "Escape"
         context: Qt.ApplicationShortcut
-        enabled: win._taskFilterEmpty && !win._viewKeysBlocked && !win._focusOnControl && !AppController.immersion
+        enabled: (win._taskFilterEmpty || (!!savedViewsHost.activeView && AppController.currentSection === "tasks"))
+                 && !win._viewKeysBlocked && !win._focusOnControl && !AppController.immersion
                  && AppController.selectionCount === 0
         onActivated: win.resetTaskFilter()
     }
@@ -1730,9 +1745,9 @@ ApplicationWindow {
         if (v && v.hoveredTaskId) return [v.hoveredTaskId];
         return [];
     }
-    // D (APP-268): nothing under the key, nothing happens. A second d on the
-    // same tasks within half a second is Vim's "dd" habit, not "take it
-    // back" (keymap rule 6).
+    // D (APP-268): nothing under the key, nothing happens. A second d within
+    // half a second is Vim's "dd" habit, not "take it back" (keymap rule 6),
+    // whichever card is under the key by then (IDIOT-TASKS-18).
     function markDone() {
         const ids = win._keyTaskIds();
         if (ids.length === 0) return;
@@ -1787,6 +1802,7 @@ ApplicationWindow {
             return;
         }
         if (id.indexOf("section.") === 0) {
+            if (id === "section.tasks") win.leaveSavedView();
             AppController.openSection(id.slice(8));
             return;
         }
@@ -1825,6 +1841,7 @@ ApplicationWindow {
             return;
         }
         if (id.indexOf("view.") === 0) {
+            if (id === "view.board") win.leaveSavedView();
             AppController.currentView = id.slice(5);
             return;
         }
@@ -2082,6 +2099,11 @@ ApplicationWindow {
         case "selection.toggle": case "selection.range":
             return v === "board" || win._keyTaskIds().length > 0;
         case "selection.clearSel":
+            if (!!b && b.dragActive === true) return true;
+            // Nothing found and nothing selected: Esc is the empty state's
+            // "reset the filter · Esc", not a cursor on a card filtered out of
+            // sight (IDIOT-TASKS-5).
+            if (win._taskFilterEmpty && AppController.selectionCount === 0) return false;
             return AppController.selectionCount > 0 || win._rangeMode || win._boardCursorShown();
         case "selection.deleteSel":
             return AppController.selectionCount > 0 || win._cursorTaskId().length > 0;
@@ -2309,6 +2331,8 @@ ApplicationWindow {
             if (win._rangeMode && AppController.currentView === "board") call("toggleCursorSelection");
             return;
         case "selection.clearSel":
+            // Esc mid-drag cancels the drag and nothing else (IDIOT-TASKS-8).
+            if (b && typeof b.cancelDrag === "function" && b.cancelDrag()) return;
             win._rangeMode = false;
             AppController.clearSelection();
             win._clearBoardCursor();
@@ -2354,6 +2378,7 @@ ApplicationWindow {
         enabled: !hotkeys.isCapturing && !win._captureActive
         bindings: AppController.shortcuts
         qtOwned: win._qtOwned
+        holdUnlive: boardTypeAhead.enabled
         handler: function (ids, dry) { return win._routeKey(ids, dry); }
         // The old keys of 0.7 say once where their action went (APP-281 A4).
         onChordPressed: (chord) => { if (AppController.hasKeymapNotice()) AppController.noteKeyPressed(chord); }
@@ -2409,7 +2434,7 @@ ApplicationWindow {
         sequence: win._kbd("section.tasks")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: AppController.openSection("tasks")
+        onActivated: { win.leaveSavedView(); AppController.openSection("tasks"); }
     }
     Shortcut {
         sequence: win._kbd("section.knowledge")
@@ -2421,7 +2446,7 @@ ApplicationWindow {
         sequence: _kbd("view.board")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: AppController.currentView = "board"
+        onActivated: { win.leaveSavedView(); AppController.currentView = "board"; }
     }
     Shortcut {
         sequence: _kbd("view.timeline")

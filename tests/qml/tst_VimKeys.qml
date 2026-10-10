@@ -279,4 +279,125 @@ TestCase {
         keyClick(Qt.Key_I, Qt.ControlModifier);
         tryCompare(AppController, "currentView", "board");
     }
+
+    // ── Idiot test 2026-10-10 (board) ──
+
+    function column(b, sid) {
+        return find(b, function (it) { return typeof it.startRename === "function" && it.statusId === sid; });
+    }
+    function search() { return byName(tc.win.contentItem, "topbar-search"); }
+    // The top card of VIM-0's column, so j has somewhere to go.
+    function topOfColumn(b) {
+        const cols = b._visibleByColumn();
+        for (let c = 0; c < cols.length; c++)
+            if (cols[c].ids.indexOf("VIM-0") >= 0) return cols[c].ids[0];
+        return "VIM-0";
+    }
+
+    // IDIOT-TASKS-2: a held e archives the card under the cursor, not the
+    // whole column one repeat at a time.
+    function test_a_held_key_acts_once() {
+        boardWithCursor();
+        KeyTest.press(tc.win, Qt.Key_E, 0, "e", false);
+        for (let i = 0; i < 4; i++) KeyTest.press(tc.win, Qt.Key_E, 0, "e", true);
+        wait(50);
+        verify(AppController.taskById("VIM-0").archived === true, "the first press archived nothing");
+        verify(AppController.taskById("VIM-1").archived !== true, "a repeat archived the next card");
+        // Walking still repeats.
+        const b = boardWithCursor();
+        AppController.setArchived("VIM-0", false);
+        wait(30);
+        const top = topOfColumn(b);
+        b.cursorTaskId = top;
+        KeyTest.press(tc.win, Qt.Key_J, 0, "j", false);
+        KeyTest.press(tc.win, Qt.Key_J, 0, "j", true);
+        verify(b.cursorTaskId !== top, "j did not walk");
+    }
+
+    // IDIOT-TASKS-4: a catalogue key with nothing to act on is not typed
+    // into the filter.
+    function test_a_dead_key_is_not_typed_into_the_filter() {
+        boardWithCursor();
+        AppController.clearPendingUndo();
+        const before = tc.win.searchText;
+        keyClick(Qt.Key_U);
+        keyClick(Qt.Key_BracketLeft);
+        wait(200);
+        compare(search().text, "", "u / [ went to type-to-search");
+        compare(tc.win.searchText, before);
+        // A letter that is nobody's key still searches.
+        keyClick(Qt.Key_W);
+        tryCompare(search(), "text", "w");
+        search().text = "";
+        tc.win.searchText = before;
+        tc.win.focusActiveView();
+    }
+
+    // IDIOT-TASKS-17: a click lets go of the prefix; a key that continues
+    // nothing does its own thing.
+    function test_a_prefix_lets_go_elsewhere() {
+        AppController.currentView = "today";
+        tc.win.focusActiveView();
+        keyClick(Qt.Key_G);
+        compare(router().pending, "G");
+        mouseClick(tc.win.contentItem, 5, tc.win.height - 5);
+        compare(router().pending, "", "a click kept the prefix");
+        tc.win.focusActiveView();
+        keyClick(Qt.Key_G);
+        keyClick(Qt.Key_K, Qt.ControlModifier);
+        const cmd = popup("CommandPalette");
+        tryCompare(cmd, "opened", true);
+        cmd.close();
+        tryCompare(cmd, "opened", false);
+    }
+
+    // IDIOT-TASKS-6: the second of two quick Returns in a board dialog does
+    // not open the cursor's task.
+    function test_return_twice_in_a_board_dialog() {
+        const b = boardWithCursor();
+        const wip = find(b, function (it) { return it.objectName === "wip-popup"; })
+                    || (function () { const d = b.data; for (let i = 0; i < d.length; i++) if (d[i] && d[i].objectName === "wip-popup") return d[i]; return null; })();
+        verify(wip !== null);
+        wip.openFor("todo", "To Do", 0, null);
+        tryCompare(wip, "opened", true);
+        keyClick(Qt.Key_3);
+        keyClick(Qt.Key_Return);
+        keyClick(Qt.Key_Return);
+        wait(100);
+        compare(tc.win._panelOpen, false, "the second Return opened the task");
+        AppController.setStatusWipLimit("todo", 0);
+        wait(450);
+    }
+
+    // IDIOT-TASKS-1: after a column rename the board has the keys again.
+    function test_rename_hands_the_keyboard_back() {
+        const b = boardWithCursor();
+        const col = column(b, "todo");
+        verify(col !== null);
+        const old = col.statusName;
+        col.startRename();
+        keyClick(Qt.Key_Escape);
+        wait(30);
+        verify(!col.renaming);
+        compare(AppController.statuses.find(st => st.id === "todo").name, old);
+        const top = topOfColumn(b);
+        b.cursorTaskId = top;
+        keyClick(Qt.Key_J);
+        verify(b.cursorTaskId !== top, "j went into the hidden field");
+    }
+
+    // IDIOT-TASKS-13/14: z a folds and unfolds; Ctrl+A skips a folded column.
+    function test_fold_unfold_and_select_all() {
+        const b = boardWithCursor();
+        keyClick(Qt.Key_Z);
+        keyClick(Qt.Key_A);
+        tryVerify(function () { return b.isFolded("todo"); }, 1000);
+        b.selectAllVisible();
+        verify(AppController.selectedTaskIds.indexOf("VIM-0") < 0, "Ctrl+A took a card of a folded column");
+        AppController.clearSelection();
+        keyClick(Qt.Key_J);
+        keyClick(Qt.Key_Z);
+        keyClick(Qt.Key_A);
+        tryVerify(function () { return !b.isFolded("todo"); }, 1000, "z a folded another column");
+    }
 }

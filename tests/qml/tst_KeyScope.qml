@@ -375,6 +375,9 @@ TestCase {
         verify(typeName(tc.win.activeFocusItem).indexOf("AppMenuItem") !== 0,
                "a closed menu's row holds the keyboard: " + typeName(tc.win.activeFocusItem));
 
+        // A Return right after a popup closed is still that popup's
+        // (IDIOT-TASKS-6): the card opens once the guard is over.
+        wait(400);
         keyClick(Qt.Key_Return);
         wait(100);
         compare(AppController.taskById(id).priority, "P3", "Enter changed the priority unseen");

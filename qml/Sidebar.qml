@@ -767,7 +767,12 @@ Rectangle {
             if (e.modifiers & Qt.ControlModifier) root._moveSavedView(vr.modelData.id, vr.index, 1);
             else root.focusSavedView(vr.index + 1);
         }
-        Keys.onDeletePressed: root._deleteSavedView(vr.modelData.id, vr.index)
+        // Once per press: focus steps to the next row, and a held Del took
+        // every view with it (IDIOT-TASKS-3).
+        Keys.onDeletePressed: (e) => {
+            e.accepted = true;
+            if (!e.isAutoRepeat) root._deleteSavedView(vr.modelData.id, vr.index);
+        }
         Keys.onPressed: (e) => {
             if (e.key === Qt.Key_F2) {
                 root.savedViewRenameRequested(vr.modelData.id);

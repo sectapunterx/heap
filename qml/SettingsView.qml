@@ -1649,6 +1649,7 @@ Item {
                     Layout.preferredWidth: Theme.px(240)
                     implicitHeight: Theme.px(28)
                     placeholderText: I18n.t("settings.cols.addPh")
+                    maximumLength: 60   // IDIOT-TASKS-16
                     placeholderTextColor: Theme.textDim
                     color: Theme.text
                     font.pixelSize: Theme.fsMd

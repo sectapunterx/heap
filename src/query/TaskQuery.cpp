@@ -231,7 +231,18 @@ QStringList queryFields() {
   return out;
 }
 
-TaskQuery TaskQuery::compile(const QString& text, const QDate& today, const QVariantList& statuses, const QStringList& newIds) {
+QSet<QString> TaskQuery::statusIds() const {
+  QSet<QString> out;
+  for(const QVector<Clause>& group : m_groups) {
+    for(const Clause& c : group) {
+      out.unite(c.statusIds);
+    }
+  }
+  return out;
+}
+
+TaskQuery TaskQuery::compile(
+    const QString& text, const QDate& today, const QVariantList& statuses, const QStringList& newIds, bool strictStatus) {
   TaskQuery q;
   q.m_today = today;
   q.m_newIds = QSet<QString>(newIds.cbegin(), newIds.cend());
@@ -410,7 +421,11 @@ TaskQuery TaskQuery::compile(const QString& text, const QDate& today, const QVar
       // nothing — "deadline:banana" is a typo, not a request for an empty
       // board — and reported.
       q.m_unknown << typed;
-      continue;
+      // A saved view's column that is gone is not a typo: its clause stays
+      // and matches only the columns it still names (IDIOT-TASKS-11).
+      if(!(strictStatus && cl.field == QLatin1String("status"))) {
+        continue;
+      }
     }
     q.m_groups.last().append(cl);
   }
