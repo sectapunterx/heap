@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Shapes
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
 import QtQuick.Controls as QQC
@@ -137,6 +138,7 @@ Rectangle {
     // check in a circle, no ring and no border of its own.
     radius: Theme.radius
     color: _isArchived ? Theme.withAlpha(Theme.surfaceCard, 0.55)
+        : markT.outOfScope && !_selected ? "transparent"
         : _selected ? Qt.tint(Theme.surfaceCard, Theme.withAlpha(Theme.text, 0.09))
         : hoverArea.containsMouse ? Theme.surfaceCardHover
         : Theme.surfaceCard
@@ -145,6 +147,10 @@ Rectangle {
     // colour.
     border.color: dragArea.drag.active ? Theme.accent
                 : _isStuck ? Theme.danger
+                // Out of step with the tracker (R2-034): the edge says so —
+                // amber / red in bold, a plain line in quiet.
+                : markT.conflict ? (Style.urgency ? Theme.danger : Theme.borderStrong)
+                : markT.pending ? (Style.urgency ? Theme.warning : Theme.borderStrong)
                 : "transparent"
     border.width: dragArea.drag.active || _isStuck ? 2 : 1
     opacity: dragArea.drag.active ? 0.92 : (_isArchived ? 0.7 : 1.0)
@@ -155,6 +161,30 @@ Rectangle {
     // (APP-175); with reduced motion it simply is where it was put.
     Behavior on scale { NumberAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
     Behavior on border.color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
+
+    // Outside the tracker's filter: a dashed edge, "only yours" (R2-034).
+    Shape {
+        objectName: "tc-dashed"
+        anchors.fill: parent
+        visible: markT.outOfScope && !dragArea.drag.active
+        preferredRendererType: Shape.CurveRenderer
+        ShapePath {
+            strokeColor: Theme.borderStrong
+            strokeWidth: 1
+            strokeStyle: ShapePath.DashLine
+            dashPattern: [3, 3]
+            fillColor: "transparent"
+            startX: card.radius; startY: 0.5
+            PathLine { x: card.width - card.radius; y: 0.5 }
+            PathArc { x: card.width - 0.5; y: card.radius; radiusX: card.radius - 0.5; radiusY: card.radius - 0.5 }
+            PathLine { x: card.width - 0.5; y: card.height - card.radius }
+            PathArc { x: card.width - card.radius; y: card.height - 0.5; radiusX: card.radius - 0.5; radiusY: card.radius - 0.5 }
+            PathLine { x: card.radius; y: card.height - 0.5 }
+            PathArc { x: 0.5; y: card.height - card.radius; radiusX: card.radius - 0.5; radiusY: card.radius - 0.5 }
+            PathLine { x: 0.5; y: card.radius }
+            PathArc { x: card.radius; y: 0.5; radiusX: card.radius - 0.5; radiusY: card.radius - 0.5 }
+        }
+    }
 
     FocusRing {
         objectName: "tc-cursor-ring"
@@ -202,10 +232,7 @@ Rectangle {
             const tracker = (card._badge.name || card._ticket.provider || "")
                 + (card._ticket.project ? " · " + card._ticket.project : "");
             if (tracker.length > 0) parts.push(tracker);
-            if (syncChip.visible) parts.push(syncChip.tip);
-            if (card._ticket.conflict) parts.push(I18n.t("taskcard.conflict.tip"));
-            if (card._ticket.outOfScope && !card._ticket.gone)
-                parts.push(I18n.t("taskcard.outOfScope.tip") + (card._writeOn ? " " + I18n.t("taskcard.outOfScope.noSync") : ""));
+            if (markT.visible) parts.push(markT.tip);
             // The tracker's own status, when the card sits somewhere else:
             // with writes off that is the normal case, and the card itself
             // stays uncluttered (APP-243).
@@ -332,8 +359,6 @@ Rectangle {
         : card._excerpt.length > 0 ? "excerpt" : ""
     readonly property bool _hasRestDetails: card._restLine.length > 0
     readonly property bool _alerting: card._isStuck || card._isArchived
-        || (card._isTicket && (syncChip.shown || !!card._ticket.conflict
-                               || (!!card._ticket.outOfScope && !card._ticket.gone)))
 
     ColumnLayout {
         id: contentCol
@@ -347,112 +372,6 @@ Rectangle {
             Layout.fillWidth: true
             visible: card._alerting
             spacing: Theme.spSm
-            // The tracker refused the last status change, or the issue is no
-            // longer in the tracker. Either way the card is out of step with it.
-            // Shown only when the card is not in step (APP-163): a status write
-            // on its way ("sending", quiet), one waiting for the tracker to be
-            // reachable, one the tracker refused (with its reason), or an issue
-            // that is gone. A conflict has its own chip below.
-            Rectangle {
-                id: syncChip
-                objectName: "tc-sync-state"
-                // syncState comes from the model; a hand-built task map (the
-                // archive, tests) may only carry the older flags.
-                readonly property string state: card._ticket.syncState
-                    || (card._ticket.gone ? "gone"
-                        : card._ticket.unsynced ? (card._ticket.queued ? "queued" : "error") : "synced")
-                readonly property bool quiet: state === "pushing"
-                readonly property bool shown: card._isTicket
-                    && (state === "pushing" || state === "queued" || state === "error" || state === "gone")
-                visible: syncChip.shown
-                radius: Theme.radiusSm
-                color: syncChip.quiet ? "transparent" : Theme.withAlpha(Theme.warning, 0.14)
-                implicitWidth: syncStateT.implicitWidth + 10
-                implicitHeight: syncStateT.implicitHeight + 2
-                Text {
-                    id: syncStateT
-                    objectName: "tc-sync-state-text"
-                    anchors.centerIn: parent
-                    text: syncChip.state === "gone" ? I18n.t("taskcard.gone")
-                        : syncChip.state === "pushing" ? I18n.t("taskcard.pushing")
-                        : syncChip.unsent ? I18n.t("taskcard.unsent")
-                        : syncChip.state === "queued" ? I18n.t("taskcard.queued")
-                        : I18n.t("taskcard.unsynced")
-                    textFormat: Text.PlainText
-                    color: syncChip.quiet ? Theme.textDim : Theme.warning
-                    font.pixelSize: Theme.fsXs
-                    font.weight: syncChip.quiet ? Theme.fwBody : Theme.fwTitle
-                }
-                // A move left over while the tracker's switch is off: it only
-                // goes out when the user sends it (APP-243).
-                readonly property bool unsent: !card._writeOn && (state === "queued" || state === "error")
-                readonly property string tip: syncChip.state === "gone" ? I18n.t("taskcard.gone.tip")
-                    : syncChip.state === "pushing" ? I18n.t("taskcard.pushing.tip")
-                    : syncChip.unsent ? I18n.t("taskcard.unsent.tip")
-                        + (card._ticket.syncError ? "\n" + I18n.t("taskcard.syncError").arg(card._ticket.syncError) : "")
-                    : syncChip.state === "queued" ? I18n.t("taskcard.queued.tip")
-                    : I18n.t("taskcard.unsynced.tip")
-                        + (card._ticket.syncError ? "\n" + I18n.t("taskcard.syncError").arg(card._ticket.syncError) : "")
-                QQC.ToolTip.visible: syncStateHover.hovered
-                QQC.ToolTip.text: syncChip.tip
-                HoverHandler { id: syncStateHover }
-                // The retry had no keyboard path: the card menu does not
-                // offer it (design audit DES-19). The HoverHandler above keeps
-                // the tooltip, which also shows for a card that is gone.
-                ClickArea {
-                    objectName: "tc-retry-push"
-                    enabled: !!card._ticket.unsynced && !card._ticket.gone
-                    label: I18n.t("taskcard.retryPush")
-                    showTip: false
-                    onActivated: AppController.retryTrackerPush(card.task.id)
-                }
-            }
-            // Both heap and the tracker changed the same field since the last
-            // sync. The local value is kept; the editor offers the other one.
-            Rectangle {
-                objectName: "tc-conflict"
-                visible: card._isTicket && !!card._ticket.conflict
-                radius: Theme.radiusSm
-                // Outlined, not filled: a different kind of out-of-step from
-                // the sync chip, which it often sits next to (VISU-2).
-                color: "transparent"
-                border.color: Theme.withAlpha(Theme.warning, 0.6)
-                border.width: 1
-                implicitWidth: conflictT.implicitWidth + 10
-                implicitHeight: conflictT.implicitHeight + 2
-                Text {
-                    id: conflictT
-                    anchors.centerIn: parent
-                    text: "⇄ " + I18n.t("taskcard.conflict")
-                    textFormat: Text.PlainText
-                    color: Theme.warning
-                    font.pixelSize: Theme.fsXs
-                    font.weight: Theme.fwTitle
-                }
-                QQC.ToolTip.visible: conflictHover.hovered
-                QQC.ToolTip.text: I18n.t("taskcard.conflict.tip")
-                HoverHandler { id: conflictHover }
-                // Opens the side-by-side choice (APP-163). heap never picks.
-                ClickArea {
-                    objectName: "tc-conflict-open"
-                    label: I18n.t("sync.conflict.open")
-                    showTip: false
-                    onActivated: card.openConflictDialog()
-                }
-            }
-            // Left behind by a filter change: still a live issue, just not one
-            // this connection pulls any more. Quiet on purpose.
-            Text {
-                objectName: "tc-out-of-scope"
-                visible: card._isTicket && !!card._ticket.outOfScope && !card._ticket.gone
-                text: I18n.t("taskcard.outOfScope")
-                textFormat: Text.PlainText
-                color: Theme.textDim
-                font.pixelSize: Theme.fsXs
-                QQC.ToolTip.visible: scopeHover.hovered
-                QQC.ToolTip.text: I18n.t("taskcard.outOfScope.tip")
-                HoverHandler { id: scopeHover }
-            }
             Rectangle {
                 objectName: "tc-stuck"
                 visible: card._isStuck
@@ -510,7 +429,8 @@ Rectangle {
             // defaults to AutoText, which would render HTML — and an <img> in
             // it fetches from the network on their say-so.
             textFormat: Text.PlainText
-            color: Theme.text
+            color: markT.gone ? Theme.textMuted : Theme.text
+            font.strikeout: markT.gone
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
             font.weight: Theme.fwTaskTitle
@@ -633,6 +553,82 @@ Rectangle {
             }
         }
 
+        // Out of step with the tracker, in the sheet's words (X/N-Err-
+        // Tracker, R2-034): "ждёт отправки статуса", "вне фильтра Jira —
+        // только у вас", "удалён в Jira · оставить у себя / убрать",
+        // "изменён и у вас, и в Jira · решить". The actions are links in
+        // the line; nothing is sent from here unless writes are on. Its own
+        // line under the key: beside the date and priority it had no room.
+        Text {
+            id: markT
+            objectName: "tc-mark"
+            Layout.fillWidth: true
+            // syncState comes from the model; a hand-built task map (the
+            // archive, tests) may only carry the older flags.
+            readonly property string state: !card._isTicket ? "synced"
+                : (card._ticket.syncState
+                   || (card._ticket.gone ? "gone"
+                       : card._ticket.unsynced ? (card._ticket.queued ? "queued" : "error") : "synced"))
+            // A move left over while the tracker's switch is off: it only
+            // goes out when the user sends it (APP-243).
+            readonly property bool unsent: !card._writeOn && (state === "queued" || state === "error")
+            readonly property bool gone: card._isTicket && (state === "gone" || !!card._ticket.gone)
+            readonly property bool conflict: card._isTicket && !!card._ticket.conflict && !gone
+            readonly property bool outOfScope: card._isTicket && !!card._ticket.outOfScope && !gone
+            readonly property bool pending: card._isTicket && !gone
+                && (state === "pushing" || state === "queued" || state === "error")
+            readonly property string tracker: card._badge.name || card._ticket.provider || ""
+            function _a(href, label) { return "<a href=\"" + href + "\">" + label + "</a>"; }
+            readonly property string words: {
+                if (!card._isTicket) return "";
+                if (gone)
+                    return I18n.t("taskcard.mark.gone").arg(tracker) + " · "
+                        + _a("keep", I18n.t("taskcard.mark.keep")) + " / " + _a("remove", I18n.t("taskcard.mark.remove"));
+                const parts = [];
+                if (conflict)
+                    parts.push(I18n.t("taskcard.mark.conflict").arg(tracker) + " · " + _a("resolve", I18n.t("taskcard.mark.resolve")));
+                if (pending) {
+                    if (state === "pushing") parts.push(I18n.t("taskcard.pushing"));
+                    else if (unsent) parts.push(I18n.t("taskcard.mark.unsent"));
+                    else if (state === "queued") parts.push(I18n.t("taskcard.mark.waiting"));
+                    else parts.push(I18n.t("taskcard.mark.refused") + " · " + _a("retry", I18n.t("taskcard.mark.retry")));
+                }
+                if (outOfScope) parts.push(I18n.t("taskcard.mark.outOfScope").arg(tracker));
+                return parts.join(" · ");
+            }
+            readonly property string tip: gone ? I18n.t("taskcard.gone.tip")
+                : conflict ? I18n.t("taskcard.conflict.tip")
+                : state === "pushing" ? I18n.t("taskcard.pushing.tip")
+                : unsent ? I18n.t("taskcard.unsent.tip")
+                    + (card._ticket.syncError ? "\n" + I18n.t("taskcard.syncError").arg(card._ticket.syncError) : "")
+                : state === "queued" ? I18n.t("taskcard.queued.tip")
+                : state === "error" ? I18n.t("taskcard.unsynced.tip")
+                    + (card._ticket.syncError ? "\n" + I18n.t("taskcard.syncError").arg(card._ticket.syncError) : "")
+                : outOfScope ? I18n.t("taskcard.outOfScope.tip") + (card._writeOn ? " " + I18n.t("taskcard.outOfScope.noSync") : "")
+                : ""
+            visible: words.length > 0
+            text: words
+            textFormat: Text.StyledText
+            linkColor: Theme.textMuted
+            color: Theme.textDim
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsXs
+            wrapMode: Text.Wrap
+            onLinkActivated: (link) => {
+                if (!card.task) return;
+                if (link === "keep") AppController.keepGoneTicketLocally(card.task.id);
+                else if (link === "remove") AppController.setArchived(card.task.id, true);
+                else if (link === "resolve") card.openConflictDialog();
+                else if (link === "retry") AppController.retryTrackerPush(card.task.id);
+            }
+            HoverHandler {
+                id: markHover
+                cursorShape: markT.hoveredLink.length > 0 ? Qt.PointingHandCursor : Qt.ArrowCursor
+            }
+            QQC.ToolTip.visible: markHover.hovered && markT.hoveredLink.length === 0 && markT.tip.length > 0
+            QQC.ToolTip.delay: 600
+            QQC.ToolTip.text: markT.tip
+        }
         // The branch checked out now is this task's (APP-281 A3): the one
         // fact of "what am I on", so it shows in both styles — and only on
         // this card.

@@ -1213,6 +1213,51 @@ TEST_F(ActionFinished, TestConnection_FinishesOnBothOutcomes) {
   EXPECT_EQ(spy.at(0).at(1).toString(), QStringLiteral("test"));
 }
 
+// ── R2-032: the conflict sheet's per-field choice, one step ──
+TEST_F(IntAudit, ConflictChoices_KeepSomeFieldsAndTakeOthersInOneUndo) {
+  ExternalTask e = issue("5");
+  e.priority = QStringLiteral("Medium");
+  merge({e});
+  edit(QStringLiteral("gh-5"), [](Task& t) {
+    t.title = QStringLiteral("mine");
+    t.priority = QStringLiteral("P1");
+  });
+  e.title = QStringLiteral("theirs");
+  e.priority = QStringLiteral("Lowest");
+  merge({e});
+  ASSERT_EQ(task("gh-5")->externalMeta.conflicts.size(), 2);
+
+  app_->resolveTrackerConflictChoices(QStringLiteral("gh-5"), {QStringLiteral("title")}, {QStringLiteral("priority")});
+  EXPECT_EQ(task("gh-5")->title, QStringLiteral("mine"));
+  EXPECT_EQ(task("gh-5")->priority, QStringLiteral("P3"));
+  EXPECT_TRUE(task("gh-5")->externalMeta.conflicts.isEmpty());
+  // A field named on both sides counts as kept: nothing local is lost.
+  e.title = QStringLiteral("theirs, again");
+  merge({e});
+  app_->resolveTrackerConflictChoices(QStringLiteral("gh-5"), {QStringLiteral("title")}, {QStringLiteral("title")});
+  EXPECT_EQ(task("gh-5")->title, QStringLiteral("mine"));
+}
+
+// ── R2-034: "оставить у себя" keeps a gone issue as the user's own task ──
+TEST_F(IntAudit, KeepGoneTicketLocally_DropsTheLinkAndKeepsEverythingLocal) {
+  merge({issue("5"), issue("6")});
+  edit(QStringLiteral("gh-5"), [](Task& t) {
+    t.desc = QStringLiteral("my notes on it");
+  });
+  merge({issue("6")});  // #5 is missing from a complete pull: gone
+  ASSERT_TRUE(task("gh-5")->externalMeta.goneUpstream);
+  app_->keepGoneTicketLocally(QStringLiteral("gh-5"));
+  const Task* t = task("gh-5");
+  ASSERT_NE(t, nullptr);
+  EXPECT_TRUE(t->externalProvider.isEmpty());
+  EXPECT_FALSE(t->externalMeta.goneUpstream);
+  EXPECT_EQ(t->desc, QStringLiteral("my notes on it"));
+  EXPECT_TRUE(app_->taskLocalNotes(QStringLiteral("gh-5")).contains(QStringLiteral("#5")));
+  // A card that is not gone is left alone.
+  app_->keepGoneTicketLocally(QStringLiteral("gh-6"));
+  EXPECT_FALSE(task("gh-6")->externalProvider.isEmpty());
+}
+
 }  // namespace intaudit
 
 int main(int argc, char** argv) {

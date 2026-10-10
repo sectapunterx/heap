@@ -366,6 +366,14 @@ qt_add_qml_module(heap_core
         qml/SeriesScopeDialog.qml
         qml/SyncConflictDialog.qml
         qml/TrackerPushConfirmDialog.qml
+        # errors & sync (0.8.1, R2-035…054)
+        qml/TrackerStrip.qml
+        qml/DamagedFileDialog.qml
+        qml/KeychainDialog.qml
+        qml/ReportIssueDialog.qml
+        qml/SyncPopover.qml
+        qml/WhatsNewDialog.qml
+        qml/WhatsNew.js
         qml/CalendarSubscriptionsCard.qml
         qml/SprintMarker.qml
         qml/WeeklyRecapDialog.qml

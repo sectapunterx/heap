@@ -41,6 +41,12 @@ Rectangle {
     signal exportVaultRequested()
     signal importVaultRequested()
     signal removeExampleRequested()
+    // The running timer's line (R2-052) opens its task.
+    signal timerTaskRequested(string taskId)
+    // The update line (R2-053): what's new in the release on offer.
+    signal updateNotesRequested()
+    // Set by Main when a check finds a newer release (R2-053).
+    property string updateVersion: ""
     property alias profileSwitcher: profile
 
     // ── My views ──
@@ -244,6 +250,120 @@ Rectangle {
             }
         }
 
+        // The running timer (X/N-Ntf-OS, R2-052): under "New task…", while a
+        // timer runs — the task, the time, pause. Click opens the task.
+        Item {
+            id: timerLine
+            objectName: "sidebar-timer"
+            property var timer: ({})
+            function refresh() { timerLine.timer = AppController.runningTimer(); }
+            Timer {
+                interval: 1000
+                repeat: true
+                running: root.visible
+                triggeredOnStart: true
+                onTriggered: timerLine.refresh()
+            }
+            Connections {
+                target: AppController.tasks
+                function onDataChanged() { timerLine.refresh(); }
+                function onModelReset() { timerLine.refresh(); }
+            }
+            readonly property bool on: !!timerLine.timer.id
+            visible: on
+            Layout.fillWidth: true
+            Layout.preferredHeight: on ? Theme.chipH + Theme.spXs : 0
+            Layout.bottomMargin: on ? Theme.spLg : 0
+            readonly property string clock: {
+                const s = Number(timerLine.timer.seconds) || 0;
+                const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+                return h + ":" + (m < 10 ? "0" : "") + m;
+            }
+            Rectangle {
+                anchors.fill: parent
+                radius: Theme.radiusMd
+                color: timerCA.hovered ? Theme.panel2 : "transparent"
+                border.width: 1
+                border.color: Theme.border
+            }
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: Theme.spMd
+                anchors.rightMargin: Theme.spMd
+                spacing: Theme.spSm
+                visible: root.expanded
+                StatusRing {
+                    category: "prog"
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                Text {
+                    objectName: "sidebar-timer-title"
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignVCenter
+                    text: timerLine.timer.title || ""
+                    textFormat: Text.PlainText
+                    elide: Text.ElideRight
+                    color: Theme.text
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
+                }
+                Rectangle {
+                    visible: Style.urgency
+                    Layout.alignment: Qt.AlignVCenter
+                    implicitWidth: Theme.spXs; implicitHeight: Theme.spXs; radius: width / 2
+                    color: Theme.signalNow
+                }
+                Text {
+                    objectName: "sidebar-timer-clock"
+                    Layout.alignment: Qt.AlignVCenter
+                    text: timerLine.clock
+                    color: Theme.signalNow
+                    font.family: Theme.fontMono
+                    font.features: Theme.tabularNums
+                    font.pixelSize: Theme.fsXs
+                }
+                Item {
+                    implicitWidth: Theme.spLg
+                    implicitHeight: Theme.spLg
+                    Layout.alignment: Qt.AlignVCenter
+                    Icon {
+                        anchors.centerIn: parent
+                        name: "pause"
+                        size: Theme.px(10)
+                        color: pauseCA.hovered ? Theme.text : Theme.textMuted
+                    }
+                    ClickArea {
+                        id: pauseCA
+                        objectName: "sidebar-timer-pause"
+                        anchors.margins: -Theme.spXs
+                        z: 2
+                        label: I18n.t("sidebar.timer.pause")
+                        shortcutId: "task.timer"
+                        onActivated: AppController.stopTaskTimer(timerLine.timer.id)
+                    }
+                }
+                KeyHint {
+                    visible: Style.keyHints && keys.length > 0
+                    Layout.alignment: Qt.AlignVCenter
+                    keys: AppController.shortcuts.length >= 0 ? root.prettyKeys(AppController.shortcutFor("task.timer")) : ""
+                }
+            }
+            Icon {
+                visible: !root.expanded
+                anchors.centerIn: parent
+                name: "timer"
+                color: Theme.signalNow
+            }
+            ClickArea {
+                id: timerCA
+                objectName: "sidebar-timer-open"
+                label: I18n.t("sidebar.timer.open")
+                tip: (timerLine.timer.title || "") + " · " + timerLine.clock
+                showTip: !root.expanded
+                onActivated: root.timerTaskRequested(timerLine.timer.id)
+            }
+        }
+
         NavRow {
             objectName: "sidebar-section-today"
             section: "today"
@@ -326,6 +446,87 @@ Rectangle {
             label: I18n.t("sidebar.settings")
             iconName: "settings"
             shortcutId: "view.settings"
+        }
+        // A newer release (X/N-Ntf-OS, R2-053): one quiet line at the bottom
+        // instead of a toast — "0.8.1 готова · перезапустить · что нового".
+        Row {
+            id: updateLine
+            objectName: "sidebar-update"
+            readonly property string phase: AppController.updatePhase
+            readonly property bool can: AppController.updateCanInstall
+            visible: root.expanded && root.updateVersion.length > 0 && phase !== "installing"
+            Layout.leftMargin: Theme.spMd
+            Layout.topMargin: Theme.spMd
+            spacing: Theme.spXs
+            Rectangle {
+                visible: Style.urgency && updateLine.phase === "ready"
+                anchors.verticalCenter: parent.verticalCenter
+                width: Theme.spXs; height: width; radius: width / 2
+                color: Theme.success
+            }
+            Text {
+                objectName: "sidebar-update-text"
+                anchors.verticalCenter: parent.verticalCenter
+                text: updateLine.phase === "ready" ? I18n.t("update.line.ready").arg(root.updateVersion)
+                    : updateLine.phase === "downloading" ? I18n.t("update.line.downloading").arg(root.updateVersion)
+                                                              .arg(Math.round(AppController.updateProgress * 100))
+                    : I18n.t("update.line.available").arg(root.updateVersion)
+                color: Theme.text
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsXs
+            }
+            Text {
+                visible: updateLine.phase !== "downloading" && updateLine.phase !== "verifying"
+                anchors.verticalCenter: parent.verticalCenter
+                text: "·"
+                color: Theme.textDim
+                font.pixelSize: Theme.fsXs
+            }
+            Text {
+                id: updateAct
+                objectName: "sidebar-update-action"
+                visible: updateLine.phase !== "downloading" && updateLine.phase !== "verifying"
+                anchors.verticalCenter: parent.verticalCenter
+                text: updateLine.phase === "ready" ? I18n.t("update.line.restart")
+                    : updateLine.can ? I18n.t("update.line.install") : I18n.t("update.line.download")
+                color: updActCA.hovered ? Theme.textMuted : Theme.text
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsXs
+                font.underline: true
+                ClickArea {
+                    id: updActCA
+                    anchors.margins: -Theme.sp2xs
+                    label: updateAct.text
+                    showTip: false
+                    onActivated: {
+                        if (updateLine.phase === "ready") AppController.installUpdate();
+                        else if (updateLine.can) AppController.downloadUpdate();
+                        else AppController.openLatestRelease();
+                    }
+                }
+            }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "·"
+                color: Theme.textDim
+                font.pixelSize: Theme.fsXs
+            }
+            Text {
+                id: updateNotes
+                objectName: "sidebar-update-notes"
+                anchors.verticalCenter: parent.verticalCenter
+                text: I18n.t("update.line.whatsNew")
+                color: notesCA.hovered ? Theme.text : Theme.textMuted
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsXs
+                ClickArea {
+                    id: notesCA
+                    anchors.margins: -Theme.sp2xs
+                    label: updateNotes.text
+                    showTip: false
+                    onActivated: root.updateNotesRequested()
+                }
+            }
         }
         // The rest is in the command line.
         Row {

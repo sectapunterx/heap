@@ -13,7 +13,7 @@ import TodoCpp
 // chevron-left, chevron-right, branch, lock, expand, collapse, info, link,
 // attachment, timer, check, plus, close, more, arrow-out, arrow-up,
 // arrow-down, arrow-left, arrow-right, sun (Today), settings, list, doc,
-// person, archive, bolt, undo, sidebar.
+// person, archive, bolt, undo, sidebar, ring, progress, pending, pause.
 Item {
     id: root
 
@@ -70,7 +70,15 @@ Item {
         "archive":       { s: "M2.5 3h11v3.5h-11zM3.5 6.5v6.5h9V6.5M6.5 9.5h3" },
         "bolt":          { s: "M9 1.5 3.5 9H8l-1 5.5L12.5 7H8z" },
         "undo":          { s: "M5.5 3.5 2.5 6.5l3 3M2.5 6.5h7a3.5 3.5 0 0 1 0 7H7" },
-        "sidebar":       { s: "M3.5 2.5h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zM6.5 2.5v11" }
+        "sidebar":       { s: "M3.5 2.5h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zM6.5 2.5v11" },
+        // State marks of the sync indicator and the problem strip (R2-035/048):
+        // a ring (a problem), a ring with a quarter filled (running), a
+        // dotted ring (waiting for the network or the tracker), a pause.
+        "ring":          { s: _c(8, 8, 4.5) },
+        "progress":      { s: _c(8, 8, 4.5), f: "M8 8V3.5a4.5 4.5 0 0 1 4.5 4.5z" },
+        "pending":       { f: _c(8, 3.2, 0.9) + _c(11.4, 4.6, 0.9) + _c(12.8, 8, 0.9) + _c(11.4, 11.4, 0.9)
+                              + _c(8, 12.8, 0.9) + _c(4.6, 11.4, 0.9) + _c(3.2, 8, 0.9) + _c(4.6, 4.6, 0.9) },
+        "pause":         { s: "M6 4v8M10 4v8" }
     })
     readonly property var _g: _glyphs[name] || ({})
 

@@ -118,13 +118,13 @@ TestCase {
     // ── The card ──
     function test_unsent_move_with_writes_off_says_not_sent() {
         const card = makeCard({ syncState: "queued", unsynced: true, queued: true });
-        compare(findChild(card, "tc-sync-state-text").text, I18n.t("taskcard.unsent"));
-        verify(findChild(card, "tc-sync-state").tip.indexOf(I18n.t("taskcard.unsent.tip")) === 0);
+        verify(findChild(card, "tc-mark").text.indexOf(I18n.t("taskcard.mark.unsent")) >= 0);
+        verify(findChild(card, "tc-mark").tip.indexOf(I18n.t("taskcard.unsent.tip")) === 0);
         card.destroy();
         // With the switch on it is the old "queued": it goes out on the next sync.
         AppController.setTrackerWriteEnabled("gitea", true);
         const on = makeCard({ syncState: "queued", unsynced: true, queued: true });
-        compare(findChild(on, "tc-sync-state-text").text, I18n.t("taskcard.queued"));
+        verify(findChild(on, "tc-mark").text.indexOf(I18n.t("taskcard.mark.waiting")) >= 0);
         on.destroy();
     }
 
@@ -147,7 +147,7 @@ TestCase {
         const card = makeCard({ syncState: "synced", remoteStatus: "closed", remoteColumn: "done" }, { status: "prog" });
         verify(card.hoverDetails.indexOf(I18n.t("taskcard.trackerStatus").arg("closed")) >= 0,
                "the tracker's status is not told");
-        verify(!findChild(card, "tc-sync-state").visible, "a local move reads as out of step");
+        verify(!findChild(card, "tc-mark").visible, "a local move reads as out of step");
         card.destroy();
         // In the column the tracker has: nothing to say.
         const same = makeCard({ syncState: "synced", remoteStatus: "closed", remoteColumn: "done" }, { status: "done" });
@@ -171,10 +171,11 @@ TestCase {
         const dlg = createTemporaryQmlObject('import TodoCpp; TrackerPushConfirmDialog { }', host);
         dlg.ask("tw-none", "WEB-5", "Fix it", "Jira", "In Review", "Done");
         tryCompare(dlg, "opened", true);
-        const body = findChild(dlg.contentItem, "trackerPushConfirmBody");
-        verify(body.text.indexOf("WEB-5") >= 0 && body.text.indexOf("In Review") >= 0 && body.text.indexOf("Done") >= 0,
-               "the dialog does not name the issue, its status and the target: " + body.text);
-        const cancel = findChild(dlg.footer, "trackerPushConfirmCancel");
+        // Whose ticket it is, and the question (X/N-Dlg-Conflict, R2-033).
+        verify(dlg.fact.indexOf("WEB-5") >= 0 && dlg.fact.indexOf("Jira") >= 0,
+               "the dialog does not name the issue and the tracker: " + dlg.fact);
+        compare(dlg.title, I18n.t("tracker.notMine.outside").arg("Jira"));
+        const cancel = findChild(dlg.contentItem, "trackerPushConfirmCancel");
         tryVerify(function () { return cancel.activeFocus; }, 1000, "Cancel is not the default");
         keyClick(Qt.Key_Return);
         tryCompare(dlg, "visible", false);

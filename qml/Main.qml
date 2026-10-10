@@ -399,6 +399,10 @@ ApplicationWindow {
         // Coming from 0.7: say once what the new sidebar moved (APP-258).
         if (AppController.shellNotice.length > 0)
             Qt.callLater(win._showShellNotice);
+        // A damaged data file at launch: the card with the snapshots (R2-037).
+        Qt.callLater(damagedFile.showIfNeeded);
+        // Once after an update to a new release line (R2-054).
+        Qt.callLater(whatsNew.showIfUpdated);
     }
     function _showShellNotice() {
         const msg = AppController.shellNotice;
@@ -954,22 +958,14 @@ ApplicationWindow {
         }
         // A newer release was found. When heap can update this copy itself
         // the action downloads it (APP-125); otherwise it opens the release page.
+        // The sidebar says it in one quiet line (X/N-Ntf-OS, R2-053):
+        // "0.8.1 доступна · обновить · что нового", then "готова ·
+        // перезапустить". No toast; Settings → About has it too.
         function onUpdateAvailable(version, url) {
-            if (AppController.updateCanInstall) {
-                toast.showWithAction(I18n.t("update.available").arg(version), I18n.t("update.install"), 10, function () {
-                    AppController.downloadUpdate()
-                });
-                return;
-            }
-            toast.showWithAction(I18n.t("update.available").arg(version), I18n.t("update.download"), 10, function () {
-                Qt.openUrlExternally(url)
-            });
+            rail.updateVersion = String(version).replace(/^v/, "");
         }
-        // Downloaded and matched against the release's SHA-256: offer the restart.
         function onUpdateReadyToInstall(version, sha256) {
-            toast.showWithAction(I18n.t("update.ready").arg(version), I18n.t("update.restart"), 30, function () {
-                AppController.installUpdate()
-            });
+            rail.updateVersion = String(version).replace(/^v/, "");
         }
     }
 
@@ -988,7 +984,10 @@ ApplicationWindow {
             expanded: win.sideRailExpanded
             onToggleRequested: win.toggleSideRail()
             onNewTaskRequested: quickCapture.open()
-            onSyncStatusRequested: win.runCommand("settings:integrations")
+            // Every source and how it is doing (R2-048).
+            onSyncStatusRequested: syncPopover.openAt(rail.profileSwitcher)
+            onTimerTaskRequested: (id) => win.showTask(AppController.taskById(id))
+            onUpdateNotesRequested: AppController.openLatestRelease()
             onNewProfileRequested: profileEditor.showCreate()
             onRenameProfileRequested: {
                 const list = AppController.profiles;
@@ -1090,6 +1089,18 @@ ApplicationWindow {
                 profileName: rail.profileSwitcher.active.name || ""
                 onProfileChipClicked: rail.profileSwitcher.openMenu()
             }
+
+                TrackerStrip {
+                    id: trackerStrip
+                    Layout.fillWidth: true
+                    Layout.leftMargin: Theme.pagePadX
+                    Layout.rightMargin: Theme.pagePadX
+                    Layout.topMargin: visible ? Theme.spSm : 0
+                    Layout.bottomMargin: visible ? Theme.spSm : 0
+                    visible: AppController.currentSection === "tasks" && (rows.length > 0 || firstLoads.length > 0)
+                    onSignInRequested: win.runCommand("settings:integrations")
+                    onLogRequested: eventLog.open()
+                }
 
                 FilterBar {
                     id: filterBar
@@ -1358,6 +1369,8 @@ ApplicationWindow {
                             function exportJson()  { exportJsonDialog.open() }
                             function importJson()  { importJsonDialog.open() }
                             function openTimeMachine() { timeMachine.showNow() }
+                            function openReportIssue() { reportIssue.showNow() }
+                            function openWhatsNew() { return whatsNew.showNow() }
                             function openCheatSheet() { win.openCheatSheet() }
                             function exportMarkdown() { exportVaultDialog.open() }
                             // A key being rebound in place (Settings → Keys):
@@ -1779,6 +1792,7 @@ ApplicationWindow {
         case "profile.prev":         win._cycleProfile(-1); break;
         case "profile.exportMd":     AppController.copyActiveProfileMarkdownToClipboard(); break;
         case "profile.weeklyReport": AppController.copyWeeklyReportToClipboard(); break;
+        case "sync.all":             AppController.syncNow(); break;
         // The Tweaks popover is gone (APP-270): its key opens Appearance.
         case "tweaks.open":          win.runCommand("settings:appearance"); break;
         case "hotkeys.open":         win.openCheatSheet(); break;
@@ -1894,7 +1908,7 @@ ApplicationWindow {
         "quick-capture-notes", "section.today", "section.tasks", "section.knowledge", "view.board",
         "view.timeline", "view.week", "view.month", "view.docs", "view.notes", "view.settings", "view.archive",
         "theme.toggle", "person.new", "profile.new", "profile.next", "profile.prev", "profile.exportMd",
-        "profile.weeklyReport", "focus.immersion", "timeMachine.open", "standup.draft", "recap.open",
+        "profile.weeklyReport", "sync.all", "focus.immersion", "timeMachine.open", "standup.draft", "recap.open",
         "endOfDay.open", "welcome.replay", "zoom.in", "zoom.out", "zoom.reset", "tweaks.open", "log.open",
         "hotkeys.open", "undo", "redo", "search.focus", "selection.selectAll", "selection.clearSel",
         "selection.deleteSel", "cal.today", "cal.prevDay", "cal.nextDay", "cal.newEvent", "cal.prev", "cal.next",
@@ -2459,6 +2473,12 @@ ApplicationWindow {
         onActivated: AppController.copyWeeklyReportToClipboard()
     }
     Shortcut {
+        sequence: _kbd("sync.all")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: AppController.syncNow()
+    }
+    Shortcut {
         sequence: _kbd("tweaks.open")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
@@ -2740,6 +2760,19 @@ ApplicationWindow {
     // "Send the status anyway?" for an issue the check found outside the
     // filter (APP-204). Cancel is the default.
     TrackerPushConfirmDialog { id: trackerPushConfirm }
+    // Errors & sync (0.8.1): the damaged-file card at launch, the keychain
+    // card, the report form, the sync sources, what's new (R2-037…054).
+    DamagedFileDialog { id: damagedFile }
+    KeychainDialog { id: keychainCard }
+    ReportIssueDialog {
+        id: reportIssue
+        onNoticeRequested: (text) => toast.show(text, "success")
+    }
+    SyncPopover {
+        id: syncPopover
+        onSignInRequested: win.runCommand("settings:integrations")
+    }
+    WhatsNewDialog { id: whatsNew }
     // The day's summary (APP-190): closed, carrying over, timers. Read-only.
     EndOfDayDialog {
         id: endOfDay
