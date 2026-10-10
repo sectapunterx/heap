@@ -694,19 +694,6 @@ jobs:
             echo "::error::two artifacts share a file name"; find dist -mindepth 2 -type f; exit 1
           fi
 
-      # heap 0.7.x looks for its update under heap's names (Updater::assetNameFor
-      # before APP-280). The same files go up under those names too, so every
-      # 0.7 install finds 0.8 and moves to lowkey by its own updater. Drop this
-      # once 0.7 is no longer worth carrying.
-      - name: Copies under heap's names for 0.7.x updaters
-        working-directory: dist
-        run: |
-          set -eu
-          for f in lowkey-*-windows-setup.exe lowkey-*-windows-portable.zip lowkey-*-macos.dmg lowkey-*-linux-x86_64.AppImage; do
-            [ -f "$f" ] && cp "$f" "heap-${f#lowkey-}"
-          done
-          ls -1
-
       - name: List artifacts
         run: find dist -type f -printf '%p (%s bytes)\n'
 

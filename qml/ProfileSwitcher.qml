@@ -114,8 +114,10 @@ Item {
         id: row
         anchors.verticalCenter: parent.verticalCenter
         anchors.right: parent.right
-        spacing: Theme.spSm
-        layoutDirection: Qt.RightToLeft
+        spacing: Theme.spXs
+        // The dot before the name, the whole pair at the right (H2-Today:
+        // "• Example").
+        layoutDirection: Qt.LeftToRight
 
         Item {
             id: syncDot

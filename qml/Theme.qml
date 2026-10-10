@@ -364,8 +364,9 @@ QtObject {
     // chips line up at every scale and density; a filter condition is smaller.
     // A window narrower than this (logical px, the window's own width) is
     // "small" (X-Oth-Small, DG-008): the sidebar folds to its icons and
-    // Today's side column goes under the day. 1280 folds, 1366 does not.
-    readonly property int compactWindowWidth: 1360
+    // Today's side column goes under the day. The sheet's own note puts it at
+    // "~1100 px"; at 1360 a 1280-1360 window lost the sidebar for no reason.
+    readonly property int compactWindowWidth: 1100
     readonly property int chipH:       px(28)
     readonly property int chipHSmall:  px(24)
     readonly property int chipMaxW:    px(240)

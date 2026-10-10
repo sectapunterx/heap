@@ -133,6 +133,19 @@ TestCase {
         compare(n, 1);
     }
 
+    // Folded, the mark on top opens it again: the wordmark that folds it is
+    // hidden then, and a key was the only way back.
+    function test_the_mark_opens_the_folded_sidebar() {
+        const sb = bar(false);
+        const mark = findChild(sb, "sidebar-expand");
+        verify(mark.visible, "no way back to the sidebar");
+        let n = 0;
+        sb.toggleRequested.connect(function () { n++; });
+        mouseClick(mark);
+        compare(n, 1);
+        verify(!findChild(bar(true), "sidebar-expand").visible);
+    }
+
     // ── My views ──
 
     function test_counts_hide_zero_and_cap_at_999() {

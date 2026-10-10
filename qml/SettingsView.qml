@@ -994,6 +994,7 @@ Item {
 
     component SwitchRow: SettingsRow {
         id: switchRow
+        minor: true
         property bool checked: false
         signal toggled(bool checked)
         // The whole row toggles, not just the switch.
@@ -1007,19 +1008,20 @@ Item {
         Keys.onSpacePressed: switchRow.toggled(!switchRow.checked)
         Keys.onReturnPressed: switchRow.toggled(!switchRow.checked)
 
-        // Bold: the accent track when on. Quiet: a grey one — no colour
-        // where the style keeps none (X-Set-StyleKeys).
+        // N-Set-StyleKeys: 34×20, a 14px knob 2px in. On: the blue track in
+        // bold (#7aa7ff), a grey one in quiet (#3a414b, X-Set-StyleKeys).
+        // Off: no fill, a hairline (#2a3038) and a dim knob (#7a8390).
         Rectangle {
             id: switchTrack
             Layout.preferredWidth: Theme.px(34); Layout.preferredHeight: Theme.px(20); radius: height / 2
-            color: switchRow.checked ? (root.quiet ? Theme.textDim : Theme.accent) : Theme.panel2
-            border.color: switchRow.checked ? "transparent" : Theme.fieldBorder
+            color: switchRow.checked ? (root.quiet ? Theme.switchOn : Theme.info) : "transparent"
+            border.color: switchRow.checked ? "transparent" : Theme.switchOffLine
             border.width: 1
             FocusRing { target: switchRow; radius: 13 }
             Rectangle {
                 id: switchKnob
                 width: switchTrack.height - 6; height: width; radius: width / 2
-                color: switchRow.checked ? Theme.knob : Theme.textDim
+                color: switchRow.checked ? Theme.switchKnobOn : Theme.switchKnobOff
                 anchors.verticalCenter: parent.verticalCenter
                 x: 3
                 transform: Translate {

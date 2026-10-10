@@ -54,15 +54,15 @@ Name: "en"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"; Flags: unchecked
 
 [InstallDelete]
-; heap 0.7's shortcuts: the program is lowkey now. heap.exe itself stays in
-; the bundle as a launcher for anything else that still starts it.
+; heap 0.7's shortcuts and its heap.exe launcher (gone in 0.8.1): the program
+; is lowkey.exe; its autostart entry is moved over by lowkey itself.
 Type: filesandordirs; Name: "{autoprograms}\heap."
 Type: files; Name: "{autoprograms}\heap..lnk"
 Type: files; Name: "{autodesktop}\heap..lnk"
+Type: files; Name: "{app}\heap.exe"
 
 [Files]
-; Recursively pack the entire portable bundle (lowkey.exe + Qt runtime + QML,
-; and the heap.exe launcher).
+; Recursively pack the entire portable bundle (lowkey.exe + Qt runtime + QML).
 Source: "{#BundleDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]

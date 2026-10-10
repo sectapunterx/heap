@@ -31,6 +31,9 @@ Item {
     property string label: ""
     property string hint: ""
     property color hintColor: Theme.textDim
+    // A switch in a list of switches (N-Set-StyleKeys): the label in body
+    // weight and the softer text colour, under a main row's weight.
+    property bool minor: false
     // The label column. Capped at a share of the row so a narrow window
     // still leaves the control room.
     property int labelWidth: 248
@@ -127,9 +130,9 @@ Item {
                 visible: row.label.length > 0
                 Layout.fillWidth: true
                 text: row.label
-                color: Style.chipFill ? Theme.text : Theme.textMuted
+                color: Style.chipFill && !row.minor ? Theme.text : Theme.textMuted
                 font.pixelSize: Theme.fsMd
-                font.weight: Style.chipFill ? Theme.fwTitle : Theme.fwBody
+                font.weight: Style.chipFill && !row.minor ? Theme.fwTitle : Theme.fwBody
                 wrapMode: Text.WordWrap
             }
             Text {

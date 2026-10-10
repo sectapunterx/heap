@@ -649,11 +649,11 @@ Rectangle {
                     Item {
                         width: Math.max(Theme.px(200), queryFlow.width - (chipsRow.width > 0 ? chipsRow.width + queryFlow.spacing : 0))
                         height: Theme.chipHSmall
-                        Rectangle {
+                        // A plain holder: the row draws the box. As a
+                        // transparent Rectangle it filled black on Windows.
+                        Item {
                             id: searchBox
                             anchors.fill: parent
-                            color: "transparent"
-            Behavior on border.color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spSm
