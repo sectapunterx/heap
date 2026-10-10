@@ -948,13 +948,10 @@ ApplicationWindow {
                 AppController.undoEntry(serial)
             }, "success", AppController.shortcutText("undo"));
         }
-        // "Done" with no column of that stage: offer to make one (APP-268).
+        // "Done" with no column of that stage: a card with the two ways out
+        // (APP-268, R3-137).
         function onDoneColumnMissing() {
-            toast.showWithAction(I18n.t("done.noColumn"), I18n.t("done.noColumn.create"), 10, function () {
-                AppController.addStatus(I18n.t("done.columnName"), "");
-                const sts = AppController.statuses;
-                AppController.setStatusCategory(sts[sts.length - 1].id, "done");
-            }, "warning");
+            doneColumnCard.open();
         }
         // A newer release was found. When heap can update this copy itself
         // the action downloads it (APP-125); otherwise it opens the release page.
@@ -2764,6 +2761,10 @@ ApplicationWindow {
     // card, the report form, the sync sources, what's new (R2-037…054).
     DamagedFileDialog { id: damagedFile }
     KeychainDialog { id: keychainCard }
+    DoneColumnDialog {
+        id: doneColumnCard
+        onPickStageRequested: win.runCommand("settings:tasks")
+    }
     ReportIssueDialog {
         id: reportIssue
         onNoticeRequested: (text) => toast.show(text, "success")
@@ -3218,14 +3219,15 @@ ApplicationWindow {
         autoAnimate: !Theme.reducedMotion
         autoDuration: 900
         onFinished: splashFade.start()
+        onReportRequested: reportIssue.showNow()
 
         // Swallow input while the splash is up.
-        MouseArea { anchors.fill: parent }
+        MouseArea { anchors.fill: parent; z: -1 }
 
         // Reduced motion: the internal progress animation is off, so dismiss
         // via a short timer instead.
         Component.onCompleted: if (Theme.reducedMotion) splashReducedDismiss.start()
-        Timer { id: splashReducedDismiss; interval: 250; onTriggered: splash.finished() }
+        Timer { id: splashReducedDismiss; interval: 250; onTriggered: splash.dismiss() }
 
         NumberAnimation {
             id: splashFade

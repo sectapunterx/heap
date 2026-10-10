@@ -198,12 +198,23 @@ FocusScope {
         anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
         anchors.leftMargin: Theme.sp3xl; anchors.rightMargin: Theme.sp3xl; anchors.bottomMargin: Theme.sp3xl
         spacing: Theme.spLg
-        Text {
-            objectName: "immersion-timer"
-            text: root.elapsedText()
-            color: Theme.text
-            font.family: Theme.fontMono
-            font.pixelSize: Theme.fsLg
+        // Bold: a running timer is "● 0:42" in the signal colour (R3-019).
+        Row {
+            spacing: Theme.spSm
+            Rectangle {
+                objectName: "immersion-timer-dot"
+                visible: Style.urgency && !!root.task.isTiming
+                anchors.verticalCenter: parent.verticalCenter
+                width: Theme.spSm; height: width; radius: width / 2
+                color: Theme.signalNow
+            }
+            Text {
+                objectName: "immersion-timer"
+                text: root.elapsedText()
+                color: Style.urgency && !!root.task.isTiming ? Theme.signalNow : Theme.text
+                font.family: Theme.fontMono
+                font.pixelSize: Theme.fsLg
+            }
         }
         // Pause / resume, with its key. The glyph is drawn (two bars or a
         // triangle) until the shared Icon component lands.
@@ -247,7 +258,7 @@ FocusScope {
         Text {
             objectName: "immersion-next"
             text: root.nextMeetingText()
-            color: Theme.textMuted
+            color: Style.urgency ? Theme.info : Theme.textMuted
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsSm
         }

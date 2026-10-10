@@ -551,6 +551,20 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"tasks.renamed", {"Tasks renamed: %1", "Переименовано задач: %1"}},
       {"notify.meetingSoon", {"In %1 min", "Через %1 мин"}},
       {"notify.meetingNow", {"Starting now", "Начинается"}},
+      {"notify.meetingSoonTitled", {"%1 in %2 min", "%1 через %2 мин"}},
+      {"notify.meetingNowTitled", {"%1 is starting", "%1 начинается"}},
+      {"notify.action.join", {"Join", "Подключиться"}},
+      {"tray.newTask", {"New task…", "Новая задача…"}},
+      {"tray.quickNote", {"Quick note…", "Быстрая заметка…"}},
+      {"tray.stopTimer", {"Stop timer", "Остановить таймер"}},
+      {"tray.next", {"Next: %1", "Далее: %1"}},
+      {"tray.open", {"Open lowkey", "Открыть lowkey"}},
+      {"tray.dnd", {"Do not disturb for 1 h", "Не беспокоить 1 ч"}},
+      {"tray.dndUntil", {"Do not disturb until %1 — turn off", "Не беспокоить до %1 — выключить"}},
+      {"tray.quit", {"Quit", "Выход"}},
+      {"notify.dueToday", {"Due today", "Срок сегодня"}},
+      {"notify.dueTomorrow", {"Due tomorrow", "Срок завтра"}},
+      {"notify.waitingOn", {"waiting on %1", "ждёт ответа: %1"}},
       {"backup.restored", {"Restored from %1", "Восстановлено из %1"}},
       {"history.notFound", {"That snapshot is gone", "Этого снимка больше нет"}},
       {"history.damaged", {"That snapshot cannot be read", "Этот снимок не читается"}},
@@ -899,7 +913,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"selection.toast.archived", {"Tasks archived: %1", "Задач в архиве: %1"}},
       {"selection.toast.unarchived", {"Tasks unarchived: %1", "Задач возвращено из архива: %1"}},
       // ---- Notification copy ----
-      {"notify.deadlineTitle", {"Deadline %1", "Дедлайн %1"}},
+      {"notify.deadlineTitle", {"Due %1", "Срок %1"}},
       {"notify.blockNow", {"Time for “%1”", "Время для «%1»"}},
       {"notify.blockSoon", {"“%1” in %2 min", "«%1» через %2 мин"}},
       {"notify.blockBody", {"planned for %1–%2", "запланировано на %1–%2"}},
@@ -1066,6 +1080,9 @@ AppController::AppController(QObject* parent) :
     connect(m_notifier.get(), &heap::notify::NotificationCenter::quitRequested, this, []() {
       QCoreApplication::quit();
     });
+    connect(m_notifier.get(), &heap::notify::NotificationCenter::trayMenuAboutToShow, this, &AppController::refreshTray);
+    connect(m_notifier.get(), &heap::notify::NotificationCenter::trayItemTriggered, this, &AppController::onTrayItem);
+    connect(this, &AppController::languageChanged, this, &AppController::refreshTray);
   }
 
   // Route notification(...) → native toast + in-app toast bar, respecting
@@ -1112,7 +1129,9 @@ AppController::AppController(QObject* parent) :
               n.iconPath = QStringLiteral(":/brand/lowkey/lowkey-icon.svg");
               n.category = kind;
               if(!routeId.isEmpty() && m_notifier->supportsActions()) {
-                n.actions = reminderActions(kind);
+                const bool canJoin =
+                    kind == QStringLiteral("meeting") && !meetingJoinUrl(heap::notify::parseRoutingId(routeId).second).isEmpty();
+                n.actions = reminderActions(kind, canJoin);
               }
               m_notifier->post(n);
             }
@@ -1198,6 +1217,21 @@ AppController::AppController(QObject* parent) :
     recomposeStorageMessage();
     emit integrationHealthChanged();
   });
+
+  // Unclean-exit marker (R3-018): written when a window session starts and
+  // removed when it ends normally, so finding it here means the last one
+  // crashed or was killed. The CLI and the test runner keep none.
+  if(!s_headless && !QStandardPaths::isTestModeEnabled()) {
+    m_sessionMarkerPath = heap::paths::dataDir() + QStringLiteral("/session.open");
+    if(QFile::exists(m_sessionMarkerPath)) {
+      m_lastExitUnclean = true;
+      m_lastSaveTime = QFileInfo(stateFilePath()).lastModified();
+    }
+    QFile marker(m_sessionMarkerPath);
+    if(marker.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+      marker.write(QDateTime::currentDateTime().toString(Qt::ISODate).toUtf8());
+    }
+  }
 
   loadStateOnStart();
   loadSentReminders();
@@ -1466,6 +1500,25 @@ AppController::~AppController() {
     m_outlookThread = nullptr;
   }
   flushSave();
+  if(!m_sessionMarkerPath.isEmpty()) {
+    QFile::remove(m_sessionMarkerPath);
+  }
+}
+
+void AppController::dismissUncleanExit() {
+  if(m_lastExitUnclean) {
+    m_lastExitUnclean = false;
+    emit lastExitUncleanChanged();
+  }
+}
+
+void AppController::simulateUncleanExitForTest(const QDateTime& savedAt) {
+  if(!QStandardPaths::isTestModeEnabled()) {
+    return;
+  }
+  m_lastExitUnclean = true;
+  m_lastSaveTime = savedAt;
+  emit lastExitUncleanChanged();
 }
 
 void AppController::flushSave() {
@@ -4436,17 +4489,25 @@ QVariantMap AppController::todayData(const QDate& date, bool allProfiles) const 
   }
   out["allDay"] = allDay;
   QVariantList blocks;
-  QStringList inDay;
+  // Who a task waits on (R3-002): the day row and the deadline line say it.
+  QHash<QString, QString> waitingName;
+  for(const WaitingOn& w : m_waitingOn) {
+    const int row = m_people.indexOfId(w.personId);
+    if(row >= 0) {
+      waitingName.insert(w.taskId, m_people.items().at(row).name);
+    }
+  }
   int meetings = static_cast<int>(day.allDay.size());
   int planned = 0;
   for(const heap::plan::Block& b : day.blocks) {
-    blocks.append(blockToVariant(b));
+    QVariantMap bm = blockToVariant(b);
     if(b.kind == QLatin1String("meeting")) {
       ++meetings;
     } else {
       ++planned;
-      inDay << b.id;
+      bm["waiting"] = b.profileName.isEmpty() ? waitingName.value(b.id) : QString();
     }
+    blocks.append(bm);
   }
   out["blocks"] = blocks;
   QVariantList free;
@@ -4490,8 +4551,11 @@ QVariantMap AppController::todayData(const QDate& date, bool allProfiles) const 
     if(due.isValid() && due.date() == date) {
       ++dueToday;
     }
-    if(due.isValid() && (due.date() == date || due.date() == date.addDays(1)) && !inDay.contains(t.id)) {
+    // Listed even when the task also has a block in the day (R3-001): the
+    // facts line counts it, so the list shows it too.
+    if(due.isValid() && (due.date() == date || due.date() == date.addDays(1))) {
       deadlines.append(QVariantMap{{"id", t.id},
+                                   {"waiting", s.own ? waitingName.value(t.id) : QString()},
                                    {"title", t.title},
                                    {"status", t.status},
                                    {"category", cat},
@@ -4506,6 +4570,15 @@ QVariantMap AppController::todayData(const QDate& date, bool allProfiles) const 
     }
   }
   out["inProgress"] = inProgress;
+  // Today's before tomorrow's, each by the hour (H2-Today "Сроки").
+  std::stable_sort(deadlines.begin(), deadlines.end(), [](const QVariant& a, const QVariant& b) {
+    const QVariantMap ma = a.toMap();
+    const QVariantMap mb = b.toMap();
+    if(ma.value("tomorrow").toBool() != mb.value("tomorrow").toBool()) {
+      return !ma.value("tomorrow").toBool();
+    }
+    return ma.value("due").toDateTime() < mb.value("due").toDateTime();
+  });
   out["deadlines"] = deadlines;
   out["overdue"] = overdue;
   out["undated"] = undated;
@@ -8256,6 +8329,7 @@ void AppController::startTaskTimer(const QString& id) {
   const UndoScope scope(this, tr_("undo.timer").arg(id));
   m_tasks.startTiming(id);
   scheduleSave();
+  refreshTray();
 }
 
 void AppController::stopTaskTimer(const QString& id) {
@@ -8265,6 +8339,7 @@ void AppController::stopTaskTimer(const QString& id) {
   const UndoScope scope(this, tr_("undo.timer").arg(id));
   m_tasks.stopTiming(id);
   scheduleSave();
+  refreshTray();
 }
 
 int AppController::elapsedSecondsFor(const QString& id) const {
@@ -14998,6 +15073,10 @@ void AppController::notify(const QString& title, const QString& body, const QStr
 }
 
 bool AppController::inQuietHours(const QDateTime& when) const {
+  // "Не беспокоить 1 ч" from the tray (R3-103).
+  if(m_quietUntil.isValid() && when < m_quietUntil) {
+    return true;
+  }
   const QVariantMap s = settingsMap();
   const QVariantMap notif = s.value("notifications").toMap();
   if(!notif.value("quietHours", true).toBool()) {
@@ -15143,6 +15222,8 @@ void AppController::dropFutureFocusBlocks(const QString& taskId) {
 
 void AppController::runAutomation() {
   runAutomationAt(QDateTime::currentDateTime());
+  // The tray tooltip carries the running timer (R3-027).
+  refreshTray();
 }
 
 void AppController::runAutomationAt(const QDateTime& now) {
@@ -15279,7 +15360,7 @@ void AppController::runAutomationAt(const QDateTime& now) {
       QString profileId;
       QString id;
       QString title;
-      QString priority;
+      QDate dueDay;
       heap::cal::DeadlineCall call;
     };
 
@@ -15303,7 +15384,7 @@ void AppController::runAutomationAt(const QDateTime& now) {
       const QDateTime deadlineAt = heap::local::effectiveDueHasTime(t) ? dueAt : QDateTime(dueAt.date(), QTime(23, 59));
       heap::cal::DeadlineCall call = heap::cal::deadlineReminder(t.id, deadlineAt, now, leadHours);
       if(call.due && !reminderSent(call.key)) {
-        dueTasks.append({profileId, t.id, t.title, heap::local::effectivePriority(t), std::move(call)});
+        dueTasks.append({profileId, t.id, t.title, dueAt.date(), std::move(call)});
       }
     };
     for(const Task& t : m_tasks.items()) {
@@ -15326,11 +15407,25 @@ void AppController::runAutomationAt(const QDateTime& now) {
                                ? (call.hours < 1 ? tr_("notify.deadlineWhen.overdue") : tr_("notify.deadlineWhen.overdueH").arg(call.hours))
                            : (call.hours <= 1) ? tr_("notify.deadlineWhen.h1")
                                                : tr_("notify.deadlineWhen.hN").arg(call.hours);
-      notifyTaskAt(heap::notify::taskRef(t.profileId, t.id),
-                   call.overdue ? tr_("notify.overdueTitle").arg(when) : tr_("notify.deadlineTitle").arg(when),
-                   QStringLiteral("%1 (%2)").arg(t.title, t.priority),
-                   QStringLiteral("deadline"),
-                   now);
+      // N/X-Ntf-OS (R3-026): "Срок сегодня" / "Оформление заказа · ждёт
+      // ответа: …" — the day, not the hours, and no priority in brackets.
+      QString title = call.overdue ? tr_("notify.overdueTitle").arg(when) : tr_("notify.deadlineTitle").arg(when);
+      if(!call.overdue && t.dueDay == today) {
+        title = tr_("notify.dueToday");
+      } else if(!call.overdue && t.dueDay == today.addDays(1)) {
+        title = tr_("notify.dueTomorrow");
+      }
+      QString body = t.title;
+      if(t.profileId == m_activeProfileId) {
+        for(const WaitingOn& w : m_waitingOn) {
+          const int row = w.taskId == t.id ? m_people.indexOfId(w.personId) : -1;
+          if(row >= 0) {
+            body += QStringLiteral(" · ") + tr_("notify.waitingOn").arg(m_people.items().at(row).name);
+            break;
+          }
+        }
+      }
+      notifyTaskAt(heap::notify::taskRef(t.profileId, t.id), title, body, QStringLiteral("deadline"), now);
     }
   }
 
@@ -15392,11 +15487,19 @@ void AppController::runAutomationAt(const QDateTime& now) {
     const QVector<CalEvent> occurrences = heap::cal::expandedEvents(m_events.items(), today.addDays(-1), today.addDays(1));
     for(const heap::cal::DueReminder& due : heap::cal::dueMeetingReminders(occurrences, now, lead, sentReminderKeys())) {
       markReminderSent(due.key, now);
-      const QString title = due.minutesLeft <= 0 ? tr_("notify.meetingNow") : tr_("notify.meetingSoon").arg(due.minutesLeft);
+      // N/X-Ntf-OS (R3-025): "1:1 с Олегом через 5 мин" / "11:00–11:30 · Zoom".
+      const QString name = due.title.isEmpty() ? tr_("event.newDefault") : due.title;
+      const QString title =
+          due.minutesLeft <= 0 ? tr_("notify.meetingNowTitled").arg(name) : tr_("notify.meetingSoonTitled").arg(name).arg(due.minutesLeft);
+      QString body = QStringLiteral("%1–%2").arg(heap::text::formatTime(heap::cal::hourToTime(due.start), twelveHourClock()),
+                                                 heap::text::formatTime(heap::cal::hourToTime(due.end), twelveHourClock()));
+      if(!due.location.trimmed().isEmpty()) {
+        body += QStringLiteral(" · ") + due.location.trimmed();
+      }
       // The key ends in the occurrence's start: "Open" goes to that day.
       const QString routeId = heap::notify::routingId(QStringLiteral("meeting"), due.eventId);
       m_shownReminders[routeId].date = QDateTime::fromString(due.key.section(QChar('@'), -1), Qt::ISODate).date();
-      emit notification(title, due.title.isEmpty() ? tr_("event.newDefault") : due.title, QStringLiteral("meeting"), routeId);
+      emit notification(title, body, QStringLiteral("meeting"), routeId);
     }
   }
 
@@ -15958,6 +16061,15 @@ void AppController::onNotifierAction(const QString& notificationId, const QStrin
   }
   if(actionId == QLatin1String(heap::notify::kOpen)) {
     openReminder(notificationId);
+    return;
+  }
+  if(actionId == QLatin1String(heap::notify::kJoin)) {
+    const QUrl url = QUrl::fromUserInput(meetingJoinUrl(taskId));
+    if(url.isValid() && (url.scheme() == QLatin1String("https") || url.scheme() == QLatin1String("http"))) {
+      QDesktopServices::openUrl(url);
+    } else {
+      openReminder(notificationId);
+    }
     return;
   }
   // A task block's own buttons (APP-256).

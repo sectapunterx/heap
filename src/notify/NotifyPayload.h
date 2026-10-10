@@ -32,6 +32,8 @@ inline constexpr char kDone[] = "done";
 // free window.
 inline constexpr char kSnoozeBlock[] = "snooze15";
 inline constexpr char kNextWindow[] = "nextWindow";
+// A meeting with a link: open it (R3-025).
+inline constexpr char kJoin[] = "join";
 // Older toasts (and Linux ones still on screen after an update) say this.
 inline constexpr char kLegacySnooze1h[] = "snooze1h";
 

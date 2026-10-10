@@ -224,6 +224,11 @@ class AppController : public QObject {
   Q_PROPERTY(QStringList storageArgs READ storageArgs NOTIFY storageStateChanged)
   Q_PROPERTY(QVariantList syncSources READ syncSources NOTIFY integrationHealthChanged)
   Q_PROPERTY(QVariantMap keychainProblem READ keychainProblem NOTIFY keychainProblemChanged)
+  // The previous window session did not end cleanly (R3-018): its marker
+  // file was still there at start. lastSaveTime is when state.json was last
+  // written, so the launch card can say the data is intact as of then.
+  Q_PROPERTY(bool lastExitUnclean READ lastExitUnclean NOTIFY lastExitUncleanChanged)
+  Q_PROPERTY(QDateTime lastSaveTime READ lastSaveTime NOTIFY lastExitUncleanChanged)
 
  public:
   explicit AppController(QObject* parent = nullptr);
@@ -240,6 +245,20 @@ class AppController : public QObject {
   static bool isHeadless() {
     return s_headless;
   }
+
+  bool lastExitUnclean() const {
+    return m_lastExitUnclean;
+  }
+
+  QDateTime lastSaveTime() const {
+    return m_lastSaveTime;
+  }
+
+  // The person answered the launch card: it does not come back this session.
+  Q_INVOKABLE void dismissUncleanExit();
+  // Tests and the capture harness only (no-op outside QStandardPaths test
+  // mode): pretend the last session crashed, saved at `savedAt`.
+  Q_INVOKABLE void simulateUncleanExitForTest(const QDateTime& savedAt);
 
   // `heap done` sent to the open window goes through moveTask() like a drag
   // does. The CLI executor mutes the sound palette (APP-177) around it: only
@@ -1852,6 +1871,7 @@ class AppController : public QObject {
 
  signals:
   void storageStateChanged();
+  void lastExitUncleanChanged();
   void keychainProblemChanged();
   void selectedDateChanged();
   void todayChanged();
@@ -2265,7 +2285,16 @@ class AppController : public QObject {
   void loadSentReminders();
   // Reminder buttons (APP-155): what each kind offers, what was last shown
   // under an id (so a snooze can bring the same text back), and the snoozes.
-  QVector<heap::notify::NotificationAction> reminderActions(const QString& kind) const;
+  QVector<heap::notify::NotificationAction> reminderActions(const QString& kind, bool canJoin = false) const;
+  // The link of a meeting a reminder is about, or "" (R3-025).
+  QString meetingJoinUrl(const QString& eventId) const;
+  // Rebuilds the tray menu and tooltip from the timer, the next meeting and
+  // the language (R3-027, R3-103).
+  void refreshTray();
+  void onTrayItem(const QString& id);
+  // "Не беспокоить 1 ч" from the tray: held like quiet hours until then.
+  // Session only.
+  QDateTime m_quietUntil;
 
   struct ShownReminder {
     QString title;
@@ -2373,6 +2402,9 @@ class AppController : public QObject {
 
   // ---- Storage health + background save (PLAT-1/4/5/23) ----
   QString m_storageState = QStringLiteral("ok");
+  bool m_lastExitUnclean = false;
+  QDateTime m_lastSaveTime;
+  QString m_sessionMarkerPath;  // empty = no marker kept (CLI, tests)
   QString m_storageMessage;
   QString m_storageReason;
   // How the message is worded: string keys with their arguments, so a
