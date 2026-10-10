@@ -15,6 +15,11 @@ Item {
     // A value that is a signal (P0, "today"): coloured in the bold style only.
     property color valueColor: Theme.text
     property bool removable: false
+    // The × only while the pointer or the keyboard is on the chip, as a
+    // badge over its corner (the quick capture sheet draws chips without
+    // it, R3-098); Delete removes it all the same.
+    property bool removeOnHover: false
+    readonly property bool _inlineRemove: root.removable && !root.removeOnHover
     property bool small: false
     // Placeholder chip ("+ property"): a dashed outline, no key.
     property bool add: false
@@ -95,7 +100,7 @@ Item {
             width: Math.min(implicitWidth, Theme.chipMaxW - 2 * Theme.spMd
                             - (root.key.length ? keyMetrics.advanceWidth + Theme.spXs : 0)
                             - (root.ring.length > 0 && Style.fills ? Theme.iconSize + Theme.spXs : 0)
-                            - (root.removable ? Theme.iconSize + Theme.spXs : 0))
+                            - (root._inlineRemove ? Theme.iconSize + Theme.spXs : 0))
             elide: Text.ElideRight
             text: root.add ? "+ " + root.value : root.value
             color: root.add ? Theme.textDim : root._toned ? Qt.tint(Theme.text, Theme.withAlpha(root.tone, 0.3)) : root.valueColor
@@ -110,7 +115,7 @@ Item {
             text: root.key
         }
         Item {
-            visible: root.removable
+            visible: root._inlineRemove
             anchors.verticalCenter: parent.verticalCenter
             width: Theme.iconSize
             height: Theme.iconSize
@@ -125,6 +130,31 @@ Item {
                 label: I18n.t("chip.remove")
                 onActivated: root.removed()
             }
+        }
+    }
+    Rectangle {
+        objectName: "chip-remove-badge"
+        visible: root.removable && root.removeOnHover
+                 && (area.hovered || badgeArea.hovered || area.activeFocus)
+        width: Theme.iconSize
+        height: Theme.iconSize
+        radius: width / 2
+        x: root.width - width / 2 - Theme.sp2xs
+        y: -height / 2 + Theme.sp2xs
+        z: 2
+        color: Theme.panel3
+        border.width: 1
+        border.color: Theme.chipBorder
+        Icon {
+            anchors.centerIn: parent
+            name: "close"
+            size: Theme.iconSize - 6
+            color: badgeArea.hovered ? Theme.text : Theme.textDim
+        }
+        ClickArea {
+            id: badgeArea
+            label: I18n.t("chip.remove")
+            onActivated: root.removed()
         }
     }
 }
