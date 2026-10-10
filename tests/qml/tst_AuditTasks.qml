@@ -265,12 +265,20 @@ TestCase {
         keyClick(Qt.Key_Escape);
         const prompt = findChild(te, "te-discard-prompt");
         tryVerify(() => prompt.opened);
+        // IDIOT-DOC-19: typing on — a word starting with d, then s — decides
+        // nothing, and a key in the burst the prompt opened in is ignored.
+        keyClick(Qt.Key_Escape);
+        verify(prompt.opened, "a key in the opening burst answered the prompt");
+        wait(450);
+        keyClick(Qt.Key_D); keyClick(Qt.Key_E); keyClick(Qt.Key_S);
+        verify(prompt.opened && te.opened, "a bare letter answered the prompt");
         keyClick(Qt.Key_Escape);
         tryVerify(() => !prompt.opened);
         verify(te.opened, "Esc in the prompt keeps editing");
         fields[0].forceActiveFocus();
         keyClick(Qt.Key_Escape);
         tryVerify(() => prompt.opened);
+        wait(450);
         keyClick(Qt.Key_Return);
         tryVerify(() => !te.opened);
         compare(AppController.taskById(id).title, tc.probe + " keyed", "Enter in the prompt saves");

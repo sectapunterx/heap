@@ -325,7 +325,7 @@ Popup {
     }
 
     // Esc and the backdrop. Clean: close. Edited: ask, keyboard first —
-    // Enter saves, D discards, Esc keeps editing.
+    // Enter saves, Ctrl+D discards, Esc keeps editing.
     function requestClose() {
         if (discardPrompt.opened) return;
         if (!root.isDirty()) { root.close(); return; }
@@ -1717,7 +1717,12 @@ Popup {
         width: Math.min(380, root.width - 2 * Theme.inset)
         background: ModalSurface {}
         Overlay.modal: ModalScrim {}
-        onOpened: promptBody.forceActiveFocus()
+        // Bare letters decided it: typing on after Esc, a word that began
+        // with d discarded the task and the rest of it hit the board's keys
+        // (IDIOT-DOC-19). Only Esc, Enter and Ctrl+D answer now, not in the
+        // first moments, and every other key stays here.
+        property real _openedAt: 0
+        onOpened: { discardPrompt._openedAt = Date.now(); promptBody.forceActiveFocus(); }
         function keep() { root._afterPrompt = null; discardPrompt.close(); titleField.forceActiveFocus(); }
         function discard() { discardPrompt.close(); root.close(); root._runAfterPrompt(); }
         // A refused save keeps the editor open and the next step waiting.
@@ -1727,9 +1732,12 @@ Popup {
             spacing: Theme.spLg
             focus: true
             Keys.onPressed: (e) => {
-                if (e.key === Qt.Key_Escape || e.key === Qt.Key_K) { discardPrompt.keep(); e.accepted = true; }
-                else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter || e.key === Qt.Key_S) { discardPrompt.save(); e.accepted = true; }
-                else if (e.key === Qt.Key_D) { discardPrompt.discard(); e.accepted = true; }
+                if (e.key === Qt.Key_Tab || e.key === Qt.Key_Backtab) return;  // to the buttons
+                e.accepted = true;
+                if (e.isAutoRepeat || Date.now() - discardPrompt._openedAt < 400) return;  // the burst it opened in
+                if (e.key === Qt.Key_Escape) discardPrompt.keep();
+                else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) discardPrompt.save();
+                else if (e.key === Qt.Key_D && (e.modifiers & Qt.ControlModifier)) discardPrompt.discard();
             }
             Text {
                 Layout.fillWidth: true
@@ -1751,7 +1759,7 @@ Popup {
                 spacing: Theme.spMd
                 PillButton {
                     objectName: "te-dirty-discard"
-                    text: I18n.t("editor.dirty.discard") + "  D"
+                    text: I18n.t("editor.dirty.discard") + "  " + AppController.keyText("Ctrl+D")
                     danger: true
                     onClicked: discardPrompt.discard()
                 }
