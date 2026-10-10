@@ -573,6 +573,7 @@ ApplicationWindow {
     // focus still sits where Qt dropped it.
     property Item _focusHome: null
     property bool _focusWasInPopup: false
+    property bool _focusOnMenu: false
     onActiveFocusItemChanged: {
         const it = win.activeFocusItem;
         if (!it) return;
@@ -584,9 +585,16 @@ ApplicationWindow {
         let inPopup = false;
         for (let p = it; p; p = p.parent)
             if (p === Overlay.overlay) { inPopup = true; break; }
+        // A menu holds the keyboard on its own item, a dialog in a field.
+        const wasMenu = win._focusOnMenu;
+        win._focusOnMenu = it.parent === Overlay.overlay;
         if (inPopup) {
             win._focusWasInPopup = true;
             return;
+        }
+        if (wasMenu) {
+            win._popupJustClosed = true;
+            popupClosedTimer.restart();
         }
         if (win._focusWasInPopup) {
             win._focusWasInPopup = false;
@@ -2709,9 +2717,14 @@ ApplicationWindow {
     // confirm, Alt+← moved the day from the header search (SHELL-3).
     component DayKey: Shortcut {
         context: Qt.ApplicationShortcut
-        enabled: sequences.length > 0 && !win._viewKeysBlocked
+        enabled: sequences.length > 0 && !win._viewKeysBlocked && !win._popupJustClosed
             && ["today", "board", "list", "day", "week", "month"].indexOf(AppController.currentView) >= 0
     }
+    // The Alt of Alt+← closes an open menu on its own, and the ← that
+    // followed paged the day behind it (IDIOT-KNOW-12): a day key just after
+    // a menu let the keyboard go waits a moment.
+    property bool _popupJustClosed: false
+    Timer { id: popupClosedTimer; interval: 400; onTriggered: win._popupJustClosed = false }
     DayKey {
         sequences: [_kbd("cal.today")]
         onActivated: AppController.selectedDate = AppController.today
