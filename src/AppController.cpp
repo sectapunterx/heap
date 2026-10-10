@@ -2788,7 +2788,13 @@ void AppController::moveTaskRanked(const QString& id, const QString& newStatus, 
     const QDate base = recurBase.isValid() ? recurBase : today;
     // The first occurrence still ahead: a weekly task finished three weeks
     // late used to spawn a copy that was already overdue.
-    const QDate next = heap::recur::nextOccurrenceAfter(recurrence, base, today);
+    // A plain monthly rule keeps the day of the date it starts from, so the
+    // 31st became the 28th after February for good (IDIOT-CAL-5). The copy
+    // carries the day as the parser writes it, "every:month:31".
+    const QString seriesRule = recurrence == QStringLiteral("every:month") && recurBase.isValid()
+                                   ? QStringLiteral("every:month:%1").arg(recurBase.day())
+                                   : recurrence;
+    const QDate next = heap::recur::nextOccurrenceAfter(seriesRule, base, today);
     const int srcRow = m_tasks.indexOfId(taskId);
     // Fresh unique id (strip any prior "-rN" suffix) so upsert inserts a new
     // row rather than overwriting the just-completed one.
@@ -2800,7 +2806,8 @@ void AppController::moveTaskRanked(const QString& id, const QString& newStatus, 
     bool alreadySpawned = false;
     const QRegularExpression series(QStringLiteral("^%1(-r\\d+)?$").arg(QRegularExpression::escape(stem)));
     for(const Task& other : m_tasks.items()) {
-      if(other.id == taskId || other.archived || statusCategory(other.status) == QStringLiteral("done") || other.recurrence != recurrence ||
+      if(other.id == taskId || other.archived || statusCategory(other.status) == QStringLiteral("done") ||
+         (other.recurrence != recurrence && other.recurrence != seriesRule) ||
          !series.match(other.id).hasMatch()) {
         continue;
       }
@@ -2845,7 +2852,7 @@ void AppController::moveTaskRanked(const QString& id, const QString& newStatus, 
       copy.trackedSeconds = 0;
       copy.local.sessions.clear();
       copy.timerStartedAt = QDateTime();
-      copy.recurrence = recurrence;  // stays recurring
+      copy.recurrence = seriesRule;  // stays recurring
       copy.externalId.clear();       // a new local occurrence, not the synced issue
       copy.externalUrl.clear();
       copy.externalProvider.clear();

@@ -524,3 +524,19 @@ TEST_F(StatusTest, ThePrefixRenameCarriesTheLinksAndIsOneUndo) {
   EXPECT_GE(app_->tasks()->indexOfId(QStringLiteral("APP-3")), 0);
   EXPECT_LT(app_->tasks()->indexOfId(QStringLiteral("WEB-1")), 0);
 }
+
+TEST_F(StatusTest, AMonthlyTaskOnThe31stKeepsTheMonthEnd) {
+  // IDIOT-CAL-5: Jan 31 → Feb 28 → Mar 28 for good.
+  Task t = makeTask(QStringLiteral("M-1"), QStringLiteral("todo"));
+  t.recurrence = QStringLiteral("every:month");
+  t.dueAt = QDateTime(QDate(2030, 1, 31), QTime(9, 0));
+  app_->tasks()->upsert(t);
+  app_->moveTask(QStringLiteral("M-1"), QStringLiteral("done"));
+  const auto due = [this](const QString& id) {
+    const int row = app_->tasks()->indexOfId(id);
+    return row >= 0 ? app_->tasks()->items().at(row).dueAt.date() : QDate();
+  };
+  EXPECT_EQ(due(QStringLiteral("M-1-r1")), QDate(2030, 2, 28));
+  app_->moveTask(QStringLiteral("M-1-r1"), QStringLiteral("done"));
+  EXPECT_EQ(due(QStringLiteral("M-1-r2")), QDate(2030, 3, 31));
+}
