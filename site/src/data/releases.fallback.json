@@ -1,42 +1,103 @@
 [
  {
+  "tag": "v0.8.0",
+  "name": "lowkey v0.8.0",
+  "date": "2026-10-10T06:40:49Z",
+  "body": "> **macOS:** this build is not notarized. On first launch, right-click lowkey.app → **Open**.\n\n> **Windows:** this build is not code-signed, so SmartScreen may say \"Windows protected your PC\". Choose **More info → Run anyway**, after checking the SHA-256 below.\n\nVerify a download: `sha256sum -c SHA256SUMS`, or `gh attestation verify <file> --repo sectapunterx/heap`.\n\n<details><summary>SHA-256 checksums</summary>\n\n```\ne54747e11d48f4363b9d90f797eda51fd0df7a822792a18421881b178388ebb2  heap-v0.8.0-linux-x86_64.AppImage\n7aa4de63083857f6529b74e09d736af1cb0d521682a118063a8b93fa5a0f7814  heap-v0.8.0-macos.dmg\nc7c53b8cacc6be7c2c87e2843fa39840ce9b486249ae478b88b5fdb0dd30ab77  heap-v0.8.0-windows-portable.zip\n62f90ae84a663b33a0a07bfb4cde6aede20e6a2454b9dd479214ababb958ba40  heap-v0.8.0-windows-setup.exe\ne54747e11d48f4363b9d90f797eda51fd0df7a822792a18421881b178388ebb2  lowkey-v0.8.0-linux-x86_64.AppImage\n7aa4de63083857f6529b74e09d736af1cb0d521682a118063a8b93fa5a0f7814  lowkey-v0.8.0-macos.dmg\n04f620329da0a74863dbb18424fec80053a0571e8337f52b5a12a799b4edf8ac  lowkey-v0.8.0-sbom.spdx.json\nc7c53b8cacc6be7c2c87e2843fa39840ce9b486249ae478b88b5fdb0dd30ab77  lowkey-v0.8.0-windows-portable.zip\n62f90ae84a663b33a0a07bfb4cde6aede20e6a2454b9dd479214ababb958ba40  lowkey-v0.8.0-windows-setup.exe\n```\n\n</details>\n\n\n## What's Changed\n* lowkey 0.8.0 by @sectapunterx in https://github.com/sectapunterx/heap/pull/238\n* test: skip the save-blocking ratio under ASan by @sectapunterx in https://github.com/sectapunterx/heap/pull/241\n* lowkey 0.8.0 by @sectapunterx in https://github.com/sectapunterx/heap/pull/240\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.7.2...v0.8.0",
+  "url": "https://github.com/sectapunterx/lowkey/releases/tag/v0.8.0",
+  "prerelease": false,
+  "draft": false,
+  "assets": [
+   {
+    "name": "heap-v0.8.0-linux-x86_64.AppImage",
+    "size": 51771896,
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.8.0/heap-v0.8.0-linux-x86_64.AppImage"
+   },
+   {
+    "name": "heap-v0.8.0-macos.dmg",
+    "size": 63245957,
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.8.0/heap-v0.8.0-macos.dmg"
+   },
+   {
+    "name": "heap-v0.8.0-windows-portable.zip",
+    "size": 61401097,
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.8.0/heap-v0.8.0-windows-portable.zip"
+   },
+   {
+    "name": "heap-v0.8.0-windows-setup.exe",
+    "size": 40960462,
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.8.0/heap-v0.8.0-windows-setup.exe"
+   },
+   {
+    "name": "lowkey-v0.8.0-linux-x86_64.AppImage",
+    "size": 51771896,
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.8.0/lowkey-v0.8.0-linux-x86_64.AppImage"
+   },
+   {
+    "name": "lowkey-v0.8.0-macos.dmg",
+    "size": 63245957,
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.8.0/lowkey-v0.8.0-macos.dmg"
+   },
+   {
+    "name": "lowkey-v0.8.0-sbom.spdx.json",
+    "size": 4271,
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.8.0/lowkey-v0.8.0-sbom.spdx.json"
+   },
+   {
+    "name": "lowkey-v0.8.0-windows-portable.zip",
+    "size": 61401097,
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.8.0/lowkey-v0.8.0-windows-portable.zip"
+   },
+   {
+    "name": "lowkey-v0.8.0-windows-setup.exe",
+    "size": 40960462,
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.8.0/lowkey-v0.8.0-windows-setup.exe"
+   },
+   {
+    "name": "SHA256SUMS",
+    "size": 869,
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.8.0/SHA256SUMS"
+   }
+  ]
+ },
+ {
   "tag": "v0.7.2",
   "name": "heap v0.7.2",
   "date": "2026-10-08T12:16:32Z",
   "body": "> **macOS:** this build is not notarized. On first launch, right-click heap.app → **Open**.\n\n> **Windows:** this build is not code-signed, so SmartScreen may say \"Windows protected your PC\". Choose **More info → Run anyway**, after checking the SHA-256 below.\n\nVerify a download: `sha256sum -c SHA256SUMS`, or `gh attestation verify <file> --repo sectapunterx/heap`.\n\n<details><summary>SHA-256 checksums</summary>\n\n```\n1aeb1a32f3fff112356d74044c903fb5e2a3a2dae0f00b5fd8a9fbfb375897b0  heap-v0.7.2-linux-x86_64.AppImage\n99d1c190b140a0dd0eac34896d16ef8a75e256997c3b56d2d7df52bb7755eafc  heap-v0.7.2-macos.dmg\n686b6e775c64101111be30b5a82c87a96245a4f130c27f7cc9faea372b988406  heap-v0.7.2-sbom.spdx.json\n1d42e79868df7d9e717b7a32099b1eb83f1eaae701af081f6f5bf2870c999272  heap-v0.7.2-windows-portable.zip\nb51a80ecc6e891e70a70541697754d2f7dacc70bb9838f04f36efd5ded5e6c1f  heap-v0.7.2-windows-setup.exe\n```\n\n</details>\n\n\n## What's Changed\n* feat: tracker write-back off by default (APP-243, APP-204) by @sectapunterx in https://github.com/sectapunterx/heap/pull/233\n* feat: drag-to-reschedule in week, month and timeline (APP-249) by @sectapunterx in https://github.com/sectapunterx/heap/pull/231\n* feat: settings search finds single settings, search in Tweaks (APP-207, APP-210) by @sectapunterx in https://github.com/sectapunterx/heap/pull/230\n* feat: weekly recap button on the board, done moment into the counter, thin board icon (APP-211, APP-205, APP-206) by @sectapunterx in https://github.com/sectapunterx/heap/pull/234\n* feat: readable toasts, Quick Capture Ctrl+Enter saves (APP-225, APP-209) by @sectapunterx in https://github.com/sectapunterx/heap/pull/232\n* perf: remove GUI-thread stalls behind mid-animation pauses (APP-203) by @sectapunterx in https://github.com/sectapunterx/heap/pull/235\n* ci: bump source-map-js from 1.2.1 to 1.2.2 in /site by @dependabot[bot] in https://github.com/sectapunterx/heap/pull/214\n* test(site): connect widget e2e matches write-back off by default (APP-243) by @sectapunterx in https://github.com/sectapunterx/heap/pull/237\n* release: 0.7.2 by @sectapunterx in https://github.com/sectapunterx/heap/pull/236\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.7.1...v0.7.2",
-  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.7.2",
+  "url": "https://github.com/sectapunterx/lowkey/releases/tag/v0.7.2",
   "prerelease": false,
   "draft": false,
   "assets": [
    {
     "name": "heap-v0.7.2-linux-x86_64.AppImage",
     "size": 50526712,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.2/heap-v0.7.2-linux-x86_64.AppImage"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.7.2/heap-v0.7.2-linux-x86_64.AppImage"
    },
    {
     "name": "heap-v0.7.2-macos.dmg",
     "size": 62028398,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.2/heap-v0.7.2-macos.dmg"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.7.2/heap-v0.7.2-macos.dmg"
    },
    {
     "name": "heap-v0.7.2-sbom.spdx.json",
     "size": 2503,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.2/heap-v0.7.2-sbom.spdx.json"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.7.2/heap-v0.7.2-sbom.spdx.json"
    },
    {
     "name": "heap-v0.7.2-windows-portable.zip",
     "size": 58936644,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.2/heap-v0.7.2-windows-portable.zip"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.7.2/heap-v0.7.2-windows-portable.zip"
    },
    {
     "name": "heap-v0.7.2-windows-setup.exe",
     "size": 39715428,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.2/heap-v0.7.2-windows-setup.exe"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.7.2/heap-v0.7.2-windows-setup.exe"
    },
    {
     "name": "SHA256SUMS",
     "size": 476,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.2/SHA256SUMS"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.7.2/SHA256SUMS"
    }
   ]
  },
@@ -45,39 +106,39 @@
   "name": "heap v0.7.1",
   "date": "2026-10-07T05:57:11Z",
   "body": "> **macOS:** this build is not notarized. On first launch, right-click heap.app → **Open**.\n\n> **Windows:** this build is not code-signed, so SmartScreen may say \"Windows protected your PC\". Choose **More info → Run anyway**, after checking the SHA-256 below.\n\nVerify a download: `sha256sum -c SHA256SUMS`, or `gh attestation verify <file> --repo sectapunterx/heap`.\n\n<details><summary>SHA-256 checksums</summary>\n\n```\n79f3344a1d29bc0e208bf4c5df7ac8ad012418740f02a67976051eb7a27295d5  heap-v0.7.1-linux-x86_64.AppImage\ncebc57c567a520314ae56a92795d647799147deb0913c2bc733a1382853103f2  heap-v0.7.1-macos.dmg\n0131e3278f06ca51c4d54fd5d2dd90b91872b8d98f51a64158989fa8c9cba9de  heap-v0.7.1-sbom.spdx.json\n199798a4bddd6056422872f0d2b1e26a95731de38f94ac56200ddaf32b17b6c2  heap-v0.7.1-windows-portable.zip\nc043653f9c6a92ee7e58bb482baa973c27ab3aac87a93a8490ca8ffc4f1b8d1e  heap-v0.7.1-windows-setup.exe\n```\n\n</details>\n\n\n## What's Changed\n* fix: smooth text, themed title bar, board icon, clicks inside dialogs by @sectapunterx in https://github.com/sectapunterx/heap/pull/229\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.7.0...v0.7.1",
-  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.7.1",
+  "url": "https://github.com/sectapunterx/lowkey/releases/tag/v0.7.1",
   "prerelease": false,
   "draft": false,
   "assets": [
    {
     "name": "heap-v0.7.1-linux-x86_64.AppImage",
     "size": 50358776,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.1/heap-v0.7.1-linux-x86_64.AppImage"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.7.1/heap-v0.7.1-linux-x86_64.AppImage"
    },
    {
     "name": "heap-v0.7.1-macos.dmg",
     "size": 62431806,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.1/heap-v0.7.1-macos.dmg"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.7.1/heap-v0.7.1-macos.dmg"
    },
    {
     "name": "heap-v0.7.1-sbom.spdx.json",
     "size": 2503,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.1/heap-v0.7.1-sbom.spdx.json"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.7.1/heap-v0.7.1-sbom.spdx.json"
    },
    {
     "name": "heap-v0.7.1-windows-portable.zip",
     "size": 58588427,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.1/heap-v0.7.1-windows-portable.zip"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.7.1/heap-v0.7.1-windows-portable.zip"
    },
    {
     "name": "heap-v0.7.1-windows-setup.exe",
     "size": 39489575,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.1/heap-v0.7.1-windows-setup.exe"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.7.1/heap-v0.7.1-windows-setup.exe"
    },
    {
     "name": "SHA256SUMS",
     "size": 476,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.1/SHA256SUMS"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.7.1/SHA256SUMS"
    }
   ]
  },
@@ -86,39 +147,39 @@
   "name": "heap v0.7.0",
   "date": "2026-10-07T01:49:40Z",
   "body": "> **macOS:** this build is not notarized. On first launch, right-click heap.app → **Open**.\n\n> **Windows:** this build is not code-signed, so SmartScreen may say \"Windows protected your PC\". Choose **More info → Run anyway**, after checking the SHA-256 below.\n\nVerify a download: `sha256sum -c SHA256SUMS`, or `gh attestation verify <file> --repo sectapunterx/heap`.\n\n<details><summary>SHA-256 checksums</summary>\n\n```\nb483ae2aad5dfaf035eca0a1618a571cb2085e7ec34bac7178fd93f10cbb1ed2  heap-v0.7.0-linux-x86_64.AppImage\n5ea4c66138c5e4c0596df72e7cf449585342ce77b5e27e4bd7bf3bdafaab43a6  heap-v0.7.0-macos.dmg\neec7dd8075f873dee486c07e9204c50babbb079ab6b5b9a0fdb7762dd344310d  heap-v0.7.0-sbom.spdx.json\n91e7f7eb07f07b2917e7bd4bd002b9c6f5ce881c7aebc3cf77c015b8c7e8d1de  heap-v0.7.0-windows-portable.zip\nf66017f002765a3c2f528d841e8eba5fa6cb40bde76b82dab519dc926849c3cd  heap-v0.7.0-windows-setup.exe\n```\n\n</details>\n\n\n## What's Changed\n* ui: keyboard cursor in its own colour, selection by form (APP-174) by @sectapunterx in https://github.com/sectapunterx/heap/pull/217\n* ui: motion tokens tap / pop / move and one curve (APP-175) by @sectapunterx in https://github.com/sectapunterx/heap/pull/218\n* feat: low sound palette and meeting chimes (APP-177, APP-178) by @sectapunterx in https://github.com/sectapunterx/heap/pull/219\n* feat: new tickets on the board, sync dot, event log (APP-180, APP-186, APP-187) by @sectapunterx in https://github.com/sectapunterx/heap/pull/220\n* ui: two-line card, done stack, quieter rows (APP-176, APP-179, APP-197, APP-199, APP-200) by @sectapunterx in https://github.com/sectapunterx/heap/pull/221\n* ui: type scale, weights, elevation, surfaces, icons (APP-181, APP-182, APP-193..APP-196, APP-198) by @sectapunterx in https://github.com/sectapunterx/heap/pull/223\n* feat: locale dates, end-of-day summary, empty states, palette coverage (APP-188, APP-190, APP-191, APP-192, APP-201) by @sectapunterx in https://github.com/sectapunterx/heap/pull/224\n* a11y: system text scale, keyboard-reachable hover, not colour alone, pseudo-locale (APP-183, APP-184, APP-185, APP-189) by @sectapunterx in https://github.com/sectapunterx/heap/pull/222\n* ui: bundled fonts sized to the Segoe UI / Consolas scale (APP-202) by @sectapunterx in https://github.com/sectapunterx/heap/pull/225\n* fix: layout at larger scales and long strings (0.7.0 audit SCALE-1..7, FUNC-1) by @sectapunterx in https://github.com/sectapunterx/heap/pull/226\n* fix: 0.7.0 audit visual findings (EYE-1..7) by @sectapunterx in https://github.com/sectapunterx/heap/pull/227\n* release: 0.7.0 by @sectapunterx in https://github.com/sectapunterx/heap/pull/228\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.6.1...v0.7.0",
-  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.7.0",
+  "url": "https://github.com/sectapunterx/lowkey/releases/tag/v0.7.0",
   "prerelease": false,
   "draft": false,
   "assets": [
    {
     "name": "heap-v0.7.0-linux-x86_64.AppImage",
     "size": 50362872,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.0/heap-v0.7.0-linux-x86_64.AppImage"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.7.0/heap-v0.7.0-linux-x86_64.AppImage"
    },
    {
     "name": "heap-v0.7.0-macos.dmg",
     "size": 62425448,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.0/heap-v0.7.0-macos.dmg"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.7.0/heap-v0.7.0-macos.dmg"
    },
    {
     "name": "heap-v0.7.0-sbom.spdx.json",
     "size": 2503,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.0/heap-v0.7.0-sbom.spdx.json"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.7.0/heap-v0.7.0-sbom.spdx.json"
    },
    {
     "name": "heap-v0.7.0-windows-portable.zip",
     "size": 58577782,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.0/heap-v0.7.0-windows-portable.zip"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.7.0/heap-v0.7.0-windows-portable.zip"
    },
    {
     "name": "heap-v0.7.0-windows-setup.exe",
     "size": 39481077,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.0/heap-v0.7.0-windows-setup.exe"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.7.0/heap-v0.7.0-windows-setup.exe"
    },
    {
     "name": "SHA256SUMS",
     "size": 476,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.0/SHA256SUMS"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.7.0/SHA256SUMS"
    }
   ]
  },
@@ -127,39 +188,39 @@
   "name": "heap v0.6.1",
   "date": "2026-10-06T14:52:29Z",
   "body": "> **macOS:** this build is not notarized. On first launch, right-click heap.app → **Open**.\n\n> **Windows:** this build is not code-signed, so SmartScreen may say \"Windows protected your PC\". Choose **More info → Run anyway**, after checking the SHA-256 below.\n\nVerify a download: `sha256sum -c SHA256SUMS`, or `gh attestation verify <file> --repo sectapunterx/heap`.\n\n<details><summary>SHA-256 checksums</summary>\n\n```\nb4b2a71f4d9adead08da1e2033d15e9b7339306fc5988147d7f976fd534288e1  heap-v0.6.1-linux-x86_64.AppImage\n81daed62750a7e751c3e64264e9dd60565366a5f22f11bcf887e0b84da5dd02b  heap-v0.6.1-macos.dmg\n23317c46141d223ba9599b1254ced71c17d3cf7a38e82232d20fda91595240af  heap-v0.6.1-sbom.spdx.json\n9607effbb5c9f4fcdfaf7358e8ab025276b9f55899e15fce0dc94aed29378104  heap-v0.6.1-windows-portable.zip\ne15f9c221ba8de973aa39604d7ea43fa16a2ef7c42ac81d44f0cee2465056722  heap-v0.6.1-windows-setup.exe\n```\n\n</details>\n\n\n## What's Changed\n* ui: crisp text and less mono texture by @sectapunterx in https://github.com/sectapunterx/heap/pull/215\n* release: 0.6.1 by @sectapunterx in https://github.com/sectapunterx/heap/pull/216\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.6.0...v0.6.1",
-  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.6.1",
+  "url": "https://github.com/sectapunterx/lowkey/releases/tag/v0.6.1",
   "prerelease": false,
   "draft": false,
   "assets": [
    {
     "name": "heap-v0.6.1-linux-x86_64.AppImage",
     "size": 50080248,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.6.1/heap-v0.6.1-linux-x86_64.AppImage"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.6.1/heap-v0.6.1-linux-x86_64.AppImage"
    },
    {
     "name": "heap-v0.6.1-macos.dmg",
     "size": 62112712,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.6.1/heap-v0.6.1-macos.dmg"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.6.1/heap-v0.6.1-macos.dmg"
    },
    {
     "name": "heap-v0.6.1-sbom.spdx.json",
     "size": 2503,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.6.1/heap-v0.6.1-sbom.spdx.json"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.6.1/heap-v0.6.1-sbom.spdx.json"
    },
    {
     "name": "heap-v0.6.1-windows-portable.zip",
     "size": 58266788,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.6.1/heap-v0.6.1-windows-portable.zip"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.6.1/heap-v0.6.1-windows-portable.zip"
    },
    {
     "name": "heap-v0.6.1-windows-setup.exe",
     "size": 39266141,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.6.1/heap-v0.6.1-windows-setup.exe"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.6.1/heap-v0.6.1-windows-setup.exe"
    },
    {
     "name": "SHA256SUMS",
     "size": 476,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.6.1/SHA256SUMS"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.6.1/SHA256SUMS"
    }
   ]
  },
@@ -168,39 +229,39 @@
   "name": "heap v0.6.0",
   "date": "2026-10-06T13:00:58Z",
   "body": "> **macOS:** this build is not notarized. On first launch, right-click heap.app → **Open**.\n\n> **Windows:** this build is not code-signed, so SmartScreen may say \"Windows protected your PC\". Choose **More info → Run anyway**, after checking the SHA-256 below.\n\nVerify a download: `sha256sum -c SHA256SUMS`, or `gh attestation verify <file> --repo sectapunterx/heap`.\n\n<details><summary>SHA-256 checksums</summary>\n\n```\nca88c218af59c0f6a77fc845d72179ff5fa39bdd44b6fea0112c7573a3d4052d  heap-v0.6.0-linux-x86_64.AppImage\nd6cb9fdd07b8a42052f94ffb977a867ac30b249195d9899017cc39d2522b0eea  heap-v0.6.0-macos.dmg\n7032bb89b3f52b68458abf985b987bfd5c0809377af3596a396398f8e0d8e59b  heap-v0.6.0-sbom.spdx.json\n383b1d37af0c2e190088f80b8403fdca1698738ca31226e6107b88f9023c7b8f  heap-v0.6.0-windows-portable.zip\n7b2383ed32b0bf31164149b02b897cba92a1a114e3ebd35ee56755ad618df6d2  heap-v0.6.0-windows-setup.exe\n```\n\n</details>\n\n\n## What's Changed\n* APP-172: spacious settings layout by @sectapunterx in https://github.com/sectapunterx/heap/pull/200\n* APP-161: performance budgets and CI perf gate by @sectapunterx in https://github.com/sectapunterx/heap/pull/201\n* APP-173: command line — heap add / now / list / today / done / open by @sectapunterx in https://github.com/sectapunterx/heap/pull/202\n* APP-162: time machine — restore state, a profile, a task or a note from any hour by @sectapunterx in https://github.com/sectapunterx/heap/pull/204\n* APP-154/155: start at login, tray start, native notifications with actions by @sectapunterx in https://github.com/sectapunterx/heap/pull/203\n* APP-156/163/164/165: whose move, sync state & conflicts, integrations health, task history by @sectapunterx in https://github.com/sectapunterx/heap/pull/205\n* APP-166/167/168/169/171: shortcut coaching, motion, accessibility, 60-second tour, Linux hotkey by @sectapunterx in https://github.com/sectapunterx/heap/pull/206\n* APP-157/158/159/160/170: safety net — end of day, waiting on, seen before, focus mode, standup draft by @sectapunterx in https://github.com/sectapunterx/heap/pull/207\n* APP-167: opt-in completion sound when a task moves to Done by @sectapunterx in https://github.com/sectapunterx/heap/pull/208\n* Close remaining B-tier findings of the 2026-09-30 e2e audit by @sectapunterx in https://github.com/sectapunterx/heap/pull/199\n* Fix S/A findings of the 0.6.0 pre-merge audit by @sectapunterx in https://github.com/sectapunterx/heap/pull/210\n* people: @-mention by login-style handle and transliterated name by @sectapunterx in https://github.com/sectapunterx/heap/pull/209\n* view: Ctrl+= / Ctrl+- / Ctrl+0 zoom the interface by @sectapunterx in https://github.com/sectapunterx/heap/pull/211\n* fonts: ship Golos Text and JetBrains Mono inside the app by @sectapunterx in https://github.com/sectapunterx/heap/pull/212\n* Release 0.6.0 by @sectapunterx in https://github.com/sectapunterx/heap/pull/213\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.5.8...v0.6.0",
-  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.6.0",
+  "url": "https://github.com/sectapunterx/lowkey/releases/tag/v0.6.0",
   "prerelease": false,
   "draft": false,
   "assets": [
    {
     "name": "heap-v0.6.0-linux-x86_64.AppImage",
     "size": 50059768,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.6.0/heap-v0.6.0-linux-x86_64.AppImage"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.6.0/heap-v0.6.0-linux-x86_64.AppImage"
    },
    {
     "name": "heap-v0.6.0-macos.dmg",
     "size": 62080545,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.6.0/heap-v0.6.0-macos.dmg"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.6.0/heap-v0.6.0-macos.dmg"
    },
    {
     "name": "heap-v0.6.0-sbom.spdx.json",
     "size": 2503,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.6.0/heap-v0.6.0-sbom.spdx.json"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.6.0/heap-v0.6.0-sbom.spdx.json"
    },
    {
     "name": "heap-v0.6.0-windows-portable.zip",
     "size": 58165821,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.6.0/heap-v0.6.0-windows-portable.zip"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.6.0/heap-v0.6.0-windows-portable.zip"
    },
    {
     "name": "heap-v0.6.0-windows-setup.exe",
     "size": 39218800,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.6.0/heap-v0.6.0-windows-setup.exe"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.6.0/heap-v0.6.0-windows-setup.exe"
    },
    {
     "name": "SHA256SUMS",
     "size": 476,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.6.0/SHA256SUMS"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.6.0/SHA256SUMS"
    }
   ]
  },
@@ -209,39 +270,39 @@
   "name": "heap v0.5.8",
   "date": "2026-10-05T16:59:32Z",
   "body": "> **macOS:** this build is not notarized. On first launch, right-click heap.app → **Open**.\n\n> **Windows:** this build is not code-signed, so SmartScreen may say \"Windows protected your PC\". Choose **More info → Run anyway**, after checking the SHA-256 below.\n\nVerify a download: `sha256sum -c SHA256SUMS`, or `gh attestation verify <file> --repo sectapunterx/heap`.\n\n<details><summary>SHA-256 checksums</summary>\n\n```\n7443d400b9359f941908cd9b7e84c0ad4fe4847ed58f7081aa57e1a95b11e574  heap-v0.5.8-linux-x86_64.AppImage\n0e595806cfd81a7c6995c8adc07133877208e0fddb68a7ceef2f7c05c54df4b3  heap-v0.5.8-macos.dmg\n26838b042bfb924b4821d28b2618e364139e69783bfa4581f1d41b4e60654fc9  heap-v0.5.8-sbom.spdx.json\n7c33a26e1bae14339226ddf2ec6e8ee68972e8d3a920bdcd28d998f3b9287922  heap-v0.5.8-windows-portable.zip\n1293ebde18ef10476e715c78fb373a502e3e2e8b43d88010cfea4e5616069e11  heap-v0.5.8-windows-setup.exe\n```\n\n</details>\n\n\n## What's Changed\n* APP-125: download, verify and install updates from inside the app by @sectapunterx in https://github.com/sectapunterx/heap/pull/197\n* Release 0.5.8 by @sectapunterx in https://github.com/sectapunterx/heap/pull/198\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.5.7...v0.5.8",
-  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.5.8",
+  "url": "https://github.com/sectapunterx/lowkey/releases/tag/v0.5.8",
   "prerelease": false,
   "draft": false,
   "assets": [
    {
     "name": "heap-v0.5.8-linux-x86_64.AppImage",
     "size": 49232376,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.8/heap-v0.5.8-linux-x86_64.AppImage"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.5.8/heap-v0.5.8-linux-x86_64.AppImage"
    },
    {
     "name": "heap-v0.5.8-macos.dmg",
     "size": 61250526,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.8/heap-v0.5.8-macos.dmg"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.5.8/heap-v0.5.8-macos.dmg"
    },
    {
     "name": "heap-v0.5.8-sbom.spdx.json",
     "size": 2503,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.8/heap-v0.5.8-sbom.spdx.json"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.5.8/heap-v0.5.8-sbom.spdx.json"
    },
    {
     "name": "heap-v0.5.8-windows-portable.zip",
     "size": 56743763,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.8/heap-v0.5.8-windows-portable.zip"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.5.8/heap-v0.5.8-windows-portable.zip"
    },
    {
     "name": "heap-v0.5.8-windows-setup.exe",
     "size": 38425264,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.8/heap-v0.5.8-windows-setup.exe"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.5.8/heap-v0.5.8-windows-setup.exe"
    },
    {
     "name": "SHA256SUMS",
     "size": 476,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.8/SHA256SUMS"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.5.8/SHA256SUMS"
    }
   ]
  },
@@ -250,80 +311,39 @@
   "name": "heap v0.5.7",
   "date": "2026-10-05T15:43:34Z",
   "body": "> **macOS:** this build is not notarized. On first launch, right-click heap.app → **Open**.\n\n> **Windows:** this build is not code-signed, so SmartScreen may say \"Windows protected your PC\". Choose **More info → Run anyway**, after checking the SHA-256 below.\n\nVerify a download: `sha256sum -c SHA256SUMS`, or `gh attestation verify <file> --repo sectapunterx/heap`.\n\n<details><summary>SHA-256 checksums</summary>\n\n```\n62080708af5d732efddbc7c31eea1b3aa9cc7106ec101ae327fe849cb95ba86c  heap-v0.5.7-linux-x86_64.AppImage\nf8f687600cd1f5d65595de2b44046c9d941b67ead197b864d29a588e4d4b1b2a  heap-v0.5.7-macos.dmg\neecc71ef6bcced046919a3295b1450212c8a3abf5bfdba492397f84885eea75a  heap-v0.5.7-sbom.spdx.json\na40b6d919c00d6f55fa70215590e69f816c1428de575d694b97ece2319565c0a  heap-v0.5.7-windows-portable.zip\n8e58c3cc0cd7ee6798651cba89ad55c5dd1034a6105c57f0799b5b39ab091ce5  heap-v0.5.7-windows-setup.exe\n```\n\n</details>\n\n\n## What's Changed\n* ci: bump anchore/sbom-action from 0.24.2 to 0.24.3 in the actions group by @dependabot[bot] in https://github.com/sectapunterx/heap/pull/188\n* APP-124: bring back Minimal dark as a low-contrast theme by @sectapunterx in https://github.com/sectapunterx/heap/pull/189\n* APP-126: close dialogs with a press beside them by @sectapunterx in https://github.com/sectapunterx/heap/pull/190\n* APP-123: auto-sync at any cadence, up to a month by @sectapunterx in https://github.com/sectapunterx/heap/pull/194\n* APP-127: an update never takes a theme away by @sectapunterx in https://github.com/sectapunterx/heap/pull/191\n* APP-122: auto-archive for any column by @sectapunterx in https://github.com/sectapunterx/heap/pull/193\n* APP-128: select and move cards from the keyboard on the board by @sectapunterx in https://github.com/sectapunterx/heap/pull/195\n* APP-121: a ticket mention reads as the ticket's title by @sectapunterx in https://github.com/sectapunterx/heap/pull/192\n* Release 0.5.7 by @sectapunterx in https://github.com/sectapunterx/heap/pull/196\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.5.6...v0.5.7",
-  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.5.7",
+  "url": "https://github.com/sectapunterx/lowkey/releases/tag/v0.5.7",
   "prerelease": false,
   "draft": false,
   "assets": [
    {
     "name": "heap-v0.5.7-linux-x86_64.AppImage",
     "size": 49207800,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.7/heap-v0.5.7-linux-x86_64.AppImage"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.5.7/heap-v0.5.7-linux-x86_64.AppImage"
    },
    {
     "name": "heap-v0.5.7-macos.dmg",
     "size": 61208989,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.7/heap-v0.5.7-macos.dmg"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.5.7/heap-v0.5.7-macos.dmg"
    },
    {
     "name": "heap-v0.5.7-sbom.spdx.json",
     "size": 2503,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.7/heap-v0.5.7-sbom.spdx.json"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.5.7/heap-v0.5.7-sbom.spdx.json"
    },
    {
     "name": "heap-v0.5.7-windows-portable.zip",
     "size": 55995684,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.7/heap-v0.5.7-windows-portable.zip"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.5.7/heap-v0.5.7-windows-portable.zip"
    },
    {
     "name": "heap-v0.5.7-windows-setup.exe",
     "size": 37919692,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.7/heap-v0.5.7-windows-setup.exe"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.5.7/heap-v0.5.7-windows-setup.exe"
    },
    {
     "name": "SHA256SUMS",
     "size": 476,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.7/SHA256SUMS"
-   }
-  ]
- },
- {
-  "tag": "v0.5.6",
-  "name": "heap v0.5.6",
-  "date": "2026-10-05T12:45:52Z",
-  "body": "> **macOS:** this build is not notarized. On first launch, right-click heap.app → **Open**.\n\n> **Windows:** this build is not code-signed, so SmartScreen may say \"Windows protected your PC\". Choose **More info → Run anyway**, after checking the SHA-256 below.\n\nVerify a download: `sha256sum -c SHA256SUMS`, or `gh attestation verify <file> --repo sectapunterx/heap`.\n\n<details><summary>SHA-256 checksums</summary>\n\n```\n8dbc26ff4a88caab5470dbca86001fde283db8534acd5f4455065c07d6d1474f  heap-v0.5.6-linux-x86_64.AppImage\n0c56ab051074baf3b9a908ed76ad248a8705987289b564ce37061437fa58b7a5  heap-v0.5.6-macos.dmg\nd4a4cf1b45def1d602bc275689fccbc489fec18f3614f000ee5a266b9d4dd27a  heap-v0.5.6-sbom.spdx.json\n7d4a22a8f0237175397dd5fa282dd195fcfdfc1b62d7c974be3638108c855438  heap-v0.5.6-windows-portable.zip\n7f05dbe29a0782eac84cb04ed6cbb4de26c9ae57f667a5b7e6e374dc3bb4951c  heap-v0.5.6-windows-setup.exe\n```\n\n</details>\n\n\n## What's Changed\n* ci: feature branch flow (master = stable, feature = next release) by @sectapunterx in https://github.com/sectapunterx/heap/pull/180\n* APP-119: new dark themes, grouped by contrast; folding colour editor by @sectapunterx in https://github.com/sectapunterx/heap/pull/181\n* APP-1: notes are named after their text, not \"Untitled note\" by @sectapunterx in https://github.com/sectapunterx/heap/pull/182\n* APP-116: drag a note onto another to merge them by @sectapunterx in https://github.com/sectapunterx/heap/pull/183\n* WEAK PECAP: weekly recap of status moves on Monday by @sectapunterx in https://github.com/sectapunterx/heap/pull/185\n* APP-117: type to search on the board, ID sort and reverse order by @sectapunterx in https://github.com/sectapunterx/heap/pull/184\n* ci: bump msys2/setup-msys2 from 2.32.0 to 2.33.0 in the actions group by @dependabot[bot] in https://github.com/sectapunterx/heap/pull/179\n* APP-118: Outlook calendar by ICS link; \"How integrations work\" info block by @sectapunterx in https://github.com/sectapunterx/heap/pull/186\n* Release 0.5.6 by @sectapunterx in https://github.com/sectapunterx/heap/pull/187\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.5.5...v0.5.6",
-  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.5.6",
-  "prerelease": false,
-  "draft": false,
-  "assets": [
-   {
-    "name": "heap-v0.5.6-linux-x86_64.AppImage",
-    "size": 49191416,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.6/heap-v0.5.6-linux-x86_64.AppImage"
-   },
-   {
-    "name": "heap-v0.5.6-macos.dmg",
-    "size": 61155816,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.6/heap-v0.5.6-macos.dmg"
-   },
-   {
-    "name": "heap-v0.5.6-sbom.spdx.json",
-    "size": 2503,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.6/heap-v0.5.6-sbom.spdx.json"
-   },
-   {
-    "name": "heap-v0.5.6-windows-portable.zip",
-    "size": 55935444,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.6/heap-v0.5.6-windows-portable.zip"
-   },
-   {
-    "name": "heap-v0.5.6-windows-setup.exe",
-    "size": 37878973,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.6/heap-v0.5.6-windows-setup.exe"
-   },
-   {
-    "name": "SHA256SUMS",
-    "size": 476,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.6/SHA256SUMS"
+    "url": "https://github.com/sectapunterx/lowkey/releases/download/v0.5.7/SHA256SUMS"
    }
   ]
  }

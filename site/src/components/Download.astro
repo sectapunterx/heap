@@ -24,7 +24,7 @@ const image = byOS.linux[0]?.name ?? 'lowkey-*-linux-x86_64.AppImage';
 const checkout = REPO.split('/')[1];
 // Scoop only while the bucket installs this very release (src/lib/scoop.ts)
 const ways = [
-  ...(scoopVersion() === versionOf(latest.tag) ? [{ h: d.scoopH, p: d.scoopP, code: `scoop bucket add heap ${GITHUB_URL}\nscoop install heap` }] : []),
+  ...(scoopVersion() === versionOf(latest.tag) ? [{ h: d.scoopH, p: d.scoopP, code: `scoop bucket add lowkey ${GITHUB_URL}\nscoop install lowkey` }] : []),
   { h: d.appimageH, p: d.appimageP, code: `chmod +x ${image}\n./${image}` },
   { h: d.sourceH, p: d.sourceP, code: `git clone ${GITHUB_URL}.git\ncmake -S ${checkout} -B build -DCMAKE_BUILD_TYPE=Release\ncmake --build build -j` },
 ];
