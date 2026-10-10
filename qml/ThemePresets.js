@@ -547,8 +547,19 @@ function builtin(id) {
     return null;
 }
 
+// The custom themes as a real array. The list travels through `var`
+// properties and signal arguments; under Qt 6.12 every custom theme vanished
+// from the picker and the active slot fell back to the default, most likely
+// because the list arrived as a sequence object that Array.isArray rejects.
+// Anything with a length is taken as the list.
+function list(x) {
+    if (Array.isArray(x)) return x;
+    if (x && typeof x === "object" && typeof x.length === "number") return Array.prototype.slice.call(x);
+    return [];
+}
+
 function _custom(id, customThemes) {
-    if (!Array.isArray(customThemes)) return null;
+    customThemes = list(customThemes);
     for (var i = 0; i < customThemes.length; i++) {
         var t = customThemes[i];
         if (t && t.id === id) return t;
@@ -582,11 +593,10 @@ function category(t, customThemes) {
 // Every theme the user can pick: built-ins first, then their own.
 function all(customThemes) {
     var out = PRESETS.slice();
-    if (Array.isArray(customThemes)) {
-        for (var i = 0; i < customThemes.length; i++) {
-            var t = customThemes[i];
-            if (t && typeof t.id === "string" && !builtin(t.id)) out.push(t);
-        }
+    var customs = list(customThemes);
+    for (var i = 0; i < customs.length; i++) {
+        var t = customs[i];
+        if (t && typeof t.id === "string" && !builtin(t.id)) out.push(t);
     }
     return out;
 }
@@ -662,7 +672,7 @@ function uniqueName(name, customThemes) {
 // to the built-in again.
 function adoptRetired(appearance) {
     if (!appearance || typeof appearance !== "object") return null;
-    var customs = Array.isArray(appearance.customThemes) ? appearance.customThemes.slice() : [];
+    var customs = list(appearance.customThemes).slice();
     var wanted = [appearance.darkPreset, appearance.lightPreset];
     for (var i = 0; i < customs.length; i++)
         if (customs[i] && customs[i].from) wanted.push(customs[i].from);
