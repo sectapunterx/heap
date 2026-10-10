@@ -291,9 +291,15 @@ FocusScope {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.leftMargin: root.plain && !root.stacked ? Theme.sp3xl + Theme.spLg : Theme.sp3xl
-        anchors.rightMargin: root.plain && !root.stacked ? Theme.sp3xl + Theme.spLg : Theme.sp3xl
-        anchors.topMargin: root.plain && !root.stacked ? Theme.sp3xl + Theme.spMd : Theme.sp2xl
+        // The sheets' main padding (R4-001): bold 28/36 (H2-Today, H2-First),
+        // quiet 40/48 (H2-Today-Calm, Q-First), a small window 26/32
+        // (N/X-Oth-Small).
+        readonly property int _side: root.stacked ? Theme.sp3xl + Theme.spMd
+            : root.plain ? 2 * Theme.sp3xl : Theme.sp3xl + Theme.spXl
+        anchors.leftMargin: _side
+        anchors.rightMargin: _side
+        anchors.topMargin: root.stacked ? Theme.sp2xl + Theme.spLg
+            : root.plain ? Theme.sp3xl + Theme.sp2xl : Theme.sp2xl + Theme.spXl
         spacing: 0
 
         // ── the header: the date, the facts, the day's arrows on the right ──
@@ -335,8 +341,8 @@ FocusScope {
                     }
                     color: Theme.text
                     font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsDayTitle
-                    font.weight: Theme.fwScreenTitle
+                    font.pixelSize: root.stacked ? Theme.fsDayTitleSmall : Theme.fsDayTitle
+                    font.weight: root.stacked ? Theme.fwHeading : Theme.fwScreenTitle
                     Accessible.role: Accessible.Heading
                     Accessible.name: text
                 }
@@ -1043,7 +1049,8 @@ FocusScope {
                         color: Theme.text
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsMd
-                        font.weight: Theme.fwHeading
+                        // The sheets set day rows at 500 (R4-003).
+                        font.weight: Theme.fwTitle
                     }
                     Text {
                         Layout.fillWidth: true

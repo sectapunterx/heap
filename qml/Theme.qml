@@ -32,10 +32,10 @@ QtObject {
     readonly property bool twelveHour: timeFormat === "12h"
         || (timeFormat === "system" && /a/i.test(Qt.locale().timeFormat(Locale.ShortFormat)))
     // Settings → Git "working on …" line over the view (DG-099); off by default
-    // (sheet N/X-Oth-Knowledge "выключена по умолчанию", R3-095).
-    // On unless turned off: the task of the branch at the top is a promise the
-    // README and the site make (owner, 2026-10-10).
-    readonly property bool gitWorkingLine: !(_settings && _settings.git && _settings.git.workingOnLine === false)
+    // (sheet N/X-Oth-Knowledge "выключена по умолчанию", R3-095). Data from
+    // before 0.8.1 had it on and keeps it: the load writes it in once
+    // (AppController::migrateGitWorkingLine, Review 2).
+    readonly property bool gitWorkingLine: !!(_settings && _settings.git && _settings.git.workingOnLine === true)
     // An explicit undefined check, not `??`: qmlcachegen 6.9.1 (what CI
     // builds with) segfaults AOT-compiling Main.qml when a singleton
     // property it resolves uses the nullish operator. Same shape as
@@ -478,6 +478,8 @@ QtObject {
     // day on Today (H2-Today); quiet: 26px for both (Q-*, H2-Today-Calm).
     readonly property int fsScreenTitle: Style.fills ? px(24) : px(26)
     readonly property int fsDayTitle:    Style.fills ? px(30) : px(26)
+    // The day in a small window (N/X-Oth-Small, R4-010): 22px/600 in both.
+    readonly property int fsDayTitleSmall: px(22)
     // Bold titles are 600, quiet ones 500 (the same sheets).
     readonly property int fwScreenTitle: Style.fills ? Font.DemiBold : Font.Medium
     // A note in Knowledge (H2/Q-Knowledge, R3-084): the title 30 / 28,

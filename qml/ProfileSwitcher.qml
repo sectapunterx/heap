@@ -17,6 +17,8 @@ Item {
 
     // Only the dot when the sidebar is folded to its icons.
     property bool compact: false
+    // The first run draws the name alone (H2-First, R4-006).
+    property bool hideProfileDot: false
 
     signal syncStatusRequested()
     signal newProfileRequested()
@@ -122,7 +124,7 @@ Item {
             readonly property bool filledMark: profileDot || root.syncState === "synced"
                 || (Style.urgency && (root.syncState === "syncing" || root.syncState === "error"))
             // Quiet has no profile dot (DG-006); the sync state still shows.
-            visible: profileDot ? (Style.fills || root.compact) : true
+            visible: profileDot ? ((Style.fills && !root.hideProfileDot) || root.compact) : true
             width: stateRow.implicitWidth
             height: root.height
             Row {
