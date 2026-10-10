@@ -573,9 +573,12 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: |
           # Sanitized suites run several times slower, hence the longer limit.
+          # The QML suite is left out: under the sanitizers it ran past 75 min
+          # on its own (0.8.1). It runs unsanitized in every build job.
           bash .github/scripts/ctest_with_retry.sh build-san/tests \
             --parallel "$(getconf _NPROCESSORS_ONLN)" \
             --timeout 600 \
+            -E heap_qml_tests \
             --output-on-failure
 
   # ──────────────────────────────────────────────────────────────────
