@@ -518,7 +518,7 @@ jobs:
     # The instrumented Debug build alone takes ~23 minutes on a hosted runner,
     # so a 25-minute cap cancelled the job before a single test ran — on
     # master too. The tests themselves take a couple of minutes.
-    timeout-minutes: 45
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
