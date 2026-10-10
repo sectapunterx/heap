@@ -1,7 +1,7 @@
-# Building heap. from source
+# Building lowkey from source
 
 Prebuilt binaries for Windows, macOS and Linux are attached to every
-[GitHub release](https://github.com/sectapunterx/lowkey/releases). Build from source if you want to hack on heap. or
+[GitHub release](https://github.com/sectapunterx/lowkey/releases). Build from source if you want to hack on lowkey or
 run an unreleased commit.
 
 You need **Qt 6.9+** (what CI builds and tests) and a **C++20** toolchain. On any platform:
@@ -65,7 +65,7 @@ cmake --build build -j
    - **Name:** `MSYS2 UCRT64`
    - **Toolset:** `C:\msys64\ucrt64`
 5. In **Settings → CMake**, add to **CMake options**: `-DCMAKE_PREFIX_PATH=C:/msys64/ucrt64`
-6. Pick the `heap` run configuration. `Shift+F10` to launch.
+6. Pick the `heap` run configuration (the CMake target keeps its code name; it builds `lowkey.exe`). `Shift+F10` to launch.
 7. To run `lowkey.exe` outside CLion, add `C:\msys64\ucrt64\bin` to `PATH`, or bundle the Qt DLLs once with
    `windeployqt6 --qmldir ../qml lowkey.exe` from the build directory.
 

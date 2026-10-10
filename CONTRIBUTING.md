@@ -1,4 +1,4 @@
-# Contributing to heap.
+# Contributing to lowkey
 
 Thanks for taking a look. This page covers building, testing, what CI checks, and where things live.
 
@@ -89,7 +89,7 @@ trust under `QT_QPA_PLATFORM=offscreen`; frame gaps are only meaningful on a dis
 
 ```
 .
-├─ CMakeLists.txt          ← heap_core (qt_add_library + qt_add_qml_module) + thin heap exe
+├─ CMakeLists.txt          ← heap_core (qt_add_library + qt_add_qml_module) + thin lowkey exe (target `heap`)
 ├─ src/
 │  ├─ main.cpp             ← QApplication entry, window icon, signal handlers
 │  ├─ AppController.{h,cpp}← QML_SINGLETON exposing models, profiles, automation, undo
@@ -132,7 +132,7 @@ single `appSettingsJson` blob edited by `SettingsView`. See [docs/DATA.md](docs/
 
 ## Writing to other systems
 
-heap reads from trackers and writes to them only where the user switched that write on. Any new write to an external
+The app reads from trackers and writes to them only where the user switched that write on. Any new write to an external
 system (a status, a comment, a label, a PR/MR action…) gets its own per-tracker switch, **off by default** for new and
 updated installs alike, and a row in the table in [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md#the-rule-every-external-write-is-opt-in).
 Comments are never sent. Local data is never overwritten by a sync.
