@@ -54,6 +54,16 @@ QVariantList AppController::savedViews() const {
   return out;
 }
 
+QStringList AppController::savedViewsUsingStatus(const QString& statusId) const {
+  QStringList out;
+  for(const SavedView& v : m_savedViews) {
+    if(heap::query::TaskQuery::compile(v.query, m_today, m_statuses).statusIds().contains(statusId)) {
+      out << heap::savedviews::displayName(v, m_language == QStringLiteral("ru"));
+    }
+  }
+  return out;
+}
+
 QVariantMap AppController::savedViewCounts() const {
   if(!m_savedViewCountsDirty) {
     return m_savedViewCounts;

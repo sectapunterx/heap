@@ -99,6 +99,9 @@ class TaskQuery {
     m_blocked = std::move(ids);
   }
 
+  // Every column id a `status:` clause named, negated ones included.
+  QSet<QString> statusIds() const;
+
  private:
   struct Clause {
     QString field;

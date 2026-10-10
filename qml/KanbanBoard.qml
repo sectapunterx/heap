@@ -125,11 +125,13 @@ Item {
         s.boardCollapsed = Object.keys(next);
         AppController.appSettingsJson = JSON.stringify(s);
     }
-    // Fold or unfold the column the keyboard cursor is in.
+    // Fold or unfold the column the keyboard cursor is in. The cursor stays
+    // on its card when the column folds, so z a again unfolds it rather than
+    // folding the next column (IDIOT-TASKS-13).
     function toggleCursorColumn() {
         const cols = _visibleByColumn();
         const pos = _cursorPos(cols);
-        let c = pos ? pos.col : -1;
+        let c = pos ? pos.col : root._foldedColumnOf(root.cursorTaskId);
         if (c < 0 && colRepeater.count > 0) c = 0;
         const col = c >= 0 ? colRepeater.itemAt(c) : null;
         if (col) root.toggleCollapsed(col.statusId);
@@ -281,6 +283,16 @@ Item {
         return cols;
     }
 
+    // The index of the folded column that holds `id`, or -1.
+    function _foldedColumnOf(id) {
+        if (!id) return -1;
+        for (let c = 0; c < colRepeater.count; c++) {
+            const col = colRepeater.itemAt(c);
+            if (col && col.folded && col.taskFilter && col.taskFilter.ids().indexOf(id) >= 0) return c;
+        }
+        return -1;
+    }
+
     // Where the cursor currently sits, or null when it points at nothing on
     // screen (a filter may have hidden it).
     function _cursorPos(cols) {
@@ -411,7 +423,15 @@ Item {
     function moveCursor(dx, dy) {
         root.cursorVisible = true;
         const cols = _visibleByColumn();
-        const pos = _cursorPos(cols);
+        let pos = _cursorPos(cols);
+        // On a card of a column z a just folded: up and down have nothing to
+        // walk, so the cursor waits there for z a to unfold it; sideways it
+        // steps on from that column (IDIOT-TASKS-13).
+        const folded = pos ? -1 : root._foldedColumnOf(root.cursorTaskId);
+        if (folded >= 0) {
+            if (dx === 0) return;
+            pos = { col: folded, row: 0 };
+        }
         if (!pos) {
             root.cursorTaskId = _firstVisible(cols);
             return;
@@ -538,12 +558,13 @@ Item {
 
     // Flat ordered list of visible task ids across the entire board, column
     // by column in render order, top-to-bottom inside each column. Used by
-    // selectAllVisible() and shift-range select.
+    // selectAllVisible() and shift-range select. A folded column shows no
+    // cards: Ctrl+A, Del deleted the ones it hid (IDIOT-TASKS-14).
     function _flatVisibleIds() {
         const out = [];
         for (let c = 0; c < colRepeater.count; c++) {
             const col = colRepeater.itemAt(c);
-            if (!col || !col.taskFilter) continue;
+            if (!col || !col.taskFilter || col.folded) continue;
             const ids = col.taskFilter.ids();
             for (let i = 0; i < ids.length; i++) out.push(ids[i]);
         }
@@ -757,6 +778,17 @@ Item {
                     readonly property string statusId: sid
                     readonly property string statusName: sname
                     function startRename() { col.renaming = true; renameField.forceActiveFocus(); renameField.selectAll(); }
+                    function finishRenameOnBlur() {
+                        if (!col.renaming || renameField.activeFocus) return;
+                        let inBoard = false;
+                        for (let p = renameField.Window.activeFocusItem; p; p = p.parent) {
+                            if (p === renameField.Overlay.overlay) break;
+                            if (p === col.board) { inBoard = true; break; }
+                        }
+                        if (inBoard) AppController.renameStatus(col.statusId, renameField.text.trim());
+                        else renameField.text = col.statusName;
+                        col.renaming = false;
+                    }
                     readonly property color statusColor: scolor
                     // Set by colRepeater (Qt 6.9's qmllint does not resolve
                     // root inside the column): the board, whether this is a
@@ -1117,20 +1149,33 @@ Item {
                                         // Typing breaks the declarative binding above; re-sync to the
                                         // authoritative name every time the field opens so an
                                         // Escape-cancelled edit can't linger and be auto-committed by
-                                        // the blur handler on the next rename.
-                                        onVisibleChanged: if (visible) text = col.statusName
+                                        // the blur handler on the next rename (onVisibleChanged below).
                                         color: Theme.text
                                         background: Rectangle { radius: Theme.radiusSm; color: Theme.panel; border.color: Theme.accent; border.width: 1 }
                                         font.family: Theme.fontUi
                                         font.pixelSize: Theme.fsMd
                                         font.weight: Theme.fwTitle
                                         selectByMouse: true
-                                        onAccepted: { AppController.renameStatus(col.statusId, text.trim()); col.renaming = false }
-                                        onActiveFocusChanged: if (!activeFocus && col.renaming) { AppController.renameStatus(col.statusId, text.trim()); col.renaming = false }
+                                        // As long as a saved view's name (IDIOT-TASKS-16).
+                                        maximumLength: 60
+                                        // Done or not, the keyboard goes back to the board: the
+                                        // hidden field kept it, j and d were typed into it and
+                                        // Esc did nothing (IDIOT-TASKS-1).
+                                        onAccepted: { AppController.renameStatus(col.statusId, text.trim()); col.renaming = false; col.board.forceActiveFocus() }
+                                        // A blur commits only when the person went on inside the
+                                        // board (a click on another column); a view switch or a
+                                        // popup taking the keyboard is a cancel, as Esc is: Ctrl+1
+                                        // or Ctrl+K renamed the column to the half-typed name
+                                        // (IDIOT-TASKS-15). Read once focus has landed.
+                                        onActiveFocusChanged: if (!activeFocus && col.renaming) Qt.callLater(col.finishRenameOnBlur)
                                         // Put the name back before letting go: hiding the
                                         // field blurs it, and the blur handler above commits
                                         // whatever is in it while renaming is still set.
-                                        Keys.onEscapePressed: { text = col.statusName; col.renaming = false }
+                                        Keys.onEscapePressed: { text = col.statusName; col.renaming = false; col.board.forceActiveFocus() }
+                                        onVisibleChanged: {
+                                            if (visible) text = col.statusName;
+                                            else if (activeFocus) col.board.forceActiveFocus();
+                                        }
                                     }
                                 }
                                 // The count, a plain number (APP-262); over the
@@ -1262,7 +1307,9 @@ Item {
                                     HoverIcon {
                                         id: deleteIcon
                                         objectName: "column-delete"
-                                        icon: "close"; tip: I18n.t("kanban.deleteColumn")
+                                        // A bin, not a cross: the cross read as "hide the
+                                        // column" (IDIOT-TASKS-21).
+                                        icon: "trash"; tip: I18n.t("kanban.deleteColumn")
                                         danger: true
                                         visible: AppController.statuses.length > 1
                                         revealed: col.headerRevealed
@@ -1986,7 +2033,7 @@ Item {
         onLineActivated: root.resetFilterRequested()
         line: root._nothingFound ? I18n.t("view.empty.resetFilter")
             : root._allRows > 0
-              ? I18n.t("board.empty.archivedHint").arg(AppController.shortcutText("view.archive")).arg(AppController.shortcutText("task.new"))
+              ? I18n.t("board.empty.archivedHint").arg(AppController.shortcutText("task.new"))
               : I18n.t("tasks.empty.line").arg(AppController.shortcutText("task.new"))
     }
     // ── Column delete: confirm when it is not empty ───────────────────
@@ -1998,15 +2045,20 @@ Item {
     // The count is every card the delete re-homes — archived ones and the
     // ones a filter is hiding included. The column's visible count skipped
     // the confirmation for a column full of filtered-out cards (TASKS-8).
+    //
+    // A column that saved views filter on asks too, and names them: deleting
+    // it drops their clause and they show everything (IDIOT-TASKS-11).
     function requestDeleteColumn(statusId, statusName) {
         const count = AppController.countByStatus(statusId);
-        if (count <= 0) {
+        const views = AppController.savedViewsUsingStatus(statusId);
+        if (count <= 0 && views.length === 0) {
             AppController.deleteStatus(statusId);
             return;
         }
         confirmDelete.statusId = statusId;
         confirmDelete.statusName = statusName;
         confirmDelete.cardCount = count;
+        confirmDelete.views = views;
         confirmDelete.open();
     }
 
@@ -2019,8 +2071,23 @@ Item {
         property string statusId: ""
         property string statusName: ""
         property int cardCount: 0
-        // The other columns, in board order; the first is the default target.
+        property var views: []
+        // The other columns, in board order.
         readonly property var targets: (AppController.statuses || []).filter(st => st.id !== confirmDelete.statusId)
+        // The default target is a column of the same stage: Enter on the Done
+        // column's dialog moved every finished task to Backlog as open work.
+        // The last done-stage column has none, so the person picks one and
+        // is told the tasks reopen (IDIOT-TASKS-12).
+        readonly property string category: (AppController.statuses, AppController.statusCategory(confirmDelete.statusId))
+        function defaultTarget() {
+            for (let i = 0; i < confirmDelete.targets.length; i++)
+                if (AppController.statusCategory(confirmDelete.targets[i].id) === confirmDelete.category) return i;
+            return confirmDelete.category === "done" ? -1 : 0;
+        }
+        readonly property bool reopens: confirmDelete.cardCount > 0 && confirmDelete.category === "done"
+            && (targetBox.currentIndex < 0 || targetBox.currentIndex >= confirmDelete.targets.length
+                || AppController.statusCategory(confirmDelete.targets[targetBox.currentIndex].id) !== "done")
+        readonly property bool canDelete: confirmDelete.cardCount === 0 || targetBox.currentIndex >= 0
 
         title: I18n.t("kanban.confirmDelete.title").arg(confirmDelete.statusName)
         fact: I18n.t("kanban.confirmDelete.fact")
@@ -2028,9 +2095,10 @@ Item {
                 .arg(AppController.shortcutText("undo").replace(/\+/g, " "))
         // Enter is the main button, as in every small dialog (X-Dlg-Small);
         // Tab reaches the column field.
-        onOpened: { targetBox.currentIndex = 0; deleteKeys.forceActiveFocus(); }
+        onOpened: { targetBox.currentIndex = confirmDelete.defaultTarget(); deleteKeys.forceActiveFocus(); }
         onAccepted: confirmDelete.deleteNow()
         function deleteNow() {
+            if (!confirmDelete.canDelete) return;
             const t = confirmDelete.targets[targetBox.currentIndex];
             AppController.deleteStatus(confirmDelete.statusId, t ? t.id : "");
             confirmDelete.close();
@@ -2044,6 +2112,7 @@ Item {
             Keys.onReturnPressed: confirmDelete.accepted()
             Keys.onEnterPressed: confirmDelete.accepted()
             Text {
+                visible: confirmDelete.cardCount > 0
                 text: I18n.t("kanban.confirmDelete.into")
                 color: Theme.textMuted
                 font.family: Theme.fontUi
@@ -2052,9 +2121,31 @@ Item {
             AppComboBox {
                 id: targetBox
                 objectName: "confirm-delete-target"
+                visible: confirmDelete.cardCount > 0
                 Accessible.name: I18n.t("kanban.confirmDelete.into")
                 Layout.fillWidth: true
                 model: confirmDelete.targets.map(st => st.name)
+                displayText: currentIndex < 0 ? I18n.t("kanban.confirmDelete.pick") : currentText
+            }
+            Text {
+                objectName: "confirm-delete-reopens"
+                visible: confirmDelete.reopens
+                Layout.fillWidth: true
+                text: I18n.t("kanban.confirmDelete.reopens").arg(I18n.count(confirmDelete.cardCount, "query.n.tasks"))
+                color: Theme.warning
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsXs
+                wrapMode: Text.Wrap
+            }
+            Text {
+                objectName: "confirm-delete-views"
+                visible: confirmDelete.views.length > 0
+                Layout.fillWidth: true
+                text: I18n.t("kanban.confirmDelete.views").arg(confirmDelete.views.join(", "))
+                color: Theme.textMuted
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsXs
+                wrapMode: Text.Wrap
             }
         }
 
@@ -2067,6 +2158,7 @@ Item {
                 objectName: "confirm-delete-ok"
                 text: I18n.t("kanban.confirmDelete.ok")
                 danger: true
+                enabled: confirmDelete.canDelete
                 onClicked: confirmDelete.deleteNow()
             }
         ]

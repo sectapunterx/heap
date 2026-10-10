@@ -230,6 +230,16 @@ QStringList queryFields() {
   return out;
 }
 
+QSet<QString> TaskQuery::statusIds() const {
+  QSet<QString> out;
+  for(const QVector<Clause>& group : m_groups) {
+    for(const Clause& c : group) {
+      out.unite(c.statusIds);
+    }
+  }
+  return out;
+}
+
 TaskQuery TaskQuery::compile(const QString& text, const QDate& today, const QVariantList& statuses, const QStringList& newIds) {
   TaskQuery q;
   q.m_today = today;

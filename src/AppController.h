@@ -1516,8 +1516,8 @@ class AppController : public QObject {
   }
 
   // ---- Status (kanban column) ops ----
-  Q_INVOKABLE void addStatus(const QString& name, const QString& color = QString());
-  Q_INVOKABLE void renameStatus(const QString& id, const QString& name);
+  Q_INVOKABLE void addStatus(const QString& typedName, const QString& color = QString());
+  Q_INVOKABLE void renameStatus(const QString& id, const QString& typedName);
   Q_INVOKABLE void setStatusColor(const QString& id, const QString& color);
   // A column's stage (APP-259): backlog / todo / prog / half / blocked /
   // review / done. It is the shape of the status mark and where Done goes.
@@ -1569,6 +1569,9 @@ class AppController : public QObject {
   Q_INVOKABLE QVariantMap savedView(const QString& id) const;
   // True when `state` no longer matches the view — what shows it as modified.
   Q_INVOKABLE bool savedViewDiffers(const QString& id, const QVariantMap& state) const;
+  // The names of the views whose query filters on the column `statusId`:
+  // deleting the column drops that clause and widens them (IDIOT-TASKS-11).
+  Q_INVOKABLE QStringList savedViewsUsingStatus(const QString& statusId) const;
 
   // settingsMap() is private and also cached; this exists so a test can prove
   // the cache does not outlive the settings it was built from.

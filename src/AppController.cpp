@@ -7548,7 +7548,12 @@ int AppController::statusIndexOf(const QString& id) const {
   return -1;
 }
 
-void AppController::addStatus(const QString& name, const QString& color) {
+// As long as a saved view's name: a pasted 3000-character name was kept
+// whole and carried into filters and the status mapping (IDIOT-TASKS-16).
+static constexpr int kMaxColumnName = 60;
+
+void AppController::addStatus(const QString& typedName, const QString& color) {
+  const QString name = typedName.left(kMaxColumnName);
   if(name.trimmed().isEmpty()) {
     return;
   }
@@ -7602,7 +7607,8 @@ bool AppController::statusNameTaken(const QString& name, const QString& exceptId
   return false;
 }
 
-void AppController::renameStatus(const QString& id, const QString& name) {
+void AppController::renameStatus(const QString& id, const QString& typedName) {
+  const QString name = typedName.left(kMaxColumnName);
   const int i = statusIndexOf(id);
   if(i < 0 || name.trimmed().isEmpty()) {
     return;
