@@ -321,7 +321,9 @@ FocusScope {
                 // H2-Today-Calm): the date alone heads the day.
                 RowLayout {
                     visible: !Style.plainRows && (!root.stacked || !root.isToday || root.dayData.workday === false)
-                    spacing: Theme.spMd
+                    // One space's width before the dot, as after it: spMd
+                    // plus the "· " read as a double gap (EYES-9).
+                    spacing: Theme.spXs
                     Text {
                         objectName: "today-label"
                         text: root.isToday ? I18n.t("sidebar.today")
