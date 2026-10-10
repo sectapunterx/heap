@@ -16001,7 +16001,19 @@ void AppController::runAutomationAt(const QDateTime& now) {
     const QVariantMap cal = s.value("calendar").toMap();
     const QTime standup = heap::cal::clockTime(cal.value("standupTime", "10:00").toString());
     const int lead = qMax(0, notif.value("meetingLead", 5).toInt());
+    // A standup on the calendar near that time has its own reminder; a second
+    // "Standup soon" in the same minute was noise (IDIOT-CAL-9).
+    bool onCalendar = false;
     if(standup.isValid()) {
+      const double at = standup.hour() + (standup.minute() / 60.0);
+      for(const CalEvent& e : heap::cal::expandedEvents(m_events.items(), today, today)) {
+        if(e.type == QStringLiteral("standup") && !e.allDay && e.date == today && qAbs(e.start - at) <= 0.25) {
+          onCalendar = true;
+          break;
+        }
+      }
+    }
+    if(standup.isValid() && !onCalendar) {
       CalEvent st;
       st.id = QStringLiteral("standup");
       st.title = tr_("notify.standupTitle");
