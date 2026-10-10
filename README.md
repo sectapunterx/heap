@@ -20,7 +20,7 @@
 
 </div>
 
-lowkey is a personal desktop app: your tickets from GitHub, GitLab, Jira and nine more trackers, your meetings, and
+A personal desktop app, lowkey brings your tickets from GitHub, GitLab, Jira and nine more trackers, your meetings, and
 your notes, in one window you drive from the keyboard. It keeps everything in a file on your disk, needs no
 account, and writes nothing to your trackers unless you switch that on. What it looks like and why it exists is on
 the [website](https://sectapunterx.github.io/lowkey/); this page is about getting it running and finding your way

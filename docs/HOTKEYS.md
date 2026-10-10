@@ -1,6 +1,6 @@
 # Keyboard reference
 
-lowkey 0.8 has a Vim-based keymap. `?` (or `Ctrl+/`) opens the cheat sheet:
+The keymap of lowkey 0.8 is Vim-based. `?` (or `Ctrl+/`) opens the cheat sheet:
 every key by area, in columns, with a search by action or by key. The cheat
 sheet is read-only; **Change shortcuts…** at its foot (or **Settings →
 Shortcuts**) opens the panel that rebinds. There, `Enter` on a binding starts

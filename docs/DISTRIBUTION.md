@@ -1,6 +1,6 @@
 # Distribution channels
 
-`heap.` ships from [GitHub Releases](https://github.com/sectapunterx/lowkey/releases).
+Every build of lowkey ships from [GitHub Releases](https://github.com/sectapunterx/lowkey/releases).
 Package-manager manifests reuse those same release assets. This doc tracks each
 free channel, the manifest that feeds it, and the exact steps to submit/update.
 
@@ -17,7 +17,8 @@ external accounts. See "Not yet done" below.
 
 ## Scoop — works now
 
-This repository is a Scoop bucket (`bucket/heap.json`). Users install with:
+This repository is a Scoop bucket (`bucket/heap.json`; the manifest, and so the
+app name in Scoop, keeps the old name `heap`). Users install with:
 
 ```powershell
 scoop bucket add heap https://github.com/sectapunterx/lowkey
@@ -35,7 +36,8 @@ of `bucket/heap.json`.
 ## winget — ready to PR
 
 Manifests live in `packaging/winget/` (schema 1.6.0):
-`sectapunterx.heap.yaml`, `.installer.yaml`, `.locale.en-US.yaml`.
+`sectapunterx.heap.yaml`, `.installer.yaml`, `.locale.en-US.yaml` (the package
+identifier `sectapunterx.heap` keeps the old name).
 
 1. Validate + test locally (Windows):
    ```powershell
@@ -49,9 +51,9 @@ Manifests live in `packaging/winget/` (schema 1.6.0):
    ```
    or manually fork [`microsoft/winget-pkgs`](https://github.com/microsoft/winget-pkgs),
    copy the three files to
-   `manifests/s/sectapunterx/lowkey/0.4.2/`, and open a PR.
+   `manifests/s/sectapunterx/heap/0.4.2/`, and open a PR.
 3. On each release, bump `PackageVersion` + `InstallerUrl` + `InstallerSha256`
-   (`sha256sum heap-<ver>-windows-setup.exe`) and repeat. `wingetcreate update`
+   (`sha256sum lowkey-<ver>-windows-setup.exe`) and repeat. `wingetcreate update`
    automates this.
 
 > The installer is currently **unsigned**; winget's automated validation still
@@ -60,7 +62,8 @@ Manifests live in `packaging/winget/` (schema 1.6.0):
 ## Flathub — draft, test before PR
 
 Files in `packaging/flatpak/`: manifest `io.github.sectapunterx.heap.yaml`,
-`io.github.sectapunterx.heap.metainfo.xml`, `io.github.sectapunterx.heap.desktop`.
+`io.github.sectapunterx.heap.metainfo.xml`, `io.github.sectapunterx.heap.desktop`
+(the app id `io.github.sectapunterx.heap` keeps the old name).
 The manifest builds from the `v0.4.2` git tag against the KDE 6 runtime.
 
 1. Build + run locally:
@@ -87,7 +90,7 @@ The manifest builds from the `v0.4.2` git tag against the KDE 6 runtime.
 
 | Channel | What's needed |
 |---------|---------------|
-| **Homebrew Cask** (macOS) | own tap repo `homebrew-heap` with a cask pointing at the `.dmg`, or PR to `homebrew/homebrew-cask` (has a notability bar) |
+| **Homebrew Cask** (macOS) | own tap repo `homebrew-lowkey` with a cask pointing at the `.dmg`, or PR to `homebrew/homebrew-cask` (has a notability bar) |
 | **AUR** (Arch) | AUR account + SSH key; push a `PKGBUILD` |
 | **Snap Store** | Snapcraft account; `snapcraft.yaml` + `snapcraft upload` |
 | **Chocolatey** | community account + API key; `.nuspec` + `choco push` |
