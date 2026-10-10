@@ -5,6 +5,18 @@ on:
     branches: [master, feature]
   pull_request:
     branches: ["**"]
+  # The full tier: release.yml runs it on every tag, nightly.yml on master
+  # once a day. See `changes` for what the two tiers run.
+  workflow_call:
+    inputs:
+      full:
+        type: boolean
+        default: true
+  workflow_dispatch:
+    inputs:
+      full:
+        type: boolean
+        default: true
 
 permissions:
   # Read-only: no job pushes to the branch any more (formatting and tidy
@@ -34,6 +46,12 @@ jobs:
     timeout-minutes: 5
     outputs:
       code: ${{ github.event_name != 'pull_request' || steps.filter.outputs.code == 'true' }}
+      # Two tiers. Every PR and push gets the fast one: Linux and Windows in
+      # full, macOS without its QML suite (the same QML runs on the other
+      # two), and no sanitizer job. The full tier runs after a release is
+      # tagged — release.yml publishes it as a pre-release and makes it the
+      # update target only once this passes — and nightly on master.
+      full: ${{ inputs.full == true }}
     steps:
       # On pull_request the filter reads the file list from the API — no
       # checkout needed.
@@ -148,7 +166,8 @@ jobs:
   # ──────────────────────────────────────────────────────────────────
   tidy:
     name: clang-tidy
-    if: github.event_name == 'pull_request'
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     # A release PR (feature -> master) touches hundreds of files; 25 minutes
     # cut it off before it finished.
@@ -245,18 +264,25 @@ jobs:
 
       # Linux + macOS. Windows builds inside MSYS2 with MSYS2's own ccache, so
       # it only needs the cache directory carried between runs (below).
+      #
+      # Only pushes (master, feature) save a ccache; a PR restores its base
+      # branch's. Every PR saving its own pushed the repository past GitHub's
+      # 10 GB cache limit, the oldest entries — master's and feature's among
+      # them — were evicted, and the next build started cold: 20 minutes for
+      # Windows instead of one.
       - name: Setup ccache (linux, macos)
         if: runner.os != 'Windows'
         uses: hendrikmuhs/ccache-action@f09c25b45002a07be2955cbe52e8cee55643f89d # v1.2.24
         with:
           key: ${{ runner.os }}-ccache
+          save: ${{ github.event_name == 'push' }}
 
       # Without this the MSYS2 ccache starts empty on every run and only adds
-      # overhead. Unique key per commit so each run saves; restore-keys picks
-      # up the newest one, a PR's own or master's.
+      # overhead. Unique key per commit; restore-keys picks up the newest one
+      # the run can see. Saved by pushes only (below), as on Linux and macOS.
       - name: Restore ccache (windows)
         if: runner.os == 'Windows'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ github.workspace }}/.ccache
           key: ${{ runner.os }}-ccache-${{ github.sha }}
@@ -353,22 +379,36 @@ jobs:
           cmake --build build --parallel --target heap heap_all_tests
           ccache -s
 
+      - name: Save ccache (windows)
+        if: runner.os == 'Windows' && github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ${{ runner.os }}-ccache-${{ github.sha }}
+
       # Tests run on the runner that built them. A separate test job meant a
       # tarred build tree up and down, a second Qt / MSYS2 install, and — via
       # `needs: build` on the whole matrix — Linux tests waiting for the macOS
       # build to finish.
       #
       # --parallel: every suite is its own process with its own test-mode data
-      # dir (named after the executable), so they are safe to run side by side.
-      # heap_qml_tests is the long pole and carries a COST so it starts first.
+      # dir (named after the executable, or the tst_*.qml file for the QML
+      # suites, one test each), so they are safe to run side by side.
       # --timeout: a hung suite fails in minutes instead of eating the job.
       # ctest_with_retry.sh gives a failed suite one more try and reports it as
       # flaky if that passes; a suite that fails twice fails the job.
       - name: Run ctest (linux, macos)
         if: runner.os != 'Windows'
         shell: bash
+        env:
+          # The fast tier skips the QML suite on macOS (see `changes`): it was
+          # most of the job's time there.
+          SKIP_QML: ${{ runner.os == 'macOS' && needs.changes.outputs.full != 'true' }}
         run: |
+          exclude=()
+          if [[ $SKIP_QML == true ]]; then exclude=(-E heap_qml_tests); fi
           bash .github/scripts/ctest_with_retry.sh build/tests \
+            "${exclude[@]}" \
             --parallel "$(getconf _NPROCESSORS_ONLN)" \
             --timeout 300 \
             --output-on-failure \
@@ -456,10 +496,10 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-results-${{ matrix.os }}
-          # heap_qml_tests.txt: the QML cases as they ran (stdout is lost on Windows).
+          # qml-results/: the QML cases as they ran (stdout is lost on Windows).
           path: |
             build/tests/ctest-${{ matrix.os }}.xml
-            build/tests/heap_qml_tests.txt
+            build/tests/qml-results/
 
       - name: Render test report
         if: always()
@@ -513,7 +553,8 @@ jobs:
   sanitizers:
     name: ASan + UBSan
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    # Full tier only (see `changes`).
+    if: needs.changes.outputs.code == 'true' && needs.changes.outputs.full == 'true'
     runs-on: ubuntu-24.04
     # The instrumented Debug build alone takes ~23 minutes on a hosted runner,
     # so a 25-minute cap cancelled the job before a single test ran — on
@@ -545,6 +586,8 @@ jobs:
           key: ${{ runner.os }}-asan-ccache
           # -g + sanitizer objects are several times larger than Release ones.
           max-size: 1G
+          # Pushes only, see the build job.
+          save: ${{ github.event_name == 'push' }}
 
       - name: Configure with sanitizers
         run: |

@@ -85,8 +85,10 @@ jobs:
             echo "prerelease=$prerelease"
           } >> "$GITHUB_OUTPUT"
 
-      # A tag may only ship a commit that passed CI. Master accepts admin
-      # pushes that bypass the ruleset, so a tag can point at a commit whose
+      # A tag may only ship a commit that passed CI — the fast tier the push
+      # to master ran; the full tier runs below, beside the packaging. Master
+      # accepts admin pushes that bypass the ruleset, so a tag can point at a
+      # commit whose
       # `ci` check is red, still running, or was never run. The version bump is
       # usually pushed moments before its tag, so wait for the check to finish
       # rather than failing on "in progress". A manual test build skips this.
@@ -761,8 +763,74 @@ jobs:
           name: "lowkey ${{ needs.meta.outputs.tag }}"
           body_path: notes.md
           generate_release_notes: true
-          # A full release becomes /releases/latest (the updater's target); a
-          # hyphenated tag (rc/beta) is flagged pre-release and stays off latest.
-          prerelease: ${{ needs.meta.outputs.prerelease }}
-          make_latest: ${{ needs.meta.outputs.prerelease == 'false' }}
+          # Published as a pre-release, off /releases/latest (the updater's
+          # target), so it can be downloaded at once but reaches no one by
+          # itself. `promote` makes a full release the latest once the full CI
+          # tier has passed; a hyphenated tag (rc/beta) stays a pre-release.
+          prerelease: true
+          make_latest: false
           files: dist/*
+
+  # ──────────────────────────────────────────────────────────────────
+  # The full CI tier on the tagged commit (macOS QML suite, ASan + UBSan —
+  # what a PR does not wait for), side by side with the packaging.
+  # ──────────────────────────────────────────────────────────────────
+  full-ci:
+    name: full CI
+    needs: meta
+    if: needs.meta.outputs.release == 'true'
+    uses: ./.github/workflows/ci.yml
+    with:
+      full: true
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: read
+
+  # ──────────────────────────────────────────────────────────────────
+  # Hand the release to the updater: green full CI → /releases/latest.
+  # ──────────────────────────────────────────────────────────────────
+  promote:
+    name: Promote to latest
+    needs: [meta, publish, full-ci]
+    if: needs.meta.outputs.prerelease == 'false'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Make the release the latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.meta.outputs.tag }}
+        run: gh release edit "$TAG" --repo "${{ github.repository }}" --prerelease=false --latest
+
+  # ──────────────────────────────────────────────────────────────────
+  # A red full CI keeps the release a pre-release (`promote` does not run),
+  # so no one is updated to it. An issue says so; it notifies the owner.
+  # ──────────────────────────────────────────────────────────────────
+  hold:
+    name: Report a held release
+    needs: [meta, publish, full-ci]
+    if: >-
+      ${{ always() && needs.meta.outputs.release == 'true'
+          && needs.publish.result == 'success'
+          && needs.full-ci.result != 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open an issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.meta.outputs.tag }}
+          RESULT: ${{ needs.full-ci.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          body=$(printf '%s\n\n%s\n\n%s\n' \
+            "The full CI tier on $TAG finished as \`$RESULT\`: $RUN_URL" \
+            "$TAG stays a pre-release, so the updater does not offer it. Fix it in a patch release; this one can then be deleted." \
+            "To ship $TAG anyway: \`gh release edit $TAG --prerelease=false --latest\`")
+          gh issue create --repo "${{ github.repository }}" \
+            --title "Release $TAG held: full CI $RESULT" --body "$body"

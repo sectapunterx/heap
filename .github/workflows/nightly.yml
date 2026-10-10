@@ -19,6 +19,21 @@ concurrency:
 
 jobs:
   # ──────────────────────────────────────────────────────────────────
+  # The full CI tier (macOS QML suite, ASan + UBSan) on master, so a
+  # regression the fast PR tier let through turns up within a day rather
+  # than at the next release.
+  # ──────────────────────────────────────────────────────────────────
+  full-ci:
+    name: full CI
+    uses: ./.github/workflows/ci.yml
+    with:
+      full: true
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: read
+
+  # ──────────────────────────────────────────────────────────────────
   # The newest Qt 6 release: an early warning for what the next Qt bump —
   # or MSYS2 on its own, which Windows follows — will break.
   # ──────────────────────────────────────────────────────────────────
@@ -230,9 +245,14 @@ jobs:
   release-dry-run:
     name: release dry run
     uses: ./.github/workflows/release.yml
+    # Every grant a job in release.yml asks for, the ones that do not run here
+    # included (full-ci's checks/pull-requests, hold's issues): a called
+    # workflow asking for more than its caller grants is rejected whole.
     permissions:
       contents: write
-      checks: read
+      checks: write
+      pull-requests: read
+      issues: write
       actions: read
       id-token: write
       attestations: write

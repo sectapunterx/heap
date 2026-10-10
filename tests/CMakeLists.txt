@@ -665,21 +665,25 @@ target_link_libraries(heap_qml_tests PRIVATE
         Qt6::QuickTest
 )
 
-# The results also go to a file: on Windows the binary's stdout never reaches
-# ctest, so a failure there said only "Failed". ctest_with_retry.sh prints the
-# failing cases from it.
-add_test(NAME heap_qml_tests
-        COMMAND heap_qml_tests -input ${CMAKE_CURRENT_SOURCE_DIR}/qml
-                -o ${CMAKE_CURRENT_BINARY_DIR}/heap_qml_tests.txt,txt -o -,txt)
-# COST: the slowest suite by far; under `ctest --parallel` it starts first so
-# the rest run alongside it instead of after it. TIMEOUT: one process runs every
-# tst_*.qml, and on the macOS runner it already took ~285 s against ctest's
-# default 300 s, so each new suite risked a timeout that is not a failure.
-# On the Linux and macOS runners it now takes 12–14 min (0.8.1).
-set_tests_properties(heap_qml_tests PROPERTIES
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_CONTROLS_STYLE=Basic"
-        COST 1000
-        TIMEOUT 1500)
+# One ctest test per tst_*.qml (heap_qml_tests.<Name>), so `ctest --parallel`
+# spreads them over every core. As a single process running all of them in a
+# row it took 12 min on the Linux runner and 24 on macOS, and was the whole of
+# CI's wall time. HEAP_QML_TEST_FILE gives each its own test-mode profile (see
+# quick_test_main.cpp). The results also go to a file: on Windows the binary's
+# stdout never reaches ctest, so a failure there said only "Failed";
+# ctest_with_retry.sh prints the failing cases from qml-results/.
+file(GLOB HEAP_QML_TEST_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/qml/tst_*.qml)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/qml-results)
+foreach(qml_test IN LISTS HEAP_QML_TEST_FILES)
+  get_filename_component(qml_name ${qml_test} NAME_WE)
+  string(REGEX REPLACE "^tst_" "" qml_name ${qml_name})
+  add_test(NAME heap_qml_tests.${qml_name}
+          COMMAND heap_qml_tests -input ${qml_test}
+                  -o ${CMAKE_CURRENT_BINARY_DIR}/qml-results/${qml_name}.txt,txt -o -,txt)
+  set_tests_properties(heap_qml_tests.${qml_name} PROPERTIES
+          ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_CONTROLS_STYLE=Basic;HEAP_QML_TEST_FILE=${qml_name}"
+          TIMEOUT 300)
+endforeach()
 
 # HEAP-71: the static TodoCpp module's file-based components (SideRail,
 # ArchiveView, …) failed to resolve in the Quick Test binary on Linux under
