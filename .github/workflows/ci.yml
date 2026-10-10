@@ -5,6 +5,27 @@ on:
     branches: [master, feature]
   pull_request:
     branches: ["**"]
+  # The full tier: release.yml runs it on every tag, nightly.yml on master
+  # once a day. See `changes` for what the two tiers run.
+  workflow_call:
+    inputs:
+      full:
+        type: boolean
+        default: true
+      # What to check out; the triggering ref when empty. Nightly passes
+      # `feature`: a schedule always runs on master, which only changes with
+      # a release, so it would test what has already shipped.
+      ref:
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      full:
+        type: boolean
+        default: true
+      ref:
+        type: string
+        default: ""
 
 permissions:
   # Read-only: no job pushes to the branch any more (formatting and tidy
@@ -34,6 +55,12 @@ jobs:
     timeout-minutes: 5
     outputs:
       code: ${{ github.event_name != 'pull_request' || steps.filter.outputs.code == 'true' }}
+      # Two tiers. Every PR and push gets the fast one: everything on Windows,
+      # Linux and macOS without the QML suite (the same QML, and it took
+      # minutes there against Windows' two), and no sanitizer job. The full tier runs after a release is
+      # tagged — release.yml publishes it as a pre-release and makes it the
+      # update target only once this passes — and nightly on master.
+      full: ${{ inputs.full == true }}
     steps:
       # On pull_request the filter reads the file list from the API — no
       # checkout needed.
@@ -90,6 +117,7 @@ jobs:
       # The PR's merge commit; HEAD^1 is the base it merges into.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.ref }}
           fetch-depth: 2
 
       - name: Install clang-format 18
@@ -120,6 +148,8 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
       - uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
         with:
           files: ".github/workflows/*.yml"
@@ -133,65 +163,13 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
       - name: Check QML against the design tokens
         run: python3 .github/scripts/ui_tokens_check.py qml
       # Displayed dates go through the UI-language formatter (APP-188).
       - name: Check displayed dates against the locale formatter
         run: python3 .github/scripts/date_format_check.py qml src
-
-  # ──────────────────────────────────────────────────────────────────
-  # 3. clang-tidy on the changed lines (PR only).
-  # Fails on any finding in a line the PR changed; the rest of a touched file
-  # is left alone. readability-identifier-naming stays off: the legacy code
-  # predates the naming rules and a changed line that merely uses an old name
-  # would be flagged. Pinned to clang-tidy 18, the same as clang-format.
-  # ──────────────────────────────────────────────────────────────────
-  tidy:
-    name: clang-tidy
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-24.04
-    # A release PR (feature -> master) touches hundreds of files; 25 minutes
-    # cut it off before it finished.
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 2
-
-      - name: Install toolchain
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            clang-tidy-18 cmake ninja-build \
-            qt6-base-dev qt6-declarative-dev qt6-tools-dev qt6-networkauth-dev libgl1-mesa-dev libxcb1-dev
-
-      # Tests included, so test sources have compile commands too; every
-      # target's moc/autogen output must exist or clang-tidy cannot parse it.
-      - name: Configure (compile_commands.json)
-        run: |
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Debug \
-            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-          ninja -C build -t targets all | sed -nE 's/^([A-Za-z0-9_]+_(autogen|qmltyperegistrations)):.*/\1/p' \
-            | sort -u | xargs ninja -C build
-
-      - name: Check the changed lines
-        run: |
-          set -uo pipefail
-          # clang-tidy-diff exits non-zero on its own findings; the verdict is
-          # taken from the log below, so the step must not stop here first.
-          # Windows- and macOS-only sources (*_win.cpp, *.mm) are not in this
-          # Linux compile database; tidy would only report their system
-          # headers as missing, so they are left to their own platforms.
-          git diff -U0 HEAD^1 -- '*.cpp' '*.h' \
-            | clang-tidy-diff-18.py -p1 -path build -iregex '(?!.*_win\.cpp$).*\.cpp' \
-                -clang-tidy-binary clang-tidy-18 -j "$(nproc)" -quiet \
-                -checks='-readability-identifier-naming' > tidy.log 2>&1 || true
-          cat tidy.log
-          if grep -qE ': (warning|error): ' tidy.log; then
-            echo "::error::clang-tidy found issues in changed lines (above)"
-            exit 1
-          fi
 
   # ──────────────────────────────────────────────────────────────────
   # 5. Build + test matrix (Linux, Windows, macOS).
@@ -219,6 +197,7 @@ jobs:
       # wrote, against HEAD^1 (the base of a PR's merge commit).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.ref }}
           fetch-depth: 2
 
       # Ubuntu 24.04's apt ships Qt 6.4.2, which has a static-QML-module
@@ -245,26 +224,38 @@ jobs:
 
       # Linux + macOS. Windows builds inside MSYS2 with MSYS2's own ccache, so
       # it only needs the cache directory carried between runs (below).
+      #
+      # Only branch runs (pushes to master/feature, nightly) save a ccache; a
+      # PR restores its base branch's, a tag saves nothing (no one could read
+      # it). Every PR saving its own pushed the repository past GitHub's 10 GB
+      # cache limit, the oldest entries — master's and feature's among them —
+      # were evicted, and the next build started cold: 20 minutes for Windows
+      # instead of one. And only a ccache that missed enough is saved again
+      # ("Save ccache" below); nightly prunes the older copies.
       - name: Setup ccache (linux, macos)
         if: runner.os != 'Windows'
         uses: hendrikmuhs/ccache-action@f09c25b45002a07be2955cbe52e8cee55643f89d # v1.2.24
         with:
           key: ${{ runner.os }}-ccache
+          save: false
 
       # Without this the MSYS2 ccache starts empty on every run and only adds
-      # overhead. Unique key per commit so each run saves; restore-keys picks
-      # up the newest one, a PR's own or master's.
+      # overhead. Unique key per run; restore-keys picks up the newest one
+      # the run can see. Saved as on Linux and macOS (below).
       - name: Restore ccache (windows)
         if: runner.os == 'Windows'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ github.workspace }}/.ccache
-          key: ${{ runner.os }}-ccache-${{ github.sha }}
+          key: ${{ runner.os }}-ccache-${{ github.run_id }}
           restore-keys: ${{ runner.os }}-ccache-
 
       # Same update policy and Qt package set as release.yml's package-windows,
       # so CI tests the Qt that ships. qt6-svg and qtkeychain were missing here;
       # a release without Qt6Svg (v0.4.3) went unnoticed partly because of it.
+      # Not `update: false` on PRs to save its ~1.5 min: without it the
+      # packages come from setup-msys2's own MSYS2 snapshot, an older Qt and
+      # GCC than ship, and every ccache entry missed (a 16-minute build).
       - name: Setup MSYS2 (windows)
         id: msys2
         if: runner.os == 'Windows'
@@ -313,6 +304,7 @@ jobs:
       - name: Build (macos)
         if: runner.os == 'macOS'
         run: |
+          ccache -z
           cmake --build build --parallel --target heap heap_all_tests
 
       - name: Configure (linux)
@@ -321,12 +313,14 @@ jobs:
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DHEAP_WARNINGS_AS_ERRORS=ON \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build (linux)
         if: runner.os == 'Linux'
         run: |
+          ccache -z
           cmake --build build --parallel --target heap heap_all_tests
 
       - name: Configure (windows)
@@ -353,22 +347,57 @@ jobs:
           cmake --build build --parallel --target heap heap_all_tests
           ccache -s
 
+      # How stale the restored ccache was: a copy that hit nearly everything
+      # is not worth another few hundred MB of the 10 GB cache.
+      - name: Count ccache misses
+        id: ccache-misses
+        shell: bash
+        env:
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then
+            msys=$(cygpath -u '${{ steps.msys2.outputs.msys2-location }}')
+            export PATH="$msys/ucrt64/bin:$PATH"
+          fi
+          misses=$(ccache --print-stats 2>/dev/null | awk -F'\t' '$1 == "cache_miss" { print $2 }')
+          # Unreadable stats: save rather than let the cache go stale.
+          echo "misses=${misses:-9999}" >> "$GITHUB_OUTPUT"
+          echo "ccache misses: ${misses:-unknown}"
+
+      - name: Save ccache
+        if: >-
+          ${{ github.event_name != 'pull_request' && github.ref_type == 'branch'
+              && fromJSON(steps.ccache-misses.outputs.misses) > 30 }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ github.workspace }}/.ccache
+          # The prefixes the restores above look for: hendrikmuhs/ccache-action
+          # puts "ccache-" in front of its key.
+          key: ${{ runner.os == 'Windows' && 'Windows-ccache' || format('ccache-{0}-ccache', runner.os) }}-${{ github.run_id }}
+
       # Tests run on the runner that built them. A separate test job meant a
       # tarred build tree up and down, a second Qt / MSYS2 install, and — via
       # `needs: build` on the whole matrix — Linux tests waiting for the macOS
       # build to finish.
       #
       # --parallel: every suite is its own process with its own test-mode data
-      # dir (named after the executable), so they are safe to run side by side.
-      # heap_qml_tests is the long pole and carries a COST so it starts first.
+      # dir (named after the executable, or the tst_*.qml file for the QML
+      # suites, one test each), so they are safe to run side by side.
       # --timeout: a hung suite fails in minutes instead of eating the job.
       # ctest_with_retry.sh gives a failed suite one more try and reports it as
       # flaky if that passes; a suite that fails twice fails the job.
       - name: Run ctest (linux, macos)
         if: runner.os != 'Windows'
         shell: bash
+        env:
+          # The fast tier runs the QML suite on Windows only (see `changes`):
+          # it was most of this job's time on Linux and macOS.
+          SKIP_QML: ${{ needs.changes.outputs.full != 'true' }}
         run: |
+          exclude=()
+          if [[ $SKIP_QML == true ]]; then exclude=(-E heap_qml_tests); fi
           bash .github/scripts/ctest_with_retry.sh build/tests \
+            "${exclude[@]}" \
             --parallel "$(getconf _NPROCESSORS_ONLN)" \
             --timeout 300 \
             --output-on-failure \
@@ -422,6 +451,46 @@ jobs:
         # trend-watching; logged only, never judged (APP-161).
         run: build/lowkey --smoke --perf-log --data-dir "$RUNNER_TEMP/smoke"
 
+      # ──────────────────────────────────────────────────────────────────
+      # clang-tidy on the changed lines (PR only), on this job's build tree.
+      # Fails on any finding in a line the PR changed; the rest of a touched
+      # file is left alone. readability-identifier-naming stays off: the
+      # legacy code predates the naming rules and a changed line that merely
+      # uses an old name would be flagged. Pinned to clang-tidy 18 (on the
+      # runner image), the same as clang-format. It was a job of its own,
+      # which spent three to six minutes generating the moc output this build
+      # already has.
+      # ──────────────────────────────────────────────────────────────────
+      - name: Generate the remaining moc output (linux)
+        if: github.event_name == 'pull_request' && runner.os == 'Linux'
+        # The targets this job does not build (CLI, updater) need theirs too,
+        # or clang-tidy cannot parse their sources.
+        run: |
+          ninja -C build -t targets all | sed -nE 's/^([A-Za-z0-9_]+_(autogen|qmltyperegistrations)):.*/\1/p' \
+            | sort -u | xargs ninja -C build
+
+      - name: clang-tidy on the changed lines (linux)
+        if: github.event_name == 'pull_request' && runner.os == 'Linux'
+        run: |
+          set -uo pipefail
+          if ! command -v clang-tidy-18 >/dev/null || ! command -v clang-tidy-diff-18.py >/dev/null; then
+            sudo apt-get install -y --no-install-recommends clang-tidy-18
+          fi
+          # clang-tidy-diff exits non-zero on its own findings; the verdict is
+          # taken from the log below, so the step must not stop here first.
+          # Windows- and macOS-only sources (*_win.cpp, *.mm) are not in this
+          # Linux compile database; tidy would only report their system
+          # headers as missing, so they are left to their own platforms.
+          git diff -U0 HEAD^1 -- '*.cpp' '*.h' \
+            | clang-tidy-diff-18.py -p1 -path build -iregex '(?!.*_win\.cpp$).*\.cpp' \
+                -clang-tidy-binary clang-tidy-18 -j "$(nproc)" -quiet \
+                -checks='-readability-identifier-naming' -extra-arg=-Wno-error > tidy.log 2>&1 || true
+          cat tidy.log
+          if grep -qE ': (warning|error): ' tidy.log; then
+            echo "::error::clang-tidy found issues in changed lines (above)"
+            exit 1
+          fi
+
       # The portable bundle exactly as release.yml assembles it (windeployqt +
       # copy-deps + UCRT), started with a PATH that has no MSYS2 on it — so a DLL
       # or plugin the bundle forgot fails here instead of on a user's machine.
@@ -456,10 +525,10 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-results-${{ matrix.os }}
-          # heap_qml_tests.txt: the QML cases as they ran (stdout is lost on Windows).
+          # qml-results/: the QML cases as they ran (stdout is lost on Windows).
           path: |
             build/tests/ctest-${{ matrix.os }}.xml
-            build/tests/heap_qml_tests.txt
+            build/tests/qml-results/
 
       - name: Render test report
         if: always()
@@ -513,7 +582,8 @@ jobs:
   sanitizers:
     name: ASan + UBSan
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    # Full tier only (see `changes`).
+    if: needs.changes.outputs.code == 'true' && needs.changes.outputs.full == 'true'
     runs-on: ubuntu-24.04
     # The instrumented Debug build alone takes ~23 minutes on a hosted runner,
     # so a 25-minute cap cancelled the job before a single test ran — on
@@ -521,6 +591,8 @@ jobs:
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Install build tools + system libs
         run: |
@@ -545,6 +617,8 @@ jobs:
           key: ${{ runner.os }}-asan-ccache
           # -g + sanitizer objects are several times larger than Release ones.
           max-size: 1G
+          # Branch runs only, see the build job.
+          save: ${{ github.event_name != 'pull_request' && github.ref_type == 'branch' }}
 
       - name: Configure with sanitizers
         run: |
@@ -592,7 +666,7 @@ jobs:
   # below.
   #
   # `if: always()` ensures this job runs even when a dependency fails or is
-  # skipped (PR-only jobs like format-cpp/tidy are skipped on push). The
+  # skipped (PR-only jobs like format-cpp are skipped on push). The
   # gating logic treats `skipped` and `success` as OK and only fails on
   # `failure` or `cancelled` — so the check is green on push (where the
   # PR-only jobs don't run) and on PRs alike.
@@ -606,7 +680,6 @@ jobs:
       - lint-actions
       - ui-tokens
       - format-cpp
-      - tidy
       - build
       - sanitizers
     runs-on: ubuntu-24.04

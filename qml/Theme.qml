@@ -57,7 +57,7 @@ QtObject {
     readonly property string slot: AppController.theme === "light" ? "light"
         : AppController.theme === "system" ? (Application.styleHints.colorScheme === Qt.ColorScheme.Light ? "light" : "dark")
         : "dark"
-    readonly property var customThemes: Array.isArray(_appearance.customThemes) ? _appearance.customThemes : []
+    readonly property var customThemes: Presets.list(_appearance.customThemes)
     readonly property string darkPresetId:  typeof _appearance.darkPreset === "string" && _appearance.darkPreset.length
                                             ? _appearance.darkPreset : Presets.DEFAULT_DARK
     readonly property string lightPresetId: typeof _appearance.lightPreset === "string" && _appearance.lightPreset.length
