@@ -1068,11 +1068,15 @@ heap_add_appcontroller_test(heap_state_fixture_tests test_state_fixtures.cpp)
 target_compile_definitions(heap_state_fixture_tests PRIVATE
         HEAP_STATE_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/state")
 
-# The two benchmarks assert wall-clock budgets. CI runs ctest with --parallel,
-# and a benchmark sharing the runner's cores with other suites misses its
-# budget for reasons that have nothing to do with the code (seen under ASan).
-# RUN_SERIAL runs each one alone; everything else stays parallel.
-set_tests_properties(heap_md_bench_tests heap_save_bench_tests PROPERTIES RUN_SERIAL TRUE)
+# These assert wall-clock budgets. CI runs ctest with --parallel, and a suite
+# sharing the runner's cores with others misses its budget for reasons that
+# have nothing to do with the code (seen under ASan, and since the QML suites
+# run one per file beside them: StorageSafety's event-loop gap hit 421 ms
+# against 322 on Windows). RUN_SERIAL runs each one alone; everything else
+# stays parallel. heap_perf_tests is set below, with its gate.
+set_tests_properties(heap_md_bench_tests heap_save_bench_tests heap_filter_bench_tests
+        heap_storage_safety_tests heap_time_audit_tests heap_time_machine_tests
+        PROPERTIES RUN_SERIAL TRUE)
 
 # ─── Performance budget gate (APP-161) ───
 # Median timings of the heavy-profile operations against tests/PerfBudgets.h;

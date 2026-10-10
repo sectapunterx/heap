@@ -40,6 +40,11 @@ if(HEAP_ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     message(STATUS "heap: ASan + UBSan ON")
     add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer -g)
     add_link_options(-fsanitize=address,undefined)
+    # No QML-to-C++ compilation here: the sanitizers are for heap's own C++,
+    # the QML suite does not run under them, and gcc instrumenting the
+    # generated code of one large view took most of an hour (ThemeSettings,
+    # nightly 2026-10-10). The QML is compiled at run time instead.
+    set(QT_QML_NO_CACHEGEN ON)
 endif()
 
 # Warnings for heap's own C++ — applied per target (and in tests/ after
