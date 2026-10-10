@@ -326,6 +326,12 @@ Popup {
         Qt.callLater(function () {
             if (entry.kind === "profile") {
                 // already switched above
+            } else if (entry.commandId === "goto-date") {
+                // The calendar on that day; Today and the calendar views
+                // just move to it.
+                AppController.selectedDate = entry.date;
+                if (["today", "week", "month"].indexOf(AppController.currentView) < 0)
+                    AppController.currentView = "week";
             } else if (entry.kind === "command" || entry.kind === "setting") {
                 // Closed first: a command often opens a popup of its own.
                 root.close();
@@ -564,6 +570,12 @@ Popup {
             const cmds = (q.length > 0 ? root._filterAndScore(q) : root._entries)
                 .filter(e => e.kind === "command" || e.kind === "setting");
             const extra = root._unavailable(q);
+            // ":" and a date goes to that date (HOTKEYS.md): ":fri",
+            // ":20.10", ":завтра" found a setting or nothing (SHELL-1).
+            const when = q.length > 0 ? AppController.parseDateTime(q, new Date()) : null;
+            if (when && when.ok && when.start && !isNaN(when.start.getTime()))
+                extra.unshift({ kind: "command", commandId: "goto-date", date: when.start, keys: "", sub: "",
+                                label: I18n.t("palette.cmd.goToDate").arg(I18n.fmtDate(when.start, "weekdayDay")) });
             if (cmds.length + extra.length > 0) header(I18n.t("cmd.group.commands"));
             for (const e of extra) rows.push(e);
             for (const e of cmds) rows.push(root._cmdRow(e));

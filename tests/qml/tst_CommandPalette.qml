@@ -267,4 +267,22 @@ TestCase {
         AppController.deleteTask(id);
         AppController.clearPendingUndo();
     }
+
+    // SHELL-1: ":" and a date goes to that date.
+    function test_colon_and_a_date_goes_there() {
+        const cp = make('import TodoCpp; CommandPalette { }');
+        const was = AppController.selectedDate;
+        const view = AppController.currentView;
+        cp.openWith(">2031-03-12");
+        tryCompare(cp, "opened", true);
+        tryVerify(function () { return cp._matches.length > 0; });
+        compare(cp._matches[0].commandId, "goto-date");
+        cp.activateSelected();
+        tryVerify(function () {
+            const d = AppController.selectedDate;
+            return d.getFullYear() === 2031 && d.getMonth() === 2 && d.getDate() === 12;
+        }, 1000, "the date was not opened");
+        AppController.selectedDate = was;
+        AppController.currentView = view;
+    }
 }
