@@ -698,19 +698,6 @@ if(WIN32)
     set_target_properties(heap-updater PROPERTIES OUTPUT_NAME lowkey-updater)
     add_dependencies(heap heap-updater)
 
-    # ── heap.exe, kept as a launcher (APP-280) ──
-    # What 0.7.x left pointing at heap.exe — its updater's restart, shortcuts,
-    # a login entry — starts lowkey.exe through this. No Qt, static runtime.
-    add_executable(heap-legacy-launcher WIN32 src/updater/legacy_launcher_win.cpp)
-    set_target_properties(heap-legacy-launcher PROPERTIES OUTPUT_NAME heap)
-    target_compile_definitions(heap-legacy-launcher PRIVATE UNICODE _UNICODE)
-    target_link_libraries(heap-legacy-launcher PRIVATE user32)
-    target_compile_options(heap-legacy-launcher PRIVATE "${HEAP_WARNING_OPTIONS}")
-    if(MINGW)
-        target_link_options(heap-legacy-launcher PRIVATE -municode -static)
-    endif()
-    add_dependencies(heap heap-legacy-launcher)
-
     # ── heap-cli (APP-173) — the console front door to heap.exe ──
     # heap.exe is a GUI-subsystem binary, so cmd and PowerShell neither wait
     # for it nor see its exit code. This console binary runs it with the
@@ -945,13 +932,12 @@ if(WIN32)
         endif()
 
         add_custom_target(portable
-                DEPENDS heap heap-updater heap-cli heap-legacy-launcher
+                DEPENDS heap heap-updater heap-cli
                 COMMAND ${CMAKE_COMMAND} -E rm -rf          "${PORTABLE_DIR}"
                 COMMAND ${CMAKE_COMMAND} -E make_directory  "${PORTABLE_DIR}"
                 COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:heap>" "${PORTABLE_DIR}/"
                 COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:heap-updater>" "${PORTABLE_DIR}/"
                 COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:heap-cli>" "${PORTABLE_DIR}/"
-                COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:heap-legacy-launcher>" "${PORTABLE_DIR}/"
                 COMMAND ${CMAKE_COMMAND} -E env "PATH=${_windeploy_path}"
                         ${WINDEPLOYQT_EXECUTABLE}
                         --no-translations

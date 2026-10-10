@@ -14,6 +14,7 @@
 
 #include <QApplication>
 #include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSignalSpy>
@@ -377,6 +378,34 @@ TEST(GitWorkingLine, MigrationKeepsAnExplicitChoice) {
   const QJsonObject g = other.value(QStringLiteral("git")).toObject();
   EXPECT_TRUE(g.value(QStringLiteral("workingOnLine")).toBool());
   EXPECT_FALSE(g.value(QStringLiteral("linkBranches")).toBool(true));
+}
+
+// ── The move to the lowkey themes (0.8.1) ──
+
+// Any theme in either slot moves to the references' look; the person's own
+// themes and the other appearance settings stay.
+TEST(LowkeyTheme, MigrationMovesBothSlotsAndKeepsCustomThemes) {
+  const QJsonArray custom{QJsonObject{{QStringLiteral("id"), QStringLiteral("mine")}}};
+  QJsonObject app{{QStringLiteral("appearance"),
+                   QJsonObject{{QStringLiteral("darkPreset"), QStringLiteral("graphite")},
+                               {QStringLiteral("lightPreset"), QStringLiteral("mine")},
+                               {QStringLiteral("accent"), QStringLiteral("#3366ff")},
+                               {QStringLiteral("cursorColor"), QStringLiteral("ink")},
+                               {QStringLiteral("customThemes"), custom}}}};
+  ASSERT_TRUE(AppController::migrateLowkeyTheme(app));
+  const QJsonObject a = app.value(QStringLiteral("appearance")).toObject();
+  EXPECT_EQ(a.value(QStringLiteral("darkPreset")).toString(), QStringLiteral("heap-ink"));
+  EXPECT_EQ(a.value(QStringLiteral("lightPreset")).toString(), QStringLiteral("heap-light"));
+  EXPECT_FALSE(a.contains(QStringLiteral("accent")));
+  EXPECT_EQ(a.value(QStringLiteral("cursorColor")).toString(), QStringLiteral("ink"));
+  EXPECT_EQ(a.value(QStringLiteral("customThemes")).toArray(), custom);
+}
+
+// A profile already on the lowkey themes is left as it is.
+TEST(LowkeyTheme, MigrationLeavesTheLowkeyThemesAlone) {
+  QJsonObject app{{QStringLiteral("appearance"), QJsonObject{{QStringLiteral("darkPreset"), QStringLiteral("heap-ink")},
+                                                             {QStringLiteral("lightPreset"), QStringLiteral("heap-light")}}}};
+  EXPECT_FALSE(AppController::migrateLowkeyTheme(app));
 }
 
 int main(int argc, char** argv) {
