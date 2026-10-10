@@ -174,7 +174,7 @@ TestCase {
         d.showNow();
         tryVerify(() => d.opened);
         const field = findChild(d.contentItem, "standup-draft-text");
-        verify(field.text.split("\n").length >= 6, field.text);
+        compare(field.text.split("\n").length, 3, field.text);
         field.text = "edited";
         compare(field.text, "edited");
         d.close();

@@ -583,7 +583,7 @@ FocusScope {
                 placeholderTextColor: Theme.textDim
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fs2xl
-                font.weight: Theme.fwTitle
+                font.weight: Theme.fwScreenTitle
                 selectByMouse: true
                 background: Item {}
                 Accessible.name: I18n.t("common.title")
@@ -906,7 +906,7 @@ FocusScope {
                     objectName: "event-delete"
                     visible: !root.readOnly
                     text: I18n.t("event.delete")
-                    color: Theme.danger
+                    color: Theme.dangerLink
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsSm
                     font.underline: deleteCA.hovered

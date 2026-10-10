@@ -136,7 +136,7 @@ TestCase {
         tryCompare(dlg, "opened", true);
         const field = find(dlg.contentItem, function (it) { return it.objectName === "saved-view-name-field"; });
         tryVerify(function () { return field.activeFocus; }, 1000, "the name field takes the keyboard");
-        compare(field.text, "svprobe priority:P0", "the query is the suggested name");
+        compare(field.text, "Svprobe · P0", "the query, read as words, is the suggested name");
         field.selectAll();
         typeText("Hot");
         keyClick(Qt.Key_Return);

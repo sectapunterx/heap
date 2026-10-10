@@ -97,8 +97,20 @@ Item {
 
     // A name to start from: the query when there is one, else the chips, else
     // the view's own name — something the user can accept with one Enter.
+    // A query as a name (X-Dlg-Small, R3-077): "статус:заблокировано p0" →
+    // "Заблокировано · P0" — the values, not the keys.
+    function readableQuery(raw) {
+        const parts = String(raw).trim().match(/(?:[^\s"]+:)?"[^"]*"|\S+/g) || [];
+        const words = parts.map(w => {
+            let v = w.indexOf(":") > 0 && !/^https?:/i.test(w) ? w.slice(w.indexOf(":") + 1) : w;
+            v = v.replace(/^"|"$/g, "");
+            return /^p[0-3]$/i.test(v) ? v.toUpperCase() : v;
+        }).filter(v => v.length > 0);
+        const out = words.join(" · ");
+        return out.length > 0 ? out.charAt(0).toUpperCase() + out.slice(1) : "";
+    }
     function suggestName(state) {
-        const q = (state.query || "").trim();
+        const q = root.readableQuery(state.query || "");
         if (q.length > 0) return q.length > 40 ? q.slice(0, 39) + "…" : q;
         if (state.priorities && state.priorities.length > 0) return state.priorities.join(" · ");
         return I18n.t("siderail." + state.view);

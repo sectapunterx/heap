@@ -25,7 +25,7 @@ Popup {
     readonly property bool due: root.field === "due"
     readonly property var _task: root.taskIds.length > 0 ? AppController.taskById(root.taskIds[0]) : null
     // Tab: the calendar, for the mouse; the shell opens it and sets the date.
-    signal pickDateRequested(date current)
+    signal pickDateRequested(date current, bool timed)
 
     function openFor(ids, field) {
         root.taskIds = ids;
@@ -68,6 +68,21 @@ Popup {
         }
         return "";
     }
+    // The nearest free slot of the same length on the same day, from the
+    // clashing time on in half hours (R3-067); null when the day has none.
+    function nearestFree(when, minutes) {
+        const day = new Date(when.getFullYear(), when.getMonth(), when.getDate());
+        const stop = Math.min(24, Math.max(AppController.workdayEnd, when.getHours() + 1)) * 60;
+        let m = Math.ceil((when.getHours() * 60 + when.getMinutes()) / 30) * 30;
+        for (; m + minutes <= stop; m += 30) {
+            const t = new Date(day.getFullYear(), day.getMonth(), day.getDate(), Math.floor(m / 60), m % 60);
+            if (root._clash(t, minutes).length === 0) return t;
+        }
+        return null;
+    }
+    readonly property string _clashWith: root.parsed.state === "ok" && root.parsed.timed && !root.due
+                                         ? root._clash(root.parsed.when, root._minutes) : ""
+    readonly property var _free: root._clashWith.length > 0 ? root.nearestFree(root.parsed.when, root._minutes) : null
     function resultText() {
         const p = root.parsed;
         if (p.state === "empty") return root.due ? I18n.t("schedule.hint.due") : I18n.t("schedule.hint.when");
@@ -81,8 +96,7 @@ Popup {
         const end = new Date(p.when.getTime() + root._minutes * 60000);
         let out = day + " · " + I18n.fmtTime(p.when) + "–" + I18n.fmtTime(end)
             + " " + I18n.t("schedule.byEstimate").arg(I18n.fmtMinutes(root._minutes));
-        const clash = root._clash(p.when, root._minutes);
-        if (clash.length > 0) out += " · " + I18n.t("schedule.clash").arg(clash);
+        if (root._clashWith.length > 0) out += " · " + I18n.t("schedule.clash").arg(root._clashWith);
         return out;
     }
 
@@ -97,11 +111,19 @@ Popup {
         root.close();
         return true;
     }
-    // A date picked in the calendar, as a date only.
-    function applyDate(d) {
+    // A date picked in the calendar, with its hour when one was picked.
+    function applyDate(d, timed) {
         for (let i = 0; i < root.taskIds.length; i++)
-            AppController.rescheduleTask(root.taskIds[i], root.field, d, false);
+            AppController.rescheduleTask(root.taskIds[i], root.field, d, timed === true);
         root.close();
+    }
+    // ↓ on a clash: the nearest free slot instead.
+    function applyNearest() {
+        if (!root._free) return false;
+        for (let i = 0; i < root.taskIds.length; i++)
+            AppController.rescheduleTask(root.taskIds[i], root.field, root._free, true);
+        root.close();
+        return true;
     }
 
     background: PopupSurface {}
@@ -132,33 +154,41 @@ Popup {
             color: Theme.text
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
-            font.weight: Theme.fwTitle
+            font.weight: Theme.fwBody
             selectByMouse: true
+            // Clearly outlined, focused or not (R3-071).
             background: Rectangle {
                 radius: Theme.radiusMd
                 color: "transparent"
-                border.color: input.activeFocus ? Theme.borderStrong : Theme.fieldBorder
+                border.color: Theme.borderStrong
                 border.width: 1
             }
             Accessible.name: root.due ? I18n.t("schedule.label.due") : I18n.t("schedule.label.when")
             onAccepted: root.apply()
             Keys.onTabPressed: (event) => {
-                root.pickDateRequested(root.parsed.state === "ok" ? root.parsed.when : AppController.selectedDate);
+                const ok = root.parsed.state === "ok";
+                root.pickDateRequested(ok ? root.parsed.when : AppController.selectedDate, ok && root.parsed.timed);
                 event.accepted = true;
             }
+            Keys.onDownPressed: (event) => { event.accepted = root.applyNearest(); }
         }
         Text {
             objectName: "schedule-result"
             Layout.fillWidth: true
             text: root.resultText()
             wrapMode: Text.Wrap
-            color: root.parsed.state === "unknown" || root.parsed.state === "empty" ? Theme.textMuted : Theme.text
+            // Bold: an overlap in the "now" orange, a date it did not read in
+            // red; quiet keeps them in text and grey (R3-069).
+            color: root.parsed.state === "unknown" ? (Style.urgency ? Theme.danger : Theme.textMuted)
+                 : root.parsed.state === "empty" ? Theme.textMuted
+                 : root._clashWith.length > 0 ? (Style.urgency ? Theme.warning : Theme.text) : Theme.text
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsSm
         }
         Text {
             Layout.fillWidth: true
             text: root.parsed.state === "unknown" ? I18n.t("schedule.keys.unknown")
+                : root._free ? I18n.t("schedule.keys.clash").arg(I18n.fmtTime(root._free))
                 : root.due ? I18n.t("schedule.keys.due") : I18n.t("schedule.keys")
             color: Theme.textDim
             font.family: Theme.fontUi

@@ -487,6 +487,7 @@ qt_add_qml_module(heap_core
         qml/EventCapture.qml
         qml/ImmersionView.qml
         qml/SmallDialog.qml
+        qml/ProfileImportDialog.qml
         qml/DialogField.qml
         qml/NotesListPane.qml
         qml/MdEditorPane.qml

@@ -163,6 +163,8 @@ Popup {
                 objectName: "series-scope-ok"
                 primary: true
                 danger: root.mode === "delete"
+                // The one filled button of the dialog in bold (R3-073).
+                solid: Style.fills && root.mode !== "delete"
                 text: root.mode === "delete" ? I18n.t("common.delete")
                     : root.mode === "move" ? I18n.t("repeat.scope.moveBtn") : I18n.t("editor.btn.save")
                 onClicked: root.answer(root.choice)

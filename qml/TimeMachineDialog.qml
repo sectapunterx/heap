@@ -248,8 +248,17 @@ Popup {
                     implicitHeight: Theme.chipH + Theme.spXs
                     radius: Theme.radiusMd
                     color: snapRow.on ? Theme.panel3 : (snapMA.hovered ? Theme.panel2 : "transparent")
-                    border.width: snapRow.on && snapList.activeFocus ? 1 : 0
-                    border.color: Theme.focusRing
+                    // The chosen version: filled; bold adds a light bar on the
+                    // left (N-Dlg-TimeMachine, R3-079). No ring round the row.
+                    Rectangle {
+                        visible: snapRow.on && Style.fills
+                        anchors.left: parent.left
+                        anchors.top: parent.top; anchors.bottom: parent.bottom
+                        anchors.topMargin: Theme.spXs; anchors.bottomMargin: Theme.spXs
+                        width: Theme.cursorBarH
+                        radius: width / 2
+                        color: Theme.text
+                    }
                     RowLayout {
                         anchors.fill: parent
                         anchors.leftMargin: Theme.spSm
@@ -454,6 +463,7 @@ Popup {
                     objectName: "time-machine-restore-all"
                     property bool armed: false
                     primary: true
+                    solid: Style.fills
                     text: restoreAllBtn.armed ? I18n.t("tm.restoreAll.confirm") : I18n.t("tm.restoreAll")
                     onClicked: {
                         if (!root.current) return;
