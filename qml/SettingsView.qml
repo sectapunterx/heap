@@ -3334,7 +3334,7 @@ Item {
                     objectName: "settings-git-line"
                     label: I18n.t("settings.git.line")
                     hint: I18n.t("settings.git.line.hint")
-                    value: root._get("git", "workingOnLine", true) !== false ? "on" : "off"
+                    value: root._get("git", "workingOnLine", false) === true ? "on" : "off"
                     options: [ ({ value: "on", label: I18n.t("settings.on") }), ({ value: "off", label: I18n.t("settings.off") }) ]
                     onSelected: (v) => root.set("git", "workingOnLine", v === "on")
                 }

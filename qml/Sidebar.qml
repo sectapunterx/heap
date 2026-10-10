@@ -17,6 +17,10 @@ Rectangle {
     color: Theme.surfaceNav
 
     property bool expanded: true
+    // The first run (H2-First, R4-006): no key hints, no "Ctrl K" footer and
+    // no profile dot — the page itself teaches the three keys.
+    property bool firstRun: false
+    readonly property bool _hints: Style.keyHints && !root.firstRun
     readonly property int expandedWidth: Theme.px(208)
     // The 36px icon cell plus the margins.
     readonly property int collapsedWidth: 36 + 2 * Theme.spLg
@@ -192,6 +196,7 @@ Rectangle {
                 Layout.minimumWidth: Theme.spLg
                 Layout.preferredHeight: Theme.chipH
                 compact: !root.expanded
+                hideProfileDot: root.firstRun
                 onSyncStatusRequested: root.syncStatusRequested()
                 onNewProfileRequested: root.newProfileRequested()
                 onRenameProfileRequested: root.renameProfileRequested()
@@ -213,7 +218,9 @@ Rectangle {
             Layout.preferredHeight: Theme.chipH + Theme.spXs
             Layout.bottomMargin: Theme.spLg
             radius: Theme.radiusMd
-            color: newTaskCA.hovered ? Theme.panel2 : Theme.panel
+            // Quiet: a hairline field on the sidebar, no fill (H2-Today-Calm,
+            // X-Oth-Light, R4-013); bold keeps the panel fill.
+            color: newTaskCA.hovered ? Theme.panel2 : Style.fills ? Theme.panel : "transparent"
             border.color: newTaskCA.hovered ? Theme.borderStrong : Theme.border
             border.width: 1
             Text {
@@ -345,7 +352,11 @@ Rectangle {
                 KeyHint {
                     visible: Style.keyHints && keys.length > 0
                     Layout.alignment: Qt.AlignVCenter
-                    keys: AppController.shortcuts.length >= 0 ? root.prettyKeys(AppController.shortcutFor("task.timer")) : ""
+                    // "⏸ T" as the sheet and focus mode write it (R4-016).
+                    keys: {
+                        const k = AppController.shortcuts.length >= 0 ? root.prettyKeys(AppController.shortcutFor("task.timer")) : "";
+                        return k.length === 1 ? k.toUpperCase() : k;
+                    }
                 }
             }
             Icon {
@@ -447,24 +458,32 @@ Rectangle {
         }
         // A newer release (X/N-Ntf-OS, R2-053): one quiet line at the bottom
         // instead of a toast — "0.8.1 готова · перезапустить · что нового".
-        Row {
+        // Bounded to the sidebar's gutters (R4-019): a long line wraps
+        // instead of widening the column and pushing every row out.
+        Flow {
             id: updateLine
             objectName: "sidebar-update"
             readonly property string phase: AppController.updatePhase
             readonly property bool can: AppController.updateCanInstall
             visible: root.expanded && root.updateVersion.length > 0 && phase !== "installing"
+            Layout.fillWidth: true
             Layout.leftMargin: Theme.spMd
+            Layout.rightMargin: Theme.spMd
             Layout.topMargin: Theme.spMd
             spacing: Theme.spXs
-            Rectangle {
+            Item {
                 visible: Style.urgency && updateLine.phase === "ready"
-                anchors.verticalCenter: parent.verticalCenter
-                width: Theme.spXs; height: width; radius: width / 2
-                color: Theme.success
+                width: Theme.spXs; height: updateText.implicitHeight
+                Rectangle {
+                        width: Theme.spXs; height: width; radius: width / 2
+                    color: Theme.success
+                }
             }
             Text {
+                id: updateText
                 objectName: "sidebar-update-text"
-                anchors.verticalCenter: parent.verticalCenter
+                width: Math.min(implicitWidth, updateLine.width)
+                elide: Text.ElideRight
                 text: updateLine.phase === "ready" ? I18n.t("update.line.ready").arg(root.updateVersion)
                     : updateLine.phase === "downloading" ? I18n.t("update.line.downloading").arg(root.updateVersion)
                                                               .arg(Math.round(AppController.updateProgress * 100))
@@ -475,7 +494,6 @@ Rectangle {
             }
             Text {
                 visible: updateLine.phase !== "downloading" && updateLine.phase !== "verifying"
-                anchors.verticalCenter: parent.verticalCenter
                 text: "·"
                 color: Theme.textDim
                 font.pixelSize: Theme.fsXs
@@ -484,7 +502,6 @@ Rectangle {
                 id: updateAct
                 objectName: "sidebar-update-action"
                 visible: updateLine.phase !== "downloading" && updateLine.phase !== "verifying"
-                anchors.verticalCenter: parent.verticalCenter
                 text: updateLine.phase === "ready" ? I18n.t("update.line.restart")
                     : updateLine.can ? I18n.t("update.line.install") : I18n.t("update.line.download")
                 color: updActCA.hovered ? Theme.textMuted : Theme.text
@@ -504,7 +521,6 @@ Rectangle {
                 }
             }
             Text {
-                anchors.verticalCenter: parent.verticalCenter
                 text: "·"
                 color: Theme.textDim
                 font.pixelSize: Theme.fsXs
@@ -512,7 +528,6 @@ Rectangle {
             Text {
                 id: updateNotes
                 objectName: "sidebar-update-notes"
-                anchors.verticalCenter: parent.verticalCenter
                 text: I18n.t("update.line.whatsNew")
                 color: notesCA.hovered ? Theme.text : Theme.textMuted
                 font.family: Theme.fontUi
@@ -529,7 +544,7 @@ Rectangle {
         // The rest is in the command line.
         Row {
             objectName: "sidebar-palette-hint"
-            visible: root.expanded && Style.keyHints && paletteKey.keys.length > 0
+            visible: root.expanded && root._hints && paletteKey.keys.length > 0
             Layout.leftMargin: Theme.spMd
             Layout.topMargin: Theme.spMd
             spacing: Theme.spXs
@@ -622,6 +637,17 @@ Rectangle {
             radius: Theme.radiusMd
             color: navCA.hovered && !nav.active ? Theme.panel2 : "transparent"
         }
+        // Folded: the open section is a rounded tile behind its icon
+        // (N/X-Oth-Small, R4-011), not the underline of the full sidebar.
+        Rectangle {
+            objectName: "sidebar-folded-tile"
+            visible: !root.expanded && nav.active
+            anchors.centerIn: parent
+            width: Math.min(parent.width, Theme.px(34))
+            height: width
+            radius: Theme.radiusMd
+            color: Theme.panel2
+        }
         Icon {
             visible: !root.expanded
             anchors.centerIn: parent
@@ -646,16 +672,14 @@ Rectangle {
         }
         CursorBar {
             objectName: "sidebar-cursor"
-            shown: nav.active
-            anchors.left: root.expanded ? navLabel.left : undefined
-            anchors.horizontalCenter: root.expanded ? undefined : parent.horizontalCenter
-            anchors.top: root.expanded ? navLabel.bottom : undefined
-            anchors.bottom: root.expanded ? undefined : parent.bottom
+            shown: nav.active && root.expanded
+            anchors.left: navLabel.left
+            anchors.top: navLabel.bottom
             anchors.topMargin: 1
         }
         KeyHint {
             id: navKey
-            visible: root.expanded && keys.length > 0 && Style.keyHints
+            visible: root.expanded && keys.length > 0 && root._hints
             anchors.right: parent.right; anchors.rightMargin: Theme.spMd
             anchors.verticalCenter: parent.verticalCenter
             keys: nav._keys

@@ -1295,6 +1295,16 @@ class AppController : public QObject {
     return m_snoozed;
   }
 
+  // Review 2 (R3-095): the git "working on" line is off for a new profile,
+  // but data from before 0.8.1 had it on. Run once for such data (settings
+  // without `gitLineDefault`): an unset switch is written as on, a set one
+  // stays. Returns whether `app` changed.
+  static bool migrateGitWorkingLine(QJsonObject& app);
+
+  // The tray menu as the OS shows it (R3-103): [{ id, text, hint, enabled }],
+  // an empty id for a separator. For tests and capture harnesses.
+  Q_INVOKABLE QVariantList trayMenuItems();
+
   // ---- Event ops ----
   // A fresh event id. Shared by the draft and the series edits, which both
   // need one and must not invent different shapes.
@@ -2134,6 +2144,9 @@ class AppController : public QObject {
   // pushKey → the write waiting on its check.
   QHash<QString, PendingCheck> m_pendingChecks;
   bool m_trackerWriteNoticeDone = false;
+  // The one-time git "working on" migration ran (or the data is new): saved
+  // as settings.gitLineDefault so it never runs again.
+  bool m_gitLineDefaultDone = false;
   // Drop the not-yet-started focus blocks planned for a task that is finished.
   void dropFutureFocusBlocks(const QString& taskId);
   void onTaskPushed(const QString& providerId,
@@ -2328,9 +2341,12 @@ class AppController : public QObject {
   // Rebuilds the tray menu and tooltip from the timer, the next meeting and
   // the language (R3-027, R3-103).
   void refreshTray();
+  // The rows refreshTray() gives the OS menu, and its tooltip.
+  QVariantList trayItemsAt(const QDateTime& now, QString* tooltip);
   void onTrayItem(const QString& id);
-  // "Не беспокоить 1 ч" from the tray: held like quiet hours until then.
-  // Session only.
+
+  // "Не беспокоить 1 ч" from the tray: notifications.dndUntil via
+  // doNotDisturbFor, the same item lifts it.
 
   struct ShownReminder {
     QString title;

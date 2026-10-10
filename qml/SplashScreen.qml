@@ -9,12 +9,13 @@ import TodoCpp
 Item {
     id: root
 
-    // 0..1 while the launch settles; drives the dismissal, not a bar.
-    property real progress: 0.0
-    property bool autoAnimate: true
-    property int autoDuration: 1200
+    // The window has drawn its first frame (Main.qml): a normal launch leaves
+    // at once, never on a timer (Review 2, R3-017).
+    property bool ready: false
     readonly property string version: AppController.appVersion
     readonly property bool crashed: AppController.lastExitUnclean
+    // finished() was sent; the splash is on its way out.
+    property bool _done: false
 
     // The splash is done and may fade out.
     signal finished()
@@ -23,7 +24,29 @@ Item {
 
     // Asked to leave: after a crash it stays until the card is answered.
     function dismiss() {
-        if (!root.crashed) root.finished();
+        if (!root.crashed) root._finish();
+    }
+    function _finish() {
+        if (root._done) return;
+        root._done = true;
+        root.finished();
+    }
+    onReadyChanged: if (root.ready) root.dismiss()
+    Component.onCompleted: {
+        if (root.crashed) root.forceActiveFocus();
+        else if (root.ready) root.dismiss();
+    }
+
+    // A press ends a normal splash and still reaches the app under it; only
+    // the crash card takes the press (it waits for an answer).
+    MouseArea {
+        anchors.fill: parent
+        z: -1
+        onPressed: (mouse) => {
+            if (root.crashed) return;
+            mouse.accepted = false;
+            root.dismiss();
+        }
     }
 
     Rectangle { anchors.fill: parent; color: Theme.bg }
@@ -91,7 +114,7 @@ Item {
                     label: parent.text
                     onActivated: {
                         AppController.dismissUncleanExit();
-                        root.finished();
+                        root._finish();
                         root.reportRequested();
                     }
                 }
@@ -109,7 +132,7 @@ Item {
                     label: parent.text
                     onActivated: {
                         AppController.dismissUncleanExit();
-                        root.finished();
+                        root._finish();
                     }
                 }
             }
@@ -117,17 +140,9 @@ Item {
     }
 
     // Enter / Esc answer the card from the keyboard: Esc = "Не отправлять".
+    // A normal splash never holds the focus, so the first key goes to the app.
     focus: root.crashed
     onCrashedChanged: if (root.crashed) root.forceActiveFocus()
-    Component.onCompleted: if (root.crashed) root.forceActiveFocus()
     Keys.onEscapePressed: if (root.crashed) skipCA.activated()
     Keys.onReturnPressed: if (root.crashed) viewCA.activated()
-
-    NumberAnimation on progress {
-        running: root.autoAnimate
-        from: 0; to: 1
-        duration: root.autoDuration
-        easing.type: Theme.easeEnter
-        onFinished: root.dismiss()
-    }
 }

@@ -4104,6 +4104,16 @@ void startOnRuleDay(CalEvent& e) {
 
 }  // namespace
 
+bool AppController::migrateGitWorkingLine(QJsonObject& app) {
+  QJsonObject git = app.value(QStringLiteral("git")).toObject();
+  if(git.contains(QStringLiteral("workingOnLine"))) {
+    return false;
+  }
+  git.insert(QStringLiteral("workingOnLine"), true);
+  app.insert(QStringLiteral("git"), git);
+  return true;
+}
+
 QString AppController::mintEventId() {
   return QString("ev-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
 }
@@ -8506,6 +8516,8 @@ void AppController::seedStartingWorkspace() {
     m_appSettingsJson = heap::platform::firstRunAppearanceJson(heap::platform::systemAccessibilityPrefs());
     emit appSettingsJsonChanged();
   }
+  // New data starts on the new defaults (the git line off, R3-095).
+  m_gitLineDefaultDone = true;
   Profile p = makeStartingProfile(tr_("profile.personal"), QString());
   p.id = QStringLiteral("default");
   // No starter views (R2-058): "Мои виды" fills as filters are saved.
@@ -12348,6 +12360,7 @@ QJsonObject AppController::buildStateHead() {
   s["welcomeSeen"] = m_welcomeSeen;
   s["demoActive"] = m_demoActive;
   s["trackerWriteNotice"] = m_trackerWriteNoticeDone;
+  s["gitLineDefault"] = m_gitLineDefaultDone;
   s["lastRunVersion"] = appVersion();
   icsUidDomain();  // mints the id on the first save
   s["installId"] = m_installId;
@@ -12912,10 +12925,18 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
       }
       applyShortcutOverrides(overrides);
     }
-    if(s.contains("app") && s["app"].isObject()) {
-      QJsonObject app = s["app"].toObject();
-      // APP-167's completion-sound switch is the Sound switch now (APP-177).
-      heap::platform::migrateLegacySoundSetting(app);
+    QJsonObject app = s.value("app").toObject();
+    // APP-167's completion-sound switch is the Sound switch now (APP-177).
+    bool appChanged = s.contains("app") && s["app"].isObject();
+    heap::platform::migrateLegacySoundSetting(app);
+    if(!viewOnly) {
+      m_gitLineDefaultDone = s.value(QStringLiteral("gitLineDefault")).toBool();
+      if(!m_gitLineDefaultDone && migrateGitWorkingLine(app)) {
+        appChanged = true;
+      }
+      m_gitLineDefaultDone = true;
+    }
+    if(appChanged) {
       m_appSettingsJson = QJsonDocument(app).toJson(QJsonDocument::Compact);
       emit appSettingsJsonChanged();
     }
@@ -12923,6 +12944,14 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
     // A document with no settings object at all is still a returning user.
     m_welcomeSeen = true;
     emit onboardingChanged();
+    if(!viewOnly) {
+      m_gitLineDefaultDone = true;
+      QJsonObject app;
+      if(migrateGitWorkingLine(app)) {
+        m_appSettingsJson = QJsonDocument(app).toJson(QJsonDocument::Compact);
+        emit appSettingsJsonChanged();
+      }
+    }
   }
 
   // Structural decisions below key off what was on disk, not the migrated value.

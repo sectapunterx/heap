@@ -107,12 +107,30 @@ Item {
                     background: Item {}
                     color: Theme.text
                     font.family: Theme.fontUi
-                    font.pixelSize: root.quiet ? Theme.fsXl : Theme.fsLg
+                    font.pixelSize: root.quiet ? Theme.fsXl : Theme.px(16)
                     placeholderText: I18n.t(root.quiet ? "first.q.placeholder" : "first.placeholder")
-                    placeholderTextColor: Theme.textDim
+                    // Bold draws its own two-tone placeholder below (R4-007).
+                    placeholderTextColor: root.quiet ? Theme.textDim : "transparent"
                     selectByMouse: true
                     Accessible.name: I18n.t("first.title")
                     onAccepted: root.submit()
+                    // H2-First: "например:" muted, the example brighter.
+                    Text {
+                        objectName: "first-run-placeholder"
+                        visible: !root.quiet && input.text.length === 0 && !input.preeditText
+                        anchors.left: parent.left
+                        anchors.leftMargin: input.leftPadding
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        readonly property string _all: I18n.t("first.placeholder")
+                        readonly property int _cut: _all.indexOf(":") + 1
+                        text: "<font color=\"" + Theme.textDim + "\">" + _all.slice(0, _cut) + "</font>" + _all.slice(_cut)
+                        textFormat: Text.StyledText
+                        elide: Text.ElideRight
+                        color: Theme.textMuted
+                        font: input.font
+                        Accessible.ignored: true
+                    }
                 }
                 Text {
                     visible: !root.quiet
@@ -155,7 +173,8 @@ Item {
         RowLayout {
             visible: !root.quiet
             Layout.fillWidth: true
-            Layout.topMargin: Theme.sp2xl
+            // H2-First: 28px above and below the cards, 14px inside (R4-008).
+            Layout.topMargin: Theme.sp2xl + Theme.spXl
             spacing: Theme.spLg
             Repeater {
                 model: [
@@ -170,7 +189,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     Layout.preferredWidth: 1
-                    implicitHeight: keyCol.implicitHeight + 2 * Theme.spLg
+                    implicitHeight: keyCol.implicitHeight + 2 * (Theme.spLg + Theme.spXs)
                     radius: Theme.radiusLg
                     color: Theme.surfaceCard
                     ColumnLayout {
@@ -178,7 +197,7 @@ Item {
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.top: parent.top
-                        anchors.margins: Theme.spLg
+                        anchors.margins: Theme.spLg + Theme.spXs
                         spacing: Theme.spSm
                         Text {
                             text: keyCard.modelData.keys
@@ -203,7 +222,7 @@ Item {
         Rectangle {
             visible: !root.quiet
             Layout.fillWidth: true
-            Layout.topMargin: Theme.sp2xl
+            Layout.topMargin: Theme.sp2xl + Theme.spXl
             implicitHeight: 1
             color: Theme.border
         }
