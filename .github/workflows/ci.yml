@@ -46,9 +46,9 @@ jobs:
     timeout-minutes: 5
     outputs:
       code: ${{ github.event_name != 'pull_request' || steps.filter.outputs.code == 'true' }}
-      # Two tiers. Every PR and push gets the fast one: Linux and Windows in
-      # full, macOS without its QML suite (the same QML runs on the other
-      # two), and no sanitizer job. The full tier runs after a release is
+      # Two tiers. Every PR and push gets the fast one: everything on Windows,
+      # Linux and macOS without the QML suite (the same QML, and it took
+      # minutes there against Windows' two), and no sanitizer job. The full tier runs after a release is
       # tagged — release.yml publishes it as a pre-release and makes it the
       # update target only once this passes — and nightly on master.
       full: ${{ inputs.full == true }}
@@ -401,9 +401,9 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         env:
-          # The fast tier skips the QML suite on macOS (see `changes`): it was
-          # most of the job's time there.
-          SKIP_QML: ${{ runner.os == 'macOS' && needs.changes.outputs.full != 'true' }}
+          # The fast tier runs the QML suite on Windows only (see `changes`):
+          # it was most of this job's time on Linux and macOS.
+          SKIP_QML: ${{ needs.changes.outputs.full != 'true' }}
         run: |
           exclude=()
           if [[ $SKIP_QML == true ]]; then exclude=(-E heap_qml_tests); fi
