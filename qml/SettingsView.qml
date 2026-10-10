@@ -2180,7 +2180,7 @@ Item {
                 SegRow {
                     objectName: "settings-safety-immersion"
                     label: I18n.t("settings.safety.immersion")
-                    hint: I18n.t("settings.safety.immersion.hint").arg(AppController.shortcutFor("focus.immersion"))
+                    hint: I18n.t("settings.safety.immersion.hint").arg(AppController.shortcutText("focus.immersion"))
                     value: AppController.safety.immersion === true ? "on" : "off"
                     options: [ ({ value: "on", label: I18n.t("settings.safety.available") }), ({ value: "off", label: I18n.t("settings.off") }) ]
                     onSelected: (value) => AppController.setSafetySetting("immersion", value === "on")
@@ -2383,15 +2383,24 @@ Item {
                             Layout.preferredWidth: Theme.px(96)
                             Layout.preferredHeight: Theme.px(28)
                             radius: Theme.radiusMd
+                            // N/X-Set-StyleKeys: a dim hairline cap with dim key
+                            // text (R4-086); an unbound action is a dashed cap
+                            // with "—" (R4-087). Recording and focus stay bright.
+                            readonly property bool unbound: !keyRow.rec && String(keyRow.modelData.sequence).length === 0
                             color: keyRow.changed && !keyRow.rec && !root.quiet ? Theme.borderStrong : "transparent"
-                            border.width: 1
-                            border.color: keyRow.rec ? Theme.text : (capFocus.activeFocus ? Theme.focusRing : Theme.fieldBorder)
-                            opacity: !keyRow.rec && String(keyRow.modelData.sequence).length === 0 ? 0.6 : 1
+                            border.width: keyCap.unbound && !capFocus.activeFocus ? 0 : 1
+                            border.color: keyRow.rec ? Theme.text : (capFocus.activeFocus ? Theme.focusRing : Theme.borderStrong)
+                            DashedRect {
+                                anchors.fill: parent
+                                visible: keyCap.unbound && !capFocus.activeFocus
+                                radius: keyCap.radius
+                                strokeColor: Theme.borderStrong
+                            }
                             Text {
                                 anchors.centerIn: parent
                                 text: keyRow.rec ? (keysRoot.candidate.length > 0 ? AppController.keyText(keysRoot.candidate) : I18n.t("settings.keys.press"))
                                      : (String(keyRow.modelData.sequence).length > 0 ? AppController.keyText(keyRow.modelData.sequence) : "—")
-                                color: Theme.text
+                                color: keyRow.rec || keyRow.changed ? Theme.text : (keyCap.unbound ? Theme.textDim : Theme.textMuted)
                                 font.family: keyRow.rec && keysRoot.candidate.length === 0 ? Theme.fontUi : Theme.fontMono
                                 font.pixelSize: Theme.fsSm
                                 font.weight: keyRow.changed || keyRow.rec ? Theme.fwHeading : Theme.fwBody
@@ -2479,6 +2488,7 @@ Item {
                                     objectName: "settings-keys-replace"
                                     visible: keysRoot.reserved.length === 0 && !keysRoot.conflictBuiltin
                                     text: I18n.t("settings.keys.replace")
+                                    primary: true
                                     onClicked: keysRoot.commit()
                                 }
                                 PillButton {
