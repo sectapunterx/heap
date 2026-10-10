@@ -221,9 +221,9 @@ ApplicationWindow {
     readonly property int _sideRailMinWidth: Theme.compactWindowWidth
     property bool _sideRailWanted: _settingsObject().sideRailExpanded !== false
     property bool _sideRailOnNarrow: false
-    readonly property bool sideRailExpanded: win.width < _sideRailMinWidth ? _sideRailOnNarrow : _sideRailWanted
+    readonly property bool sideRailExpanded: Theme.compactAt(win.width) ? _sideRailOnNarrow : _sideRailWanted
     function toggleSideRail() {
-        if (win.width < _sideRailMinWidth) {
+        if (Theme.compactAt(win.width)) {
             _sideRailOnNarrow = !_sideRailOnNarrow;
             return;
         }

@@ -59,7 +59,7 @@ FocusScope {
 
     // A small window (X-Oth-Small, DG-008): the side goes under the day, its
     // blocks side by side in three columns, the rows one line each.
-    readonly property bool stacked: Window.width > 0 && Window.width < Theme.compactWindowWidth
+    readonly property bool stacked: Theme.compactAt(Window.width)
     // The quiet drawing of the day and of the side (DG-012, DG-013).
     readonly property bool plain: Style.plainRows || root.stacked
     readonly property bool cards: Style.sideCards && !root.stacked
