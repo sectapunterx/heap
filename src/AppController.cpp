@@ -117,6 +117,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <iterator>
 #include <memory>
 #include <optional>
@@ -659,6 +660,8 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"import.missingProfile", {"JSON has no 'profile' block or expected fields", "В JSON нет блока 'profile' или ожидаемых полей"}},
       {"import.emptyPath", {"Empty path", "Пустой путь"}},
       {"import.openFail", {"Cannot open: ", "Не открывается: "}},
+      {"profile.merged", {"Merged into %1: %2 added", "Слито с «%1»: добавлено %2"}},
+      {"profile.mergedKept", {"Merged into %1: %2 added, kept as they were: %3", "Слито с «%1»: добавлено %2, оставлены как были: %3"}},
       {"event.newDefault", {"New event", "Новое событие"}},
       {"palette.fromTemplate", {"New from template: %1", "Новая по шаблону: %1"}},
       {"palette.templateSub", {"template", "шаблон"}},
@@ -13744,6 +13747,8 @@ QString AppController::exportActiveProfileJson() const {
   QJsonObject root;
   root["schemaVersion"] = heap::state::kSchemaVersion;
   root["kind"] = "todocpp.profile";
+  // Which build wrote it, for the import preview (R3-080).
+  root["appVersion"] = QString::fromLatin1(HEAP_VERSION);
   root["exportedAt"] = QDateTime::currentDateTime().toString(Qt::ISODate);
   root["profile"] = profObj;
   // The files the profile's tasks and notes use, so the export stands on its
@@ -13880,6 +13885,180 @@ QString AppController::importProfileFromFile(const QUrl& fileUrl, bool activate)
   }
   const QString text = QString::fromUtf8(f.readAll());
   return importProfileFromJson(text, activate);
+}
+
+namespace {
+
+// A profile export's root and its profile object, or an error text.
+QString readProfileExport(
+    const QUrl& fileUrl, QJsonObject* root, QJsonObject* profileObj, QString* fileName, const std::function<QString(const char*)>& tr) {
+  const QString path = fileUrl.isLocalFile() ? fileUrl.toLocalFile() : fileUrl.toString();
+  if(path.isEmpty()) {
+    return tr("import.emptyPath");
+  }
+  QFile f(path);
+  if(!f.open(QIODevice::ReadOnly)) {
+    return tr("import.openFail") + f.errorString();
+  }
+  *fileName = QFileInfo(path).fileName();
+  const QByteArray bytes = f.readAll();
+  if(bytes.trimmed().isEmpty()) {
+    return tr("import.emptyJson");
+  }
+  const QJsonDocument doc = QJsonDocument::fromJson(bytes);
+  if(doc.isNull() || !doc.isObject()) {
+    return tr("import.invalidJson");
+  }
+  *root = doc.object();
+  if(root->contains("profile") && (*root)["profile"].isObject()) {
+    *profileObj = (*root)["profile"].toObject();
+  } else if(root->contains("id") && root->contains("name")) {
+    *profileObj = *root;
+  } else {
+    return tr("import.missingProfile");
+  }
+  return {};
+}
+
+}  // namespace
+
+QVariantMap AppController::previewProfileImport(const QUrl& fileUrl) {
+  QJsonObject root;
+  QJsonObject profileObj;
+  QString fileName;
+  const QString err = readProfileExport(fileUrl, &root, &profileObj, &fileName, [this](const char* k) {
+    return tr_(QString::fromLatin1(k));
+  });
+  QVariantMap out;
+  if(!err.isEmpty()) {
+    out["error"] = err;
+    return out;
+  }
+  QVector<CalEvent> events;
+  const Profile p = heap::state::profileFromJson(profileObj, &events);
+  out["file"] = fileName;
+  out["name"] = p.name.trimmed().isEmpty() ? QStringLiteral("Imported") : p.name.trimmed();
+  out["version"] = root.value("appVersion").toString();
+  out["schema"] = root.value("schemaVersion").toInt();
+  out["tasks"] = static_cast<int>(p.tasks.size());
+  out["notes"] = static_cast<int>(p.notes.size());
+  out["views"] = static_cast<int>(p.savedViews.size());
+  out["events"] = static_cast<int>(events.size());
+  const int ai = profileIndexOf(m_activeProfileId);
+  out["activeName"] = ai >= 0 ? m_profiles[ai].name : QString();
+  return out;
+}
+
+QString AppController::mergeProfileFromFile(const QUrl& fileUrl) {
+  QJsonObject root;
+  QJsonObject profileObj;
+  QString fileName;
+  const QString err = readProfileExport(fileUrl, &root, &profileObj, &fileName, [this](const char* k) {
+    return tr_(QString::fromLatin1(k));
+  });
+  if(!err.isEmpty()) {
+    return err;
+  }
+  const int ai = profileIndexOf(m_activeProfileId);
+  if(ai < 0) {
+    return importProfileFromFile(fileUrl, true);
+  }
+  snapshotBeforeChange(QStringLiteral("import"));
+  emit flushEditorsRequested();
+  snapshotActiveProfile();
+
+  QVector<CalEvent> importedEvents;
+  Profile in = heap::state::profileFromJson(profileObj, &importedEvents);
+  QStringList attachmentProblems;
+  heap::attachments::remapProfile(in, importAttachmentBlobs(root.value("attachments").toArray(), &attachmentProblems));
+  if(!attachmentProblems.isEmpty()) {
+    emit toast(attText("import.problems").arg(attachmentProblems.join(QStringLiteral("; "))), QStringLiteral("warning"));
+  }
+  Profile& target = m_profiles[ai];
+
+  // Matching ids are never overwritten: they stay as they are and are listed.
+  QStringList kept;
+  int added = 0;
+  const auto idsOf = [](const auto& items) {
+    QSet<QString> s;
+    for(const auto& x : items) {
+      s.insert(x.id);
+    }
+    return s;
+  };
+  const QSet<QString> haveTasks = idsOf(target.tasks);
+  QVector<Task> newTasks;
+  for(const Task& t : in.tasks) {
+    if(haveTasks.contains(t.id)) {
+      kept << t.id;
+    } else {
+      newTasks.append(t);
+    }
+  }
+  in.tasks = newTasks;
+  // A task id another profile holds gets a fresh one (PLAT-9).
+  reissueSharedTaskIds(in, &importedEvents);
+  // A column the profile does not have comes with its tasks.
+  QSet<QString> haveStatuses;
+  for(const QVariant& v : target.statuses) {
+    haveStatuses.insert(v.toMap().value("id").toString());
+  }
+  for(const QVariant& v : in.statuses) {
+    const QString sid = v.toMap().value("id").toString();
+    if(!sid.isEmpty() && !haveStatuses.contains(sid)) {
+      bool used = false;
+      for(const Task& t : in.tasks) {
+        used = used || t.status == sid;
+      }
+      if(used) {
+        target.statuses.append(v);
+        haveStatuses.insert(sid);
+      }
+    }
+  }
+  for(const Task& t : in.tasks) {
+    target.tasks.append(t);
+    ++added;
+  }
+  const auto mergeById = [&kept, &added](auto& into, const auto& from) {
+    QSet<QString> have;
+    for(const auto& x : into) {
+      have.insert(x.id);
+    }
+    for(const auto& x : from) {
+      if(have.contains(x.id)) {
+        kept << x.id;
+      } else {
+        into.append(x);
+        ++added;
+      }
+    }
+  };
+  mergeById(target.notes, in.notes);
+  mergeById(target.docPages, in.docPages);
+  mergeById(target.people, in.people);
+  mergeById(target.savedViews, in.savedViews);
+  QSet<QString> haveEvents;
+  for(const CalEvent& e : m_events.items()) {
+    haveEvents.insert(e.id);
+  }
+  for(CalEvent& e : importedEvents) {
+    if(haveEvents.contains(e.id)) {
+      kept << e.title;
+      continue;
+    }
+    e.profileId = target.id;
+    m_events.upsert(e);
+    ++added;
+  }
+
+  clearPendingUndo();
+  applyProfileToModels(target);
+  emit profilesChanged();
+  emit toast(kept.isEmpty() ? tr_("profile.merged").arg(target.name).arg(added)
+                            : tr_("profile.mergedKept").arg(target.name).arg(added).arg(kept.join(QStringLiteral(", "))));
+  scheduleSave();
+  return {};
 }
 
 // ─────────────────────────────────────────────── Shortcuts catalog ──

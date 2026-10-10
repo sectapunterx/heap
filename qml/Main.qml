@@ -2050,6 +2050,40 @@ ApplicationWindow {
             return;
         }
         schedulePopup.openFor(ids, field);
+        win._placeUnderCard(schedulePopup, ids.length === 1 ? ids[0] : "");
+    }
+    // The visible card (or row) of a task in the active view, or null.
+    function _taskItem(id) {
+        const v = win.activeViewItem();
+        if (!v || !id) return null;
+        const stack = [v];
+        while (stack.length > 0) {
+            const it = stack.pop();
+            if (!it.visible) continue;
+            if (it !== v && it.taskId === id && it.width > 40 && it.height > 12) return it;
+            const kids = it.children;
+            for (let i = 0; i < kids.length; i++) stack.push(kids[i]);
+        }
+        return null;
+    }
+    // "Маленькое поле у карточки" (N-Dlg-Schedule, R3-066): right under the
+    // card it was opened from, so its title stays in sight; above it when
+    // there is no room below. A selection, or a card out of sight: centred.
+    function _placeUnderCard(pop, id) {
+        const host = win.contentItem;
+        const card = win._taskItem(id);
+        if (!card) {
+            pop.x = Math.round((host.width - pop.width) / 2);
+            pop.y = Math.round(host.height / 4);
+            return;
+        }
+        const p = card.mapToItem(host, 0, 0);
+        const gap = Theme.spXs;
+        const h = pop.implicitHeight > 0 ? pop.implicitHeight : pop.height;
+        let y = p.y + card.height + gap;
+        if (y + h > host.height - gap) y = Math.max(gap, p.y - h - gap);
+        pop.x = Math.round(Math.max(gap, Math.min(p.x, host.width - pop.width - gap)));
+        pop.y = Math.round(y);
     }
     function _boardCursorShown() {
         const bi = win._cursorView();
@@ -2870,17 +2904,20 @@ ApplicationWindow {
     SchedulePopup {
         id: schedulePopup
         parent: win.contentItem
-        x: parent ? Math.round((parent.width - width) / 2) : 0
-        y: parent ? Math.round(parent.height / 4) : 0
-        onPickDateRequested: (current) => schedDatePicker.openAt(current, win.contentItem)
+        // Placed by _placeUnderCard() on open.
+        onPickDateRequested: (current, timed) => {
+            schedDatePicker.openAt(current, win.contentItem, timed);
+            // The picker takes the field's place, under the same card.
+            schedDatePicker.x = Math.max(Theme.spXs, Math.min(schedulePopup.x, win.contentItem.width - schedDatePicker.width - Theme.spXs));
+            schedDatePicker.y = Math.max(Theme.spXs, Math.min(schedulePopup.y, win.contentItem.height - schedDatePicker.height - Theme.spXs));
+        }
         onClosed: Qt.callLater(win.returnFocusHome)
     }
     DatePickerPopup {
         id: schedDatePicker
         objectName: "schedule-date"
-        x: parent ? Math.round((parent.width - width) / 2) : 0
-        y: parent ? Math.round((parent.height - height) / 3) : 0
-        onPicked: (value) => schedulePopup.applyDate(value)
+        withTimes: true
+        onPickedAt: (value, timed) => schedulePopup.applyDate(value, timed)
     }
 
     // Jump straight to a day rather than paging to it. Anchored to the window
@@ -3079,15 +3116,12 @@ ApplicationWindow {
     FileDialog {
         id: importJsonDialog
         fileMode: FileDialog.OpenFile
-        nameFilters: ["heap. profile (*.json)", "All files (*)"]
+        nameFilters: [I18n.t("profileImport.filter"), "All files (*)"]
         title: I18n.t("dialog.importProfile.title")
-        onAccepted: {
-            const err = AppController.importProfileFromJson === undefined
-                ? "" : AppController.importProfileFromFile(selectedFile, true);
-            if (err && err.length > 0)
-                win.notice(I18n.t("toast.profile.importFail") + err, "error");
-        }
+        // A preview first, nothing is written before its button (R3-080).
+        onAccepted: profileImportDialog.openFor(selectedFile)
     }
+    ProfileImportDialog { id: profileImportDialog }
 
     // ── Calendar import / export via .ics ──────────────────────────────
     FileDialog {

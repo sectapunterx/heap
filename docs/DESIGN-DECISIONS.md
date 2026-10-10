@@ -355,3 +355,19 @@ progressive disclosure, content priority, state preservation). One entry each.
   Настройки → Внешний вид (the sheet's "Тихий по умолчанию" predates that decision). Shown once
   when the data last ran with an older release line (`settings.lastRunVersion`, or a pre-v12 file);
   a fresh install never sees it; Settings → О программе → Что нового opens it any time.
+- **R3-067 · "↓ ближайшее окно" applies at once.** On a clash the hint names the nearest free slot
+  of the same length on that day (half-hour steps, meetings only, up to the end of the work day);
+  ↓ sets it and closes, like ↵ does for the typed time — one keystroke, one undo step with the undo
+  toast (ui-ux-pro-max: undo-support over a second confirm). No free slot left: the ↓ part is not shown.
+- **R3-068 · The Tab picker lists every work-day hour.** A meeting's hour stays in the list with the
+  word "занято" (colour is not the only sign) and can still be picked — overlap is a fact, not a
+  refusal. "без времени · весь день" answers a date only. The generic picker (go to date, editors)
+  keeps its "Сегодня" button; only the schedule picker shows the hours instead.
+- **R3-076 · Every external web link asks once.** Links from notes, doc pages and task descriptions
+  are written by someone else, so http(s) shows "Открыть ссылку в браузере?" with the full address;
+  Enter opens, Esc cancels — one key of friction. mailto/heap:// open directly; a non-web scheme
+  keeps the warning text and a red "Всё равно открыть".
+- **R3-080 · Merge never overwrites.** "Слить с «…»" adds the tasks, notes, pages, people, views and
+  meetings whose id the active profile does not have (a missing column comes with its tasks); an id
+  already here stays as it is and is named in the toast. The JSON export now carries `appVersion`
+  for the preview line; older files show no version.

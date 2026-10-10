@@ -1658,6 +1658,14 @@ class AppController : public QObject {
   }
   Q_INVOKABLE QString importProfileFromJson(const QString& jsonText, bool activate = true);
   Q_INVOKABLE QString importProfileFromFile(const QUrl& fileUrl, bool activate = true);
+  // The import preview (N-Dlg-Log-Import, R3-080): what a profile export holds
+  // before anything is written — { file, name, version, tasks, notes, views,
+  // events, activeName } or { error }.
+  Q_INVOKABLE QVariantMap previewProfileImport(const QUrl& fileUrl);
+  // Merges an export into the active profile: what it has that the profile
+  // does not is added; an item whose id is already here is left as it is and
+  // named in the toast. Returns an error text, empty on success.
+  Q_INVOKABLE QString mergeProfileFromFile(const QUrl& fileUrl);
 
   Q_INVOKABLE QVariantList commandPaletteEntries() const;
   // Full text over every note and every doc page of every profile, one row per
