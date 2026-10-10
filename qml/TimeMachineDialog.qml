@@ -91,6 +91,7 @@ Popup {
     function kindText(tag) {
         if (!tag) return I18n.t("tm.kind.hourly");
         if (tag === "pre") return I18n.t("tm.tag.pre");
+        if (tag === "profile") return I18n.t("tm.tag.profile");
         return tag;
     }
     function rowText(s) {

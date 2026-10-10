@@ -752,6 +752,27 @@ class UndoStack {
     m_cursor = 0;
   }
 
+  // Leaving a workspace drops its diffs, but a profile removal is not one:
+  // it restores a whole profile from any workspace, so it stays undoable
+  // across a switch (IDIOT-SHELL-2). It is always the bottom entry —
+  // pushProfileRemoval clears what was under it. Returns whether anything
+  // was dropped.
+  bool clearKeepingProfileRemoval() {
+    if(m_cursor > 0 && m_entries.at(0).profileRemoved) {
+      if(m_entries.size() == 1 && m_cursor == 1) {
+        return false;
+      }
+      m_entries.resize(1);
+      m_cursor = 1;
+      return true;
+    }
+    if(m_entries.isEmpty()) {
+      return false;
+    }
+    clear();
+    return true;
+  }
+
   // The undoable entry recorded under `serial`, or nullptr when it has been
   // undone already, fell off the bottom of the stack or never existed.
   const Entry* findUndoable(quint64 serial) const {

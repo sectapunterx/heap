@@ -990,9 +990,14 @@ ApplicationWindow {
             // Undo takes back the action this toast names — not whatever was
             // done last, which after a silent reorder is something else.
             const serial = AppController.undoSerialForToast();
-            toast.showWithAction(msg, I18n.t("undo.action"), secs, function () {
+            toast.showUndo(msg, I18n.t("undo.action"), secs, function () {
                 AppController.undoEntry(serial)
             }, "success", AppController.shortcutText("undo"));
+        }
+        // No history left behind an Undo toast: it stops offering the button
+        // (IDIOT-SHELL-4).
+        function onPendingUndoChanged() {
+            if (!AppController.hasPendingUndo) toast.dropUndo();
         }
         // "Done" with no column of that stage: a card with the two ways out
         // (APP-268, R3-137).

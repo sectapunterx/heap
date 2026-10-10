@@ -408,6 +408,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"event.seriesDeleted", {"Deleted series: %1", "Удалена серия: %1"}},
       {"event.followingDeleted", {"Deleted this and following: %1", "Удалены это и следующие: %1"}},
       {"undo.redone", {"Redone", "Повторено"}},
+      {"undo.gone", {"Can't undo that any more", "Это уже не отменить"}},
       {"shortcut.cal.today.label", {"Calendar: today", "Календарь: сегодня"}},
       {"shortcut.cal.today.desc", {"Jump the calendar back to today.", "Вернуть календарь к сегодняшнему дню."}},
       {"shortcut.cal.prev.label", {"Calendar: previous", "Календарь: назад"}},
@@ -9060,6 +9061,9 @@ bool AppController::undoEntry(double serialValue) {
   const auto serial = static_cast<quint64>(serialValue);
   const heap::undo::Entry* top = m_undo.peekUndo();
   if(top == nullptr) {
+    // The stack went with a profile switch: say so rather than nothing
+    // (IDIOT-SHELL-4).
+    emit toast(tr_("undo.gone"), QStringLiteral("warning"));
     return false;
   }
   // The common case — nothing happened since the toast — is a plain undo.
@@ -9069,11 +9073,15 @@ bool AppController::undoEntry(double serialValue) {
   }
   const heap::undo::Entry* found = m_undo.findUndoable(serial);
   if(found == nullptr) {
-    return false;  // already undone (Ctrl+Z got there first) or evicted
+    // Already undone (Ctrl+Z got there first) or evicted.
+    emit toast(tr_("undo.gone"), QStringLiteral("warning"));
+    return false;
   }
   const heap::undo::Entry copy = *found;
   if(copy.profileRemoved) {
-    return false;  // a profile swap only makes sense off the top of the stack
+    // A profile swap only makes sense off the top of the stack.
+    emit toast(tr_("undo.changedSince"), QStringLiteral("warning"));
+    return false;
   }
   // Reversing one operation out of order is only safe while nothing it
   // touched has changed again since; otherwise the later edit would be
@@ -9117,6 +9125,12 @@ void AppController::beginUndoGroup(const QString& label) {
 void AppController::endUndoGroup() {
   if(!m_undoGroups.empty()) {
     m_undoGroups.pop_back();  // the scope's destructor records the group
+  }
+}
+
+void AppController::clearWorkspaceUndo() {
+  if(m_undo.clearKeepingProfileRemoval()) {
+    emit pendingUndoChanged();
   }
 }
 
@@ -13148,8 +13162,9 @@ void AppController::setActiveProfileId(const QString& id) {
   snapshotActiveProfile();
   // Undo is scoped to the workspace it was recorded in (PLAT-15/TASKS-1): the
   // entries are diffs of the active models, and replaying one onto another
-  // profile's models deleted or duplicated that profile's tasks.
-  clearPendingUndo();
+  // profile's models deleted or duplicated that profile's tasks. A deleted
+  // profile stays restorable (IDIOT-SHELL-2).
+  clearWorkspaceUndo();
   m_activeProfileId = id;
   applyProfileToModels(m_profiles[next]);
   emit activeProfileChanged();
@@ -13189,7 +13204,7 @@ QString AppController::createProfile(const QString& name, const QString& color) 
   }
   // Snapshot current active before creating so we don't lose unsaved edits.
   snapshotActiveProfile();
-  clearPendingUndo();  // undo is scoped to the active workspace
+  clearWorkspaceUndo();  // undo is scoped to the active workspace
   Profile p = makeStartingProfile(name.trimmed(), color);
   p.id = makeProfileId(name.trimmed());
   m_profiles.push_back(p);
@@ -13246,6 +13261,9 @@ void AppController::deleteProfile(const QString& id) {
     return;  // never let the app run out of profiles
   }
   snapshotActiveProfile();
+  // The dialog promises a snapshot to restore from (IDIOT-SHELL-2): the
+  // in-memory undo is only good until the app closes.
+  takeSnapshotNow(QStringLiteral("profile"));
   // The history of the workspace being deleted must not be replayed onto the
   // one that takes its place (PLAT-15); only the deletion itself stays undoable.
   if(id == m_activeProfileId) {

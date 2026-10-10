@@ -2614,6 +2614,9 @@ class AppController : public QObject {
   void applyUndoEntry(const heap::undo::Entry& entry, bool backward);
   // Hands the open note's unsaved keystrokes to it before an undo or redo.
   void flushNotesForUndo();
+  // Drops the undo history of the workspace being left; a profile removal
+  // stays (IDIOT-SHELL-2).
+  void clearWorkspaceUndo();
 
   // Selection state
   QSet<QString> m_selectedTaskIds;
