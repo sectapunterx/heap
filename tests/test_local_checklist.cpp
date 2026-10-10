@@ -185,6 +185,19 @@ TEST(LocalChecklistEdit, IndentMovesTheSubtree) {
   EXPECT_EQ(levels(xs), (QList<int>{1, 1, 2}));
 }
 
+TEST(LocalChecklistEdit, IndentGoesAtMostOneLevelBelowTheItemAbove) {
+  // IDIOT-TASKS-11.
+  auto xs = cl::parse(QStringLiteral("- a
+-- child
+- b"));
+  for(int k = 0; k < 5; ++k) {
+    cl::indent(xs, 2, +1);
+  }
+  EXPECT_EQ(levels(xs), (QList<int>{1, 2, 3}));
+  cl::indent(xs, 0, +1);
+  EXPECT_EQ(levels(xs).first(), 1) << "the first item stays at the top";
+}
+
 TEST(LocalChecklistEdit, MoveSwapsSiblingSubtrees) {
   auto xs = cl::parse(QStringLiteral("- a\n-- a1\n- b\n-- b1\n--- b2\n- c"));
   const int now = cl::move(xs, at(xs, QStringLiteral("b")), -1);
