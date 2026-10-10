@@ -405,4 +405,45 @@ TestCase {
         AppController.clearPendingUndo();
         AppController.activeProfileId = home;
     }
+
+    // IDIOT-TASKS-3: a held Del removes one view; focus stepping to the next
+    // row does not hand the repeat on to it.
+    function test_a_held_delete_removes_one_view() {
+        const a = mkView("Alpha", "svprobe card 0");
+        const b = mkView("Beta", "svprobe card 1");
+        const c = mkView("Gamma", "svprobe card 2");
+        railRow(0).forceActiveFocus(Qt.TabFocusReason);
+        KeyTest.press(tc.win, Qt.Key_Delete, 0, "", false);
+        for (let i = 0; i < 4; i++) {
+            wait(20);
+            KeyTest.press(tc.win, Qt.Key_Delete, 0, "", true);
+        }
+        wait(50);
+        compare(ids(), [b, c], "the repeat deleted more views");
+        tc.win.focusActiveView();
+    }
+
+    // PERSONA-16: Esc on the board and Ctrl+2 leave a saved view for the
+    // plain list with its default query.
+    function test_keyboard_ways_out_of_a_view() {
+        const id = mkView("Probe", "svprobe");
+        tc.host.apply(id);
+        compare(tc.host.activeId, id);
+        tc.win.focusActiveView();
+        const b = tc.win.activeViewItem();
+        if (b && b.clearCursor) b.clearCursor();
+        keyClick(Qt.Key_Escape);
+        compare(tc.host.activeId, "", "Esc kept the view");
+        compare(tc.win.searchText, "is:open");
+        tc.host.apply(id);
+        tc.win.focusActiveView();
+        keyClick(Qt.Key_2, Qt.ControlModifier);
+        compare(tc.host.activeId, "", "Ctrl+2 kept the view");
+    }
+
+    // PERSONA-17: a clause said twice is saved once.
+    function test_a_saved_query_keeps_each_clause_once() {
+        tc.win.searchText = "is:open priority:p1 priority:p1";
+        compare(tc.host.currentState().query, "is:open priority:p1");
+    }
 }
