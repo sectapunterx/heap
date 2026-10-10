@@ -3505,7 +3505,7 @@ Item {
                     delegate: SettingsRow {
                         required property var modelData
                         label: modelData.mtime
-                        hint: modelData.fileName + "  ·  " + modelData.sizeKb + " KB"
+                        hint: modelData.fileName + "  ·  " + I18n.t("common.kb").arg(modelData.sizeKb)  // КБ in Russian (SHELL-4)
                         ActionButton {
                             id: restoreBtn
                             objectName: "settings-restore-backup"

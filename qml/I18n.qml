@@ -274,6 +274,8 @@ QtObject {
             "filter.sort.reverse": "Reverse order",
             "filter.clear": "clear",
             "filter.counts": "%1 tasks · %2 active · %3 blocked · %4 review",
+            "filter.counts.rest": "%1 active · %2 blocked · %3 review",
+            "common.kb": "%1 KB",
 
             // ── Kanban / TaskCard ──
             "kanban.empty": "Nothing here yet",
@@ -2317,7 +2319,7 @@ QtObject {
             "reminder.none": "No reminder",
             "reminder.atStart": "When it starts",
             "reminder.before": "%1 min before",
-            "editor.err.title": "Give the event a title.",
+            "event.err.title": "Give the event a title.",
             "editor.err.time": "\"%1\" is not a time. Try 9:30, 930 or 14-15.",
             "editor.err.endBeforeStart": "The end is before the start. For an overnight event, set the end date.",
             "editor.err.rule": "That repeat rule cannot be read.",
@@ -2852,6 +2854,8 @@ QtObject {
             "filter.sort.reverse": "Обратный порядок",
             "filter.clear": "сбросить",
             "filter.counts": "%1 задач · %2 в работе · %3 заблокировано · %4 на ревью",
+            "filter.counts.rest": "%1 в работе · %2 заблокировано · %3 на ревью",
+            "common.kb": "%1 КБ",
 
             "kanban.empty": "Пока пусто",
             "kanban.empty.hint": "Перетащите сюда карточку или добавьте её правым кликом.",
@@ -4870,7 +4874,7 @@ QtObject {
             "reminder.none": "Без напоминания",
             "reminder.atStart": "В момент начала",
             "reminder.before": "За %1 мин",
-            "editor.err.title": "Дайте событию название.",
+            "event.err.title": "Дайте событию название.",
             "editor.err.time": "«%1» — не время. Например: 9:30, 930 или 14-15.",
             "editor.err.endBeforeStart": "Конец раньше начала. Для ночного события укажите дату окончания.",
             "editor.err.rule": "Это правило повтора не удаётся прочитать.",
