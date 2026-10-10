@@ -25,6 +25,8 @@ Item {
     // How [[targets]] read (APP-269): AppController.wikiTargets(text).
     property var wikiTargets: ({})
     property bool headingRules: true
+    // The Knowledge document type (MdView.noteType).
+    property bool noteType: false
     // Drawn under the last block, inside the scroll (the task document's
     // plan and hint, DG-062): the item gets `width` set to the text column.
     property Component tail: null
@@ -75,6 +77,15 @@ Item {
     }
     function _lineCount(t) { return t.length === 0 ? 1 : t.split("\n").length; }
 
+    // The row a source line belongs to. A blank line after the last block
+    // (a click below the text) is a new block of its own, not the paragraph
+    // above: it opened that paragraph, so a "/" typed there landed in the
+    // paragraph's box (R3-092). -1 = after the last row.
+    function _rowFor(t, line) {
+        const row = doc.rowForLine(line);
+        if (row < 0 || row !== view.count - 1 || line <= doc.lastLineOfRow(row)) return row;
+        return t.substring(root._lineStart(t, line), root._lineEnd(t, line)).trim().length === 0 ? -1 : row;
+    }
     // Open the block that holds `line` for editing; the caret at its end, or
     // at its start with `atStart`.
     function editLine(line, atStart) {
@@ -83,7 +94,7 @@ Item {
         const t = src.text;
         const last = Math.max(0, root._lineCount(t) - 1);
         line = Math.max(0, Math.min(line, last));
-        const row = doc.rowForLine(line);
+        const row = root._rowFor(t, line);
         let first = line, lastLine = line;
         if (row >= 0) {
             first = Math.max(0, doc.firstLineOfRow(row));
@@ -130,7 +141,7 @@ Item {
         }
         view.editLast = view.editFirst + root._lineCount(field.text) - 1;
         doc.flush();
-        view.editRow = doc.rowForLine(view.editFirst);
+        view.editRow = root._rowFor(src.text, view.editFirst);
     }
     function _reveal() {
         const y = field._contentY;
@@ -181,6 +192,7 @@ Item {
         objectName: "md-block-view"
         anchors.fill: parent
         headingRules: root.headingRules
+        noteType: root.noteType
         document: doc
         editorDocument: src.textDocument
         clickToEdit: !root.readOnly
@@ -251,22 +263,25 @@ Item {
                                   ? view.itemAtIndex(view.count - 1).y + view.itemAtIndex(view.count - 1).height : 0)
             x: view.x + view.sideMargin - leftPadding
             y: view.y + view.contentItem.y + _contentY
-            width: view.width - 2 * view.sideMargin + leftPadding + rightPadding
+            width: (root.noteType ? Math.min(view.width - 2 * view.sideMargin, Theme.px(680)) : view.width - 2 * view.sideMargin) + leftPadding + rightPadding
             wrapMode: TextEdit.Wrap
             selectByMouse: true
             textFormat: TextEdit.PlainText
             color: Theme.text
             font.family: Theme.fontUi
-            font.pixelSize: Theme.fsMd
-            topPadding: Theme.spXs
-            bottomPadding: Theme.spXs
-            leftPadding: Theme.spSm
-            rightPadding: Theme.spSm
+            // One editor, no modes (N/X-Oth-Knowledge, R3-092): the source
+            // is typed where the block was drawn, in the block's own face,
+            // with no box around it.
+            font.pixelSize: root.noteType ? Theme.fsLg : Theme.fsMd
+            topPadding: root.noteType ? 0 : Theme.spXs
+            bottomPadding: root.noteType ? Theme.px(14) : Theme.spXs
+            leftPadding: root.noteType ? 0 : Theme.spSm
+            rightPadding: root.noteType ? 0 : Theme.spSm
             background: Rectangle {
                 radius: Theme.radiusSm
-                color: Theme.panel
+                color: root.noteType ? "transparent" : Theme.panel
                 border.color: Theme.border
-                border.width: 1
+                border.width: root.noteType ? 0 : 1
             }
             QQC.ContextMenu.menu: TextEditMenu { editor: field; context: root.menuTitle; taskLink: true }
             onTextChanged: if (!root._fieldLoading && root.editing) commitTimer.restart()
@@ -373,6 +388,8 @@ Item {
     AppMenu {
         id: slashMenu
         objectName: "md-slash-menu"
+        // The sheet's "/" menu is 280px wide (R3-093).
+        minWidth: Theme.px(280)
         // Where the typed "/" is; a pick replaces it.
         property int slashAt: -1
         function _dropSlash() {

@@ -1024,6 +1024,7 @@ Item {
                     placeholder: I18n.t("notes.placeholderBody")
                     wikiTargets: root._wiki
                     headingRules: false
+                    noteType: true
                     onEdited: (t) => root._applyFromLive(t)
                     onInternalLinkActivated: (kind, target) => root._followLink(kind, target)
                     onEscaped: if (root._listShown) notesList.focusList()
@@ -1085,8 +1086,11 @@ Item {
                         visible: active
                         sourceComponent: backlinksGroup
                     }
+                    // Q-Knowledge has no external-links group (R3-091).
                     Loader {
                         Layout.fillWidth: true
+                        active: !Style.quiet
+                        visible: active
                         sourceComponent: externalGroup
                     }
                 }
@@ -1099,8 +1103,9 @@ Item {
         Layout.fillWidth: true
         Layout.bottomMargin: Theme.spLg
         color: Theme.textDim
-        font.pixelSize: Theme.fsXs
-        font.weight: Style.quiet ? Theme.fwBody : Theme.fwTitle
+        // Sheet: 12px, 600 in bold, regular in quiet (R3-088).
+        font.pixelSize: Theme.fsSm
+        font.weight: Style.quiet ? Theme.fwBody : Theme.fwHeading
         elide: Text.ElideRight
     }
     component LinksItem: Text {
@@ -1111,7 +1116,8 @@ Item {
         Layout.bottomMargin: Theme.spLg
         textFormat: Text.StyledText
         color: Theme.text
-        font.pixelSize: Theme.fsSm
+        font.pixelSize: Theme.fsMd
+        font.weight: Style.quiet ? Theme.fwBody : Theme.fwTitle
         font.underline: linkCA.hovered
         wrapMode: Text.Wrap
         maximumLineCount: 2
@@ -1139,7 +1145,9 @@ Item {
                     objectName: "note-task-" + modelData.id
                     readonly property string status: Style.quiet ? String(modelData.statusName).toLowerCase()
                                                                  : String(modelData.statusName)
-                    text: modelData.id + "<font color=\"" + Theme.textMuted + "\"> · " + status
+                    // Bold: the ID bold, the column dimmed (H2-Knowledge, R3-088).
+                    text: (Style.quiet ? modelData.id : "<b>" + modelData.id + "</b>")
+                          + "<font color=\"" + (Style.quiet ? Theme.textMuted : Theme.textDim) + "\"> · " + status
                           + (modelData.profileName.length > 0 ? " · " + modelData.profileName : "") + "</font>"
                     tip: modelData.id + " " + modelData.title
                     maximumLineCount: 1

@@ -273,6 +273,7 @@ Item {
                 id: live
                 objectName: "docpage-live"
                 headingRules: false
+                noteType: true
                 visible: root.mode === "live"
                 Layout.fillWidth: true
                 Layout.fillHeight: true

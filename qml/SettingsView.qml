@@ -2599,7 +2599,11 @@ Item {
                 // The list.
                 ColumnLayout {
                     objectName: "int-list"
+                    // One width whatever the rows say, so the detail column
+                    // starts at the same x for every tracker (R3-128).
                     Layout.preferredWidth: Theme.px(170)
+                    Layout.minimumWidth: Theme.px(170)
+                    Layout.maximumWidth: Theme.px(170)
                     Layout.alignment: Qt.AlignTop
                     spacing: 0
                     Repeater {
@@ -3192,7 +3196,11 @@ Item {
                                                 id: columnPick
                                                 objectName: "status-map-combo"
                                                 label: mapRow.modelData.status
-                                                Layout.preferredWidth: Theme.px(160)
+                                                // A pill with the column's ring (R3-127).
+                                                compact: true
+                                                ring: AppController.statusCategory(String(mapRow.modelData.column))
+                                                Layout.preferredWidth: implicitWidth
+                                                Layout.maximumWidth: Theme.px(200)
                                                 // The guess while the user has
                                                 // not decided; their pick after.
                                                 options: AppController.statuses.map((s) => ({ value: String(s.id), label: String(s.name), keepCase: true }))
@@ -3205,12 +3213,13 @@ Item {
                                             Text {
                                                 Layout.fillWidth: true
                                                 visible: !mapRow.modelData.overridden && mapRow.modelData.known === false
-                                                elide: Text.ElideRight
+                                                // In full, wrapping if it must (R3-127).
+                                                wrapMode: Text.WordWrap
                                                 text: I18n.t("settings.trk.unknownStatus")
                                                 color: Theme.textDim
                                                 font.pixelSize: Theme.fsSm
                                             }
-                                            Item { Layout.fillWidth: true }
+                                            Item { Layout.fillWidth: true; visible: !(!mapRow.modelData.overridden && mapRow.modelData.known === false) }
                                         }
                                     }
                                 }
@@ -3322,7 +3331,7 @@ Item {
                     objectName: "settings-git-line"
                     label: I18n.t("settings.git.line")
                     hint: I18n.t("settings.git.line.hint")
-                    value: root._get("git", "workingOnLine", true) === false ? "off" : "on"
+                    value: root._get("git", "workingOnLine", false) === true ? "on" : "off"
                     options: [ ({ value: "on", label: I18n.t("settings.on") }), ({ value: "off", label: I18n.t("settings.off") }) ]
                     onSelected: (v) => root.set("git", "workingOnLine", v === "on")
                 }

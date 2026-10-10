@@ -132,6 +132,8 @@ MdHtmlOptions MdDocument::buildOptions() const {
   options.palette.ticket = colorAt(m_palette, "ticket");
   options.palette.tag = colorAt(m_palette, "tag");
   options.palette.math = colorAt(m_palette, "math");
+  options.palette.taskDecoration = colorAt(m_palette, "taskDecoration");
+  options.palette.linkDecoration = colorAt(m_palette, "linkDecoration");
   options.allowRemoteImages = m_allowRemoteImages;
   options.imageBaseDir = m_imageBaseDir;
   for(auto it = m_ticketTitles.constBegin(); it != m_ticketTitles.constEnd(); ++it) {

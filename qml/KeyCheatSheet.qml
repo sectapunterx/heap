@@ -242,31 +242,28 @@ Popup {
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ThinScrollBar {}
 
-            // Four columns, each a stack of its areas (X-Keys); fewer on a
-            // narrow window, the areas then flow column by column.
-            RowLayout {
+            // A grid of four columns read row by row (N/X-Keys, R3-112):
+            // Движение | Перейти | Задача | Переместить, then Скопировать |
+            // Выделение | Вид | Поиск, then "Изменилось". Fewer columns on a
+            // narrow window; an area with nothing found takes no cell.
+            GridLayout {
                 id: cols
                 width: flick.width
-                spacing: Theme.sp2xl
+                columnSpacing: Theme.sp2xl
+                rowSpacing: Theme.sp2xl
                 readonly property int n: Math.max(1, Math.min(4, Math.floor((flick.width + Theme.sp2xl) / Theme.px(260))))
-                Repeater {
-                    model: cols.n
-                    delegate: ColumnLayout {
-                        id: column
-                        required property int index
-                        Layout.alignment: Qt.AlignTop
-                        Layout.fillWidth: true
-                        Layout.preferredWidth: 1
-                        spacing: Theme.spXl
+                columns: cols.n
                         Repeater {
-                            model: root._shownGroups.filter(g => g.col % cols.n === column.index)
+                            model: root._shownGroups
                             delegate: ColumnLayout {
                                 id: group
                                 required property var modelData
                                 readonly property var shownRows: root._filtered(group.modelData.rows, search.text)
                                 objectName: "key-sheet-group-" + group.modelData.id
                                 visible: group.shownRows.length > 0
+                                Layout.alignment: Qt.AlignTop
                                 Layout.fillWidth: true
+                                Layout.preferredWidth: 1
                                 spacing: 0
                                 Text {
                                     Layout.bottomMargin: Theme.spSm
@@ -291,8 +288,8 @@ Popup {
                                             anchors.rightMargin: Theme.spMd
                                             anchors.verticalCenter: parent.verticalCenter
                                             text: root._label(row.modelData)
-                                                  + (row.modelData.note ? "  <font color=\"" + Theme.textMuted + "\">" + I18n.t(row.modelData.note) + "</font>" : "")
-                                                  + (row.modelData.was ? "  <font color=\"" + Theme.textMuted + "\">" + I18n.t(row.modelData.was) + "</font>" : "")
+                                                  + (row.modelData.note ? "&nbsp;&nbsp;<font color=\"" + Theme.textDim + "\">" + I18n.t(row.modelData.note) + "</font>" : "")
+                                                  + (row.modelData.was ? "&nbsp;&nbsp;<font color=\"" + Theme.textDim + "\">" + I18n.t(row.modelData.was) + "</font>" : "")
                                             textFormat: Text.StyledText
                                             wrapMode: Text.WordWrap
                                             color: Theme.text
@@ -312,8 +309,10 @@ Popup {
                                                     implicitWidth: capText.implicitWidth + 2 * Theme.spSm
                                                     implicitHeight: Theme.chipHSmall
                                                     radius: Theme.radiusSm
-                                                    color: "transparent"
-                                                    border.color: Theme.border
+                                                    // Filled caps in bold, outlined in
+                                                    // quiet, bright mono (R3-111).
+                                                    color: Style.fills ? Theme.chipBg : "transparent"
+                                                    border.color: Theme.borderStrong
                                                     border.width: 1
                                                     Text {
                                                         id: capText
@@ -322,6 +321,7 @@ Popup {
                                                         color: Theme.text
                                                         font.family: Theme.fontMono
                                                         font.pixelSize: Theme.fsXs
+                                                        font.weight: Theme.fwTitle
                                                     }
                                                 }
                                             }
@@ -337,8 +337,6 @@ Popup {
                                 }
                             }
                         }
-                    }
-                }
             }
         }
 

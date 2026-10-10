@@ -41,9 +41,14 @@ QString span(const QString& color, const QString& body) {
 
 // A link heap resolves itself rather than handing to the browser. The UI
 // routes these; nothing is fetched.
-QString internalLink(const QString& scheme, const QString& target, const QString& label, const QString& color) {
-  return QStringLiteral("<a href=\"heap://%1/%2\" style=\"color:%3;text-decoration:none;\">%4</a>")
-      .arg(scheme, QString::fromUtf8(QUrl::toPercentEncoding(target)), colorOr(color, QStringLiteral("inherit")), label);
+QString internalLink(
+    const QString& scheme, const QString& target, const QString& label, const QString& color, const QString& decoration = QString()) {
+  return QStringLiteral("<a href=\"heap://%1/%2\" style=\"color:%3;text-decoration:%4;\">%5</a>")
+      .arg(scheme,
+           QString::fromUtf8(QUrl::toPercentEncoding(target)),
+           colorOr(color, QStringLiteral("inherit")),
+           colorOr(decoration, QStringLiteral("none")),
+           label);
 }
 
 // Text with heap's decorations applied. The input is raw document text; every
@@ -214,8 +219,13 @@ void appendInline(const MdAst& ast, int index, const MdHtmlOptions& options, QSt
       if(label.isEmpty()) {
         label = escapeHtml(node.href);
       }
-      *out += QStringLiteral("<a href=\"%1\" style=\"color:%2;\">%3</a>")
-                  .arg(escapeHtml(node.href), colorOr(options.palette.link, QStringLiteral("inherit")), label);
+      {
+        const QString deco = options.palette.linkDecoration.isEmpty()
+                                 ? QString()
+                                 : QStringLiteral("text-decoration:%1;").arg(options.palette.linkDecoration.toHtmlEscaped());
+        *out += QStringLiteral("<a href=\"%1\" style=\"color:%2;%3\">%4</a>")
+                    .arg(escapeHtml(node.href), colorOr(options.palette.link, QStringLiteral("inherit")), deco, label);
+      }
       break;
     }
 
@@ -226,7 +236,11 @@ void appendInline(const MdAst& ast, int index, const MdHtmlOptions& options, QSt
                                  ? escapeHtml(target->label)
                                  : QStringLiteral("<span style=\"background-color:%1;\">&nbsp;%2&nbsp;</span>")
                                        .arg(options.palette.codeBackground, escapeHtml(target->label));
-        *out += internalLink(QStringLiteral("task"), node.href.trimmed(), chip, colorOr(options.palette.text, options.palette.ticket));
+        *out += internalLink(QStringLiteral("task"),
+                             node.href.trimmed(),
+                             chip,
+                             colorOr(options.palette.text, options.palette.ticket),
+                             options.palette.taskDecoration);
         break;
       }
       if(target != options.wikiTargets.constEnd() && target->kind == QStringLiteral("missing")) {

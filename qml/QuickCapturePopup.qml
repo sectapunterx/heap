@@ -179,6 +179,17 @@ Popup {
         if (hasTime) out += ", " + I18n.fmtTime(d);
         return out;
     }
+    // A chip's date as the sheet writes it: "пт, 9 окт · 11:00" (R3-098);
+    // the toast keeps the relative word.
+    function _chipWhen(d, hasTime) {
+        let out = I18n.fmtDate(d, "weekdayDay");
+        if (hasTime) out += " · " + I18n.fmtTime(d);
+        return out;
+    }
+    // "из ветки fix/APP-105 — связать?" (R3-097): the checked-out branch,
+    // offered as the new task's branch; a click takes it, a second drops it.
+    property bool linkBranch: false
+    readonly property string _branch: AppController.focusedBranch
     function _cap(t) { return t.charAt(0).toUpperCase() + t.slice(1); }
 
     function _recurLabel(r) {
@@ -332,6 +343,7 @@ Popup {
         // same draft `heap add` saves from the command line (APP-173).
         const draft = AppController.quickTaskDraft(inputField.text, new Date(), root._rejected);
         draft.status = root._status;
+        if (root.linkBranch && root._branch.length > 0) draft.branch = root._branch;
         // A meeting is a task and its calendar event: one undo step for both.
         AppController.beginUndoGroup(I18n.t("quick.undo").arg(draft.id));
         try {
@@ -465,6 +477,7 @@ Popup {
         _hint = "";
         _lastAdded = "";
         keepOpen = false;
+        linkBranch = false;
         at.dismiss();
         if (_openText.length > 0) {
             inputField.text = _openText;
@@ -486,6 +499,18 @@ Popup {
         RowLayout {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             spacing: Theme.spMd
+            // The wordmark before the label, as on the quick note (R3-096).
+            Item {
+                Layout.preferredWidth: qcLogo.implicitWidth
+                Layout.preferredHeight: qcLogo.height
+                BrandLogo {
+                    id: qcLogo
+                    anchors.verticalCenter: parent.verticalCenter
+                    variant: "wordmark"
+                    theme: Theme.dark ? "dark" : "light"
+                    height: Theme.fsSm
+                }
+            }
             Text {
                 text: I18n.t("capture.title")
                 color: Theme.textDim
@@ -559,7 +584,9 @@ Popup {
                 ContextMenu.menu: TextEditMenu { editor: inputField }
                 objectName: "qc-input"
                 placeholderText: I18n.t("quick.fieldPh")
-                font.pixelSize: Theme.fsLg
+                // 16px medium (N/X-Oth-Capture, R3-098).
+                font.pixelSize: Theme.typeStep(2)
+                font.weight: Theme.fwTitle
                 wrapMode: TextEdit.Wrap
                 // A line under the text, not a box (X-Oth-Capture).
                 leftPadding: Theme.sp2xs
@@ -593,8 +620,10 @@ Popup {
                 SpanHighlighter {
                     target: inputField.textDocument
                     spans: (root._parsed && root._parsed.marks) || []
-                    colors: ({ when: Theme.info, due: Theme.warning, estimate: Theme.info,
-                               priority: Theme.priorityInk("P1"), label: Theme.textMuted })
+                    // Every recognised word in the accent, as the sheet
+                    // draws "завтра 11:00 p1" (R3-098).
+                    colors: ({ when: Theme.accentStrong, due: Theme.accentStrong, estimate: Theme.accentStrong,
+                               priority: Theme.accentStrong, label: Theme.textMuted })
                 }
                 onCursorPositionChanged: at.refresh()
 
@@ -697,30 +726,33 @@ Popup {
             spacing: Theme.spSm
             PropertyChip {
                 objectName: "qc-when"
+                removeOnHover: true
                 visible: !!(root._preview && root._preview.start)
-                small: true
+                small: false
                 removable: true
                 key: I18n.t("capture.when")
-                value: visible ? root._when(root._preview.start, root._preview.hasTime)
+                value: visible ? root._chipWhen(root._preview.start, root._preview.hasTime)
                                  + (root._preview.whenPast ? " · " + I18n.t("capture.past") : "") : ""
                 valueColor: visible && root._preview.whenPast ? Theme.textDim : Theme.text
                 onRemoved: root.rejectSpan("when")
             }
             PropertyChip {
                 objectName: "qc-due"
+                removeOnHover: true
                 visible: !!(root._preview && root._preview.due)
-                small: true
+                small: false
                 removable: true
                 key: I18n.t("capture.due")
-                value: visible ? root._when(root._preview.due, root._preview.dueHasTime)
+                value: visible ? root._chipWhen(root._preview.due, root._preview.dueHasTime)
                                  + (root._preview.duePast ? " · " + I18n.t("capture.past") : "") : ""
                 valueColor: visible && root._preview.duePast ? Theme.textDim : Theme.text
                 onRemoved: root.rejectSpan("due")
             }
             PropertyChip {
                 objectName: "qc-estimate"
+                removeOnHover: true
                 visible: !!(root._preview && root._preview.estimate > 0)
-                small: true
+                small: false
                 removable: true
                 key: I18n.t("capture.estimate")
                 value: visible ? I18n.fmtMinutes(root._preview.estimate) : ""
@@ -729,16 +761,17 @@ Popup {
             PropertyChip {
                 objectName: "qc-priority"
                 visible: !!(root._parsed && root._parsed.priority)
-                small: true
+                small: false
                 key: I18n.t("capture.priority")
                 value: visible ? root._parsed.priority : ""
-                valueColor: visible ? Theme.priorityInk(root._parsed.priority) : Theme.text
+                // Plain, as the sheet writes "приоритет P1" (R3-098).
+                valueColor: Theme.text
             }
             Repeater {
                 model: (root._parsed && root._parsed.labels) || []
                 delegate: PropertyChip {
                     required property var modelData
-                    small: true
+                    small: false
                     key: I18n.t("capture.label")
                     value: "#" + modelData
                 }
@@ -750,7 +783,7 @@ Popup {
                 objectName: "qc-meeting"
                 property bool checked: false
                 visible: !!(root._preview && root._preview.start && root._preview.hasTime)
-                small: true
+                small: false
                 key: I18n.t("capture.meetingKey")
                 value: meetingBox.checked ? I18n.t("capture.meetingYes") : I18n.t("capture.meetingNo")
                 valueColor: meetingBox.checked ? Theme.text : Theme.textMuted
@@ -759,7 +792,7 @@ Popup {
             PropertyChip {
                 id: columnChip
                 objectName: "qc-column"
-                small: true
+                small: false
                 key: I18n.t("capture.column")
                 value: root._statusName(root._status)
                 onClicked: columnMenu.popup(columnChip, 0, columnChip.height + Theme.spXs)
@@ -844,16 +877,40 @@ Popup {
         RowLayout {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.bottomMargin: Theme.sp2xl
             spacing: Theme.spMd
-            // Wraps rather than pushing the buttons out: the keys are four now.
-            Text {
+            // The keys as separate items, spaced (R3-099).
+            Flow {
                 objectName: "qc-keys-hint"
                 Layout.fillWidth: true
-                text: I18n.t("capture.hints")
-                color: Theme.textDim
+                spacing: Theme.sp2xl
+                Repeater {
+                    model: I18n.t("capture.hints").split(" · ")
+                    delegate: Text {
+                        required property string modelData
+                        text: modelData
+                        color: Theme.textDim
+                        font.family: Theme.fontUi
+                        font.features: Theme.tabularNums
+                        font.pixelSize: Theme.fsXs
+                    }
+                }
+            }
+            Text {
+                objectName: "qc-branch"
+                visible: root._branch.length > 0
+                text: root.linkBranch ? I18n.t("capture.branch.linked").arg(root._branch)
+                                      : I18n.t("capture.branch.offer").arg(root._branch)
+                textFormat: Text.PlainText
+                color: branchCA.hovered || root.linkBranch ? Theme.text : Theme.textDim
                 font.family: Theme.fontUi
-                font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsXs
-                wrapMode: Text.Wrap
+                font.underline: branchCA.hovered
+                ClickArea {
+                    id: branchCA
+                    label: parent.text
+                    checkable: true
+                    checked: root.linkBranch
+                    onActivated: root.linkBranch = !root.linkBranch
+                }
             }
         }
     }

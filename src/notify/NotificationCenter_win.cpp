@@ -145,6 +145,11 @@ class WinToastBackend : public NotificationCenter {
     connect(m_tray.get(), &NotificationCenter::showWindowRequested, this, &NotificationCenter::showWindowRequested);
     connect(m_tray.get(), &NotificationCenter::quitRequested, this, &NotificationCenter::quitRequested);
     connect(m_tray.get(), &NotificationCenter::activated, this, &NotificationCenter::activated);
+    connect(m_tray.get(), &NotificationCenter::trayCommand, this, &NotificationCenter::trayCommand);
+  }
+
+  void setTrayMenu(const QVariantList& items) override {
+    m_tray->setTrayMenu(items);
   }
 
   // False when WinRT toasts are not available here.

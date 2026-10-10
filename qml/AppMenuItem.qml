@@ -47,6 +47,14 @@ MenuItem {
     onTriggered: if (item.shortcutId.length > 0 && item.hint.length > 0 && item.hovered) AppController.noteMouseAction(item.shortcutId)
     readonly property bool _check: item.marked || (item.checkable && item.checked)
     readonly property bool _arrow: item.subMenu !== null || item.opensList
+    // Width of the check / glyph column with its gap; none when no row of
+    // the menu has a mark (R3-101).
+    readonly property real _glyphW: {
+        const m = item.menu as AppMenu;
+        const own = item.glyph.length > 0 || item.ring.length > 0 || item.marked || item.checkable;
+        return (m ? m.glyphColumn : own) ? Theme.fsMd + Theme.spMd : 0;
+    }
+    readonly property color _dangerInk: Style.fills ? Theme.danger : Theme.dangerMuted
     // The width the row wants for its whole label, hint and arrow. AppMenu
     // sizes itself from this; it does not depend on the row's own width, so
     // the menu and its rows do not chase each other (VISP-5).
@@ -55,7 +63,7 @@ MenuItem {
     readonly property real _hintW: (item.hint.length > 0 ? Theme.sp2xl + hintText.implicitWidth : 0)
                                    + (item.note.length > 0 ? Theme.sp2xl + noteText.implicitWidth : 0)
     readonly property real naturalWidth: labelRow && item.contentItem === labelRow
-        ? item.leftPadding + Theme.fsMd + Theme.spMd + labelText.implicitWidth + item._hintW + item._arrowW + item.rightPadding
+        ? item.leftPadding + item._glyphW + labelText.implicitWidth + item._hintW + item._arrowW + item.rightPadding
         : item.implicitWidth
 
     implicitWidth: Math.max(implicitBackgroundWidth + leftInset + rightInset,
@@ -105,11 +113,12 @@ MenuItem {
 
     contentItem: Row {
         id: labelRow
-        spacing: Theme.spMd
-        // The check column is always there, so checked and unchecked rows
-        // start their labels in the same place.
+        spacing: item._glyphW > 0 ? Theme.spMd : 0
+        // The check column is there whenever a row of the menu uses it, so
+        // checked and unchecked rows start their labels in the same place.
         Item {
-            width: Theme.fsMd
+            visible: item._glyphW > 0
+            width: visible ? Theme.fsMd : 0
             height: Math.max(glyphText.implicitHeight, Theme.statusRingSize)
             anchors.verticalCenter: parent.verticalCenter
             Text {
@@ -117,7 +126,7 @@ MenuItem {
                 anchors.fill: parent
                 visible: item.ring.length === 0
                 text: item._check ? "✓" : item.glyph
-                color: item._check ? Theme.accentStrong : item.danger ? Theme.danger : Theme.textDim
+                color: item._check ? Theme.accentStrong : item.danger ? item._dangerInk : Theme.textDim
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsMd
                 horizontalAlignment: Text.AlignHCenter
@@ -134,12 +143,12 @@ MenuItem {
             // Never wider than the row leaves it: a row in a menu at its
             // widest elides instead of running under the panel's edge.
             width: Math.max(0, Math.min(implicitWidth,
-                item.availableWidth - Theme.fsMd - Theme.spMd - item._hintW - item._arrowW))
+                item.availableWidth - item._glyphW - item._hintW - item._arrowW))
             anchors.verticalCenter: parent.verticalCenter
             text: item.text
             textFormat: Text.PlainText
             color: !item.enabled ? Theme.textDim
-                 : item.danger ? Theme.danger
+                 : item.danger ? item._dangerInk
                  : item._check ? Theme.accentStrong
                  : Theme.text
             font: item.font
@@ -185,7 +194,8 @@ MenuItem {
         // menu could not be seen. A focusRing bar marks the highlighted row.
         Rectangle {
             objectName: "menu-row-marker"
-            visible: item.enabled && item.highlighted
+            // The quiet sheets mark the row by its fill alone (R3-102).
+            visible: item.enabled && item.highlighted && Style.fills
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
             width: 3

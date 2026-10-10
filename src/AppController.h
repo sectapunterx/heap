@@ -1289,6 +1289,16 @@ class AppController : public QObject {
   // deadlines[], overdue[], people[], undated}. The active profile's tasks
   // and everyone's meetings; `allProfiles` adds every profile's tasks.
   Q_INVOKABLE QVariantMap todayData(const QDate& date, bool allProfiles = false) const;
+  // The first meeting of `now`'s day that has not started yet ({} = none):
+  // the tray menu's "Далее: 11:00 1:1 с Олегом" line (R3-103).
+  Q_INVOKABLE QVariantMap nextEventAfter(const QDateTime& now) const;
+  // The tray icon's menu, built in QML in the app's language (R3-103);
+  // see NotificationCenter::setTrayMenu. "open" and "quit" are handled
+  // here; any other pick comes back as trayCommand(id).
+  Q_INVOKABLE void setTrayMenu(const QVariantList& items);
+  // "Не беспокоить 1 ч": notifications are held as in quiet hours until
+  // `now` + minutes (settings notifications.dndUntil).
+  Q_INVOKABLE void doNotDisturbFor(int minutes, const QDateTime& now);
   // The same day as a pure fact for the calendars (APP-247): load minutes.
   Q_INVOKABLE QVariantMap dayLoad(const QDate& date) const;
   // The stored event behind an occurrence: the master, or the override that
@@ -1993,6 +2003,7 @@ class AppController : public QObject {
   // Raised when the user asks to restore the window from the tray (tray click
   // or the tray menu's "Show" entry). QML un-hides and activates the window.
   void showWindowRequested();
+  void trayCommand(const QString& id);
 
  public:
   // One automation tick at `now`. The timer calls it with the wall clock;

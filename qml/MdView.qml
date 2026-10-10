@@ -77,12 +77,18 @@ ListView {
     readonly property int tBlank: 12
 
     // Indent per list level and per quote level, in pixels.
-    readonly property int indentStep: 22
+    readonly property int indentStep: view.noteType ? 12 : 22
     readonly property int quoteStep: 14
     readonly property int sideMargin: 24
     // The rule under the top two heading levels. Knowledge draws the note
     // as a plain document without them (sheet H2-Knowledge, DG-071).
     property bool headingRules: true
+    // The Knowledge sheet's document type (H2/Q-Knowledge, R3-083/084):
+    // body at 1.7 line height with 14px between paragraphs, the title and
+    // "##" on the style's own sizes. Off, the task document keeps the
+    // compact scale.
+    property bool noteType: false
+    readonly property real _bodyLineHeight: view.noteType ? 1.7 : 1.0
 
     function _handleLink(link, line) {
         if (link.startsWith("heap://")) {
@@ -183,11 +189,29 @@ ListView {
             anchors.leftMargin: view.sideMargin
                                 + rowItem.model.quoteDepth * view.quoteStep
                                 + rowItem.model.indent * view.indentStep
-            anchors.rightMargin: view.sideMargin
-            anchors.topMargin: rowItem.model.rowType === view.tHeading
+            // A note's text column is at most 680 wide (H2-Knowledge), so a
+            // paragraph wraps as the sheet's does.
+            anchors.rightMargin: view.noteType ? Math.max(view.sideMargin, view.width - view.sideMargin - Theme.px(680))
+                                               : view.sideMargin
+            // A note's margins collapse as the sheet's CSS does: a "##" sits
+            // 22 under a paragraph that already leaves 14 (R3-083).
+            anchors.topMargin: view.noteType
+                               ? (rowItem.model.rowType === view.tHeading
+                                  ? (rowItem.model.level === 1 ? 0 : Theme.px(22) - Theme.px(14))
+                                  : 0)
+                               : rowItem.model.rowType === view.tHeading
                                ? (rowItem.model.level <= 2 ? 18 : 12)
                                : (rowItem.model.loose ? 8 : 4)
-            anchors.bottomMargin: rowItem.model.rowType === view.tHeading ? 6 : 4
+            // The sheet's block gaps: 18 under the title, 8 under a heading,
+            // 14 under a paragraph; list items sit line on line.
+            anchors.bottomMargin: view.noteType
+                                  ? (rowItem.model.rowType === view.tBlank ? 0
+                                     : rowItem.model.rowType === view.tHeading
+                                     ? (rowItem.model.level === 1 ? Theme.px(18) : Theme.spMd)
+                                     : rowItem.model.rowType === view.tParagraph
+                                       && (rowItem.model.marker !== "" || rowItem.model.taskState >= 0) && !rowItem.model.loose
+                                     ? 0 : Theme.px(14))
+                                  : rowItem.model.rowType === view.tHeading ? 6 : 4
             anchors.top: parent.top
 
             sourceComponent: {
@@ -228,6 +252,9 @@ ListView {
                     Layout.alignment: Qt.AlignTop
                     Layout.topMargin: Theme.sp2xs
                     active: rowItem.model.marker !== "" || rowItem.model.taskState >= 0
+                    // An inactive marker took the row's spacing anyway and set
+                    // every paragraph 8px right of its heading (R3-083).
+                    visible: active
                     sourceComponent: rowItem.model.taskState >= 0 ? taskBox : bulletLabel
                 }
                 TextEdit {
@@ -238,7 +265,9 @@ ListView {
                     selectByMouse: true
                     wrapMode: TextEdit.Wrap
                     textFormat: TextEdit.RichText
-                    text: rowItem.model.html
+                    text: view.noteType
+                          ? "<p style=\"line-height:" + Math.round(view._bodyLineHeight * 100) + "%\">" + rowItem.model.html + "</p>"
+                          : rowItem.model.html
                     color: Theme.text
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsLg
@@ -265,7 +294,7 @@ ListView {
                             radius: Theme.radiusSm
                             color: Style.chipFill ? Theme.mdCodeBg : "transparent"
                             border.width: Style.chipFill ? 0 : 1
-                            border.color: Theme.border
+                            border.color: Theme.borderStrong
                         }
                     }
                 }
@@ -277,7 +306,7 @@ ListView {
             Text {
                 objectName: "mdMarker"
                 text: rowItem.model.marker
-                color: Theme.textDim
+                color: view.noteType ? Theme.text : Theme.textDim
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsLg
             }
@@ -338,10 +367,15 @@ ListView {
                     text: rowItem.model.html
                     color: Theme.text
                     font.family: Theme.fontUi
-                    font.bold: rowItem.model.level <= 3
+                    // A note: the title and "##" on the sheet's sizes, 600 in
+                    // bold and 500 in quiet (R3-084); deeper levels a step down.
+                    font.weight: view.noteType ? (rowItem.model.level <= 2 ? Theme.fwScreenTitle : Theme.fwTitle)
+                                               : (rowItem.model.level <= 3 ? Theme.fwHeading : Theme.fwBody)
                     // Relative sizes, so the hierarchy reads at a glance without
                     // any level becoming shouty.
-                    font.pixelSize: [24, 20, 17, 15, 14, 13][Math.min(rowItem.model.level, 6) - 1]
+                    font.pixelSize: view.noteType
+                                    ? [Theme.fsNoteTitle, Theme.fsNoteHeading, Theme.fsLg, Theme.fsMd, Theme.fsMd, Theme.fsSm][Math.min(rowItem.model.level, 6) - 1]
+                                    : [24, 20, 17, 15, 14, 13][Math.min(rowItem.model.level, 6) - 1]
                     onLinkActivated: (link) => view._handleLink(link, rowItem.model.firstLine)
                 }
                 // A rule under the top two levels, the way a document separates
@@ -552,6 +586,22 @@ ListView {
                                       && !(view.document.allowRemoteImages
                                            && /^https?:\/\//i.test(rowItem.model.imageSource)))
                                      ? remoteImagePlaceholder : localImage
+                }
+                // The alt text as the figure's caption (sheet N/X-Oth-Knowledge,
+                // R3-094); none when the image has no words of its own.
+                Text {
+                    objectName: "mdImageCaption"
+                    readonly property string alt: String(rowItem.model.imageAlt || "")
+                    visible: alt.length > 0 && alt !== String(rowItem.model.imageSource || "")
+                             && !/^[\w.\/:\\-]+\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(alt)
+                    Layout.fillWidth: true
+                    Layout.topMargin: Theme.spXs
+                    text: alt
+                    textFormat: Text.PlainText
+                    wrapMode: Text.WordWrap
+                    color: Theme.textMuted
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
                 }
             }
         }

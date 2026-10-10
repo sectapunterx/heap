@@ -58,9 +58,13 @@ Rectangle {
         try { return JSON.parse(raw) || ({}); } catch (e) { return ({}); }
     }
     // "RFC 9110" → tag "RFC", number "9110"; a ref without a number is its tag.
+    // Only a short code is a tag: "OpenAPI 3.1" was cut to "Open" (R3-089);
+    // a longer word names its kind by its "API" ending, else "REF".
     function _splitRef(ref) {
         const m = /^(\S+)\s+(.+)$/.exec(String(ref || "").trim());
-        return m ? { tag: m[1], rest: m[2] } : { tag: String(ref || ""), rest: "" };
+        const r = m ? { tag: m[1], rest: m[2] } : { tag: String(ref || "").trim(), rest: "" };
+        if (r.tag.length > 4) r.tag = /api$/i.test(r.tag) ? "API" : "REF";
+        return r;
     }
 
     // Pin or unpin a reference of the catalogue (DG-073): only pinned ones
@@ -527,7 +531,7 @@ Rectangle {
                             Text {
                                 id: tagTxt
                                 anchors.centerIn: parent
-                                text: String(drow.rowData.tag || "").substring(0, 4)
+                                text: String(drow.rowData.tag || "")
                                 color: Theme.textDim
                                 font.family: Theme.fontMono
                                 font.pixelSize: Theme.fsXs
