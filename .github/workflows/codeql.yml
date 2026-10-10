@@ -45,6 +45,10 @@ jobs:
           languages: c-cpp
           build-mode: manual
           queries: security-extended
+          # A TRAP cache is ~670 MB per master commit; a handful of them filled
+          # the repository's 10 GB cache and evicted CI's ccache. The analysis
+          # runs once per push to master, so it gains little from one.
+          trap-caching: false
 
       # The app only: the analysis is about shipped code, and the tests would
       # double the build.
