@@ -38,19 +38,25 @@ QQC.Dialog {
     QQC.Overlay.modal: ModalScrim {}
     parent: QQC.Overlay.overlay
     anchors.centerIn: parent
-    width: Math.min(460, (parent ? parent.width : 460) - 32)
+    // On the small-dialog template (X-Dlg-Small, R4-062): its width, the
+    // fact right under the title, the buttons right under the field.
+    width: Math.min(428, (parent ? parent.width : 428) - 32)
     padding: Theme.inset
+    topPadding: Theme.spXs
+    bottomPadding: 0
     title: root.web ? I18n.t("md.link.web.title") : I18n.t("md.link.confirm.title")
     header: DialogHeader { text: root.title }
     background: ModalSurface {}
     contentItem: ColumnLayout {
-        spacing: Theme.spMd
+        spacing: Theme.spXl
         Text {
             Layout.fillWidth: true
             text: root.web ? I18n.t("md.link.web.body") : I18n.t("md.link.confirm.body")
             color: Theme.textMuted
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
+            lineHeightMode: Text.FixedHeight
+            lineHeight: Math.round(Theme.fsMd * 1.45)
             wrapMode: Text.Wrap
         }
         DialogField {
@@ -63,6 +69,7 @@ QQC.Dialog {
         }
     }
     footer: DialogFooter {
+        topGap: Theme.sp2xl
         PillButton {
             objectName: "mdLinkConfirmCopy"
             text: I18n.t("md.link.copy")

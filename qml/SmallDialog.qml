@@ -69,17 +69,24 @@ Popup {
             color: Theme.textMuted
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
+            // The sheet's 1.45 leading, in pixels: Qt's proportional
+            // lineHeight scales the font's own leading, not the em.
+            lineHeightMode: Text.FixedHeight
+            lineHeight: Math.round(Theme.fsMd * 1.45)
             wrapMode: Text.Wrap
         }
         ColumnLayout {
             id: fieldCol
-            Layout.topMargin: Theme.spLg
+            // No fields: the buttons follow the fact straight away.
+            visible: fieldCol.children.length > 0
+            Layout.topMargin: Theme.spXl
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             Layout.fillWidth: true
-            spacing: Theme.spMd
+            spacing: Theme.spLg
         }
         RowLayout {
-            Layout.topMargin: Theme.spLg
+            // X-Dlg-Small: the buttons 16px under the last field or the fact.
+            Layout.topMargin: Theme.sp2xl
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             Layout.bottomMargin: Theme.inset
             Layout.fillWidth: true

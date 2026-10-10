@@ -69,7 +69,10 @@ Popup {
                 font.pixelSize: Theme.fsMd
                 color: Theme.text
                 selectByMouse: true
-                padding: Theme.spLg
+                // 12/14 padding, 22px lines (N-Dlg-Recap, R4-059).
+                topPadding: Theme.spXl; bottomPadding: Theme.spXl
+                leftPadding: Theme.px(14); rightPadding: Theme.px(14)
+                TextLeading { target: draftField.textDocument; lineHeight: Math.round(draftField.font.pixelSize * 1.7) }
                 background: Rectangle {
                     radius: Theme.radiusMd
                     color: "transparent"

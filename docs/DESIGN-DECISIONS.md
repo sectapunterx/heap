@@ -468,3 +468,23 @@ progressive disclosure, content priority, state preservation). One entry each.
   (the Russian key, R3-136, plus p0).
 
 - Lead (2026-10-10, r4 merge): two groups each built the "no Done column" card (R3-137) and the menu column/danger ink; one of each stays (DoneColumnDialog; the tasks group's menu rule). Line height keeps both: notes 1.7 (R3-083), the task document 1.65 (R3-038).
+
+### r4 · Calendar / dialogs (2026-10-10)
+
+- **R4-056 · The return key glyph lives in the bundled fonts.** Neither Golos Text nor JetBrains
+  Mono has U+21B5, so every "↵" fell back to whatever font the machine had (offscreen: a plain
+  "←", read as "back"). The glyph is now added to all five bundled TTFs, built from each font's
+  own arrowleft plus a stem rising to cap height, so it matches the stroke weight of the hint
+  text it sits in. One fix for every hint, menu key and button key, no per-string workaround.
+- **R4-055 · Series question keeps "Только эту встречу" preselected.** The sheet's own data
+  (X/N-Dlg-Event script: `scope[0].on = true`) preselects it, and it is the answer that changes
+  least, so Return stays safe. Not a gap.
+- **R4-059 · Editable text gets its leading from `TextLeading`.** QML TextArea has no
+  lineHeight; a small C++ helper sets a fixed pixel line height on the field's document blocks
+  (standup draft: 13px × 1.7 = 22px). Fixed pixels, not proportional: Qt's proportional height
+  scales the font's own leading, not the em (same cause as R4-021).
+- **R4-062/063 · Small-dialog spacing follows X-Dlg-Small.** Fact 13px at 1.45 leading (fixed
+  px), 12px to the fields, 10px between fields, buttons 16px under the last field or the fact;
+  the link dialog and "Убрать пример?" now use the same width (428) and spacing as SmallDialog.
+- **R4-065 · Event-log error mark is the line icon "warning"** after the source (danger ink:
+  red in bold, softened in quiet), never the "⚠" text glyph.

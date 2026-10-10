@@ -78,7 +78,9 @@ Item {
         "progress":      { s: _c(8, 8, 4.5), f: "M8 8V3.5a4.5 4.5 0 0 1 4.5 4.5z" },
         "pending":       { f: _c(8, 3.2, 0.9) + _c(11.4, 4.6, 0.9) + _c(12.8, 8, 0.9) + _c(11.4, 11.4, 0.9)
                               + _c(8, 12.8, 0.9) + _c(4.6, 11.4, 0.9) + _c(3.2, 8, 0.9) + _c(4.6, 4.6, 0.9) },
-        "pause":         { s: "M6 4v8M10 4v8" }
+        "pause":         { s: "M6 4v8M10 4v8" },
+        // A failed line in the event log ("GitHub ⚠", N-Dlg-Log-Import).
+        "warning":       { s: "M8 2.5 14 13H2zM8 6.5v3", f: _c(8, 11.2, 0.8) }
     })
     readonly property var _g: _glyphs[name] || ({})
 

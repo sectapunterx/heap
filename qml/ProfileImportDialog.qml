@@ -77,12 +77,13 @@ SmallDialog {
                     spacing: Theme.spMd
                     Rectangle {
                         Layout.alignment: Qt.AlignTop
-                        Layout.topMargin: Theme.spXs
-                        implicitWidth: Theme.spLg; implicitHeight: Theme.spLg
+                        Layout.topMargin: Theme.sp2xs
+                        implicitWidth: Theme.px(14); implicitHeight: Theme.px(14)
                         radius: width / 2
                         color: "transparent"
-                        border.width: opt.on ? 4 : 1
-                        border.color: opt.on ? Theme.accent : Theme.borderStrong
+                        // The same plain radio as the series question (R4-051).
+                        border.width: opt.on ? 4 : 1.5
+                        border.color: opt.on ? Theme.accent : Theme.textMuted
                     }
                     Text {
                         id: optText

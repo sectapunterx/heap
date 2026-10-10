@@ -230,6 +230,7 @@ qt_add_library(heap_core STATIC
     # The window frame follows heap's theme, not the system's app mode.
     src/platform/WindowFrame.cpp
     src/TypeAhead.cpp
+    src/TextLeading.cpp
     # The 0.8.0 keymap: physical keys, two-key sequences (APP-272).
     src/keys/KeyNames.cpp
     src/keys/KeyRouter.cpp
@@ -539,6 +540,7 @@ qt_add_qml_module(heap_core
         src/platform/Sound.h
         src/hints/ShortcutHints.h
         src/TypeAhead.h
+        src/TextLeading.h
         src/keys/KeyRouter.h
         src/integrations/IntegrationTypes.h
         src/integrations/StatusMap.h
