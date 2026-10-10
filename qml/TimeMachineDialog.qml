@@ -472,7 +472,6 @@ Popup {
                     property bool armed: false
                     property real armedAt: 0
                     primary: true
-                    solid: Style.fills
                     text: restoreAllBtn.armed ? I18n.t("tm.restoreAll.confirm") : I18n.t("tm.restoreAll")
                     onClicked: {
                         if (!root.current) return;

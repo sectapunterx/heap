@@ -138,7 +138,6 @@ Popup {
                 objectName: "report-issue-open"
                 text: I18n.t("report.open")
                 primary: true
-                solid: Style.fills
                 onClicked: {
                     root.close();
                     AppController.openIssueReport(root.preview);
