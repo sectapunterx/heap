@@ -33,12 +33,7 @@ TestCase {
     function test_todayview()   { load("TodayView"); }
     function test_filterbar()   { load("FilterBar"); }
     function test_kanbanboard() { load("KanbanBoard"); }
-    function test_timelineview(){ load("TimelineView"); }
     function test_weekview()    { load("WeekView"); }
-    function test_daycalendar() { load("DayCalendar"); }
-    function test_peoplelist()  { load("PeopleList"); }
-    function test_archiveview() { load("ArchiveView"); }
-    function test_docsview()    { load("DocsView"); }
     function test_notesview()   { load("NotesView"); }
     function test_settingsview(){ load("SettingsView"); }
     function test_toast()       { load("Toast"); }
@@ -89,8 +84,8 @@ TestCase {
     // field, so a freshly pasted token would otherwise still be unsaved when
     // Connect / Test connection / Sync now fires.
     function test_settings_textrow_commit_pending() {
-        const row = createTemporaryQmlObject('import TodoCpp; SettingsView.TextRow { value: "old" }', host);
-        verify(row !== null, "failed to instantiate SettingsView.TextRow");
+        const row = createTemporaryQmlObject('import TodoCpp; SettingsTextRow { value: "old" }', host);
+        verify(row !== null, "failed to instantiate SettingsTextRow");
         let committed = "";
         row.committed.connect(function(t) { committed = t; });
 

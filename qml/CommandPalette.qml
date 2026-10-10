@@ -20,17 +20,30 @@ Popup {
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     padding: 0
-    width: Math.min(Overlay.overlay ? Overlay.overlay.width - 2 * Theme.sp3xl : 960,
-                    root.syntaxShown ? Theme.px(980) : Theme.px(680))
-    height: Theme.px(520)
-    anchors.centerIn: Overlay.overlay
+    // H2-Command: a 700 px line at y 100 with the syntax card 20 px beside
+    // it; Q-Command: 620 px, centred, at y 130, no card (DG-082, DG-083).
+    readonly property bool _quiet: !Style.fills
+    readonly property bool _cardShown: root.syntaxShown && !root._quiet
+    readonly property int _lineW: root._quiet ? Theme.px(620) : Theme.px(700)
+    readonly property int _cardW: Theme.px(320)
+    readonly property real _avail: Overlay.overlay ? Overlay.overlay.width - 2 * Theme.sp3xl : 960
+    readonly property bool _cardFits: root._cardShown && root._avail >= root._lineW + root._cardW + Theme.sp2xl
+    width: Math.min(root._avail, root._lineW + (root._cardFits ? root._cardW + Theme.sp2xl : 0))
+    x: Overlay.overlay ? Math.round((Overlay.overlay.width - root.width) / 2) : 0
+    y: root._quiet ? Theme.px(130) : Theme.px(100)
+    height: root.contentItem ? root.contentItem.implicitHeight : Theme.px(520)
+    // The results scroll past this; the line grows with them up to it.
+    readonly property real _listMax: Math.max(Theme.px(160), Math.min(Theme.px(480),
+        (Overlay.overlay ? Overlay.overlay.height : 900) - root.y - Theme.px(160)))
 
     // Dimmed backdrop so the underlying app stays visible behind the popup.
     Overlay.modal: ModalScrim {}
 
-    signal navigateToDoc(string sectionId)
-    signal navigateToSnippets()
-    signal navigateToContacts()
+    // Catalogue entries are found in the Knowledge list (DG-070): the text
+    // to search it for.
+    signal navigateToDoc(string text)
+    signal navigateToSnippets(string text)
+    signal navigateToContacts(string text)
     signal openTask(string taskId)
     signal openPerson(string personId)
     // A note hit carries the line its section starts on, so opening it lands
@@ -78,7 +91,7 @@ Popup {
     }
 
     // Views a task editor can open over without losing the reader's place.
-    readonly property var _taskViews: ["board", "timeline", "week", "month", "archive"]
+    readonly property var _taskViews: ["board", "list", "week", "month"]
 
     // Catalog actions that only mean something on a surface, with a cursor or
     // a selection — offered by the palette they would do nothing. A second
@@ -89,7 +102,11 @@ Popup {
         return _contextual.indexOf(id) >= 0 || id.indexOf("board.") === 0 || id.indexOf("savedView.") === 0
             || id.indexOf("cal.") === 0 || id.indexOf("selection.") === 0 || id.indexOf("cursor.") === 0
             || id.indexOf("nav.") === 0 || /\.alt\d*$/.test(id)
-            || (id.indexOf("task.") === 0 && id !== "task.new");
+            || (id.indexOf("task.") === 0 && id !== "task.new")
+            // Docs and Notes are one place now: "Перейти в «Знания»" is the
+            // one way there (sheet H2-Command, R4-077); their old ids only
+            // keep a key someone bound.
+            || id === "view.docs" || id === "view.notes";
     }
 
     // Catalog actions whose palette name says more than their hotkey label.
@@ -142,6 +159,17 @@ Popup {
                        body: views[v].query });
         }
         out.push({ kind: "command", commandId: "savedview.save", label: I18n.t("palette.cmd.saveView"), sub: "" });
+        // What left the selection bar, the profile menu and the column menu
+        // for the sheets (DG-025, DG-026, DG-151): still one command away.
+        if (AppController.selectionCount > 0) {
+            out.push({ kind: "command", commandId: "selection.label", label: I18n.t("palette.cmd.selLabel"), sub: "" });
+            out.push({ kind: "command", commandId: "selection.carry", label: I18n.t("palette.cmd.selCarry"), sub: "" });
+        }
+        for (const pc of ["profile.duplicate", "ics.import", "ics.export", "vault.import", "vault.export"])
+            out.push({ kind: "command", commandId: pc, label: I18n.t("palette.cmd." + pc), sub: "" });
+        if (AppController.currentView === "board")
+            for (const cc of ["color", "archive", "doing"])
+                out.push({ kind: "command", commandId: "column:" + cc, label: I18n.t("palette.cmd.column." + cc), sub: "" });
         // Integrations health (APP-164) lives at the top of that section.
         out.push({ kind: "setting", commandId: "settings:integrations", label: I18n.t("palette.cmd.integrationsHealth"),
                    sub: I18n.t("health.hint") });
@@ -279,12 +307,13 @@ Popup {
             if (score < 0) continue;
             // tiny boost so an entry in the active profile floats up
             const profBonus = (e.profileId === AppController.activeProfileId) ? 1 : 0;
-            out.push({ entry: e, score: score + profBonus, snippet: snippet });
+            out.push({ entry: e, score: score + profBonus, snippet: snippet, bodyOnly: score <= 5 && snippet.length > 0 });
         }
         out.sort(function (a, b) { return b.score - a.score; });
         return out.slice(0, 80).map(function (x) {
             const c = Object.assign({}, x.entry);
             c._snippet = x.snippet;
+            c._bodyOnly = x.bodyOnly;
             return c;
         });
     }
@@ -310,14 +339,14 @@ Popup {
                     AppController.currentView = "board";
                 root.openTask(entry.taskId);
             } else if (entry.kind === "doc") {
-                AppController.currentView = "docs";
-                root.navigateToDoc(entry.sectionId);
+                AppController.currentView = "notes";
+                root.navigateToDoc(entry.title || entry.label);
             } else if (entry.kind === "snippet") {
-                AppController.currentView = "docs";
-                root.navigateToSnippets();
+                AppController.currentView = "notes";
+                root.navigateToSnippets(entry.label);
             } else if (entry.kind === "contact") {
-                AppController.currentView = "docs";
-                root.navigateToContacts();
+                AppController.currentView = "notes";
+                root.navigateToContacts(entry.label);
             } else if (entry.kind === "person") {
                 root.openPerson(entry.personId);
             } else if (entry.kind === "note") {
@@ -327,7 +356,7 @@ Popup {
                 root.navigateToNoteLine(entry.line !== undefined ? entry.line : 0);
             } else if (entry.kind === "docPage") {
                 AppController.activeDocPageId = entry.pageId;
-                AppController.currentView = "docs";
+                AppController.currentView = "notes";
                 root.navigateToDocPage(entry.pageId);
             } else if (entry.kind === "dailyNote") {
                 AppController.currentView = "notes";
@@ -372,10 +401,55 @@ Popup {
         return t === k ? kind : t;
     }
 
+    // "сегодня", "завтра", "вчера", else "9 окт" ("" for no date).
+    function _dayWord(d) {
+        if (!(d && d.getTime && !isNaN(d.getTime()))) return "";
+        const a = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        const n = new Date();
+        const k = Math.round((a - new Date(n.getFullYear(), n.getMonth(), n.getDate())) / 86400000);
+        if (k === 0) return I18n.t("common.today").toLowerCase();
+        if (k === 1) return I18n.t("common.tomorrow").toLowerCase();
+        if (k === -1) return I18n.t("common.yesterday").toLowerCase();
+        return I18n.fmtDate(d, "dayMonth");
+    }
+    // A key as the sheets write it: Enter is ↵, one letter is lower case.
+    function _k(keys) {
+        const t = String(keys || "");
+        if (t.length === 1) return t.toLowerCase();
+        return t.replace(/\b(Enter|Return)\b/g, "↵");
+    }
+    // A chip's signal (bold only): blocked / P0 red, P1 amber.
+    function chipTone(c) {
+        if (!Style.urgency) return "transparent";
+        const v = String(c.clause || "").toLowerCase();
+        if (/status:blocked|priority:p0/.test(v)) return Theme.danger;
+        if (/priority:p1/.test(v)) return Theme.warning;
+        return "transparent";
+    }
+
     // ── The command line ─────────────────────────────────────────────
     function openWith(text) {
         root._initial = text || "";
-        root.open();
+        if (!root.opened) { root.open(); return; }
+        // Already open: the line takes the text as if it had opened with it.
+        root._sync = true;
+        root.chips = [];
+        searchField.text = root._initial;
+        root._initial = "";
+        root._sync = false;
+        if (!root.commitTokens(true)) root._rebuild();
+        searchField.cursorPosition = searchField.text.length;
+    }
+    // Beside a query, a result is one whose name holds every word typed
+    // (DG-081): the typo-tolerant match stays for "> commands" and for the
+    // empty line, where it cannot bury the tasks found.
+    function _nameHit(words, e) {
+        const label = String(e.label || "").toLowerCase();
+        const ws = String(words || "").toLowerCase().split(/\s+/).filter(w => w.length > 0);
+        if (ws.length === 0) return false;
+        if ((e.kind === "person" || e.kind === "contact")
+            && AppController.personMatchRank(String(words), e.label, e.personId || "") > 0) return true;
+        return ws.every(w => label.indexOf(w) >= 0);
     }
     property string _initial: ""
 
@@ -419,10 +493,17 @@ Popup {
             const at = String(c.clause).indexOf(":");
             return at > 0 ? String(c.clause).slice(at + 1) : c.clause;
         }
-        return c.value;
+        // Quiet writes values in lower case ("заблокировано"), P0 stays.
+        return root._quiet && c.kind === "status" ? String(c.value).toLowerCase() : c.value;
     }
 
     // The task actions, for the task the line opened on or for what it found.
+    // A column's name as the target of "→": the default "В работе" reads
+    // "В работу" there (H2-Command, R3-106); a column the user named stays
+    // as written.
+    function _toStatus(name) {
+        return String(name) === I18n.t("cmd.status.progName") ? I18n.t("cmd.status.progTo") : String(name);
+    }
     function _taskAction(action, ids, labelKey, keyId, extra) {
         return Object.assign({ kind: "action", action: action, ids: ids, label: I18n.t(labelKey),
                                keys: keyId ? AppController.shortcutText(keyId) : "", sub: "" }, extra || {});
@@ -496,12 +577,16 @@ Popup {
             // The tasks found.
             const found = [];
             for (const t of p.tasks) {
+                // The row ends with when it is due or planned (H2-Command).
+                const full = AppController.taskById(t.id);
+                const when = full && full.id ? root._dayWord(full.dueAt || full.scheduledAt) : "";
                 found.push({ kind: "task", taskId: t.id, label: t.id + " · " + t.title,
-                             sub: t.statusName + (t.archived ? " · " + I18n.t("cmd.archived") : ""),
+                             sub: root._quiet ? "" : (t.archived ? I18n.t("cmd.archived") : when),
                              archived: t.archived, category: t.category, keys: "" });
             }
             if (found.length > 0) {
-                header(I18n.t("cmd.group.tasks").arg(p.total));
+                header(root._quiet ? I18n.t(p.total === 1 ? "cmd.group.task" : "cmd.group.tasksQuiet")
+                                   : I18n.t("cmd.group.tasks").arg(p.total));
                 for (const e of found) rows.push(e);
                 if (p.total > found.length)
                     rows.push({ kind: "more", label: I18n.t("cmd.more").arg(p.total - found.length),
@@ -511,14 +596,15 @@ Popup {
                 const acts = [];
                 if (open.length > 0)
                     acts.push(root._taskAction("doneFound", open, "cmd.doneFound", "task.done",
-                                               { sub: I18n.count(open.length, "cmd.n.tasks") }));
+                                               { sub: root._quiet ? "" : I18n.count(open.length, "cmd.n.tasks") }));
                 const allBlocked = found.length > 0 && found.every(e => e.category === "blocked");
                 const prog = AppController.statuses.find(st => AppController.statusCategory(st.id) === "prog");
                 if (allBlocked && prog)
                     acts.push({ kind: "action", action: "unblock", ids: found.map(e => e.taskId), status: prog.id,
-                                label: I18n.t("cmd.unblock").arg(prog.name), keys: "", sub: "" });
+                                label: root._quiet ? I18n.t("cmd.unblockQuiet") : I18n.t("cmd.unblock").arg(root._toStatus(prog.name)), keys: "", sub: "" });
                 if (acts.length > 0) {
-                    header(I18n.t("cmd.group.withFound"));
+                    header(root._quiet ? I18n.t(found.length === 1 ? "cmd.group.withIt" : "cmd.group.withThem")
+                                       : I18n.t("cmd.group.withFound"));
                     for (const a of acts) rows.push(a);
                 }
             }
@@ -526,13 +612,21 @@ Popup {
             const q = p.query;
             if (q.length > 0 && (root.chips.length > 0 || p.tokens.length > 0)) {
                 header(I18n.t("cmd.group.withFilter"));
-                const name = root.chips.concat(p.tokens).map(c => root.chipValue(c)).join(" · ");
-                rows.push({ kind: "action", action: "saveView", query: q, label: I18n.t("cmd.saveView").arg(name),
-                            keys: AppController.keyText("Ctrl+S"), sub: I18n.t("cmd.saveView.sub") });
-                rows.push({ kind: "action", action: "openBoard", query: q, label: I18n.t("cmd.openBoard"),
-                            keys: AppController.shortcutText("view.board"), sub: "" });
-                rows.push({ kind: "action", action: "openList", query: q, label: I18n.t("cmd.openList"),
-                            keys: AppController.keyText("Ctrl+Return"), sub: "" });
+                // The parse already holds the chips' clauses: each once.
+                const seen = {};
+                const name = root.chips.concat(p.tokens).filter(c => !seen[c.clause] && (seen[c.clause] = true))
+                    .map(c => root.chipValue(c)).join(" · ");
+                rows.push({ kind: "action", action: "saveView", query: q,
+                            label: root._quiet ? I18n.t("cmd.saveViewQuiet") : I18n.t("cmd.saveView").arg(name),
+                            keys: AppController.keyText("Ctrl+S"), sub: root._quiet ? "" : I18n.t("cmd.saveView.sub") });
+                // Bold opens it as a board (the list is Ctrl ↵ in the footer);
+                // quiet, with no footer keys, offers the list.
+                if (root._quiet)
+                    rows.push({ kind: "action", action: "openList", query: q, label: I18n.t("cmd.openList"),
+                                keys: AppController.keyText("Ctrl+Return"), sub: "" });
+                else
+                    rows.push({ kind: "action", action: "openBoard", query: q, label: I18n.t("cmd.openBoard"),
+                                keys: AppController.shortcutText("view.board"), sub: "" });
             }
             // The task the line opened on, then the commands, then the rest.
             const ctx = root._contextActions(words);
@@ -541,14 +635,16 @@ Popup {
                 for (const a of ctx) rows.push(a);
             }
             const scored = words.length > 0 ? root._filterAndScore(words) : [];
-            const cmds = scored.filter(e => e.kind === "command" || e.kind === "setting").slice(0, 8);
+            const cmds = scored.filter(e => (e.kind === "command" || e.kind === "setting") && root._nameHit(words, e)).slice(0, 8);
             const extra = root._unavailable(words);
             if (cmds.length + extra.length > 0) header(I18n.t("cmd.group.commands"));
             for (const e of extra) rows.push(e);
             for (const e of cmds) rows.push(Object.assign({}, e, { keys: e.sub || "", sub: "" }));
             const shownTasks = {};
             for (const e of found) shownTasks[e.taskId] = true;
-            const other = scored.filter(e => e.kind !== "command" && e.kind !== "setting"
+            // Only what matches by name (DG-081): a word met somewhere in a
+            // doc's body is not a result of the line.
+            const other = scored.filter(e => e.kind !== "command" && e.kind !== "setting" && !e._bodyOnly && root._nameHit(words, e)
                                              && !(e.kind === "task" && (shownTasks[e.taskId]
                                                                         || e.profileId === AppController.activeProfileId)))
                 .slice(0, 20);
@@ -644,7 +740,9 @@ Popup {
         searchField.text = root._initial;
         root._initial = "";
         root._sync = false;
-        root._rebuild();
+        // A query handed in whole ("статус:заблок p0 оформ") shows as chips
+        // the way typing it would (DG-080).
+        if (!root.commitTokens(true)) root._rebuild();
         Qt.callLater(function () {
             searchField.forceActiveFocus();
             searchField.cursorPosition = searchField.text.length;
@@ -661,32 +759,43 @@ Popup {
         onActivatedAmbiguously: root.close()
     }
 
-    background: ModalSurface {}
+    background: Item {}
 
     contentItem: RowLayout {
-        spacing: 0
+        spacing: Theme.sp2xl
+
+        Item {
+            Layout.preferredWidth: root._lineW
+            Layout.fillWidth: true
+            Layout.alignment: Qt.AlignTop
+            implicitHeight: lineCol.implicitHeight
+            Layout.preferredHeight: lineCol.implicitHeight
+            ModalSurface { anchors.fill: parent }
 
         ColumnLayout {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
+            id: lineCol
+            anchors.fill: parent
             spacing: 0
 
-            // The line: chips, then the field.
+            // The line: › then the chips, then the field.
             Item {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Math.max(Theme.px(48), inputFlow.implicitHeight + 2 * Theme.spMd)
+                Layout.preferredHeight: Math.max(Theme.px(52), inputFlow.implicitHeight + 2 * Theme.spXl)
                 Rectangle {
                     anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
                     height: 1; color: Theme.border
                 }
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: Theme.sp2xl; anchors.rightMargin: Theme.spXl
+                    anchors.leftMargin: root._quiet ? Theme.px(18) : Theme.sp2xl
+                    anchors.rightMargin: Theme.sp2xl
                     spacing: Theme.spMd
-                    Text {
-                        text: root._commandsOnly() ? "›" : "⌕"
+                    Icon {
+                        objectName: "cmd-prompt"
+                        visible: !root._quiet || root._commandsOnly()
+                        name: "chevron-right"
+                        size: Theme.iconSize - 2
                         color: Theme.textMuted
-                        font.pixelSize: Theme.fsXl
                     }
                     Flow {
                         id: inputFlow
@@ -694,16 +803,20 @@ Popup {
                         Layout.alignment: Qt.AlignVCenter
                         spacing: Theme.spSm
                         Repeater {
+                            id: chipRep
                             model: root.chips
                             delegate: PropertyChip {
                                 id: chip
                                 required property var modelData
                                 required property int index
                                 objectName: "cmd-chip-" + chip.index
-                                small: true
+                                small: !root._quiet
                                 removable: true
+                                // Plain chips; × only under the pointer (sheet H2/Q-Command, R4-078).
+                                removeOnHover: true
                                 key: root.chipKey(chip.modelData)
                                 value: root.chipValue(chip.modelData)
+                                tone: root.chipTone(chip.modelData)
                                 onRemoved: root.removeChip(chip.index)
                             }
                         }
@@ -711,12 +824,19 @@ Popup {
                             id: searchField
                             objectName: "cmd-field"
                             ContextMenu.menu: TextEditMenu { editor: searchField }
-                            width: Math.max(Theme.px(200), inputFlow.width - x)
+                            // The rest of the chips' row, or a row of its own.
+                            readonly property Item _lastChip: chipRep.count > 0 ? chipRep.itemAt(chipRep.count - 1) : null
+                            readonly property real _after: _lastChip ? _lastChip.x + _lastChip.width + inputFlow.spacing : 0
+                            width: inputFlow.width - _after >= Theme.px(200) ? inputFlow.width - _after : inputFlow.width
+                            height: root._quiet ? Theme.chipH : Theme.chipHSmall
+                            topPadding: 0; bottomPadding: 0
+                            leftPadding: Theme.sp2xs
+                            verticalAlignment: TextInput.AlignVCenter
                             placeholderText: root.chips.length > 0 ? "" : I18n.t("cmd.placeholder")
                             background: Item {}
                             color: Theme.text
                             placeholderTextColor: Theme.textDim
-                            font.pixelSize: Theme.fsLg
+                            font.pixelSize: root._quiet ? Theme.typeStep(1) : Theme.typeStep(2)
                             selectByMouse: true
                             onTextChanged: {
                                 if (root._sync) return;
@@ -751,19 +871,6 @@ Popup {
                             }
                         }
                     }
-                    // The syntax card, shown or hidden.
-                    Text {
-                        objectName: "cmd-syntax-toggle"
-                        text: "?"
-                        color: syntaxCA.hovered || root.syntaxShown ? Theme.text : Theme.textDim
-                        font.family: Theme.fontMono
-                        font.pixelSize: Theme.fsMd
-                        ClickArea {
-                            id: syntaxCA
-                            label: I18n.t(root.syntaxShown ? "cmd.syntax.hide" : "cmd.syntax.show")
-                            onActivated: root.toggleSyntax()
-                        }
-                    }
                 }
             }
 
@@ -772,13 +879,15 @@ Popup {
                 id: resultsView
                 objectName: "cmd-results"
                 Layout.fillWidth: true
-                Layout.fillHeight: true
+                Layout.preferredHeight: root._matches.length === 0 ? Theme.px(120)
+                                      : Math.min(resultsView.contentHeight + resultsView.topMargin + resultsView.bottomMargin,
+                                                 root._listMax)
                 clip: true
                 model: root._rows
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ThinScrollBar {}
-                topMargin: Theme.spMd
-                bottomMargin: Theme.spMd
+                topMargin: Theme.spSm
+                bottomMargin: Theme.spSm
                 Connections {
                     target: root
                     function on_SelectedIdxChanged() {
@@ -793,9 +902,47 @@ Popup {
                     id: rowItem
                     required property var modelData
                     readonly property bool selected: !rowItem.modelData.header && rowItem.modelData._idx === root._selectedIdx
+                    // Nothing found: two centred lines, not a row (R3-135).
+                    readonly property bool isCreate: rowItem.modelData.kind === "create"
                     width: ListView.view.width
-                    height: rowItem.modelData.header ? headText.implicitHeight + Theme.spLg
-                          : Math.max(Theme.px(34), rowLabel.implicitHeight + 2 * Theme.spSm)
+                    height: rowItem.modelData.header ? headText.implicitHeight + Theme.spLg + Theme.spXs
+                          : rowItem.isCreate ? Theme.px(120) - 2 * Theme.spSm
+                          : Math.max(Theme.px(36), rowLabel.implicitHeight + 2 * Theme.spMd)
+                    Column {
+                        objectName: "cmd-nothing"
+                        visible: rowItem.isCreate
+                        anchors.centerIn: parent
+                        width: parent.width - 2 * Theme.sp2xl
+                        spacing: Theme.spXs
+                        Text {
+                            width: parent.width
+                            horizontalAlignment: Text.AlignHCenter
+                            text: rowItem.isCreate ? I18n.t("cmd.nothingFor").arg(rowItem.modelData.text) : ""
+                            textFormat: Text.PlainText
+                            elide: Text.ElideMiddle
+                            color: Theme.textMuted
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsMd
+                        }
+                        Text {
+                            width: parent.width
+                            horizontalAlignment: Text.AlignHCenter
+                            text: rowItem.isCreate ? I18n.t("cmd.createLine").arg(AppController.keyText("Return")).arg(rowItem.modelData.text) : ""
+                            textFormat: Text.PlainText
+                            elide: Text.ElideMiddle
+                            color: createCA.hovered ? Theme.textMuted : Theme.textDim
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsMd
+                            ClickArea {
+                                id: createCA
+                                label: parent.text
+                                onActivated: {
+                                    root._selectedIdx = rowItem.modelData._idx;
+                                    root.activateSelected();
+                                }
+                            }
+                        }
+                    }
 
                     Text {
                         id: headText
@@ -803,48 +950,47 @@ Popup {
                         anchors.left: parent.left; anchors.leftMargin: Theme.sp2xl
                         anchors.bottom: parent.bottom; anchors.bottomMargin: Theme.spXs
                         text: rowItem.modelData.header ? rowItem.modelData.label : ""
-                        color: Theme.textDim
+                        color: root._quiet ? Theme.textDim : Theme.textMuted
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsXs
                     }
                     Rectangle {
-                        visible: !rowItem.modelData.header
+                        visible: !rowItem.modelData.header && !rowItem.isCreate
                         anchors.fill: parent
-                        anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spMd
-                        radius: Theme.radiusSm
+                        anchors.leftMargin: Theme.spSm; anchors.rightMargin: Theme.spSm
+                        radius: Theme.radiusMd
                         color: rowItem.selected ? Theme.rowHighlight : "transparent"
-                        // The selected row's marker: 3:1 against the panel on
-                        // every theme.
+                        // The selected row's marker (bold): a bright line on
+                        // its left edge, 3:1 against the panel.
                         Rectangle {
                             objectName: "palette-row-marker"
-                            visible: rowItem.selected
+                            visible: rowItem.selected && !root._quiet
                             anchors.left: parent.left
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: 3
-                            height: parent.height - 2 * Theme.spSm
-                            radius: Theme.radiusXs
+                            anchors.top: parent.top; anchors.bottom: parent.bottom
+                            width: 2
                             color: Theme.focusRing
                         }
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: Theme.spXl; anchors.rightMargin: Theme.spXl
-                            spacing: Theme.spLg
+                            anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spMd
+                            spacing: Theme.spMd
                             Text {
                                 id: rowLabel
                                 Layout.fillWidth: true
                                 text: rowItem.modelData.label || ""
                                 textFormat: Text.PlainText
-                                color: rowItem.modelData.off || rowItem.modelData.archived ? Theme.textDim : Theme.text
+                                color: rowItem.modelData.off || rowItem.modelData.archived ? Theme.textDim
+                                     : rowItem.selected || !root._quiet ? Theme.text : Theme.textMuted
                                 font.family: Theme.fontUi
                                 font.pixelSize: Theme.fsMd
-                                font.weight: rowItem.modelData.kind === "task" ? Theme.fwTitle : Theme.fwBody
+                                font.weight: rowItem.modelData.kind === "task" && !root._quiet ? Theme.fwTitle : Theme.fwBody
                                 elide: Text.ElideRight
                             }
                             Text {
                                 visible: text.length > 0
                                 Layout.maximumWidth: Theme.px(260)
                                 text: rowItem.modelData.note || (rowItem.modelData._snippet ? "" : (rowItem.modelData.sub || ""))
-                                color: Theme.textDim
+                                color: Theme.textMuted
                                 font.family: Theme.fontUi
                                 font.pixelSize: Theme.fsXs
                                 elide: Text.ElideRight
@@ -853,15 +999,22 @@ Popup {
                                 visible: !!rowItem.modelData.kind && rowItem.modelData.kind !== "task"
                                          && rowItem.modelData.kind !== "action" && rowItem.modelData.kind !== "command"
                                          && rowItem.modelData.kind !== "more" && rowItem.modelData.kind !== "create"
-                                text: (rowItem.modelData._recent ? "↺ " : "") + root._kindLabel(rowItem.modelData.kind)
+                                text: rowItem.modelData.kind ? root._kindLabel(rowItem.modelData.kind) : ""
                                 color: Theme.textDim
                                 font.family: Theme.fontUi
                                 font.pixelSize: Theme.fsXs
                             }
-                            KeyHint {
-                                always: true
-                                keys: rowItem.modelData.keys
-                                      || (rowItem.selected && rowItem.modelData.kind === "task" ? AppController.keyText("Return") : "")
+                            // The key column: right-aligned, as wide as "Ctrl S".
+                            Text {
+                                Layout.minimumWidth: root._quiet ? 0 : Theme.px(56)
+                                horizontalAlignment: Text.AlignRight
+                                text: root._k(rowItem.modelData.keys
+                                              || (rowItem.modelData.kind === "task" && (rowItem.selected || !root._quiet)
+                                                  ? AppController.keyText("Return") : ""))
+                                visible: text.length > 0 || !root._quiet
+                                color: root._quiet ? Theme.textDim : Theme.textMuted
+                                font.family: Theme.fontMono
+                                font.pixelSize: Theme.fsXs
                             }
                         }
                         MouseArea {
@@ -883,59 +1036,80 @@ Popup {
                     visible: root._matches.length === 0
                     anchors.centerIn: parent
                     width: Math.min(parent.width - 2 * Theme.sp3xl, Theme.px(380))
-                    compact: searchField.text.length === 0
+                    compact: true
                     title: searchField.text.length === 0 ? I18n.t("palette.empty.start") : I18n.t("palette.empty.miss")
                     line: searchField.text.length === 0 ? "" : I18n.t("palette.empty.missHint")
                 }
             }
 
-            // Hints: the keys of the line, and what Tab would make of the word
-            // being typed.
-            Rectangle {
+            // The footer. Bold: the keys (↵ выполнить · Tab · Ctrl ↵);
+            // quiet: the language in one line. Tab's offer replaces both.
+            Item {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Theme.px(30)
-                color: Theme.panel2
-                Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; height: 1; color: Theme.border }
+                Layout.preferredHeight: footText.implicitHeight + (root._quiet ? Theme.spMd + Theme.spLg : 2 * Theme.spMd)
+                Rectangle {
+                    visible: !root._quiet
+                    anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                    height: 1; color: Theme.border
+                }
                 Text {
+                    id: footText
                     objectName: "cmd-hints"
-                    anchors.left: parent.left; anchors.leftMargin: Theme.sp2xl
+                    anchors.left: parent.left; anchors.leftMargin: root._quiet ? Theme.px(18) : Theme.sp2xl
                     anchors.right: parent.right; anchors.rightMargin: Theme.sp2xl
                     anchors.verticalCenter: parent.verticalCenter
+                    anchors.verticalCenterOffset: root._quiet ? -Theme.spXs : 0
                     readonly property var pending: root._parse.tokens
                         ? root._parse.tokens.filter(t => !root.chips.some(c => c.clause === t.clause)) : []
+                    function k(key) {
+                        return "<b><font face=\"" + Theme.fontMono + "\" color=\"" + Theme.text + "\">" + key + "</font></b>";
+                    }
+                    textFormat: pending.length > 0 ? Text.PlainText : Text.StyledText
                     text: pending.length > 0
                           ? I18n.t("cmd.tabHint").arg(pending.map(t => root.chipKey(t) + " " + root.chipValue(t)).join(" · "))
-                          : I18n.t("cmd.kbdHint")
-                    color: Theme.textDim
+                          : root._quiet ? I18n.t("cmd.quietHint").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+                          : footText.k("↵") + " " + I18n.t("cmd.hint.run") + "&nbsp;&nbsp;&nbsp;&nbsp;"
+                            + footText.k("Tab") + " " + I18n.t("cmd.hint.tab") + "&nbsp;&nbsp;&nbsp;&nbsp;"
+                            + footText.k(root._k(AppController.keyText("Ctrl+Return"))) + " " + I18n.t("cmd.hint.list")
+                    color: root._quiet ? Theme.textDim : Theme.textMuted
                     font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsXs
+                    font.pixelSize: Theme.fsSm
                     elide: Text.ElideRight
                 }
             }
         }
+        }
 
-        // The language, beside the results (hideable).
-        Rectangle {
+        // "Один язык везде": its own card beside the line (bold only).
+        Item {
             objectName: "cmd-syntax"
-            visible: root.syntaxShown
-            Layout.preferredWidth: Theme.px(300)
-            Layout.fillHeight: true
-            color: Theme.panel2
-            radius: Theme.radiusXl
-            Rectangle { anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom; width: 1; color: Theme.border }
+            visible: root._cardFits
+            Layout.preferredWidth: root._cardW
+            Layout.alignment: Qt.AlignTop
+            Layout.preferredHeight: synCol.implicitHeight + 2 * Theme.sp2xl
+            Rectangle {
+                anchors.fill: parent
+                color: Theme.panel2
+                radius: Theme.modalRadius
+                border.width: 1
+                border.color: Theme.border
+            }
             ColumnLayout {
+                id: synCol
                 anchors.fill: parent
                 anchors.margins: Theme.sp2xl
-                spacing: Theme.spMd
+                spacing: 0
                 Text {
                     text: I18n.t("cmd.syntax.title")
                     color: Theme.text
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsMd
-                    font.weight: Theme.fwTitle
+                    font.weight: Theme.fwHeading
                 }
                 Text {
                     Layout.fillWidth: true
+                    Layout.topMargin: Theme.spXs
+                    Layout.bottomMargin: Theme.spLg
                     text: I18n.t("cmd.syntax.intro")
                     wrapMode: Text.WordWrap
                     color: Theme.textMuted
@@ -944,29 +1118,40 @@ Popup {
                 }
                 Repeater {
                     model: ["priority", "when", "due", "label", "status", "ticket", "commands"]
-                    delegate: RowLayout {
+                    delegate: Item {
                         id: syn
                         required property string modelData
                         Layout.fillWidth: true
-                        spacing: Theme.spLg
-                        Text {
-                            Layout.preferredWidth: Theme.px(120)
-                            text: I18n.t("cmd.syntax." + syn.modelData + ".example")
-                            color: Theme.text
-                            font.family: Theme.fontMono
-                            font.pixelSize: Theme.fsSm
+                        implicitHeight: synRow.implicitHeight + 2 * Theme.spSm
+                        RowLayout {
+                            id: synRow
+                            anchors.left: parent.left; anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: Theme.spLg
+                            Text {
+                                Layout.preferredWidth: Theme.px(120)
+                                text: I18n.t("cmd.syntax." + syn.modelData + ".example")
+                                color: Theme.text
+                                font.family: Theme.fontMono
+                                font.pixelSize: Theme.fsSm
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                text: I18n.t("cmd.syntax." + syn.modelData)
+                                wrapMode: Text.WordWrap
+                                color: Theme.textMuted
+                                font.family: Theme.fontUi
+                                font.pixelSize: Theme.fsSm
+                            }
                         }
-                        Text {
-                            Layout.fillWidth: true
-                            text: I18n.t("cmd.syntax." + syn.modelData)
-                            wrapMode: Text.WordWrap
-                            color: Theme.textMuted
-                            font.family: Theme.fontUi
-                            font.pixelSize: Theme.fsSm
+                        Rectangle {
+                            anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+                            height: 1
+                            color: Theme.border
+                            opacity: 0.6
                         }
                     }
                 }
-                Item { Layout.fillHeight: true }
             }
         }
     }

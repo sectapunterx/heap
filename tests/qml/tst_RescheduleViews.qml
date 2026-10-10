@@ -69,30 +69,6 @@ TestCase {
         if (release !== false) mouseRelease(view, to.x, to.y);
     }
 
-    // ── Timeline ─────────────────────────────────────────────────────
-    function makeTimeline() {
-        const tv = make('import TodoCpp; TimelineView { anchors.fill: parent }');
-        tv._rebuild();
-        return tv;
-    }
-    function timelineRow(tv, id) {
-        let found = null;
-        tryVerify(function () {
-            (function walk(it) {
-                if (!it || found) return;
-                if (String(it.objectName) === "tl-row" && it.t && it.t.id === id && it.visible) { found = it; return; }
-                const kids = it.children || [];
-                for (let i = 0; i < kids.length; i++) walk(kids[i]);
-            })(tv);
-            return found !== null;
-        }, 3000, "row " + id);
-        return found;
-    }
-    function scrollTo(tv, id) {
-        const list = findChild(tv, "timeline-rows");
-        for (let i = 0; i < tv.flatRows.length; i++)
-            if (tv.flatRows[i].kind === "task" && tv.flatRows[i].task.id === id) { list.positionViewAtIndex(i, ListView.Beginning); break; }
-    }
     function laterDue() {
         const t = AppController.today;
         return new Date(t.getFullYear(), t.getMonth(), t.getDate() + 40);
@@ -100,74 +76,6 @@ TestCase {
     function tomorrow() {
         const t = AppController.today;
         return new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1);
-    }
-
-    function test_timeline_drop_on_a_group_moves_the_deadline_and_undo_restores() {
-        const id = "RSV-TL1";
-        tc._made.push(id);
-        const due = laterDue();
-        seed(id, { dueAt: due, scheduledAt: null, dueHasTime: false });
-        const tv = makeTimeline();
-        scrollTo(tv, id);
-        const row = timelineRow(tv, id);
-
-        // The group bar shows once the drag is on; the pill is the target.
-        const c = center(row);
-        const from = row.mapToItem(tv, c.x, c.y);
-        mousePress(row, c.x, c.y);
-        mouseMove(tv, from.x + 10, from.y + 10);
-        verify(tv.drag !== null, "the drag started");
-        const pill = findChild(tv, "tl-drop-tomorrow");
-        verify(pill && pill.visible);
-        const to = pill.mapToItem(tv, pill.width / 2, pill.height / 2);
-        mouseMove(tv, to.x, to.y);
-        compare(tv.dragBucket, "tomorrow");
-        const hint = findChild(tv, "reschedule-hint-text");
-        verify(hint.text.length > 0 && hint.text.indexOf(I18n.t("drag.field.due")) === 0,
-               "the hint names the field that changes: " + hint.text);
-        mouseRelease(tv, to.x, to.y);
-
-        verify(sameDay(task(id).dueAt, tomorrow()), "deadline is tomorrow");
-        verify(AppController.undoEntry(AppController.undoSerialForToast()));
-        verify(sameDay(task(id).dueAt, due), "undo puts it back");
-    }
-
-    function test_timeline_esc_cancels() {
-        const id = "RSV-TL2";
-        tc._made.push(id);
-        const due = laterDue();
-        seed(id, { dueAt: due, scheduledAt: null, dueHasTime: false });
-        const tv = makeTimeline();
-        scrollTo(tv, id);
-        const row = timelineRow(tv, id);
-        const c = center(row);
-        const from = row.mapToItem(tv, c.x, c.y);
-        mousePress(row, c.x, c.y);
-        mouseMove(tv, from.x + 10, from.y + 10);
-        const pill = findChild(tv, "tl-drop-nodl");
-        const to = pill.mapToItem(tv, pill.width / 2, pill.height / 2);
-        mouseMove(tv, to.x, to.y);
-        keyClick(Qt.Key_Escape);
-        verify(tv.drag === null, "Esc ended the drag");
-        mouseMove(tv, to.x + 2, to.y);
-        mouseRelease(tv, to.x + 2, to.y);
-        verify(sameDay(task(id).dueAt, due), "nothing changed");
-    }
-
-    function test_timeline_schedule_only_row_moves_when_not_a_deadline() {
-        const id = "RSV-TL3";
-        tc._made.push(id);
-        const t = AppController.today;
-        const at = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 40, 15, 30);
-        seed(id, { dueAt: null, scheduledAt: at, scheduledHasTime: true });
-        const tv = makeTimeline();
-        tv.cursorTaskId = id;
-        verify(tv.moveKeyTaskByDays(-39), "the key moves it");
-        const now = task(id);
-        verify(sameMinute(now.scheduledAt, new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1, 15, 30)), "a schedule-only row moves its schedule, clock kept");
-        verify(!now.dueAt || isNaN(new Date(now.dueAt).getTime()), "no deadline appears");
-        AppController.undo();
-        verify(sameMinute(task(id).scheduledAt, at));
     }
 
     // ── Week ─────────────────────────────────────────────────────────

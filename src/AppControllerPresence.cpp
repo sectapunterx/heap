@@ -2,6 +2,8 @@
 // that put them off or open what they are about (APP-155).
 #include "AppController.h"
 
+#include "cal/EventClamp.h"
+#include "cal/Occurrences.h"
 #include "notify/NotificationCenter.h"
 #include "platform/Autostart.h"
 #include "platform/Paths.h"
@@ -57,7 +59,119 @@ bool isAppointment(const QString& kind) {
 
 }  // namespace
 
-QVector<heap::notify::NotificationAction> AppController::reminderActions(const QString& kind) const {
+void AppController::refreshTray() {
+  if(!m_notifier) {
+    return;
+  }
+  QString tip;
+  QVector<heap::notify::NotificationCenter::TrayItem> items;
+  for(const QVariant& v : trayItemsAt(QDateTime::currentDateTime(), &tip)) {
+    const QVariantMap m = v.toMap();
+    items.append({m.value(QStringLiteral("id")).toString(),
+                  m.value(QStringLiteral("text")).toString(),
+                  m.value(QStringLiteral("hint")).toString(),
+                  m.value(QStringLiteral("enabled")).toBool()});
+  }
+  m_notifier->setTrayMenu(QStringLiteral("lowkey"), items);
+  m_notifier->setTrayToolTip(tip);
+}
+
+QVariantList AppController::trayMenuItems() {
+  return trayItemsAt(QDateTime::currentDateTime(), nullptr);
+}
+
+QVariantList AppController::trayItemsAt(const QDateTime& now, QString* tooltip) {
+  using Item = heap::notify::NotificationCenter::TrayItem;
+  QVector<Item> items;
+  items.append({QStringLiteral("capture"), tr_(QStringLiteral("tray.newTask")), shortcutText(QStringLiteral("quick-capture")), true});
+  items.append({QStringLiteral("note"), tr_(QStringLiteral("tray.quickNote")), shortcutText(QStringLiteral("quick-capture-notes")), true});
+  const QVariantMap timer = runningTimer();
+  QString timerText;
+  if(!timer.isEmpty()) {
+    const int secs = timer.value(QStringLiteral("seconds")).toInt();
+    timerText = QStringLiteral("%1:%2").arg(secs / 3600).arg((secs / 60) % 60, 2, 10, QLatin1Char('0'));
+    QString title = timer.value(QStringLiteral("title")).toString();
+    if(title.size() > 22) {
+      title = title.left(21).trimmed() + QChar(0x2026);
+    }
+    timerText = title + QStringLiteral("  ") + timerText;
+  }
+  // The next meeting today, as a line of facts.
+  QString next;
+  {
+    const QDate today = now.date();
+    const double h = now.time().hour() + (now.time().minute() / 60.0);
+    double best = 25;
+    for(const CalEvent& e : heap::cal::expandedEvents(m_events.items(), today, today)) {
+      if(!e.allDay && e.date == today && e.start > h && e.start < best) {
+        best = e.start;
+        next = heap::text::formatTime(heap::cal::hourToTime(e.start), twelveHourClock()) + QLatin1Char(' ') +
+               (e.title.isEmpty() ? tr_(QStringLiteral("event.newDefault")) : e.title);
+      }
+    }
+  }
+  if(!timer.isEmpty() || !next.isEmpty()) {
+    items.append(Item{});
+    if(!timer.isEmpty()) {
+      items.append({QStringLiteral("stopTimer"), tr_(QStringLiteral("tray.stopTimer")), timerText, true});
+    }
+    if(!next.isEmpty()) {
+      items.append({QStringLiteral("next"), tr_(QStringLiteral("tray.next")).arg(next), {}, false});
+    }
+  }
+  items.append(Item{});
+  items.append({QStringLiteral("open"), tr_(QStringLiteral("tray.open")), {}, true});
+  // One "do not disturb": notifications.dndUntil, the one Settings writes.
+  const QDateTime dndUntil = QDateTime::fromString(
+      settingsMap().value(QStringLiteral("notifications")).toMap().value(QStringLiteral("dndUntil")).toString(), Qt::ISODate);
+  const bool muted = dndUntil.isValid() && now < dndUntil;
+  items.append({QStringLiteral("dnd"),
+                muted ? tr_(QStringLiteral("tray.dndUntil")).arg(heap::text::formatTime(dndUntil.time(), twelveHourClock()))
+                      : tr_(QStringLiteral("tray.dnd")),
+                {},
+                true});
+  items.append(Item{});
+  items.append({QStringLiteral("quit"), tr_(QStringLiteral("tray.quit")), {}, true});
+  if(tooltip) {
+    *tooltip = timer.isEmpty() ? QStringLiteral("lowkey") : QStringLiteral("lowkey · ") + timerText;
+  }
+  QVariantList out;
+  for(const Item& it : items) {
+    out.append(QVariantMap{{QStringLiteral("id"), it.id},
+                           {QStringLiteral("text"), it.text},
+                           {QStringLiteral("hint"), it.hint},
+                           {QStringLiteral("enabled"), it.enabled}});
+  }
+  return out;
+}
+
+void AppController::onTrayItem(const QString& id) {
+  if(id == QLatin1String("capture")) {
+    onGlobalHotkey(HotkeyQuickCapture);
+  } else if(id == QLatin1String("note")) {
+    onGlobalHotkey(HotkeyQuickCaptureNotes);
+  } else if(id == QLatin1String("stopTimer")) {
+    const QString taskId = runningTimer().value(QStringLiteral("id")).toString();
+    if(!taskId.isEmpty()) {
+      stopTaskTimer(taskId);
+    }
+  } else if(id == QLatin1String("dnd")) {
+    // The same "do not disturb for an hour" Settings and the app use; a
+    // second pick lifts it.
+    const QDateTime now = QDateTime::currentDateTime();
+    const QDateTime until = QDateTime::fromString(
+        settingsMap().value(QStringLiteral("notifications")).toMap().value(QStringLiteral("dndUntil")).toString(), Qt::ISODate);
+    doNotDisturbFor(until.isValid() && now < until ? 0 : 60, now);
+  }
+  refreshTray();
+}
+
+QString AppController::meetingJoinUrl(const QString& eventId) const {
+  const int row = m_events.indexOfId(eventId);
+  return row >= 0 ? m_events.items().at(row).url.trimmed() : QString();
+}
+
+QVector<heap::notify::NotificationAction> AppController::reminderActions(const QString& kind, bool canJoin) const {
   namespace hn = heap::notify;
   const QVariantMap notif = settingsMap().value(QStringLiteral("notifications")).toMap();
   const bool ru = m_language == QStringLiteral("ru");
@@ -72,6 +186,21 @@ QVector<heap::notify::NotificationAction> AppController::reminderActions(const Q
     return {{QString::fromLatin1(hn::kOpen), tr_(QStringLiteral("notify.action.open"))},
             {QString::fromLatin1(hn::kSnoozeBlock), tr_(QStringLiteral("notify.action.snooze15"))},
             {QString::fromLatin1(hn::kNextWindow), tr_(QStringLiteral("notify.action.window"))}};
+  }
+  // N/X-Ntf-OS (R3-025, R3-026): a meeting offers "Подключиться" when it has
+  // a link and one snooze; a deadline only opens the task.
+  if(kind == QStringLiteral("meeting") || kind == QStringLiteral("standup")) {
+    QVector<hn::NotificationAction> out;
+    if(canJoin) {
+      out.append({QString::fromLatin1(hn::kJoin), tr_(QStringLiteral("notify.action.join"))});
+    } else {
+      out.append({QString::fromLatin1(hn::kOpen), tr_(QStringLiteral("notify.action.open"))});
+    }
+    out.append({snoozeShort, hn::snoozeLabel(hn::snoozeMinutesFor(snoozeShort, shortMin, longMin), ru)});
+    return out;
+  }
+  if(kind == QStringLiteral("deadline")) {
+    return {{QString::fromLatin1(hn::kOpen), tr_(QStringLiteral("notify.action.open"))}};
   }
   QVector<hn::NotificationAction> out{{snoozeShort, hn::snoozeLabel(hn::snoozeMinutesFor(snoozeShort, shortMin, longMin), ru)},
                                       {snoozeLong, hn::snoozeLabel(hn::snoozeMinutesFor(snoozeLong, shortMin, longMin), ru)},

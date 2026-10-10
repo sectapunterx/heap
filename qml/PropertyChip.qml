@@ -15,9 +15,24 @@ Item {
     // A value that is a signal (P0, "today"): coloured in the bold style only.
     property color valueColor: Theme.text
     property bool removable: false
+    // The × only while the pointer or the keyboard is on the chip, as a
+    // badge over its corner (the quick capture sheet draws chips without
+    // it, R3-098); Delete removes it all the same.
+    property bool removeOnHover: false
+    readonly property bool _inlineRemove: root.removable && !root.removeOnHover
     property bool small: false
     // Placeholder chip ("+ property"): a dashed outline, no key.
     property bool add: false
+    // A status stage ("prog", "blocked"…): its ring before the value, in the
+    // bold style only (H2-Task "Статус ◑ В работе"); quiet keeps the word.
+    property string ring: ""
+    // A signal tint (H2-Command: "статус Заблокировано" on red): a tinted
+    // fill, no outline. Transparent = the plain chip.
+    property color tone: "transparent"
+    readonly property bool _toned: root.tone.a > 0
+    // A parsed value (quick capture, sheets N/X-Oth-Capture, R4-074): a dim
+    // hairline, no fill and a regular value in either style.
+    property bool outlined: false
 
     signal clicked()
     signal removed()
@@ -29,9 +44,10 @@ Item {
         anchors.fill: parent
         radius: Theme.radiusMd
         visible: !root.add
-        color: area.hovered ? Theme.surfaceCardHover : Theme.chipBg
-        border.width: 1
-        border.color: Theme.chipBorder
+        color: root._toned ? Theme.withAlpha(root.tone, area.hovered ? 0.24 : 0.16)
+             : area.hovered ? Theme.surfaceCardHover : root.outlined ? "transparent" : Theme.chipBg
+        border.width: root._toned ? 0 : 1
+        border.color: root.outlined ? Theme.border : Theme.chipBorder
     }
     // "+ property": a dashed outline
     Canvas {
@@ -71,22 +87,30 @@ Item {
             visible: root.key.length > 0
             anchors.verticalCenter: parent.verticalCenter
             text: root.key
-            color: Theme.textDim
+            color: root._toned ? Qt.tint(Theme.textMuted, Theme.withAlpha(root.tone, 0.45)) : Theme.textDim
             font.family: Theme.fontUi
             font.pixelSize: root.small ? Theme.fsXs : Theme.fsSm
+        }
+        StatusRing {
+            visible: root.ring.length > 0 && Style.fills
+            anchors.verticalCenter: parent.verticalCenter
+            category: root.ring
+            size: root.small ? Theme.iconSize - 2 : Theme.iconSize - 1
         }
         Text {
             id: valueText
             anchors.verticalCenter: parent.verticalCenter
             width: Math.min(implicitWidth, Theme.chipMaxW - 2 * Theme.spMd
                             - (root.key.length ? keyMetrics.advanceWidth + Theme.spXs : 0)
-                            - (root.removable ? Theme.iconSize + Theme.spXs : 0))
+                            - (root.ring.length > 0 && Style.fills ? Theme.iconSize + Theme.spXs : 0)
+                            - (root._inlineRemove ? Theme.iconSize + Theme.spXs : 0))
             elide: Text.ElideRight
             text: root.add ? "+ " + root.value : root.value
-            color: root.add ? Theme.textDim : root.valueColor
+            color: root.add ? Theme.textDim : root._toned ? Qt.tint(Theme.text, Theme.withAlpha(root.tone, 0.3))
+                 : root.outlined && root.valueColor === Theme.text ? Theme.textMuted : root.valueColor
             font.family: Theme.fontUi
             font.pixelSize: root.small ? Theme.fsXs : Theme.fsSm
-            font.weight: root.add ? Theme.fwBody : Theme.fwTitle
+            font.weight: root.add || root.outlined ? Theme.fwBody : Theme.fwTitle
         }
         TextMetrics {
             id: keyMetrics
@@ -95,22 +119,46 @@ Item {
             text: root.key
         }
         Item {
-            visible: root.removable
+            visible: root._inlineRemove
             anchors.verticalCenter: parent.verticalCenter
             width: Theme.iconSize
             height: Theme.iconSize
-            Text {
+            Icon {
                 anchors.centerIn: parent
-                text: "×"
+                name: "close"
+                size: Theme.iconSize - 4
                 color: removeArea.hovered ? Theme.text : Theme.textDim
-                font.family: Theme.fontUi
-                font.pixelSize: Theme.fsSm
             }
             ClickArea {
                 id: removeArea
                 label: I18n.t("chip.remove")
                 onActivated: root.removed()
             }
+        }
+    }
+    Rectangle {
+        objectName: "chip-remove-badge"
+        visible: root.removable && root.removeOnHover
+                 && (area.hovered || badgeArea.hovered || area.activeFocus)
+        width: Theme.iconSize
+        height: Theme.iconSize
+        radius: width / 2
+        x: root.width - width / 2 - Theme.sp2xs
+        y: -height / 2 + Theme.sp2xs
+        z: 2
+        color: Theme.panel3
+        border.width: 1
+        border.color: Theme.chipBorder
+        Icon {
+            anchors.centerIn: parent
+            name: "close"
+            size: Theme.iconSize - 6
+            color: badgeArea.hovered ? Theme.text : Theme.textDim
+        }
+        ClickArea {
+            id: badgeArea
+            label: I18n.t("chip.remove")
+            onActivated: root.removed()
         }
     }
 }

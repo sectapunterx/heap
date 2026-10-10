@@ -419,23 +419,19 @@ TEST(Standup, PreviousWorkDaySkipsTheWeekend) {
 
 TEST(Standup, TheThreeSections) {
   EXPECT_EQ(buildStandup(standupFacts(), false),
-            QStringLiteral("Yesterday:\n"
-                           "- APP-12 Login rate limit: In progress → Review\n"
-                           "- APP-14 CSV export: 2 commits\n"
-                           "- Meeting: Sync with the team\n"
-                           "Today:\n"
-                           "- APP-14 CSV export\n"
-                           "- 15:00 1:1 with Oleg\n"
-                           "Blockers:\n"
-                           "- APP-20 Deploy pipeline"));
+            QStringLiteral("Yesterday: APP-12 Login rate limit (In progress \u2192 Review), APP-14 CSV export (2 commits), "
+                           "meeting \u201cSync with the team\u201d.\n"
+                           "Today: APP-14 CSV export, 1:1 with Oleg at 15:00.\n"
+                           "Blockers: APP-20 Deploy pipeline."));
 }
 
 TEST(Standup, RussianHeadingsAndPlurals) {
   const QString ru = buildStandup(standupFacts(), true);
-  EXPECT_TRUE(ru.startsWith(QStringLiteral("Вчера:\n")));
-  EXPECT_TRUE(ru.contains(QStringLiteral("APP-14 CSV export: 2 коммита")));
-  EXPECT_TRUE(ru.contains(QStringLiteral("\nСегодня:\n")));
-  EXPECT_TRUE(ru.contains(QStringLiteral("\nБлокеры:\n- APP-20 Deploy pipeline")));
+  EXPECT_TRUE(ru.startsWith(QStringLiteral("Вчера: ")));
+  EXPECT_TRUE(ru.contains(QStringLiteral("APP-14 CSV export (2 коммита)")));
+  EXPECT_TRUE(ru.contains(QStringLiteral("\nСегодня: ")));
+  EXPECT_TRUE(ru.contains(QStringLiteral("в 15:00")));
+  EXPECT_TRUE(ru.contains(QStringLiteral("\nБлокеры: APP-20 Deploy pipeline.")));
 }
 
 // An empty section keeps its place, so the shape is there to fill in.
@@ -443,7 +439,7 @@ TEST(Standup, EmptySectionsSaySo) {
   StandupFacts f;
   f.today = kDay;
   f.previousDay = kDay.addDays(-1);
-  EXPECT_EQ(buildStandup(f, false), QStringLiteral("Yesterday:\n- —\nToday:\n- —\nBlockers:\n- —"));
+  EXPECT_EQ(buildStandup(f, false), QStringLiteral("Yesterday: \u2014\nToday: \u2014\nBlockers: \u2014"));
 }
 
 // Moved there and back the same day: nothing to report.
@@ -452,7 +448,7 @@ TEST(Standup, ARoundTripIsNotAMove) {
   const QDateTime mon(kDay.addDays(-1), QTime(9, 0));
   f.moves = {{.taskId = QStringLiteral("APP-12"), .from = QStringLiteral("prog"), .to = QStringLiteral("review"), .at = mon},
              {.taskId = QStringLiteral("APP-12"), .from = QStringLiteral("review"), .to = QStringLiteral("prog"), .at = mon.addSecs(60)}};
-  EXPECT_FALSE(buildStandup(f, false).contains(QStringLiteral("APP-12 Login rate limit:")));
+  EXPECT_FALSE(buildStandup(f, false).contains(QStringLiteral("APP-12 Login rate limit (")));
 }
 
 TEST(EndOfDayText, RussianPluralForms) {

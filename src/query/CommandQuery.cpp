@@ -83,6 +83,8 @@ CommandQuery parseCommandLine(const QString& text,
   static const QRegularExpression clauseRx(QStringLiteral("^-?[A-Za-z]+:\\S+$"));
   static const QRegularExpression priorityRx(QStringLiteral("^[pP]([0-3])$"));
   static const QRegularExpression tagRx(QStringLiteral("^#(\\S+)$"));
+  static const QRegularExpression ruKeyRx(QStringLiteral("^(статус|приоритет):(\\S+)$"),
+                                          QRegularExpression::CaseInsensitiveOption | QRegularExpression::UseUnicodePropertiesOption);
   static const QRegularExpression ticketRx(QStringLiteral("^[A-Za-z][A-Za-z0-9]*-\\d+$"));
 
   // Where each recognised token sat, to give them back in typed order.
@@ -93,6 +95,30 @@ CommandQuery parseCommandLine(const QString& text,
     const int at = static_cast<int>(input.indexOf(word, cursor));
     cursor = at + static_cast<int>(word.size());
     QRegularExpressionMatch m;
+    // The chips' own words typed back ("статус:заблок", "приоритет:p0"):
+    // the Russian keys the line shows on its chips (DG-080).
+    if((m = ruKeyRx.match(word)).hasMatch()) {
+      const QString value = m.captured(2);
+      if(m.captured(1).toLower() == QStringLiteral("статус")) {
+        const QString id = statusByPrefix(value, statuses);
+        if(!id.isEmpty()) {
+          QString name = id;
+          for(const QVariant& v : statuses) {
+            if(v.toMap().value(QStringLiteral("id")).toString() == id) {
+              name = v.toMap().value(QStringLiteral("name")).toString();
+            }
+          }
+          found.append({at, {word, QStringLiteral("status"), QStringLiteral("status:") + id, name}});
+          continue;
+        }
+      } else if(const QRegularExpressionMatch pm = priorityRx.match(value); pm.hasMatch()) {
+        const QString p = QStringLiteral("P") + pm.captured(1);
+        found.append({at, {word, QStringLiteral("priority"), QStringLiteral("priority:") + p, p}});
+        continue;
+      }
+      rest << word;
+      continue;
+    }
     if(clauseRx.match(word).hasMatch() && !word.contains(QStringLiteral("//"))) {
       found.append({at, {word, QStringLiteral("clause"), word, word}});
     } else if((m = priorityRx.match(word)).hasMatch()) {

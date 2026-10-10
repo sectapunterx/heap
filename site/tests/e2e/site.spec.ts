@@ -32,7 +32,8 @@ for (const path of PAGES) {
   test(`/${path} never starts a sentence with the product name`, async ({ page }) => {
     await page.goto(path);
     const text = await page.locator('body').innerText();
-    expect(text).not.toMatch(/(?:^|[.!?]\s+|\n\s*)lowkey\b/);
+    // A file name (lowkey-v0.8.0-…) or a path (lowkey/lowkey) on its own line is not a sentence.
+    expect(text).not.toMatch(/(?:^|[.!?]\s+|\n\s*)lowkey(?![\w/.-])/);
   });
 }
 
@@ -181,7 +182,7 @@ test('the download buttons point at this platform’s file', async ({ page, isMo
     await expect(page.locator('[data-mobile-note]')).toBeVisible();
   } else {
     await expect(cta).toHaveText(/Download for (Linux|Windows|macOS)/);
-    await expect(cta).toHaveAttribute('href', /^https:\/\/github\.com\/sectapunterx\/heap\/releases\/download\//);
+    await expect(cta).toHaveAttribute('href', new RegExp(`^https://github\\.com/${REPO}/releases/download/`));
   }
 });
 
@@ -192,7 +193,7 @@ test('the download page lists every file with its size', async ({ page }) => {
     await expect(files).toHaveCount(4);
     for (const a of await files.all()) {
       await expect(a).toContainText(new RegExp(`\\d+\\.\\d ${mb}`));
-      await expect(a).toHaveAttribute('href', /^https:\/\/github\.com\/sectapunterx\/heap\/releases\/download\//);
+      await expect(a).toHaveAttribute('href', new RegExp(`^https://github\\.com/${REPO}/releases/download/`));
     }
   }
 });

@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.Basic as QQC
+import QtQuick.Dialogs
 import TodoCpp
 
 // A markdown document edited where it is drawn (heap 2, APP-265/269): the
@@ -18,9 +19,19 @@ Item {
     // task, a pull from the tracker) and drops the undo history.
     property string text: ""
     property string placeholder: ""
+    // The context line of the field's right-click menu (DG-152).
+    property string menuTitle: ""
     property bool readOnly: false
     // How [[targets]] read (APP-269): AppController.wikiTargets(text).
     property var wikiTargets: ({})
+    property bool headingRules: true
+    // The Knowledge document type (MdView.noteType).
+    property bool noteType: false
+    property real paragraphLineHeight: 0
+    // Drawn under the last block, inside the scroll (the task document's
+    // plan and hint, DG-062): the item gets `width` set to the text column.
+    property Component tail: null
+    readonly property Item tailItem: view.footerItem ? (view.footerItem as MdTailHost).loaded : null
     // The edited source, as each edit is taken in.
     signal edited(string text)
     // Esc with no block open: the caller goes back.
@@ -67,6 +78,15 @@ Item {
     }
     function _lineCount(t) { return t.length === 0 ? 1 : t.split("\n").length; }
 
+    // The row a source line belongs to. A blank line after the last block
+    // (a click below the text) is a new block of its own, not the paragraph
+    // above: it opened that paragraph, so a "/" typed there landed in the
+    // paragraph's box (R3-092). -1 = after the last row.
+    function _rowFor(t, line) {
+        const row = doc.rowForLine(line);
+        if (row < 0 || row !== view.count - 1 || line <= doc.lastLineOfRow(row)) return row;
+        return t.substring(root._lineStart(t, line), root._lineEnd(t, line)).trim().length === 0 ? -1 : row;
+    }
     // Open the block that holds `line` for editing; the caret at its end, or
     // at its start with `atStart`.
     function editLine(line, atStart) {
@@ -75,7 +95,7 @@ Item {
         const t = src.text;
         const last = Math.max(0, root._lineCount(t) - 1);
         line = Math.max(0, Math.min(line, last));
-        const row = doc.rowForLine(line);
+        const row = root._rowFor(t, line);
         let first = line, lastLine = line;
         if (row >= 0) {
             first = Math.max(0, doc.firstLineOfRow(row));
@@ -122,7 +142,7 @@ Item {
         }
         view.editLast = view.editFirst + root._lineCount(field.text) - 1;
         doc.flush();
-        view.editRow = doc.rowForLine(view.editFirst);
+        view.editRow = root._rowFor(src.text, view.editFirst);
     }
     function _reveal() {
         const y = field._contentY;
@@ -172,6 +192,9 @@ Item {
         id: view
         objectName: "md-block-view"
         anchors.fill: parent
+        headingRules: root.headingRules
+        noteType: root.noteType
+        paragraphLineHeight: root.paragraphLineHeight
         document: doc
         editorDocument: src.textDocument
         clickToEdit: !root.readOnly
@@ -181,10 +204,21 @@ Item {
         onInternalLinkActivated: (kind, target) => root.internalLinkActivated(kind, target)
 
         // Room to click below the last block: a new block there.
-        footer: Item {
+        footer: MdTailHost {
+            id: tailHost
             width: view.width
-            height: Theme.px(160)
+            height: tailLoader.y + tailLoader.height + Theme.px(160)
+            loaded: tailLoader.item as Item
+            Loader {
+                id: tailLoader
+                x: view.sideMargin
+                y: placeholderText.visible ? placeholderText.y + placeholderText.height + Theme.spLg : Theme.spSm
+                width: view.width - 2 * view.sideMargin
+                active: root.tail !== null
+                sourceComponent: root.tail
+            }
             Text {
+                id: placeholderText
                 objectName: "md-block-placeholder"
                 visible: src.text.trim().length === 0 && !root.editing
                 x: view.sideMargin
@@ -196,9 +230,24 @@ Item {
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsMd
             }
-            TapHandler {
-                enabled: !root.readOnly
-                onTapped: root.appendBlock()
+            // A click above the tail (the placeholder) or below it: a new
+            // block. The tail's own rows take their clicks.
+            Item {
+                width: parent.width
+                height: tailLoader.y
+                TapHandler {
+                    enabled: !root.readOnly
+                    onTapped: root.appendBlock()
+                }
+            }
+            Item {
+                y: tailLoader.y + tailLoader.height
+                width: parent.width
+                height: parent.height - y
+                TapHandler {
+                    enabled: !root.readOnly
+                    onTapped: root.appendBlock()
+                }
             }
         }
 
@@ -216,26 +265,30 @@ Item {
                                   ? view.itemAtIndex(view.count - 1).y + view.itemAtIndex(view.count - 1).height : 0)
             x: view.x + view.sideMargin - leftPadding
             y: view.y + view.contentItem.y + _contentY
-            width: view.width - 2 * view.sideMargin + leftPadding + rightPadding
+            width: (root.noteType ? Math.min(view.width - 2 * view.sideMargin, Theme.px(680)) : view.width - 2 * view.sideMargin) + leftPadding + rightPadding
             wrapMode: TextEdit.Wrap
             selectByMouse: true
             textFormat: TextEdit.PlainText
             color: Theme.text
             font.family: Theme.fontUi
-            font.pixelSize: Theme.fsMd
-            topPadding: Theme.spXs
-            bottomPadding: Theme.spXs
-            leftPadding: Theme.spSm
-            rightPadding: Theme.spSm
+            // One editor, no modes (N/X-Oth-Knowledge, R3-092): the source
+            // is typed where the block was drawn, in the block's own face,
+            // with no box around it.
+            font.pixelSize: root.noteType ? Theme.fsLg : Theme.fsMd
+            topPadding: root.noteType ? 0 : Theme.spXs
+            bottomPadding: root.noteType ? Theme.px(14) : Theme.spXs
+            leftPadding: root.noteType ? 0 : Theme.spSm
+            rightPadding: root.noteType ? 0 : Theme.spSm
             background: Rectangle {
                 radius: Theme.radiusSm
-                color: Theme.panel
+                color: root.noteType ? "transparent" : Theme.panel
                 border.color: Theme.border
-                border.width: 1
+                border.width: root.noteType ? 0 : 1
             }
-            QQC.ContextMenu.menu: TextEditMenu { editor: field }
+            QQC.ContextMenu.menu: TextEditMenu { editor: field; context: root.menuTitle; taskLink: true }
             onTextChanged: if (!root._fieldLoading && root.editing) commitTimer.restart()
-            onActiveFocusChanged: if (!activeFocus && !slashMenu.opened) root._leave(true)
+            // Not while the "/" menu or its file picker holds the keyboard.
+            onActiveFocusChanged: if (!activeFocus && !slashMenu.opened && slashMenu.slashAt < 0) root._leave(true)
 
             Keys.priority: Keys.BeforeItem
             Keys.onShortcutOverride: (event) => {
@@ -299,9 +352,16 @@ Item {
                     return;
                 }
                 // "/" at the start of a line: insert a checklist, code, a link.
+                // The "/" is typed as it is (sheet: "/" and the caret over
+                // the menu); a pick replaces it, Esc leaves it.
                 if (event.text === "/" && (field.cursorPosition === 0
                         || field.text.charAt(field.cursorPosition - 1) === "\n")) {
+                    const at = field.cursorPosition;
+                    field.insert(at, "/");
+                    field.cursorPosition = at + 1;
+                    slashMenu.slashAt = at;
                     slashMenu.popup(field, field.cursorRectangle.x, field.cursorRectangle.y + field.cursorRectangle.height);
+                    slashMenu.currentIndex = 0;
                     event.accepted = true;
                     return;
                 }
@@ -325,22 +385,80 @@ Item {
         }
     }
 
-    // What "/" inserts (sheet X-Oth-Knowledge).
+    // What "/" inserts (R2-024, sheet X/N-Oth-Knowledge): the six rows, the
+    // markdown each one types on the right.
     AppMenu {
         id: slashMenu
         objectName: "md-slash-menu"
+        // The sheet's "/" menu is 280px wide (R3-093).
+        minWidth: Theme.px(280)
+        // Where the typed "/" is; a pick replaces it.
+        property int slashAt: -1
+        function _dropSlash() {
+            const at = slashMenu.slashAt;
+            slashMenu.slashAt = -1;
+            if (at >= 0 && field.text.charAt(at) === "/") {
+                field.remove(at, at + 1);
+                field.cursorPosition = at;
+            }
+        }
         function put(s, back) {
+            slashMenu._dropSlash();
             const at = field.cursorPosition;
             field.insert(at, s);
             field.cursorPosition = at + s.length - (back || 0);
             field.forceActiveFocus();
         }
-        AppMenuItem { objectName: "md-slash-check"; text: I18n.t("md.slash.checklist"); onTriggered: slashMenu.put("- [ ] ") }
-        AppMenuItem { objectName: "md-slash-code"; text: I18n.t("md.slash.code"); onTriggered: slashMenu.put("```\n\n```", 4) }
-        AppMenuItem { objectName: "md-slash-task"; text: I18n.t("md.slash.task"); onTriggered: slashMenu.put("[[]]", 2) }
-        AppMenuItem { objectName: "md-slash-heading"; text: I18n.t("md.slash.heading"); onTriggered: slashMenu.put("## ") }
+        // Closed without a pick (Esc): the caret goes back after the "/".
+        onClosed: Qt.callLater(() => {
+            if (fileDialog.visible) return;
+            slashMenu.slashAt = -1;
+            if (root.editing && !field.activeFocus) field.forceActiveFocus();
+        })
+        AppMenuItem { objectName: "md-slash-check"; text: I18n.t("md.slash.checklist"); keyText: "[]"; onTriggered: slashMenu.put("- [ ] ") }
+        AppMenuItem { objectName: "md-slash-code"; text: I18n.t("md.slash.code"); keyText: "```"; onTriggered: slashMenu.put("```\n\n```", 4) }
+        AppMenuItem { objectName: "md-slash-task"; text: I18n.t("md.slash.task"); keyText: "[["; onTriggered: slashMenu.put("[[]]", 2) }
+        AppMenuItem {
+            objectName: "md-slash-file"
+            text: I18n.t("md.slash.file")
+            onTriggered: {
+                fileDialog.line = view.editFirst;
+                fileDialog.at = slashMenu.slashAt;
+                fileDialog.open();
+            }
+        }
         AppMenuItem { objectName: "md-slash-table"; text: I18n.t("md.slash.table"); onTriggered: slashMenu.put("| | |\n|---|---|\n| | |\n", 0) }
-        AppMenuItem { objectName: "md-slash-quote"; text: I18n.t("md.slash.quote"); onTriggered: slashMenu.put("> ") }
-        AppMenuItem { objectName: "md-slash-slash"; text: I18n.t("md.slash.literal"); onTriggered: slashMenu.put("/") }
+        // A reference: a titled link (the knowledge base's "RFC 6585 ·
+        // 429 Too Many Requests ↗"); the caret on the title.
+        AppMenuItem { objectName: "md-slash-ref"; text: I18n.t("md.slash.reference"); onTriggered: slashMenu.put("[](https://)", 11) }
+    }
+
+    // "Картинка или файл": stored under attachments/, linked where the "/" was.
+    FileDialog {
+        id: fileDialog
+        property int line: -1
+        property int at: -1
+        fileMode: FileDialog.OpenFiles
+        title: I18n.t("md.slash.file")
+        onAccepted: {
+            const list = [];
+            for (let i = 0; i < selectedFiles.length; ++i) list.push(selectedFiles[i]);
+            const added = AppController.importAttachments(list, true);
+            if (!root.editing && fileDialog.line >= 0) root.editLine(fileDialog.line, false);
+            slashMenu.slashAt = fileDialog.at;
+            if (added && added.length > 0) {
+                field.cursorPosition = Math.min(Math.max(0, fileDialog.at + 1), field.length);
+                slashMenu.put(added.map(a => a.ref).join("\n\n"));
+            }
+        }
+        onRejected: {
+            slashMenu.slashAt = -1;
+            if (!root.editing && fileDialog.line >= 0) root.editLine(fileDialog.line, false);
+            else field.forceActiveFocus();
+        }
+    }
+
+    component MdTailHost: Item {
+        property Item loaded: null
     }
 }

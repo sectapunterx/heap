@@ -61,14 +61,6 @@ TestCase {
         AppController.clearPendingUndo();
     }
 
-    function makeDay() {
-        const dc = createTemporaryQmlObject(
-            'import TodoCpp; DayCalendar { anchors.fill: parent }', host);
-        verify(dc !== null);
-        wait(0);
-        return dc;
-    }
-
     // ── What the model reports ──
 
     // The two roles are appended, never inserted: the calendar QML reads event
@@ -128,98 +120,6 @@ TestCase {
     }
 
     // ── The day grid ──
-
-    function test_an_all_day_event_appears_in_the_strip_not_the_grid() {
-        const day = probeDay(523);
-        clearDay(day);
-        AppController.selectedDate = day;
-        const id = addEvent(day, { allDay: true, title: "release day" });
-
-        const dc = makeDay();
-        verify(findChild(dc, "allday-" + id) !== null, "it must be in the strip");
-        const block = findChild(dc, "event-" + id);
-        verify(block === null || !block.visible, "and not drawn on the hour grid");
-    }
-
-    function test_the_strip_is_hidden_when_nothing_is_all_day() {
-        const day = probeDay(524);
-        clearDay(day);
-        AppController.selectedDate = day;
-        addEvent(day, { start: 9, end: 10 });
-
-        const dc = makeDay();
-        const strip = findChild(dc, "allday-strip");
-        verify(strip !== null);
-        verify(!strip.visible, "an ordinary day shows no strip");
-    }
-
-    // A multi-day all-day event is in the strip on every day it covers, not
-    // only the one its `date` names.
-    function test_a_multi_day_event_is_in_the_strip_on_each_of_its_days() {
-        const first = probeDay(525);
-        const last = probeDay(527);
-        clearDay(first);
-        const id = addEvent(first, { allDay: true, endDate: last, title: "offsite" });
-
-        for (let k = 525; k <= 527; k++) {
-            AppController.selectedDate = probeDay(k);
-            const dc = makeDay();
-            verify(findChild(dc, "allday-" + id) !== null, "day " + k + " must show the bar");
-        }
-
-        AppController.selectedDate = probeDay(528);
-        const after = makeDay();
-        verify(findChild(after, "allday-" + id) === null, "the day after must not");
-    }
-
-    // The reason spans exist: 22:00 to 02:00 is one event and two blocks.
-    function test_a_cross_midnight_event_draws_on_both_days() {
-        const first = probeDay(530);
-        const second = probeDay(531);
-        clearDay(first);
-        clearDay(second);
-        const id = addEvent(first, { start: 22, end: 2, endDate: second, title: "night call" });
-
-        AppController.selectedDate = first;
-        const d1 = makeDay();
-        const b1 = findChild(d1, "event-" + id);
-        verify(b1 !== null && b1.visible, "the first evening must draw it");
-        fuzzyCompare(b1.y, 22 * Theme.hourH, 2);
-
-        AppController.selectedDate = second;
-        const d2 = makeDay();
-        const b2 = findChild(d2, "event-" + id);
-        verify(b2 !== null && b2.visible, "and so must the following morning");
-        fuzzyCompare(b2.y, 0, 2);
-    }
-
-    // A piece whose edges belong to another day has nothing to resize: dragging
-    // one here would describe an hour range the event does not have.
-    function test_a_spanning_piece_has_no_resize_handles() {
-        const first = probeDay(532);
-        const second = probeDay(533);
-        clearDay(first);
-        clearDay(second);
-        const id = addEvent(first, { start: 22, end: 2, endDate: second, title: "night call" });
-
-        AppController.selectedDate = second;
-        const dc = makeDay();
-        const block = findChild(dc, "event-" + id);
-        verify(block !== null);
-        verify(!block.wholeEvent, "the tail carries neither edge of the event");
-    }
-
-    function test_an_ordinary_event_still_resizes() {
-        const day = probeDay(534);
-        clearDay(day);
-        AppController.selectedDate = day;
-        const id = addEvent(day, { start: 9, end: 10 });
-
-        const dc = makeDay();
-        const block = findChild(dc, "event-" + id);
-        verify(block !== null);
-        verify(block.wholeEvent, "a one-day event owns both of its edges");
-    }
 
     // ── The week grid ──
 

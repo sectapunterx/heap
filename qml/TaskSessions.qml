@@ -48,14 +48,29 @@ ColumnLayout {
                                    : AppController.updateTaskSession(root.taskId, sessionId, start, end);
     }
 
-    Text {
+    Item {
         objectName: "task-doc-sessions-toggle"
         visible: root.sessions.length > 0 || root._open
-        text: (root._open ? "▾ " : "▸ ") + I18n.count(root.sessions.length, "local.sessions.count")
-        color: togCA.hovered ? Theme.text : Theme.textDim
-        font.family: Theme.fontUi
-        font.pixelSize: Theme.fsXs
-        ClickArea { id: togCA; label: parent.text; onActivated: root._open = !root._open }
+        implicitWidth: togRow.implicitWidth
+        implicitHeight: togRow.implicitHeight
+        Row {
+            id: togRow
+            spacing: Theme.sp2xs
+            Icon {
+                anchors.verticalCenter: parent.verticalCenter
+                name: root._open ? "chevron-down" : "chevron-right"
+                size: Theme.iconSize - 2
+                color: togCA.hovered ? Theme.text : Theme.textDim
+            }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: I18n.count(root.sessions.length, "local.sessions.count")
+                color: togCA.hovered ? Theme.text : Theme.textDim
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsXs
+            }
+        }
+        ClickArea { id: togCA; label: I18n.count(root.sessions.length, "local.sessions.count"); onActivated: root._open = !root._open }
     }
 
     Repeater {

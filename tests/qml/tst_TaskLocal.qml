@@ -40,9 +40,12 @@ TestCase {
         const id = mkTask("plan probe");
         const doc = make();
         doc.open(id);
+        // The plan is hidden while empty; "+ свойство → План" starts it (DG-062).
+        tryVerify(() => findChild(doc, "cl-add") !== null, 1000, "no plan in the body's tail");
         const add = findChild(doc, "cl-add");
-        verify(add.visible);
-        add.forceActiveFocus();
+        verify(!findChild(doc, "task-doc-checklist").visible, "an empty plan is drawn at rest");
+        doc.startPlan();
+        tryVerify(() => add.visible && add.activeFocus, 1000, "the plan did not start");
         typeText("repro");
         keyClick(Qt.Key_Return);
         tryCompare(AppController.taskChecklist(id), "length", 1);
@@ -73,9 +76,11 @@ TestCase {
         const id = mkTask("paste probe");
         const doc = make();
         doc.open(id);
+        tryVerify(() => findChild(doc, "cl-add") !== null, 1000);
         const add = findChild(doc, "cl-add");
+        doc.startPlan();
+        tryVerify(() => add.activeFocus, 1000);
         add.text = "- a\n-- [x] b\n--- c";
-        add.forceActiveFocus();
         keyClick(Qt.Key_Return);
         tryVerify(() => AppController.taskChecklist(id).length === 3, 1000);
         const items = AppController.taskChecklist(id);
@@ -87,10 +92,9 @@ TestCase {
         const b = mkTask("zebrafish target");
         const doc = make();
         doc.open(a);
-        const addRelated = findChild(doc, "task-doc-link-add-related");
-        verify(addRelated !== null);
-        addRelated.children[0].forceActiveFocus();
-        keyClick(Qt.Key_Return);
+        // No links: the section is not drawn; "+ свойство → Связь" starts one.
+        verify(!findChild(doc, "task-doc-links").visible, "an empty links section is drawn");
+        doc.startLink("related");
         const field = findChild(doc, "task-doc-link-field");
         tryVerify(() => field.visible, 1000, "the field did not show");
         tryVerify(() => field.activeFocus, 1000, "the field has no keyboard");
@@ -107,10 +111,7 @@ TestCase {
         const a = mkTask("url probe");
         const doc = make();
         doc.open(a);
-        const addR = findChild(doc, "task-doc-link-add-related");
-        verify(addR.visible && addR.width > 0, "add link not shown");
-        addR.children[0].forceActiveFocus();
-        keyClick(Qt.Key_Return);
+        doc.startLink("related");
         const field = findChild(doc, "task-doc-link-field");
         tryVerify(() => field.activeFocus, 1000);
         typeText("https://gitlab.example/a/-/merge_requests/17");

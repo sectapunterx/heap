@@ -43,7 +43,7 @@ TestCase {
     // Design audit DES-15: the first-run hints name rebindable shortcuts, so
     // they take them as arguments instead of spelling out the defaults.
     function test_first_run_hints_take_the_shortcuts_as_arguments() {
-        const keys = ["welcome.capture.desc", "welcome.palette.desc", "board.empty.hint",
+        const keys = ["tasks.empty.line", "calendar.empty.hint",
                       "board.empty.archivedHint", "timeline.empty.none.hint"];
         for (const lang of ["en", "ru"]) {
             for (const k of keys) {
@@ -102,8 +102,9 @@ TestCase {
         compare(out.en, "Oct 6");
         compare(out.en24, "Oct 6, 15:15");
         compare(out.enLong, "Tuesday, October 6");
-        compare(out.ru, "6 окт.");
-        compare(out.ru24, "6 окт., 15:15");
+        // No dot after the short month (DG-031: "9 окт").
+        compare(out.ru, "6 окт");
+        compare(out.ru24, "6 окт, 15:15");
         compare(out.ru12, "3:15pm");
         compare(out.en12, "Tue, Oct 6, 3:15pm");
         compare(out.bad, "");

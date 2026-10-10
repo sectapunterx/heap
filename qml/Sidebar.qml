@@ -17,6 +17,10 @@ Rectangle {
     color: Theme.surfaceNav
 
     property bool expanded: true
+    // The first run (H2-First, R4-006): no key hints, no "Ctrl K" footer and
+    // no profile dot — the page itself teaches the three keys.
+    property bool firstRun: false
+    readonly property bool _hints: Style.keyHints && !root.firstRun
     readonly property int expandedWidth: Theme.px(208)
     // The 36px icon cell plus the margins.
     readonly property int collapsedWidth: 36 + 2 * Theme.spLg
@@ -40,6 +44,13 @@ Rectangle {
     signal importIcsRequested()
     signal exportVaultRequested()
     signal importVaultRequested()
+    signal removeExampleRequested()
+    // The running timer's line (R2-052) opens its task.
+    signal timerTaskRequested(string taskId)
+    // The update line (R2-053): what's new in the release on offer.
+    signal updateNotesRequested()
+    // Set by Main when a check finds a newer release (R2-053).
+    property string updateVersion: ""
     property alias profileSwitcher: profile
 
     // ── My views ──
@@ -50,6 +61,7 @@ Rectangle {
     signal savedViewActivated(string id)
     signal savedViewRenameRequested(string id)
     signal savedViewUpdateRequested(string id)
+    signal savedViewEditRequested(string id)
     signal saveViewRequested()
     readonly property var _savedViews: AppController.savedViews
     readonly property var _savedCounts: AppController.savedViewCounts
@@ -184,6 +196,7 @@ Rectangle {
                 Layout.minimumWidth: Theme.spLg
                 Layout.preferredHeight: Theme.chipH
                 compact: !root.expanded
+                hideProfileDot: root.firstRun
                 onSyncStatusRequested: root.syncStatusRequested()
                 onNewProfileRequested: root.newProfileRequested()
                 onRenameProfileRequested: root.renameProfileRequested()
@@ -194,6 +207,7 @@ Rectangle {
                 onImportIcsRequested: root.importIcsRequested()
                 onExportVaultRequested: root.exportVaultRequested()
                 onImportVaultRequested: root.importVaultRequested()
+                onRemoveExampleRequested: root.removeExampleRequested()
             }
         }
 
@@ -204,7 +218,9 @@ Rectangle {
             Layout.preferredHeight: Theme.chipH + Theme.spXs
             Layout.bottomMargin: Theme.spLg
             radius: Theme.radiusMd
-            color: newTaskCA.hovered ? Theme.panel2 : Theme.panel
+            // Quiet: a hairline field on the sidebar, no fill (H2-Today-Calm,
+            // X-Oth-Light, R4-013); bold keeps the panel fill.
+            color: newTaskCA.hovered ? Theme.panel2 : Style.fills ? Theme.panel : "transparent"
             border.color: newTaskCA.hovered ? Theme.borderStrong : Theme.border
             border.width: 1
             Text {
@@ -225,13 +241,11 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 keys: AppController.shortcuts.length >= 0 ? root.prettyKeys(AppController.shortcutFor("task.new")) : ""
             }
-            Text {
+            Icon {
                 visible: !root.expanded
                 anchors.centerIn: parent
-                text: "+"
+                name: "plus"
                 color: Theme.textMuted
-                font.family: Theme.fontUi
-                font.pixelSize: Theme.fsLg
             }
             ClickArea {
                 id: newTaskCA
@@ -243,37 +257,159 @@ Rectangle {
             }
         }
 
+        // The running timer (X/N-Ntf-OS, R2-052): under "New task…", while a
+        // timer runs — the task, the time, pause. Click opens the task.
+        Item {
+            id: timerLine
+            objectName: "sidebar-timer"
+            property var timer: ({})
+            function refresh() { timerLine.timer = AppController.runningTimer(); }
+            Timer {
+                interval: 1000
+                repeat: true
+                running: root.visible
+                triggeredOnStart: true
+                onTriggered: timerLine.refresh()
+            }
+            Connections {
+                target: AppController.tasks
+                function onDataChanged() { timerLine.refresh(); }
+                function onModelReset() { timerLine.refresh(); }
+            }
+            readonly property bool on: !!timerLine.timer.id
+            visible: on
+            Layout.fillWidth: true
+            Layout.preferredHeight: on ? Theme.chipH + Theme.spXs : 0
+            Layout.bottomMargin: on ? Theme.spLg : 0
+            readonly property string clock: {
+                const s = Number(timerLine.timer.seconds) || 0;
+                const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+                return h + ":" + (m < 10 ? "0" : "") + m;
+            }
+            Rectangle {
+                anchors.fill: parent
+                radius: Theme.radiusMd
+                color: timerCA.hovered ? Theme.panel2 : "transparent"
+                border.width: 1
+                border.color: Theme.border
+            }
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: Theme.spMd
+                anchors.rightMargin: Theme.spMd
+                spacing: Theme.spSm
+                visible: root.expanded
+                StatusRing {
+                    category: "prog"
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                Text {
+                    objectName: "sidebar-timer-title"
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignVCenter
+                    text: timerLine.timer.title || ""
+                    textFormat: Text.PlainText
+                    elide: Text.ElideRight
+                    color: Theme.text
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
+                }
+                Rectangle {
+                    visible: Style.urgency
+                    Layout.alignment: Qt.AlignVCenter
+                    implicitWidth: Theme.spXs; implicitHeight: Theme.spXs; radius: width / 2
+                    color: Theme.signalNow
+                }
+                Text {
+                    objectName: "sidebar-timer-clock"
+                    Layout.alignment: Qt.AlignVCenter
+                    text: timerLine.clock
+                    color: Theme.signalNow
+                    font.family: Theme.fontMono
+                    font.features: Theme.tabularNums
+                    font.pixelSize: Theme.fsXs
+                }
+                Item {
+                    implicitWidth: Theme.spLg
+                    implicitHeight: Theme.spLg
+                    Layout.alignment: Qt.AlignVCenter
+                    Icon {
+                        anchors.centerIn: parent
+                        name: "pause"
+                        size: Theme.px(10)
+                        color: pauseCA.hovered ? Theme.text : Theme.textMuted
+                    }
+                    ClickArea {
+                        id: pauseCA
+                        objectName: "sidebar-timer-pause"
+                        anchors.margins: -Theme.spXs
+                        z: 2
+                        label: I18n.t("sidebar.timer.pause")
+                        shortcutId: "task.timer"
+                        onActivated: AppController.stopTaskTimer(timerLine.timer.id)
+                    }
+                }
+                KeyHint {
+                    visible: Style.keyHints && keys.length > 0
+                    Layout.alignment: Qt.AlignVCenter
+                    // "⏸ T" as the sheet and focus mode write it (R4-016).
+                    keys: {
+                        const k = AppController.shortcuts.length >= 0 ? root.prettyKeys(AppController.shortcutFor("task.timer")) : "";
+                        return k.length === 1 ? k.toUpperCase() : k;
+                    }
+                }
+            }
+            Icon {
+                visible: !root.expanded
+                anchors.centerIn: parent
+                name: "timer"
+                color: Theme.signalNow
+            }
+            ClickArea {
+                id: timerCA
+                objectName: "sidebar-timer-open"
+                label: I18n.t("sidebar.timer.open")
+                tip: (timerLine.timer.title || "") + " · " + timerLine.clock
+                showTip: !root.expanded
+                onActivated: root.timerTaskRequested(timerLine.timer.id)
+            }
+        }
+
         NavRow {
             objectName: "sidebar-section-today"
             section: "today"
             label: I18n.t("sidebar.today")
-            iconSource: "qrc:/brand/icons/heap-17-calendar.svg"
+            iconName: "sun"
             shortcutId: "section.today"
         }
         NavRow {
             objectName: "sidebar-section-tasks"
             section: "tasks"
             label: I18n.t("sidebar.tasks")
-            iconSource: "qrc:/brand/icons/heap-01-board.svg"
+            iconName: "list"
             shortcutId: "section.tasks"
         }
         NavRow {
             objectName: "sidebar-section-knowledge"
             section: "knowledge"
             label: I18n.t("sidebar.knowledge")
-            iconSource: "qrc:/brand/icons/heap-09-notes.svg"
+            iconName: "doc"
             shortcutId: "section.knowledge"
         }
 
         // ── My views ──
+        // Empty, bold shows the head and "Появятся, когда сохраните фильтр";
+        // quiet shows no block at all (H2-First / Q-First, R2-058).
+        // Folded shows only the sections (N/X-Oth-Small, R3-015); the views
+        // stay on their Alt keys and in Ctrl K.
         Item {
+            visible: root.expanded && (root._savedViews.length > 0 || !Style.plainRows)
             Layout.fillWidth: true
             Layout.topMargin: Theme.spLg
-            Layout.preferredHeight: root.expanded ? viewsHead.implicitHeight + Theme.spXs : Theme.spSm
+            Layout.preferredHeight: viewsHead.implicitHeight + Theme.spXs
             Text {
                 id: viewsHead
                 objectName: "sidebar-views-head"
-                visible: root.expanded
                 anchors.left: parent.left; anchors.leftMargin: Theme.spMd
                 anchors.verticalCenter: parent.verticalCenter
                 text: I18n.t("sidebar.myViews")
@@ -283,15 +419,10 @@ Rectangle {
                 Accessible.role: Accessible.Heading
                 Accessible.name: text
             }
-            Rectangle {
-                visible: !root.expanded
-                anchors.centerIn: parent
-                width: 24; height: 1; color: Theme.border
-            }
         }
         Text {
             objectName: "sidebar-views-empty"
-            visible: root._savedViews.length === 0 && root.expanded
+            visible: root._savedViews.length === 0 && root.expanded && !Style.plainRows
             Layout.fillWidth: true
             Layout.leftMargin: Theme.spMd
             text: I18n.t("sidebar.myViews.empty")
@@ -304,6 +435,7 @@ Rectangle {
         ListView {
             id: viewsList
             objectName: "sidebar-views-list"
+            visible: root.expanded
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
@@ -314,19 +446,105 @@ Rectangle {
             ScrollBar.vertical: ThinScrollBar { objectName: "sidebar-views-scrollbar" }
             delegate: ViewRow {}
         }
+        Item { visible: !root.expanded; Layout.fillHeight: true }
 
         NavRow {
             id: settingsRow
             objectName: "sidebar-section-settings"
             section: "settings"
             label: I18n.t("sidebar.settings")
-            iconSource: "qrc:/brand/icons/heap-12-settings.svg"
+            iconName: "settings"
             shortcutId: "view.settings"
+        }
+        // A newer release (X/N-Ntf-OS, R2-053): one quiet line at the bottom
+        // instead of a toast — "0.8.1 готова · перезапустить · что нового".
+        // Bounded to the sidebar's gutters (R4-019): a long line wraps
+        // instead of widening the column and pushing every row out.
+        Flow {
+            id: updateLine
+            objectName: "sidebar-update"
+            readonly property string phase: AppController.updatePhase
+            readonly property bool can: AppController.updateCanInstall
+            visible: root.expanded && root.updateVersion.length > 0 && phase !== "installing"
+            Layout.fillWidth: true
+            Layout.leftMargin: Theme.spMd
+            Layout.rightMargin: Theme.spMd
+            Layout.topMargin: Theme.spMd
+            spacing: Theme.spXs
+            Item {
+                visible: Style.urgency && updateLine.phase === "ready"
+                width: Theme.spXs; height: updateText.implicitHeight
+                Rectangle {
+                        width: Theme.spXs; height: width; radius: width / 2
+                    color: Theme.success
+                }
+            }
+            Text {
+                id: updateText
+                objectName: "sidebar-update-text"
+                width: Math.min(implicitWidth, updateLine.width)
+                elide: Text.ElideRight
+                text: updateLine.phase === "ready" ? I18n.t("update.line.ready").arg(root.updateVersion)
+                    : updateLine.phase === "downloading" ? I18n.t("update.line.downloading").arg(root.updateVersion)
+                                                              .arg(Math.round(AppController.updateProgress * 100))
+                    : I18n.t("update.line.available").arg(root.updateVersion)
+                color: Theme.text
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsXs
+            }
+            Text {
+                visible: updateLine.phase !== "downloading" && updateLine.phase !== "verifying"
+                text: "·"
+                color: Theme.textDim
+                font.pixelSize: Theme.fsXs
+            }
+            Text {
+                id: updateAct
+                objectName: "sidebar-update-action"
+                visible: updateLine.phase !== "downloading" && updateLine.phase !== "verifying"
+                text: updateLine.phase === "ready" ? I18n.t("update.line.restart")
+                    : updateLine.can ? I18n.t("update.line.install") : I18n.t("update.line.download")
+                color: updActCA.hovered ? Theme.textMuted : Theme.text
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsXs
+                font.underline: true
+                ClickArea {
+                    id: updActCA
+                    anchors.margins: -Theme.sp2xs
+                    label: updateAct.text
+                    showTip: false
+                    onActivated: {
+                        if (updateLine.phase === "ready") AppController.installUpdate();
+                        else if (updateLine.can) AppController.downloadUpdate();
+                        else AppController.openLatestRelease();
+                    }
+                }
+            }
+            Text {
+                text: "·"
+                color: Theme.textDim
+                font.pixelSize: Theme.fsXs
+            }
+            Text {
+                id: updateNotes
+                objectName: "sidebar-update-notes"
+                text: I18n.t("update.line.whatsNew")
+                color: notesCA.hovered ? Theme.text : Theme.textMuted
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsXs
+                ClickArea {
+                    id: notesCA
+                    anchors.margins: -Theme.sp2xs
+                    label: updateNotes.text
+                    showTip: false
+                    onActivated: root.updateNotesRequested()
+                }
+            }
         }
         // The rest is in the command line.
         Row {
             objectName: "sidebar-palette-hint"
-            visible: root.expanded && Style.keyHints && paletteKey.keys.length > 0
+            visible: root.expanded && root._hints && paletteKey.keys.length > 0
             Layout.leftMargin: Theme.spMd
             Layout.topMargin: Theme.spMd
             spacing: Theme.spXs
@@ -351,36 +569,42 @@ Rectangle {
         objectName: "sidebar-views-menu"
         property string targetId: ""
         property int targetIndex: -1
+        readonly property string targetName: targetIndex >= 0 && targetIndex < root._savedViews.length
+            ? String(root._savedViews[targetIndex].name || "") : ""
+        // X-Menus-Other: "Вид «Заблокировано»", then Open (g N), Edit
+        // query…, Rename (F2); Up / Down (Shift K / J); Delete view.
+        AppMenuHeader {
+            text: I18n.t("siderail.saved.header").arg(savedMenu.targetName)
+        }
         AppMenuItem {
             objectName: "sidebar-view-apply"
-            text: I18n.t("siderail.saved.apply")
+            text: I18n.t("siderail.saved.open")
+            shortcutId: savedMenu.targetIndex >= 0 && savedMenu.targetIndex < 9 ? "savedView." + (savedMenu.targetIndex + 1) + ".alt" : ""
             onTriggered: root.savedViewActivated(savedMenu.targetId)
         }
         AppMenuItem {
-            objectName: "sidebar-view-update"
-            text: I18n.t("siderail.saved.update")
-            onTriggered: root.savedViewUpdateRequested(savedMenu.targetId)
+            objectName: "sidebar-view-edit"
+            text: I18n.t("siderail.saved.editQuery")
+            onTriggered: root.savedViewEditRequested(savedMenu.targetId)
         }
         AppMenuItem {
             objectName: "sidebar-view-rename"
             text: I18n.t("siderail.saved.rename")
+            keyText: "F2"
             onTriggered: root.savedViewRenameRequested(savedMenu.targetId)
-        }
-        AppMenuItem {
-            objectName: "sidebar-view-duplicate"
-            text: I18n.t("siderail.saved.duplicate")
-            onTriggered: AppController.duplicateSavedView(savedMenu.targetId)
         }
         AppMenuSeparator {}
         AppMenuItem {
             objectName: "sidebar-view-up"
             text: I18n.t("siderail.saved.moveUp")
+            keyText: AppController.keyText("Shift+K")
             enabled: savedMenu.targetIndex > 0
             onTriggered: root._moveSavedView(savedMenu.targetId, savedMenu.targetIndex, -1)
         }
         AppMenuItem {
             objectName: "sidebar-view-down"
             text: I18n.t("siderail.saved.moveDown")
+            keyText: AppController.keyText("Shift+J")
             enabled: savedMenu.targetIndex >= 0 && savedMenu.targetIndex < root._savedViews.length - 1
             onTriggered: root._moveSavedView(savedMenu.targetId, savedMenu.targetIndex, 1)
         }
@@ -398,7 +622,8 @@ Rectangle {
         id: nav
         property string section: ""
         property string label: ""
-        property url iconSource
+        // The sheets' line icon (Icon.qml, DG-003).
+        property string iconName: ""
         property string shortcutId: ""
         readonly property bool active: root._section === nav.section
         readonly property string _keys: nav.shortcutId.length && AppController.shortcuts.length >= 0
@@ -412,12 +637,22 @@ Rectangle {
             radius: Theme.radiusMd
             color: navCA.hovered && !nav.active ? Theme.panel2 : "transparent"
         }
-        IconImage {
+        // Folded: the open section is a rounded tile behind its icon
+        // (N/X-Oth-Small, R4-011), not the underline of the full sidebar.
+        Rectangle {
+            objectName: "sidebar-folded-tile"
+            visible: !root.expanded && nav.active
+            anchors.centerIn: parent
+            width: Math.min(parent.width, Theme.px(34))
+            height: width
+            radius: Theme.radiusMd
+            color: Theme.panel2
+        }
+        Icon {
             visible: !root.expanded
             anchors.centerIn: parent
-            source: nav.iconSource
-            width: 18; height: 18
-            sourceSize.width: 18; sourceSize.height: 18
+            name: nav.iconName
+            size: Theme.px(16)
             color: nav.active ? Theme.text : Theme.textMuted
         }
         Text {
@@ -433,20 +668,18 @@ Rectangle {
             color: nav.active || navCA.hovered ? Theme.text : Theme.textMuted
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
-            font.weight: nav.active ? Theme.fwTitle : Theme.fwBody
+            font.weight: nav.active && Style.fills ? Theme.fwHeading : Theme.fwBody
         }
         CursorBar {
             objectName: "sidebar-cursor"
-            shown: nav.active
-            anchors.left: root.expanded ? navLabel.left : undefined
-            anchors.horizontalCenter: root.expanded ? undefined : parent.horizontalCenter
-            anchors.top: root.expanded ? navLabel.bottom : undefined
-            anchors.bottom: root.expanded ? undefined : parent.bottom
+            shown: nav.active && root.expanded
+            anchors.left: navLabel.left
+            anchors.top: navLabel.bottom
             anchors.topMargin: 1
         }
         KeyHint {
             id: navKey
-            visible: root.expanded && keys.length > 0 && Style.keyHints
+            visible: root.expanded && keys.length > 0 && root._hints
             anchors.right: parent.right; anchors.rightMargin: Theme.spMd
             anchors.verticalCenter: parent.verticalCenter
             keys: nav._keys
@@ -510,6 +743,9 @@ Rectangle {
             if (e.key === Qt.Key_F2) {
                 root.savedViewRenameRequested(vr.modelData.id);
                 e.accepted = true;
+            } else if (e.modifiers === Qt.ShiftModifier && (e.key === Qt.Key_K || e.key === Qt.Key_J)) {
+                root._moveSavedView(vr.modelData.id, vr.index, e.key === Qt.Key_K ? -1 : 1);
+                e.accepted = true;
             } else if (e.key === Qt.Key_Menu || (e.key === Qt.Key_F10 && (e.modifiers & Qt.ShiftModifier))) {
                 root._openSavedMenu(vr, vr.modelData.id, vr.index);
                 e.accepted = true;
@@ -561,7 +797,7 @@ Rectangle {
             color: vr.active || vrMA.containsMouse ? Theme.text : Theme.textMuted
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
-            font.weight: vr.active ? Theme.fwTitle : Theme.fwBody
+            font.weight: vr.active && Style.fills ? Theme.fwHeading : Theme.fwBody
         }
         CursorBar {
             visible: vr.active && root.expanded

@@ -383,7 +383,7 @@ std::optional<Snapshot> snapshotFromState(QJsonObject root, QString* error) {
   const int schema = root.value(QStringLiteral("schemaVersion")).toInt(1);
   if(schema < 2 || !root.value(QStringLiteral("profiles")).isArray()) {
     if(error != nullptr) {
-      *error = QStringLiteral("state.json has no profiles (an old format): open heap once to upgrade it");
+      *error = QStringLiteral("state.json has no profiles (an old format): open lowkey once to upgrade it");
     }
     return std::nullopt;
   }

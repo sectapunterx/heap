@@ -2,7 +2,7 @@
 
 One thing, one word, in each language. New strings use these terms;
 `tests/qml/tst_Glossary.qml` fails when a banned synonym comes back into a
-live string (strings of views leaving with heap 2 — welcome tour, side rail,
+live string (strings of views leaving with the 0.8.0 redesign — welcome tour, side rail,
 Tweaks — are not checked).
 
 | Term (en) | Термин (ru) | What it is | Not |
@@ -17,7 +17,7 @@ Tweaks — are not checked).
 | Save as view | Сохранить как вид | Saving the current query | Save view, Сохранить вид |
 | Column stage | Этап колонки | What a column means: todo / in progress / done… | status category |
 | Command line | Командная строка | Ctrl K: find anything, run any command | palette, палитра |
-| Style: Quiet / Bold / Custom | Стиль: Тихий / Насыщенный / Свой | The look of heap 2 | theme preset |
+| Style: Quiet / Bold / Custom | Стиль: Тихий / Насыщенный / Свой | The look of the app | theme preset |
 | Appearance (Settings) | Внешний вид (Настройки) | Where Tweaks went | Tweaks, Твики |
 | Only yours | Только у вас | Data that never leaves this computer | private, local-only |
 | Profile | Профиль | A set of tasks with its own trackers and statuses | project, workspace |

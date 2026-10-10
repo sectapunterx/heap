@@ -59,25 +59,30 @@ TestCase {
         tryCompare(s, "opened", true);
         s.query = "y y";
         wait(50);
-        let shownGroups = 0;
-        const grid = findGrid(s.contentItem);
-        verify(grid !== null);
-        for (let i = 0; i < grid.children.length; i++) {
-            const g = grid.children[i];
-            if (String(g.objectName).indexOf("key-sheet-group-") === 0 && g.visible) shownGroups++;
-        }
+        const shownGroups = groups(s.contentItem, []).filter(g => g.visible).length;
         verify(shownGroups >= 1 && shownGroups <= 3, "groups shown for 'y y': " + shownGroups);
         s.close();
     }
-    function findGrid(root) {
-        if (!root) return null;
-        if (root.columns !== undefined && root.rowSpacing !== undefined) return root;
+    function groups(root, out) {
+        if (!root) return out;
+        if (String(root.objectName).indexOf("key-sheet-group-") === 0) out.push(root);
         const kids = root.children || [];
-        for (let i = 0; i < kids.length; i++) {
-            const r = findGrid(kids[i]);
-            if (r) return r;
-        }
-        return null;
+        for (let i = 0; i < kids.length; i++) groups(kids[i], out);
+        return out;
+    }
+
+    // DG-133: the areas of X-Keys and "Changed in 0.8.0", and nothing else —
+    // no area for the rest of the catalogue, no row without a key.
+    function test_only_the_sheet_areas_and_no_unbound_rows() {
+        const s = make();
+        s.open();
+        tryCompare(s, "opened", true);
+        wait(50);
+        const ids = groups(s.contentItem, []).filter(g => g.visible).map(g => String(g.objectName).replace("key-sheet-group-", ""));
+        compare(ids.sort(), ["changed", "copy", "find", "go", "move", "moveTask", "select", "task", "view"]);
+        for (const g of s.groups)
+            for (const r of g.rows) verify(r.ids.indexOf("view.archive") < 0 && r.ids.indexOf("view.docs") < 0);
+        s.close();
     }
 
     // A rebinding changes the key on the sheet.

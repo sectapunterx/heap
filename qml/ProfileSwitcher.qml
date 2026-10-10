@@ -8,13 +8,17 @@ import TodoCpp
 // The active profile at the top of the sidebar (APP-258): a dot and the
 // name; the dot is the profile's colour, and turns the live colour while a
 // sync has been out long enough to notice (APP-186) — a click on it then
-// shows how the integrations are doing. The name opens the profile menu;
-// with eight profiles or more the list is a picker with a search field.
+// shows how the integrations are doing. The name opens the switcher of
+// X-Menus-Other (DG-151): "Найти профиль", the profiles (the active one with
+// its last sync), then Новый профиль, Переименовать текущий, Удалить
+// профиль. Import, export and duplicating moved to the command line.
 Item {
     id: root
 
     // Only the dot when the sidebar is folded to its icons.
     property bool compact: false
+    // The first run draws the name alone (H2-First, R4-006).
+    property bool hideProfileDot: false
 
     signal syncStatusRequested()
     signal newProfileRequested()
@@ -26,9 +30,9 @@ Item {
     signal importIcsRequested()
     signal exportVaultRequested()
     signal importVaultRequested()
-
-    // A picker with a search field from this many profiles on.
-    readonly property int pickerFrom: 8
+    // The example profile (APP-271) goes from here: the sheets have no
+    // banner for it (DG-001), only its name in the sidebar.
+    signal removeExampleRequested()
 
     implicitHeight: Theme.chipH
     implicitWidth: row.implicitWidth
@@ -71,9 +75,39 @@ Item {
         }
     }
 
-    function openMenu() {
-        if (AppController.profiles.length >= root.pickerFrom) picker.openAt(root);
-        else profileMenu.popup(root, 0, root.height + Theme.spXs);
+    function openMenu() { picker.openAt(root); }
+    // The active profile's last good sync, as the health line words it.
+    function _syncNote() {
+        const h = AppController.integrationHealth();
+        let best = "";
+        for (let i = 0; i < h.length; i++) if (h[i].lastOk && !best) best = String(h[i].lastOk);
+        return best.length > 0 ? I18n.t("sidebar.profile.synced").arg(best) : "";
+    }
+
+    // ── The sync indicator (X/N-Ntf-Toasts, R2-048) ──
+    // In words where something is off: a dot when synced (the tip says when),
+    // "◔ синк…" while a pull runs, "○ 1 ошибка", "◌ офлайн". Bold colours the
+    // marks; quiet says it with the form. No tracker connected: the profile's
+    // own dot as before (bold only, DG-006). A click lists every source.
+    property var sources: AppController.syncSources
+    readonly property int _errors: {
+        let n = 0;
+        for (const s of root.sources || []) if (s.failing && s.kind !== "network" && !s.offline) n++;
+        return n;
+    }
+    readonly property bool _offline: (root.sources || []).some(s => s.offline || s.kind === "network")
+    readonly property string syncState: (root.sources || []).length === 0 ? (root.syncDotShown ? "syncing" : "none")
+        : root.syncDotShown ? "syncing"
+        : root._offline ? "offline"
+        : root._errors > 0 ? "error"
+        : "synced"
+    readonly property string syncWord: root.syncState === "syncing" ? I18n.t("sync.ind.syncing")
+        : root.syncState === "offline" ? I18n.t("sync.ind.offline")
+        : root.syncState === "error" ? I18n.count(root._errors, "sync.ind.errors")
+        : ""
+    function _syncTip() {
+        const note = root._syncNote();
+        return note.length > 0 ? note : I18n.t("sync.ind.open");
     }
 
     Row {
@@ -81,26 +115,73 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         anchors.right: parent.right
         spacing: Theme.spSm
+        layoutDirection: Qt.RightToLeft
 
         Item {
             id: syncDot
             objectName: "sidebar-sync-dot"
-            width: Theme.spLg
+            readonly property bool profileDot: root.syncState === "none"
+            readonly property bool filledMark: profileDot || root.syncState === "synced"
+                || (Style.urgency && (root.syncState === "syncing" || root.syncState === "error"))
+            // Quiet has no profile dot (DG-006); the sync state still shows.
+            visible: profileDot ? ((Style.fills && !root.hideProfileDot) || root.compact) : true
+            width: stateRow.implicitWidth
             height: root.height
-            Rectangle {
-                anchors.centerIn: parent
-                width: Theme.spSm
-                height: Theme.spSm
-                radius: height / 2
-                color: root.syncDotShown ? (syncDotMA.hovered ? Theme.withAlpha(Theme.live, 0.7) : Theme.live)
-                                         : (root.active.color || Theme.accent)
+            Row {
+                id: stateRow
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Theme.spXs
+                Item {
+                    width: Theme.spLg
+                    height: Theme.spLg
+                    anchors.verticalCenter: parent.verticalCenter
+                    Rectangle {
+                        objectName: "sidebar-sync-mark-dot"
+                        // Bold: a coloured dot for synced / running / an
+                        // error; quiet: a dot only when synced, shapes else.
+                        visible: syncDot.filledMark
+                        anchors.centerIn: parent
+                        width: Theme.spSm
+                        height: Theme.spSm
+                        radius: height / 2
+                        color: syncDot.profileDot ? (root.active.color || Theme.accent)
+                             : !Style.urgency ? Theme.textMuted
+                             : root.syncState === "syncing" ? Theme.warning
+                             : root.syncState === "error" ? Theme.danger : Theme.success
+                    }
+                    Icon {
+                        objectName: "sidebar-sync-mark-icon"
+                        visible: !syncDot.filledMark
+                        anchors.centerIn: parent
+                        size: Theme.px(10)
+                        name: root.syncState === "syncing" ? "progress" : root.syncState === "offline" ? "pending" : "ring"
+                        color: !Style.urgency ? Theme.textMuted
+                             : root.syncState === "syncing" ? Theme.warning
+                             : root.syncState === "error" ? Theme.danger
+                             : Theme.warning
+                        RotationAnimator on rotation {
+                            running: root.syncState === "syncing" && !Theme.reducedMotion
+                            from: 0; to: 360; duration: Theme.durSpin
+                            loops: Animation.Infinite
+                        }
+                    }
+                }
+                Text {
+                    objectName: "sidebar-sync-word"
+                    visible: !root.compact && root.syncWord.length > 0
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root.syncWord
+                    color: Theme.textMuted
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsXs
+                }
             }
             ClickArea {
                 id: syncDotMA
                 objectName: "sidebar-sync-dot-area"
-                enabled: root.syncDotShown
-                label: I18n.t("topbar.syncing")
-                tip: I18n.t("topbar.syncing.tip")
+                enabled: !syncDot.profileDot
+                label: I18n.t("sync.ind.open")
+                tip: root.syncState === "synced" ? root._syncTip() : I18n.t("sync.ind.open")
                 onActivated: root.syncStatusRequested()
             }
         }
@@ -134,53 +215,17 @@ Item {
         onActivated: root.openMenu()
     }
 
-    AppMenu {
-        id: profileMenu
-        objectName: "sidebar-profile-menu"
-        Instantiator {
-            model: AppController.profiles.length < root.pickerFrom ? AppController.profiles : []
-            delegate: AppMenuItem {
-                id: profRow
-                required property var modelData
-                marked: profRow.modelData.id === AppController.activeProfileId
-                text: profRow.modelData.name
-                onTriggered: AppController.activeProfileId = profRow.modelData.id
-            }
-            onObjectAdded: (idx, obj) => profileMenu.insertItem(idx, obj)
-            onObjectRemoved: (idx, obj) => profileMenu.removeItem(obj)
-        }
-        AppMenuSeparator {}
-        AppMenuItem { text: I18n.t("topbar.profile.new"); onTriggered: root.newProfileRequested() }
-        AppMenuItem { text: I18n.t("topbar.profile.rename"); onTriggered: root.renameProfileRequested() }
-        AppMenuItem { text: I18n.t("topbar.profile.duplicate"); onTriggered: root.duplicateProfileRequested() }
-        AppMenuSeparator {}
-        AppMenuItem { text: I18n.t("topbar.profile.import"); onTriggered: root.importJsonRequested() }
-        AppMenuItem { text: I18n.t("topbar.profile.export"); onTriggered: root.exportJsonRequested() }
-        AppMenuSeparator {}
-        AppMenuItem { text: I18n.t("topbar.cal.import"); onTriggered: root.importIcsRequested() }
-        AppMenuItem { text: I18n.t("topbar.cal.export"); onTriggered: root.exportIcsRequested() }
-        AppMenuSeparator {}
-        AppMenuItem { text: I18n.t("topbar.notes.import"); onTriggered: root.importVaultRequested() }
-        AppMenuItem { text: I18n.t("topbar.notes.export"); onTriggered: root.exportVaultRequested() }
-        // Last, apart and in red, and it says which profile goes (DES-9).
-        AppMenuSeparator {}
-        AppMenuItem {
-            objectName: "sidebar-profile-delete"
-            text: I18n.t("topbar.profile.delete").arg(root.active.name || I18n.t("topbar.profile.fallback"))
-            danger: true
-            enabled: AppController.profiles.length > 1
-            onTriggered: AppController.deleteProfile(AppController.activeProfileId)
-        }
-    }
+    // "Удалить профиль…" asks first (DG-151).
+    ProfileDeleteDialog { id: deleteDialog }
 
-    // Eight profiles or more: a search field over the list, the actions in
-    // the menu behind "More…".
+    // The switcher: a search field over the list, the actions under it.
     QQC.Popup {
         id: picker
         objectName: "sidebar-profile-picker"
         padding: Theme.spXs
-        width: Theme.px(260)
-        height: Math.min(Theme.px(420), pickCol.implicitHeight + 2 * Theme.spXs)
+        width: Theme.px(272)
+        height: Math.min(Theme.px(480), pickCol.implicitHeight + 2 * Theme.spXs)
+        property string syncNote: ""
         background: PopupSurface {}
         property string filter: ""
         readonly property var matches: {
@@ -194,7 +239,8 @@ Item {
             picker.y = anchor.height + Theme.spXs;
             picker.filter = "";
             search.text = "";
-            pickList.currentIndex = 0;
+            picker.syncNote = root._syncNote();
+            pickList.currentIndex = Math.max(0, picker.matches.findIndex(p => p.id === AppController.activeProfileId));
             picker.open();
             search.forceActiveFocus();
         }
@@ -217,7 +263,8 @@ Item {
                 placeholderTextColor: Theme.textDim
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsMd
-                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                leftPadding: Theme.spMd
+                background: Rectangle { radius: Theme.radiusMd; color: "transparent"; border.color: search.activeFocus ? Theme.focusRing : Theme.border; border.width: 1 }
                 onTextChanged: { picker.filter = text; pickList.currentIndex = 0; }
                 Keys.onDownPressed: pickList.currentIndex = Math.min(pickList.count - 1, pickList.currentIndex + 1)
                 Keys.onUpPressed: pickList.currentIndex = Math.max(0, pickList.currentIndex - 1)
@@ -238,8 +285,13 @@ Item {
                     required property var modelData
                     required property int index
                     width: pickList.width
+                    readonly property bool active: pickRow.modelData.id === AppController.activeProfileId
                     text: pickRow.modelData.name
-                    marked: pickRow.modelData.id === AppController.activeProfileId
+                    font.weight: pickRow.active ? Theme.fwTitle : Theme.fwBody
+                    note: pickRow.active ? picker.syncNote : ""
+                    // Ctrl ] goes to the next profile: its key on that row.
+                    shortcutId: pickRow.index === (picker.matches.findIndex(p => p.id === AppController.activeProfileId) + 1) % Math.max(1, picker.matches.length)
+                                && !pickRow.active && picker.filter.length === 0 ? "profile.next" : ""
                     highlighted: pickRow.index === pickList.currentIndex
                     onTriggered: picker.choose(pickRow.index)
                 }
@@ -253,13 +305,36 @@ Item {
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsSm
             }
+            Rectangle { Layout.fillWidth: true; Layout.topMargin: Theme.spXs; Layout.bottomMargin: Theme.spXs; implicitHeight: 1; color: Theme.border }
             AppMenuItem {
+                objectName: "sidebar-profile-new"
                 Layout.fillWidth: true
-                text: I18n.t("sidebar.profile.more")
-                onTriggered: {
-                    picker.close();
-                    profileMenu.popup(root, 0, root.height + Theme.spXs);
-                }
+                text: I18n.t("sidebar.profile.new")
+                shortcutId: "profile.new"
+                onTriggered: { picker.close(); root.newProfileRequested(); }
+            }
+            AppMenuItem {
+                objectName: "sidebar-profile-rename"
+                Layout.fillWidth: true
+                text: I18n.t("sidebar.profile.renameCurrent")
+                onTriggered: { picker.close(); root.renameProfileRequested(); }
+            }
+            AppMenuItem {
+                objectName: "sidebar-profile-remove-example"
+                Layout.fillWidth: true
+                visible: AppController.activeProfileId === "lowkey-example"
+                text: I18n.t("example.remove")
+                danger: true
+                onTriggered: { picker.close(); root.removeExampleRequested(); }
+            }
+            AppMenuItem {
+                objectName: "sidebar-profile-delete"
+                Layout.fillWidth: true
+                visible: AppController.activeProfileId !== "lowkey-example"
+                text: I18n.t("sidebar.profile.delete")
+                danger: true
+                enabled: AppController.profiles.length > 1
+                onTriggered: { picker.close(); deleteDialog.openFor(AppController.activeProfileId); }
             }
         }
     }

@@ -59,33 +59,4 @@ TestCase {
         compare(texts.sort().join(""), ["P0", "P1", "P2", "P3"].map(p => Theme.priorityMark(p)).sort().join(""));
     }
 
-    // The week's deadline chips had a 6px coloured square as the only sign
-    // of the priority.
-    function test_week_due_chip_priority_is_a_shape() {
-        const prev = AppController.selectedDate;
-        const day = new Date();
-        day.setDate(day.getDate() + 611);
-        day.setHours(0, 0, 0, 0);
-        const ids = [];
-        for (const p of ["P2", "P3"]) {
-            const t = AppController.newTaskDraft("todo");
-            t.title = "colour probe " + p; t.priority = p;
-            t.dueAt = day; t.scheduledAt = day; t.hasTime = false;
-            AppController.saveTask(t);
-            ids.push(t.id);
-        }
-        try {
-            AppController.selectedDate = day;
-            const wv = createTemporaryQmlObject('import TodoCpp; WeekView { anchors.fill: parent }', host);
-            let marks = [];
-            tryVerify(function () { marks = marksOf(wv, "week-due-priority"); return marks.length >= 2; }, 2000);
-            const shapes = {};
-            for (const m of marks) shapes[m.text] = true;
-            verify(shapes[Theme.priorityMark("P2")], "a P2 shape on the week");
-            verify(shapes[Theme.priorityMark("P3")], "a P3 shape on the week");
-        } finally {
-            for (const id of ids) AppController.deleteTask(id);
-            AppController.selectedDate = prev;
-        }
-    }
 }

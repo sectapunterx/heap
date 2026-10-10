@@ -28,11 +28,20 @@ struct MdHtmlPalette {
   QString link;
   QString code;
   QString codeBackground;
+  // Inline code face (R2-020). When set, the view draws the pill under the
+  // span (InlineCodeFrames), so no background is baked into the HTML.
+  QString codeFont;
+  QString codeSize;  // px, with codeFont
   QString highlightBackground;
   QString mention;
   QString ticket;
   QString tag;
   QString math;
+  // CSS text-decoration of a [[task]] reference and of an external link.
+  // Empty keeps the defaults (none / the browser's underline); the quiet
+  // sheet underlines a task and leaves a link plain (R3-085).
+  QString taskDecoration;
+  QString linkDecoration;
 };
 
 struct MdHtmlOptions {

@@ -333,6 +333,10 @@ var HEAP_INK = {
 // first is what a new column, person or profile starts with.
 var SWATCHES = ["#5cc2dd", "#5aa9e6", "#a4a4d6", "#c07acf", "#e6624c",
                 "#e69854", "#dcb86b", "#6ec18a", "#9aa3b4", "#8a8e98"];
+// A profile's colour (N/X-Dlg-Small "Новый профиль", R3-075): eight muted
+// tones, so the sidebar dot reads as a label, not a signal.
+var PROFILE_SWATCHES = ["#8aa4c2", "#7fae9a", "#b49cc8", "#c2a27a",
+                        "#c48e8a", "#9aa4b1", "#6f8fa8", "#a3a86e"];
 
 var PRESETS = [HEAP_DARK, HEAP_LIGHT, HEAP_INK, CRIMSON, GRAPHITE, OCHRE, FJORD, DUSK, MINIMAL_DARK];
 

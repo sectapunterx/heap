@@ -102,7 +102,7 @@ TestCase {
         verify(header !== null && header.visible);
         AppController.currentView = "today";
         verify(!header.visible, "Today carries its own title");
-        compare(byName("right-panel").visible, false, "Today is the day; no second one beside it");
+        compare(byName("right-panel"), null, "no right panel anywhere (DG-002)");
         AppController.currentView = "board";
     }
 
@@ -130,17 +130,6 @@ TestCase {
         verify(Math.abs(x + w / 2 - tc.win.width / 2) < 4, "centre at " + (x + w / 2));
     }
 
-    // UX-29: at 1280 logical px (1080p at 150%) the calendar column folds, so
-    // the board keeps more than two columns.
-    function test_1280_folds_the_right_panel() {
-        tc.win.width = 1280;
-        AppController.currentView = "board";
-        wait(50);
-        compare(tc.win.rightPanelShown, false);
-        tc.win.width = 1600;
-        wait(50);
-    }
-
     // UX-19: the close-to-tray dialog title is drawn in the theme.
     function test_close_dialog_is_themed() {
         const d = popup("close-to-tray-ask");
@@ -148,18 +137,4 @@ TestCase {
         verify(d.header && Qt.colorEqual(d.header.color, Theme.text), "unstyled dialog header");
     }
 
-    // UX-23: an empty timeline without filters does not blame the filters.
-    function test_timeline_empty_state_without_filters() {
-        tc.win.searchText = "zzzz-no-such-task-zzzz";
-        AppController.currentView = "timeline";
-        tryVerify(function () { return tc.win.activeViewItem() !== null; });
-        const v = tc.win.activeViewItem();
-        tryVerify(function () { return find(v, function (it) { return it.objectName === "timeline-empty" && it.visible; }) !== null; });
-        const t = find(v, function (it) { return it.objectName === "timeline-empty"; });
-        compare(t.title, I18n.t("timeline.empty.title"), "with a search, the filters are the reason");
-        compare(v._filtering, true);
-        tc.win.searchText = "";
-        compare(v._filtering, false);
-        AppController.currentView = "board";
-    }
 }

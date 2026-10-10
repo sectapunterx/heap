@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Shapes
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
 import QtQuick.Controls as QQC
@@ -137,17 +138,23 @@ Rectangle {
     // check in a circle, no ring and no border of its own.
     radius: Theme.radius
     color: _isArchived ? Theme.withAlpha(Theme.surfaceCard, 0.55)
+        : markT.outOfScope && !_selected ? "transparent"
         : _selected ? Qt.tint(Theme.surfaceCard, Theme.withAlpha(Theme.text, 0.09))
         : hoverArea.containsMouse ? Theme.surfaceCardHover
         : Theme.surfaceCard
     // heap 2 (APP-262): a card is a surface without a border; the cursor and
     // the selection are told apart by shape (ring, check), not by an outline
     // colour.
-    border.color: dragArea.drag.active ? Theme.accent
+    // Lifted, the card is an opaque surface with no accent edge (R3-052).
+    border.color: dragArea.drag.active ? "transparent"
                 : _isStuck ? Theme.danger
+                // Out of step with the tracker (R2-034): the edge says so —
+                // amber / red in bold, a plain line in quiet.
+                : markT.conflict ? (Style.urgency ? Theme.danger : Theme.borderStrong)
+                : markT.pending ? (Style.urgency ? Theme.warning : Theme.borderStrong)
                 : "transparent"
-    border.width: dragArea.drag.active || _isStuck ? 2 : 1
-    opacity: dragArea.drag.active ? 0.92 : (_isArchived ? 0.7 : 1.0)
+    border.width: _isStuck && !dragArea.drag.active ? 2 : 1
+    opacity: dragArea.drag.active ? 1.0 : (_isArchived ? 0.7 : 1.0)
     scale: dragArea.drag.active ? 1.03 : 1.0
     transformOrigin: Item.Center
     z: dragArea.drag.active ? 1000 : 0
@@ -155,6 +162,30 @@ Rectangle {
     // (APP-175); with reduced motion it simply is where it was put.
     Behavior on scale { NumberAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
     Behavior on border.color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
+
+    // Outside the tracker's filter: a dashed edge, "only yours" (R2-034).
+    Shape {
+        objectName: "tc-dashed"
+        anchors.fill: parent
+        visible: markT.outOfScope && !dragArea.drag.active
+        preferredRendererType: Shape.CurveRenderer
+        ShapePath {
+            strokeColor: Theme.borderStrong
+            strokeWidth: 1
+            strokeStyle: ShapePath.DashLine
+            dashPattern: [3, 3]
+            fillColor: "transparent"
+            startX: card.radius; startY: 0.5
+            PathLine { x: card.width - card.radius; y: 0.5 }
+            PathArc { x: card.width - 0.5; y: card.radius; radiusX: card.radius - 0.5; radiusY: card.radius - 0.5 }
+            PathLine { x: card.width - 0.5; y: card.height - card.radius }
+            PathArc { x: card.width - card.radius; y: card.height - 0.5; radiusX: card.radius - 0.5; radiusY: card.radius - 0.5 }
+            PathLine { x: card.radius; y: card.height - 0.5 }
+            PathArc { x: 0.5; y: card.height - card.radius; radiusX: card.radius - 0.5; radiusY: card.radius - 0.5 }
+            PathLine { x: 0.5; y: card.radius }
+            PathArc { x: card.radius; y: 0.5; radiusX: card.radius - 0.5; radiusY: card.radius - 0.5 }
+        }
+    }
 
     FocusRing {
         objectName: "tc-cursor-ring"
@@ -202,10 +233,7 @@ Rectangle {
             const tracker = (card._badge.name || card._ticket.provider || "")
                 + (card._ticket.project ? " · " + card._ticket.project : "");
             if (tracker.length > 0) parts.push(tracker);
-            if (syncChip.visible) parts.push(syncChip.tip);
-            if (card._ticket.conflict) parts.push(I18n.t("taskcard.conflict.tip"));
-            if (card._ticket.outOfScope && !card._ticket.gone)
-                parts.push(I18n.t("taskcard.outOfScope.tip") + (card._writeOn ? " " + I18n.t("taskcard.outOfScope.noSync") : ""));
+            if (markT.visible) parts.push(markT.tip);
             // The tracker's own status, when the card sits somewhere else:
             // with writes off that is the normal case, and the card itself
             // stays uncluttered (APP-243).
@@ -243,6 +271,34 @@ Rectangle {
     // drop into another column.
     readonly property bool _lifted: dragArea.drag.active && card.dragLayer !== null
     property Item _homeParent: null
+    // Where the lifted card came from keeps a dashed, faded placeholder
+    // (X/N-Oth-Select-Drag, R3-051).
+    property Item _origin: null
+    Component.onDestruction: if (card._origin) card._origin.destroy()
+    Component {
+        id: originComp
+        DashedRect {
+            objectName: "tc-drag-origin"
+            // The card's own fill and title, faded, inside a dashed edge — in
+            // both styles (R4-038: quiet showed an empty outline).
+            opacity: 0.35
+            radius: Theme.radius
+            fillColor: Theme.surfaceCard
+            Text {
+                anchors.fill: parent
+                anchors.margins: Theme.spLg
+                text: card.task ? card.task.title : ""
+                textFormat: Text.PlainText
+                color: Theme.text
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsMd
+                font.weight: Theme.fwTaskTitle
+                wrapMode: Text.Wrap
+                maximumLineCount: 2
+                elide: Text.ElideRight
+            }
+        }
+    }
     // Where the card was let go, in window coordinates: a card dropped back
     // where it came from glides home from there instead of jumping (APP-167).
     property var _dropAt: null
@@ -269,10 +325,12 @@ Rectangle {
         if (card._lifted) {
             const p = card.mapToItem(card.dragLayer, 0, 0);
             card._homeParent = card.parent;
+            card._origin = originComp.createObject(card.parent, { x: card.x, y: card.y, width: card.width, height: card.height });
             card.parent = card.dragLayer;
             card.x = p.x;
             card.y = p.y;
         } else if (card._homeParent) {
+            if (card._origin) { card._origin.destroy(); card._origin = null; }
             card.parent = card._homeParent;
             card._homeParent = null;
             // Back in the list: the list owns x/y, so put the card where it
@@ -319,7 +377,6 @@ Rectangle {
         || card._attachmentCount > 0 || card._waiting !== undefined || card._isTicket
     readonly property bool _hasDetails: card._excerpt.length > 0 || (card._cl.total || 0) > 0 || card._hasFacts
         || localMarks.hasContent
-    readonly property bool _branchMatched: card.taskId.length > 0 && AppController.focusedTaskId === card.taskId
     // The detailed card (APP-281 A1) keeps the description's first line, the
     // checklist and the pull request at rest; the other facts wait for the
     // cursor as on a compact one.
@@ -332,31 +389,6 @@ Rectangle {
         : card._excerpt.length > 0 ? "excerpt" : ""
     readonly property bool _hasRestDetails: card._restLine.length > 0
     readonly property bool _alerting: card._isStuck || card._isArchived
-        || (card._isTicket && (syncChip.shown || !!card._ticket.conflict
-                               || (!!card._ticket.outOfScope && !card._ticket.gone)))
-
-    // Ink on a text-coloured dot: reads on every theme, and is not the
-    // cursor's colour. In the corner, over the title's right padding.
-    Rectangle {
-        objectName: "tc-selected-mark"
-        visible: card._selected
-        anchors.top: parent.top
-        anchors.right: parent.right
-        anchors.margins: Theme.spMd
-        z: 4
-        implicitWidth: Theme.fsMd + Theme.sp2xs
-        implicitHeight: implicitWidth
-        radius: width / 2
-        color: Theme.text
-        Text {
-            anchors.centerIn: parent
-            text: "✓"
-            color: Theme.bg
-            font.family: Theme.fontUi
-            font.pixelSize: Theme.fsXs
-            font.weight: Theme.fwTitle
-        }
-    }
 
     ColumnLayout {
         id: contentCol
@@ -370,112 +402,6 @@ Rectangle {
             Layout.fillWidth: true
             visible: card._alerting
             spacing: Theme.spSm
-            // The tracker refused the last status change, or the issue is no
-            // longer in the tracker. Either way the card is out of step with it.
-            // Shown only when the card is not in step (APP-163): a status write
-            // on its way ("sending", quiet), one waiting for the tracker to be
-            // reachable, one the tracker refused (with its reason), or an issue
-            // that is gone. A conflict has its own chip below.
-            Rectangle {
-                id: syncChip
-                objectName: "tc-sync-state"
-                // syncState comes from the model; a hand-built task map (the
-                // archive, tests) may only carry the older flags.
-                readonly property string state: card._ticket.syncState
-                    || (card._ticket.gone ? "gone"
-                        : card._ticket.unsynced ? (card._ticket.queued ? "queued" : "error") : "synced")
-                readonly property bool quiet: state === "pushing"
-                readonly property bool shown: card._isTicket
-                    && (state === "pushing" || state === "queued" || state === "error" || state === "gone")
-                visible: syncChip.shown
-                radius: Theme.radiusSm
-                color: syncChip.quiet ? "transparent" : Theme.withAlpha(Theme.warning, 0.14)
-                implicitWidth: syncStateT.implicitWidth + 10
-                implicitHeight: syncStateT.implicitHeight + 2
-                Text {
-                    id: syncStateT
-                    objectName: "tc-sync-state-text"
-                    anchors.centerIn: parent
-                    text: syncChip.state === "gone" ? I18n.t("taskcard.gone")
-                        : syncChip.state === "pushing" ? I18n.t("taskcard.pushing")
-                        : syncChip.unsent ? I18n.t("taskcard.unsent")
-                        : syncChip.state === "queued" ? I18n.t("taskcard.queued")
-                        : I18n.t("taskcard.unsynced")
-                    textFormat: Text.PlainText
-                    color: syncChip.quiet ? Theme.textDim : Theme.warning
-                    font.pixelSize: Theme.fsXs
-                    font.weight: syncChip.quiet ? Theme.fwBody : Theme.fwTitle
-                }
-                // A move left over while the tracker's switch is off: it only
-                // goes out when the user sends it (APP-243).
-                readonly property bool unsent: !card._writeOn && (state === "queued" || state === "error")
-                readonly property string tip: syncChip.state === "gone" ? I18n.t("taskcard.gone.tip")
-                    : syncChip.state === "pushing" ? I18n.t("taskcard.pushing.tip")
-                    : syncChip.unsent ? I18n.t("taskcard.unsent.tip")
-                        + (card._ticket.syncError ? "\n" + I18n.t("taskcard.syncError").arg(card._ticket.syncError) : "")
-                    : syncChip.state === "queued" ? I18n.t("taskcard.queued.tip")
-                    : I18n.t("taskcard.unsynced.tip")
-                        + (card._ticket.syncError ? "\n" + I18n.t("taskcard.syncError").arg(card._ticket.syncError) : "")
-                QQC.ToolTip.visible: syncStateHover.hovered
-                QQC.ToolTip.text: syncChip.tip
-                HoverHandler { id: syncStateHover }
-                // The retry had no keyboard path: the card menu does not
-                // offer it (design audit DES-19). The HoverHandler above keeps
-                // the tooltip, which also shows for a card that is gone.
-                ClickArea {
-                    objectName: "tc-retry-push"
-                    enabled: !!card._ticket.unsynced && !card._ticket.gone
-                    label: I18n.t("taskcard.retryPush")
-                    showTip: false
-                    onActivated: AppController.retryTrackerPush(card.task.id)
-                }
-            }
-            // Both heap and the tracker changed the same field since the last
-            // sync. The local value is kept; the editor offers the other one.
-            Rectangle {
-                objectName: "tc-conflict"
-                visible: card._isTicket && !!card._ticket.conflict
-                radius: Theme.radiusSm
-                // Outlined, not filled: a different kind of out-of-step from
-                // the sync chip, which it often sits next to (VISU-2).
-                color: "transparent"
-                border.color: Theme.withAlpha(Theme.warning, 0.6)
-                border.width: 1
-                implicitWidth: conflictT.implicitWidth + 10
-                implicitHeight: conflictT.implicitHeight + 2
-                Text {
-                    id: conflictT
-                    anchors.centerIn: parent
-                    text: "⇄ " + I18n.t("taskcard.conflict")
-                    textFormat: Text.PlainText
-                    color: Theme.warning
-                    font.pixelSize: Theme.fsXs
-                    font.weight: Theme.fwTitle
-                }
-                QQC.ToolTip.visible: conflictHover.hovered
-                QQC.ToolTip.text: I18n.t("taskcard.conflict.tip")
-                HoverHandler { id: conflictHover }
-                // Opens the side-by-side choice (APP-163). heap never picks.
-                ClickArea {
-                    objectName: "tc-conflict-open"
-                    label: I18n.t("sync.conflict.open")
-                    showTip: false
-                    onActivated: card.openConflictDialog()
-                }
-            }
-            // Left behind by a filter change: still a live issue, just not one
-            // this connection pulls any more. Quiet on purpose.
-            Text {
-                objectName: "tc-out-of-scope"
-                visible: card._isTicket && !!card._ticket.outOfScope && !card._ticket.gone
-                text: I18n.t("taskcard.outOfScope")
-                textFormat: Text.PlainText
-                color: Theme.textDim
-                font.pixelSize: Theme.fsXs
-                QQC.ToolTip.visible: scopeHover.hovered
-                QQC.ToolTip.text: I18n.t("taskcard.outOfScope.tip")
-                HoverHandler { id: scopeHover }
-            }
             Rectangle {
                 objectName: "tc-stuck"
                 visible: card._isStuck
@@ -503,7 +429,34 @@ Rectangle {
             Item { Layout.fillWidth: true }
         }
 
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Theme.spSm
+        // Selected (DG-026, N-Oth-Select-Drag): a check in a filled ring
+        // before the title — form, not colour; the card's fill says it too.
+        // While a selection exists the other cards carry the empty ring, so
+        // the choice is offered on them as well (R4-037).
+        Rectangle {
+            objectName: "tc-selected-mark"
+            visible: card._selected || AppController.selectionCount > 0
+            Layout.alignment: Qt.AlignTop
+            Layout.topMargin: Math.max(0, (titleT.lineHeight - height) / 2)
+            implicitWidth: Theme.statusRingSize
+            implicitHeight: implicitWidth
+            radius: width / 2
+            color: card._selected ? Theme.textMuted : "transparent"
+            border.width: card._selected ? 0 : 1.5
+            border.color: Theme.textMuted
+            Icon {
+                visible: card._selected
+                anchors.centerIn: parent
+                name: "check"
+                size: Math.round(parent.width * 0.75)
+                color: Theme.bg
+            }
+        }
         Text {
+            id: titleT
             objectName: "tc-title"
             Layout.fillWidth: true
             text: card.task ? card.task.title : ""
@@ -511,24 +464,28 @@ Rectangle {
             // defaults to AutoText, which would render HTML — and an <img> in
             // it fetches from the network on their say-so.
             textFormat: Text.PlainText
-            color: Theme.text
+            color: markT.gone ? Theme.textMuted : Theme.text
+            font.strikeout: markT.gone
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
-            font.weight: Theme.fwTitle
+            font.weight: Theme.fwTaskTitle
+            // H2-Board 1.35, Q-Board 1.4 (R3-031) of the em. A proportional
+            // lineHeight multiplies the font's own leading (R4-021).
+            lineHeightMode: Text.FixedHeight
+            lineHeight: Math.round(font.pixelSize * (Style.fills ? 1.35 : 1.4))
             // Wrap, not WordWrap: a URL or a long identifier has no space to
             // break at and ran off the card (TASKS-27).
             wrapMode: Text.Wrap
             maximumLineCount: 3
             elide: Text.ElideRight
-            // Clear of the selection mark in the corner.
-            rightPadding: card._selected && !card._alerting ? Theme.fsMd + Theme.spSm : 0
+        }
         }
 
         // The one line of facts: key, date, priority.
         RowLayout {
             objectName: "tc-meta"
             Layout.fillWidth: true
-            spacing: Theme.spLg
+            spacing: Theme.spMd
             Text {
                 objectName: "tc-key"
                 // A mirrored issue is known by its tracker key, not by the
@@ -618,25 +575,15 @@ Rectangle {
                     onClicked: if (card.task) AppController.stopTaskTimer(card.task.id)
                 }
             }
-            Text {
-                objectName: "tc-branch-glyph"
-                visible: Style.detailedCards && !card._branchMatched
-                         && !!(card.task && card.task.branch && String(card.task.branch).length > 0)
-                text: "⎇"
-                color: Theme.textDim
-                font.family: Theme.fontMono
-                font.pixelSize: Theme.fsXs
-                Accessible.name: I18n.t("taskcard.hasBranch")
-            }
             Item { Layout.fillWidth: true }
-            // P0 and P1 only on a compact card (APP-262); the detailed one
-            // (APP-281 A1) shows any priority, P2 and P3 in dim text.
+            // P0 and P1 in bold, P0 only in quiet (R3-030); P2 and P3 are
+            // blank on every card, as H2-Board / Q-Board draw them.
             Text {
                 id: priT
                 objectName: "tc-priority"
                 readonly property string pri: card.task ? String(card.task.priority || "") : ""
                 readonly property bool loud: pri === "P0" || pri === "P1"
-                visible: pri.length > 0 && (loud || Style.detailedCards)
+                visible: Theme.priorityShown(pri)
                 text: pri
                 color: loud ? Theme.priorityInk(pri) : Theme.textDim
                 font.family: Theme.fontUi
@@ -645,21 +592,19 @@ Rectangle {
             }
         }
 
-        // The branch checked out now is this task's (APP-281 A3): the one
-        // fact of "what am I on", so it shows in both styles — and only on
-        // this card.
-        Text {
-            objectName: "tc-branch"
+        // Out of step with the tracker (X/N-Err-Tracker, R2-034); its own
+        // line under the key: beside the date and priority it had no room.
+        TrackerMark {
+            id: markT
+            objectName: "tc-mark"
             Layout.fillWidth: true
-            visible: card._branchMatched
-            text: "⎇ " + AppController.focusedBranch
-            textFormat: Text.PlainText
-            color: Theme.textMuted
-            font.family: Theme.fontMono
-            font.pixelSize: Theme.fsXs
-            elide: Text.ElideMiddle
+            wrapMode: Text.Wrap
+            taskId: card.task ? card.task.id : ""
+            ticket: card._ticket
+            trackerName: card._badge.name || ""
+            writeOn: card._writeOn
+            onResolveRequested: card.openConflictDialog()
         }
-
         // Under the cursor: the description's first line, the checklist, and
         // the quieter facts. Opens and closes in a pop; `visible` holds while
         // it closes so the height can run down to nothing.

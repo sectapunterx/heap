@@ -52,66 +52,56 @@ TestCase {
         compare(b.contentItem.text, "Create");
     }
 
-    // Neutral (default) variant: panel2 fill, Theme.border line, Theme.text
-    // label at the title weight.
+    // DG-005 (X/N-Dlg-Small): every button is outlined, none is filled.
+    // Neutral: the quiet line and the muted label.
     function test_neutral_style() {
         const b = make('import TodoCpp; PillButton { text: "n"; width: 120; height: 32 }');
         parkCursor();
         tryCompare(b, "hovered", false);
-        verify(Qt.colorEqual(b.background.color, Theme.panel2), "neutral fill must be panel2");
-        verify(Qt.colorEqual(b.background.border.color, Theme.border), "neutral border must be Theme.border");
+        verify(Qt.colorEqual(b.background.color, "#00000000"), "neutral is not filled");
+        verify(Qt.colorEqual(b.background.border.color, Theme.buttonLine), "neutral border is the button line");
         compare(b.background.border.width, 1);
         compare(b.background.radius, Theme.radiusMd);
-        verify(Qt.colorEqual(b.contentItem.color, Theme.text), "neutral label must be Theme.text");
-        compare(b.contentItem.font.weight, Theme.fwTitle);
+        verify(Qt.colorEqual(b.contentItem.color, Theme.buttonText), "neutral label is the button text");
+        compare(b.contentItem.font.weight, Theme.fwBody);
         compare(b.contentItem.font.pixelSize, Theme.fsMd);
     }
-
-    // Primary variant: accent fill, no border, text-on-accent label at the title weight (APP-193: one weight
-    // for every button; the fill says which one is primary) —
-    // what every "Save"/"Create" caller (EventEditor, DocsEditor, …) relies on.
+    // Primary: the brighter line and the bright label — never a lavender fill.
     function test_primary_style() {
         const b = make('import TodoCpp; PillButton { text: "p"; primary: true }');
-        verify(Qt.colorEqual(b.background.color, Theme.accent), "primary fill must be Theme.accent");
-        verify(Qt.colorEqual(b.background.border.color, "#00000000"), "primary border must be transparent");
-        verify(Qt.colorEqual(b.contentItem.color, Theme.textOnAccent), "primary label is the theme's text-on-accent");
-        compare(b.contentItem.font.weight, Theme.fwTitle);
+        parkCursor();
+        verify(Qt.colorEqual(b.background.color, "#00000000"), "primary is not filled");
+        verify(Qt.colorEqual(b.background.border.color, Theme.buttonLinePrimary), "primary has the brighter line");
+        verify(Qt.colorEqual(b.contentItem.color, Theme.buttonTextPrimary), "primary label is the bright text");
     }
-
-    // Danger variant: danger-tinted fill/border with a danger label — the "Delete"
-    // buttons (DocsEditor, EventEditor, PersonEditor, SelectionBar) contract.
+    // Danger: a danger line and a danger label.
     function test_danger_style() {
         const b = make('import TodoCpp; PillButton { text: "d"; danger: true }');
-        verify(Qt.colorEqual(b.background.color, Theme.withAlpha(Theme.danger, 0.12)), "danger fill must be danger @ 0.12");
-        verify(Qt.colorEqual(b.background.border.color, Theme.withAlpha(Theme.danger, 0.4)), "danger border must be danger @ 0.4");
+        parkCursor();
+        verify(Qt.colorEqual(b.background.color, "#00000000"), "danger is not filled");
+        verify(Qt.colorEqual(b.background.border.color, Theme.withAlpha(Theme.danger, 0.45)), "danger border must be danger @ 0.45");
         verify(Qt.colorEqual(b.contentItem.color, Theme.danger), "danger label must be Theme.danger");
-        compare(b.contentItem.font.weight, Theme.fwTitle);
     }
-
-    // Precedence pin: primary wins over danger in every ternary chain
-    // (background, border, label) when both flags are set.
-    function test_primary_precedes_danger() {
+    // Danger wins over primary: a destructive primary still reads as danger.
+    function test_danger_precedes_primary() {
         const b = make('import TodoCpp; PillButton { text: "pd"; primary: true; danger: true }');
-        verify(Qt.colorEqual(b.background.color, Theme.accent), "primary must win the fill");
-        verify(Qt.colorEqual(b.background.border.color, "#00000000"), "primary must win the border");
-        verify(Qt.colorEqual(b.contentItem.color, Theme.textOnAccent), "primary must win the label");
+        parkCursor();
+        verify(Qt.colorEqual(b.background.border.color, Theme.withAlpha(Theme.danger, 0.45)), "danger must win the border");
+        verify(Qt.colorEqual(b.contentItem.color, Theme.danger), "danger must win the label");
     }
-
-    // Flags are live bindings, not one-shot styling: flipping them at runtime
-    // restyles the pill both ways.
+    // Flags are live bindings: flipping them at runtime restyles the pill.
     function test_runtime_flag_flip() {
         const b = make('import TodoCpp; PillButton { text: "flip"; width: 120; height: 32 }');
         parkCursor();
         b.primary = true;
-        verify(Qt.colorEqual(b.background.color, Theme.accent), "flip to primary must restyle");
+        verify(Qt.colorEqual(b.background.border.color, Theme.buttonLinePrimary), "flip to primary must restyle");
         b.primary = false;
         b.danger = true;
         verify(Qt.colorEqual(b.contentItem.color, Theme.danger), "flip to danger must restyle");
         b.danger = false;
         tryCompare(b, "hovered", false);
-        verify(Qt.colorEqual(b.background.color, Theme.panel2), "flip back must restore the neutral fill");
+        verify(Qt.colorEqual(b.background.border.color, Theme.buttonLine), "flip back must restore the neutral line");
     }
-
     // Hover restyle (panel3 fill + strong border) is intentionally not tested:
     // the offscreen QPA platform used by the suite does not synthesise a hover
     // enter, so `hovered` never flips true and the branch is unreachable here.

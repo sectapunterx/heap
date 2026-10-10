@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 # C is enabled for the vendored md4c parser (third_party/md4c), the only C in
 # the tree.
-project(heap VERSION 0.8.0 LANGUAGES C CXX)
+project(heap VERSION 0.8.1 LANGUAGES C CXX)
 
 # Windows resource compiler (windres on mingw / rc.exe on MSVC). Required so
 # design/brand-export/lowkey/lowkey-icon.rc is actually compiled into lowkey.exe —
@@ -230,6 +230,7 @@ qt_add_library(heap_core STATIC
     # The window frame follows heap's theme, not the system's app mode.
     src/platform/WindowFrame.cpp
     src/TypeAhead.cpp
+    src/TextLeading.cpp
     # The 0.8.0 keymap: physical keys, two-key sequences (APP-272).
     src/keys/KeyNames.cpp
     src/keys/KeyRouter.cpp
@@ -277,6 +278,7 @@ qt_add_library(heap_core STATIC
     # ── audit-perf: begin ──
     # ── audit-perf: end ──
     src/markdown/MdDocument.cpp
+    src/markdown/InlineCodeFrames.cpp
     src/markdown/MarkdownEditorController.cpp
     src/markdown/MdHighlighter.cpp
     src/integrations/StatusMap.cpp
@@ -343,11 +345,13 @@ qt_add_qml_module(heap_core
         # heap 2 design system (APP-259) and the two styles (APP-275)
         qml/Style.qml
         qml/StatusRing.qml
+        qml/DashedRect.qml
         qml/PropertyChip.qml
         qml/KeyHint.qml
         qml/CursorBar.qml
         qml/SectionHeader.qml
         qml/MeetingIcon.qml
+        qml/Icon.qml
         qml/LensTabs.qml
         qml/QueryBar.qml
         qml/Pseudo.js
@@ -364,11 +368,16 @@ qt_add_qml_module(heap_core
         qml/SeriesScopeDialog.qml
         qml/SyncConflictDialog.qml
         qml/TrackerPushConfirmDialog.qml
-        qml/IntegrationHealthCard.qml
-        qml/IntegrationsInfoCard.qml
+        # errors & sync (0.8.1, R2-035…054)
+        qml/TrackerStrip.qml
+        qml/DamagedFileDialog.qml
+        qml/KeychainDialog.qml
+        qml/ReportIssueDialog.qml
+        qml/SyncPopover.qml
+        qml/WhatsNewDialog.qml
+        qml/WhatsNew.js
         qml/CalendarSubscriptionsCard.qml
         qml/SprintMarker.qml
-        qml/AutoSyncCard.qml
         qml/WeeklyRecapDialog.qml
         qml/EventLogDialog.qml
         qml/TimeMachineDialog.qml
@@ -391,6 +400,7 @@ qt_add_qml_module(heap_core
         qml/EmptyState.qml
         qml/Motion.js
         qml/TaskDates.js
+        qml/QueryWords.js
         qml/IntegrationActivity.qml
         qml/PopupSurface.qml
         qml/ModalSurface.qml
@@ -421,29 +431,29 @@ qt_add_qml_module(heap_core
         qml/FilterBar.qml
         qml/KanbanBoard.qml
         qml/TaskCard.qml
+        qml/TrackerWriteAskDialog.qml
         qml/TaskListView.qml
         qml/SelectionBar.qml
-        qml/ArchiveView.qml
-        qml/TimelineView.qml
         qml/WeekView.qml
         qml/CalendarView.qml
         qml/CalendarNav.qml
         qml/UndatedTray.qml
         qml/MonthView.qml
-        qml/DocsView.qml
-        qml/DocsEditor.qml
-        qml/MiniWeek.qml
-        qml/DayCalendar.qml
         qml/DatePickerPopup.qml
-        qml/PeopleList.qml
         qml/TaskEditor.qml
         qml/EventEditor.qml
         qml/PersonEditor.qml
         qml/PersonPicker.qml
+        qml/PeopleDialog.qml
+        qml/PersonMenu.qml
+        qml/ProfileDeleteDialog.qml
+        qml/DoneColumnDialog.qml
+        qml/TrackerMark.qml
         qml/Toast.qml
         qml/ToastTiming.js
         qml/AppMenu.qml
         qml/AppMenuItem.qml
+        qml/AppMenuHeader.qml
         qml/AppMenuSeparator.qml
         qml/AppComboBox.qml
         qml/TextEditMenu.qml
@@ -460,6 +470,8 @@ qt_add_qml_module(heap_core
         qml/SettingsView.qml
         qml/SettingsGroup.qml
         qml/SettingsRow.qml
+        qml/SettingsTextRow.qml
+        qml/SettingsDangerRow.qml
         qml/CursorColorRow.qml
         qml/SeenBeforeHint.qml
         qml/StandupDraftDialog.qml
@@ -473,14 +485,18 @@ qt_add_qml_module(heap_core
         qml/CaptureWindow.qml
         qml/QuickCaptureNotesPopup.qml
         qml/MentionAutocomplete.qml
-        qml/WelcomePopup.qml
-        qml/Tour.js
         qml/DocsStarter.js
         qml/Mention.js
         qml/Attendees.js
+        qml/EventRule.js
+        qml/EventCapture.qml
+        qml/ImmersionView.qml
+        qml/SmallDialog.qml
+        qml/ProfileImportDialog.qml
+        qml/DialogField.qml
         qml/NotesListPane.qml
         qml/MdEditorPane.qml
-        qml/DocsPagesPane.qml
+        qml/PlusGlyph.qml
         qml/UnscheduledRail.qml
         qml/ChangeTick.qml
         qml/Overlap.js
@@ -513,6 +529,7 @@ qt_add_qml_module(heap_core
         src/query/TaskQuery.h
         src/notes/NoteLinks.h
         src/markdown/MdDocument.h
+        src/markdown/InlineCodeFrames.h
         src/markdown/MarkdownEditorController.h
         src/markdown/MdHighlighter.h
         src/notify/NotificationCenter.h
@@ -523,6 +540,7 @@ qt_add_qml_module(heap_core
         src/platform/Sound.h
         src/hints/ShortcutHints.h
         src/TypeAhead.h
+        src/TextLeading.h
         src/keys/KeyRouter.h
         src/integrations/IntegrationTypes.h
         src/integrations/StatusMap.h

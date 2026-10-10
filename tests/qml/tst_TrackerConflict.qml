@@ -51,17 +51,20 @@ TestCase {
     function test_card_shows_a_conflict_marker() {
         const card = cardComp.createObject(host, { task: ticketTask() });
         verify(card !== null);
-        const chip = findChild(card, "tc-conflict");
-        verify(chip !== null, "no conflict marker on the card");
-        verify(chip.visible, "a conflicting card looks in sync");
+        const mark = findChild(card, "tc-mark");
+        verify(mark !== null, "no conflict marker on the card");
+        verify(mark.visible && mark.conflict, "a conflicting card looks in sync");
+        verify(mark.text.indexOf(I18n.t("taskcard.mark.resolve")) >= 0, "no way to resolve it from the card");
         card.destroy();
     }
 
     function test_out_of_scope_card_is_not_called_gone() {
         const card = cardComp.createObject(host, { task: ticketTask({ conflict: false, outOfScope: true, gone: false }) });
-        verify(findChild(card, "tc-out-of-scope").visible, "an out-of-scope card has no marker");
-        verify(!findChild(card, "tc-sync-state").visible, "an out-of-scope card reads as gone/unsynced");
-        verify(!findChild(card, "tc-conflict").visible);
+        const mark = findChild(card, "tc-mark");
+        verify(mark.visible && mark.outOfScope, "an out-of-scope card has no marker");
+        verify(!mark.gone && !mark.pending, "an out-of-scope card reads as gone/unsynced");
+        verify(!mark.conflict);
+        verify(findChild(card, "tc-dashed").visible, "the card is not dashed");
         card.destroy();
     }
 

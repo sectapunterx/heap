@@ -26,12 +26,27 @@ TestCase {
     }
 
     // Smoke: the component instantiates against the live singleton and the
-    // default month grid is fully built (6 weeks x 7 days).
+    // month grid holds the weeks the month touches (DG-050), 4 to 6.
     function test_monthview_load() {
         const mv = make('import TodoCpp; MonthView { anchors.fill: parent }');
         compare(mv.mode, "month");
-        compare(mv.rows, 6);
-        compare(mv.cells.length, 42);
+        verify(mv.rows >= 4 && mv.rows <= 6, "rows " + mv.rows);
+        compare(mv.cells.length, mv.rows * 7);
+    }
+
+    // October 2026 starts on a Thursday and fits five weeks: no trailing
+    // week of November (DG-050, X-Oth-DayMonth).
+    function test_month_has_only_the_weeks_it_touches() {
+        const prev = AppController.selectedDate;
+        AppController.selectedDate = new Date(2026, 9, 9);
+        const mv = make('import TodoCpp; MonthView { anchors.fill: parent }');
+        if (Theme.weekStart !== "sun") {
+            compare(mv.rows, 5);
+            compare(mv.cells[0].date.getDate(), 28);
+            compare(mv.cells[34].date.getDate(), 1);
+        }
+        verify(mv.cells[mv.cells.length - 1].date >= new Date(2026, 9, 31), "the 31st is on the grid");
+        AppController.selectedDate = prev;
     }
 
     // Signal contract: taskClicked carries the task id.
@@ -124,8 +139,8 @@ TestCase {
         AppController.selectedDate = day;
 
         const mv = make('import TodoCpp; MonthView { anchors.fill: parent }');
-        compare(mv.rows, 6);
-        compare(mv.cells.length, 42);
+        verify(mv.rows >= 4 && mv.rows <= 6);
+        compare(mv.cells.length, mv.rows * 7);
         compare(mv.rangeTitle(), Qt.formatDate(day, "MMMM yyyy"));
 
         mv.step(1);

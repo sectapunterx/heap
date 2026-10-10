@@ -98,6 +98,25 @@ class NotificationCenter : public QObject {
   // actionInvoked() and returns true; false for anything else.
   bool handleActivationUri(const QString& uri);
 
+  // The tray icon's menu and tooltip (N-Menus-Other "Меню в трее", R3-103,
+  // R3-027). Built by the app; only the tray backend shows them. An item
+  // with an empty id is a separator; a disabled one is a line of facts.
+  struct TrayItem {
+    QString id;
+    QString text;
+    QString hint;  // right column: the key, or the timer
+    bool enabled = true;
+  };
+
+  virtual void setTrayMenu(const QString& header, const QVector<TrayItem>& items) {
+    Q_UNUSED(header);
+    Q_UNUSED(items);
+  }
+
+  virtual void setTrayToolTip(const QString& text) {
+    Q_UNUSED(text);
+  }
+
  signals:
   void actionInvoked(const QString& notificationId, const QString& actionId);
   void dismissed(const QString& notificationId);
@@ -108,6 +127,10 @@ class NotificationCenter : public QObject {
   // and exit for real on "Quit". Backends without a tray never emit them.
   void showWindowRequested();
   void quitRequested();
+  // The tray menu is about to open (refresh it now), or one of the app's own
+  // items in it was picked.
+  void trayMenuAboutToShow();
+  void trayItemTriggered(const QString& id);
 
  protected:
   using QObject::QObject;

@@ -28,26 +28,26 @@
   <developer id="io.github.sectapunterx">
     <name>sectapunterx</name>
   </developer>
-  <url type="homepage">https://github.com/sectapunterx/heap</url>
-  <url type="bugtracker">https://github.com/sectapunterx/heap/issues</url>
-  <url type="vcs-browser">https://github.com/sectapunterx/heap</url>
+  <url type="homepage">https://github.com/sectapunterx/lowkey</url>
+  <url type="bugtracker">https://github.com/sectapunterx/lowkey/issues</url>
+  <url type="vcs-browser">https://github.com/sectapunterx/lowkey</url>
   <content_rating type="oars-1.1" />
   <screenshots>
     <screenshot type="default">
       <caption>Board view — kanban columns, pinned calendar and people pane</caption>
-      <image>https://raw.githubusercontent.com/sectapunterx/heap/master/docs/assets/img/screens/board-kanban.png</image>
+      <image>https://raw.githubusercontent.com/sectapunterx/lowkey/master/docs/assets/img/screens/board-kanban.png</image>
     </screenshot>
     <screenshot>
       <caption>Week view — 7-day grid with drag/resize events</caption>
-      <image>https://raw.githubusercontent.com/sectapunterx/heap/master/docs/assets/img/screens/board-week.png</image>
+      <image>https://raw.githubusercontent.com/sectapunterx/lowkey/master/docs/assets/img/screens/board-week.png</image>
     </screenshot>
     <screenshot>
       <caption>Day calendar — drag-to-create and focus blocks</caption>
-      <image>https://raw.githubusercontent.com/sectapunterx/heap/master/docs/assets/img/screens/calendar-focus.png</image>
+      <image>https://raw.githubusercontent.com/sectapunterx/lowkey/master/docs/assets/img/screens/calendar-focus.png</image>
     </screenshot>
     <screenshot>
       <caption>Docs — custom sections, snippets and contact cards</caption>
-      <image>https://raw.githubusercontent.com/sectapunterx/heap/master/docs/assets/img/screens/board-docs.png</image>
+      <image>https://raw.githubusercontent.com/sectapunterx/lowkey/master/docs/assets/img/screens/board-docs.png</image>
     </screenshot>
   </screenshots>
   <categories>

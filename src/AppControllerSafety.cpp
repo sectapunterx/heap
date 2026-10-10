@@ -418,6 +418,7 @@ bool AppController::holdForImmersion(const HeldNotification& n) {
     m_immersionHeld.removeFirst();
   }
   m_immersionHeld.append(n);
+  emit immersionChanged();
   return true;
 }
 

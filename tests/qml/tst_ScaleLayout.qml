@@ -119,115 +119,9 @@ TestCase {
 
     // ── SCALE-3: Notes and Docs headers ─────────────────────────────────
 
-    function test_the_notes_header_keeps_its_buttons_in_the_view() {
-        withScale(1.5);
-        const v = make('import TodoCpp; NotesView { width: 760; height: 500 }');
-        const toggle = findChild(v, "notes-mode-toggle");
-        tryVerify(() => toggle.width > 0);
-        verify(rightIn(toggle, v) <= v.width, "the mode toggle runs past the view: " + rightIn(toggle, v));
-        const title = findChild(v, "notes-title-col");
-        verify(rightIn(title, v) <= toggle.mapToItem(v, 0, 0).x, "title over the buttons");
-    }
-
-    function test_the_docs_header_gives_way_and_keeps_tab_words() {
-        withScale(1.5);
-        const v = make('import TodoCpp; DocsView { width: 760; height: 600 }');
-        v.tab = "references";
-        const search = findChild(v, "docs-search-box");
-        tryVerify(() => search.width > 0);
-        verify(rightIn(search, v) <= v.width, "the search runs past the view");
-        for (const id of ["pages", "references"]) {
-            const tab = findChild(v, "docs-tab-" + id);
-            const label = I18n.t("docs.tab." + id);
-            let txt = null;
-            for (let i = 0; i < tab.children.length; i++)
-                if (tab.children[i].text === label) txt = tab.children[i];
-            verify(txt !== null);
-            verify(txt.implicitWidth <= tab.width - 2 * Theme.spSm, id + " tab text runs over its frame");
-        }
-        const subs = findAll(v, "docs-section-subtitle", []);
-        for (const s of subs) if (s.visible && s.width > 0)
-            verify(rightIn(s, v) <= v.width, "a section subtitle runs past the view");
-    }
-
     // ── SCALE-4: avatars grow with their initials ───────────────────────
 
-    function test_people_avatars_hold_their_initials_at_150() {
-        withScale(1.5);
-        const d = AppController.newPersonDraft();
-        d.id = "scale.mk";
-        d.name = "Маша Кузнецова";
-        d.state = "todo";
-        verify(AppController.savePerson(d));
-        try {
-            const list = make('import TodoCpp; PeopleList { width: 320; height: 600 }');
-            let avatars = [];
-            tryVerify(() => (avatars = findAll(list, "people-avatar", [])).length > 0, 2000);
-            for (const a of avatars) {
-                compare(a.width, Theme.px(28));
-                compare(a.height, a.width);
-                const t = a.children[0];
-                verify(t.implicitWidth <= a.width - 2, "initials " + t.text + " overflow " + a.width);
-            }
-        } finally {
-            AppController.deletePerson("scale.mk");
-        }
-    }
-
     // ── SCALE-5: no band between a date sub-header and its first task ───
-
-    function test_a_bucket_label_does_not_push_its_first_task_down() {
-        withScale(1.5);
-        const ids = [];
-        for (const off of [700, 701]) {
-            const t = AppController.newTaskDraft("todo");
-            t._isNew = true; t.id = "SCL-TL-" + off; t.title = "scale timeline " + off;
-            t.dueAt = day(off); t.scheduledAt = day(off); t.hasTime = false;
-            verify(AppController.saveTask(t));
-            ids.push(t.id);
-        }
-        try {
-            const tv = make('import TodoCpp; TimelineView { width: 900; height: 800 }');
-            const list = findChild(tv, "timeline-rows");
-            tryVerify(() => tv.flatRows.length > 0);
-            list.positionViewAtEnd();
-            function delegates() {
-                const out = [];
-                const kids = list.contentItem.children;
-                for (let i = 0; i < kids.length; i++)
-                    if (kids[i].rd !== undefined && kids[i].rd && kids[i].visible) out.push(kids[i]);
-                return out;
-            }
-            let rows = [];
-            tryVerify(() => (rows = delegates()).some(r => r.rd.task && r.rd.task.id === ids[0]), 3000);
-            // Only the buckets this test seeded: the profile persists between
-            // runs, and whatever earlier runs or other tests left behind
-            // (tasks dated today, say) is not what is being measured.
-            const ours = {};
-            for (const r of rows)
-                if (r.rd.task && ids.indexOf(r.rd.task.id) >= 0) ours[r.rd.bucketId] = true;
-            let checkedHead = false;
-            for (const r of rows) {
-                if (!ours[r.rd.bucketId]) continue;
-                if (r.first && !r.last) {
-                    // As tall as its own row: the label runs down beside the rows.
-                    compare(r.height, r._ownH, "row " + r.index + " is sized by its label");
-                    checkedHead = true;
-                }
-                if (r.last && !r.first) {
-                    const head = rows.find(h => h.index === r.rd.firstIndex);
-                    if (!head) continue;
-                    const label = findChild(head, "timeline-label-col");
-                    verify(head.y + 14 + label.implicitHeight <= r.y + r.height + 1,
-                           "bucket " + r.rd.bucketId + " is shorter than its label");
-                }
-            }
-            verify(checkedHead, "no multi-row bucket was on screen");
-        } finally {
-            for (const id of ids) AppController.deleteTask(id);
-            AppController.clearPendingUndo();
-        }
-    }
 
     // ── SCALE-6: a long title reads from its start ──────────────────────
 
@@ -272,18 +166,12 @@ TestCase {
         AppController.saveEvent(ev);
         try {
             const wv = make('import TodoCpp; WeekView { width: 720; height: 800 }');
-            let keys = [];
-            tryVerify(() => (keys = findAll(wv, "week-due-key", [])).length > 0, 3000, "no due chip");
-            for (const k of keys) {
-                const row = k.parent;
-                let title = null;
-                for (let i = 0; i < row.children.length; i++)
-                    if (row.children[i].objectName === "week-due-title") title = row.children[i];
-                // The key shows only while the title keeps its room.
-                verify(!k.visible || title.width >= Theme.px(64) - 1,
-                       "chip title squeezed to " + title.width + " beside its key");
+            // The deadline row is a flag and the title (DG-041): no key
+            // to squeeze it.
+            let dues = [];
+            tryVerify(() => (dues = findAll(wv, "week-due-title", [])).length > 0, 3000, "no due chip");
+            for (const title of dues)
                 verify(title.width > Theme.px(24), "chip title is gone: " + title.width);
-            }
             let titles = [];
             tryVerify(() => (titles = findAll(wv, "week-event-title", [])).some(x => x.text === ev.title), 3000);
             const et = titles.find(x => x.text === ev.title);

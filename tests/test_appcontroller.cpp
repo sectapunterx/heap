@@ -389,7 +389,7 @@ TEST_F(AppControllerTest, KeysAreWrittenTheKeymapWay) {
   EXPECT_EQ(app_->shortcutText(QStringLiteral("task.done")), QStringLiteral("d"));
 #ifndef Q_OS_MACOS
   EXPECT_EQ(app_->shortcutText(QStringLiteral("task.due")), QStringLiteral("Shift S"));
-  EXPECT_EQ(app_->shortcutText(QStringLiteral("board.open")), QStringLiteral("Enter"));
+  EXPECT_EQ(app_->shortcutText(QStringLiteral("board.open")), QStringLiteral("↵"));
   EXPECT_EQ(app_->shortcutText(QStringLiteral("palette.open")), QStringLiteral("Ctrl K"));
 #endif
   // A rebinding shows at once.
@@ -2239,6 +2239,7 @@ TEST_F(AppControllerTest, MovingACrossProjectTicketPushesToItsOwnRepo) {
                              {QStringLiteral("host"), gitea.base()},
                              {QStringLiteral("repo"), QStringLiteral("acme/web")},
                              {QStringLiteral("writeStatus"), true},
+                             {QStringLiteral("askBeforeWrite"), false},
                          });
 
   // A ticket that came from another repo entirely.
@@ -2294,6 +2295,7 @@ TEST_F(AppControllerTest, MyIssuesModeWritesBackThroughTheIssuesOwnRepo) {
                              {QStringLiteral("connected"), true},
                              {QStringLiteral("host"), gitea.base()},
                              {QStringLiteral("writeStatus"), true},
+                             {QStringLiteral("askBeforeWrite"), false},
                          });
 
   Task mine;
@@ -2335,6 +2337,7 @@ TEST_F(AppControllerTest, AFailedCrossProjectPushFlagsOnlyTheMovedCard) {
                              {QStringLiteral("connected"), true},
                              {QStringLiteral("host"), gitea.base()},
                              {QStringLiteral("writeStatus"), true},
+                             {QStringLiteral("askBeforeWrite"), false},
                          });
 
   Task mine;

@@ -416,6 +416,17 @@ void TaskModel::reset(QVector<Task> items) {
   endResetModel();
 }
 
+QVariantMap TaskModel::gitFactsFor(const QString& id) const {
+  const auto it = m_git.constFind(id);
+  if(it == m_git.constEnd()) {
+    return {};
+  }
+  return {{QStringLiteral("prState"), it->prState},
+          {QStringLiteral("prNumber"), it->prNumber},
+          {QStringLiteral("prUrl"), it->prUrl},
+          {QStringLiteral("prChecks"), it->prChecks}};
+}
+
 void TaskModel::setGitInfoForId(const QString& id, const QVariantMap& info) {
   const int row = indexOfId(id);
   if(row < 0) {
@@ -430,6 +441,9 @@ void TaskModel::setGitInfoForId(const QString& id, const QVariantMap& info) {
   }
   if(info.contains(QStringLiteral("prUrl"))) {
     g.prUrl = info.value(QStringLiteral("prUrl")).toString();
+  }
+  if(info.contains(QStringLiteral("prChecks"))) {
+    g.prChecks = info.value(QStringLiteral("prChecks")).toString();
   }
   if(info.contains(QStringLiteral("prMove"))) {
     g.prMove = info.value(QStringLiteral("prMove")).toString();
@@ -585,8 +599,16 @@ void TaskModel::setArchived(const QString& id, bool archived) {
     return;
   }
   m_items[row].archived = archived;
+  // The archive groups by the month the status last changed (DG-161). A task
+  // archived by hand that never changed status had no month and fell into
+  // "no date" (R3-056); its archiving is that change.
+  QList<int> roles{ArchivedRole};
+  if(archived && !m_items[row].statusChangedAt.isValid()) {
+    m_items[row].statusChangedAt = QDateTime::currentDateTime();
+    roles << StatusChangedAtRole;
+  }
   const QModelIndex mi = index(row, 0);
-  emit dataChanged(mi, mi, {ArchivedRole});
+  emit dataChanged(mi, mi, roles);
 }
 
 void TaskModel::setBlockedStuckIds(const QSet<QString>& ids) {
@@ -1082,6 +1104,7 @@ QHash<int, QByteArray> PersonModel::roleNames() const {
       {QuestionRole, "question"},
       {StateRole, "state"},
       {ColorRole, "color"},
+      {StateAtRole, "stateAt"},
   };
 }
 
@@ -1103,6 +1126,8 @@ QVariant PersonModel::data(const QModelIndex& idx, int role) const {
       return p.state;
     case ColorRole:
       return p.color;
+    case StateAtRole:
+      return p.stateAt;
   }
   return {};
 }
@@ -1152,8 +1177,10 @@ void PersonModel::setState(const QString& id, const QString& state) {
     return;
   }
   m_items[row].state = state;
+  // When it moved: "написал вчера" (X-Oth-Archive-People, R3-057).
+  m_items[row].stateAt = QDateTime::currentDateTime();
   const QModelIndex mi = index(row, 0);
-  emit dataChanged(mi, mi, {StateRole});
+  emit dataChanged(mi, mi, {StateRole, StateAtRole});
 }
 
 void PersonModel::upsert(const Person& p) {

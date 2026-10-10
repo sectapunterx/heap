@@ -73,8 +73,12 @@ TestCase {
         seed("CARRY-3", { scheduledAt: plusDays(-2), scheduledHasTime: false });
         AppController.setSelectedTaskIds(["CARRY-2", "CARRY-3"]);
         const bar = createTemporaryQmlObject('import TodoCpp; SelectionBar {}', host);
-        const btn = findChild(bar, "sel-carry");
-        verify(btn !== null && btn.visible, "the bar offers the carry");
+        // The carry left the bar for the command line (DG-026): the bar
+        // still opens its menu ("Перенести выбранные…").
+        bar.openCarry();
+        const menu = findChild(bar, "sel-carry-menu");
+        tryVerify(() => menu.opened, 2000, "the carry menu opens");
+        menu.close();
         // What the menu's "→ Someday" row runs.
         bar.carry("someday");
         for (const id of ["CARRY-2", "CARRY-3"]) {

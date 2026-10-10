@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic as QQC
+import QtQuick.Dialogs
 import TodoCpp
 
 // The list of notes, beside the one being edited.
@@ -17,11 +18,29 @@ Rectangle {
     id: root
 
     property string filter: ""
+    // The doc page open in the document, so its row reads as the open one.
+    property string openPageId: ""
 
     // Bumped by the model so the grouping rebuilds.
     property int rev: 0
 
     signal noteActivated(string id)
+    // A note's "Экспорт в .md" (R2-062): where to, then one file.
+    function exportNote(id, title) {
+        noteExportDialog.noteId = id;
+        noteExportDialog.currentFile = "file:///" + (title.replace(/[\\/:*?"<>|]/g, " ").trim() || "note") + ".md";
+        noteExportDialog.open();
+    }
+    FileDialog {
+        id: noteExportDialog
+        property string noteId: ""
+        fileMode: FileDialog.SaveFile
+        nameFilters: ["Markdown (*.md)", "All files (*)"]
+        defaultSuffix: "md"
+        title: I18n.t("notes.menu.export")
+        onAccepted: AppController.showToast(AppController.exportNoteToFile(noteExportDialog.noteId, selectedFile)
+                                         ? I18n.t("notes.export.done") : I18n.t("notes.export.fail"))
+    }
     // After "+": the view puts the cursor in the new note.
     signal noteCreated(string id)
     // Knowledge (APP-269): Docs live in the same list — the reference links
@@ -29,18 +48,39 @@ Rectangle {
     signal refActivated(string url)
     signal pageActivated(string id)
     signal snippetActivated(string title, string code)
+    signal contactActivated(string handle)
 
     // The Docs catalogue, read as it is stored: nothing is moved or copied,
     // so nothing of it can be lost on the way to Knowledge.
     function _docs() {
         const raw = AppController.docsState || "";
-        if (!raw.length) return ({ sections: [], snippets: [] });
+        if (!raw.length) return ({ sections: [], snippets: [], contacts: [] });
         try { return JSON.parse(raw) || ({}); } catch (e) { return ({}); }
     }
     // "RFC 9110" → tag "RFC", number "9110"; a ref without a number is its tag.
+    // Only a short code is a tag: "OpenAPI 3.1" was cut to "Open" (R3-089);
+    // a longer word names its kind by its "API" ending, else "REF".
     function _splitRef(ref) {
         const m = /^(\S+)\s+(.+)$/.exec(String(ref || "").trim());
-        return m ? { tag: m[1], rest: m[2] } : { tag: String(ref || ""), rest: "" };
+        const r = m ? { tag: m[1], rest: m[2] } : { tag: String(ref || "").trim(), rest: "" };
+        if (r.tag.length > 4) r.tag = /api$/i.test(r.tag) ? "API" : "REF";
+        return r;
+    }
+
+    // Pin or unpin a reference of the catalogue (DG-073): only pinned ones
+    // stand in Закреплено at rest; the rest come up in the search and Ctrl+K.
+    // The blob is rewritten as read, with only this one flag changed.
+    function setRefPinned(sectionIdx, itemIdx, pinned) {
+        const raw = AppController.docsState || "";
+        if (!raw.length) return;
+        let d;
+        try { d = JSON.parse(raw); } catch (e) { return; }
+        const sec = (d.sections || [])[sectionIdx];
+        const it = sec && (sec.items || [])[itemIdx];
+        if (!it) return;
+        if (pinned) it.pinned = true;
+        else delete it.pinned;
+        AppController.docsState = JSON.stringify(d);
     }
 
     color: Theme.bg
@@ -67,7 +107,7 @@ Rectangle {
         const byFolder = ({});
         const loose = [];
         const rId = m.roleOf("id"), rTitle = m.roleOf("title"), rFolder = m.roleOf("folder");
-        const rPinned = m.roleOf("pinned"), rExcerpt = m.roleOf("excerpt");
+        const rPinned = m.roleOf("pinned"), rExcerpt = m.roleOf("excerpt"), rCreated = m.roleOf("created");
         for (let i = 0; i < m.rowCount(); i++) {
             const idx = m.index(i, 0);
             const id = String(m.data(idx, rId));
@@ -77,7 +117,8 @@ Rectangle {
                 title:   String(m.data(idx, rTitle) || ""),
                 folder:  String(m.data(idx, rFolder) || ""),
                 pinned:  !!m.data(idx, rPinned),
-                excerpt: String(m.data(idx, rExcerpt) || "")
+                excerpt: String(m.data(idx, rExcerpt) || ""),
+                created: new Date(m.data(idx, rCreated) || 0).getTime() || 0
             };
             if (note.pinned) pinned.push(note);
             else if (note.folder.length > 0) {
@@ -90,20 +131,45 @@ Rectangle {
             return a.title.toLowerCase() < b.title.toLowerCase() ? -1
                  : a.title.toLowerCase() > b.title.toLowerCase() ? 1 : 0;
         };
+        // Notes newest first (sheet H2-Knowledge, DG-073): by when they were
+        // made, so a note being typed in does not jump to the top.
+        const newest = function (a, b) { return b.created - a.created || byTitle(a, b); };
         pinned.sort(byTitle);
-        loose.sort(byTitle);
+        loose.sort(newest);
 
         // Docs: the reference links, the pages, the snippets (APP-269).
         const q = needle.toLowerCase();
         const has = (s) => q.length === 0 || String(s || "").toLowerCase().indexOf(q) >= 0;
         const docs = root._docs();
-        const refs = [];
-        for (const sec of docs.sections || []) {
-            for (const it of sec.items || []) {
+        // Pinned references stand in Закреплено (DG-073); the others are
+        // listed only while searching, under their own header.
+        const refs = [], otherRefs = [];
+        const secs = docs.sections || [];
+        for (let si = 0; si < secs.length; si++) {
+            const items = (secs[si] && secs[si].items) || [];
+            for (let ii = 0; ii < items.length; ii++) {
+                const it = items[ii];
                 if (!it || !(it.url || "").length) continue;
+                const pinnedRef = it.pinned === true;
+                if (!pinnedRef && q.length === 0) continue;
                 if (!has(it.title) && !has(it.ref) && !has(it.desc) && !has(it.url)) continue;
                 const r = root._splitRef(it.ref);
-                refs.push({ kind: "ref", tag: r.tag, title: String(it.title || it.ref || it.url) + (r.rest.length ? " · " + r.rest : ""), url: String(it.url) });
+                const title = String(it.title || it.ref || it.url);
+                (pinnedRef ? refs : otherRefs).push({
+                    kind: "ref", tag: r.tag, rest: r.rest, name: title,
+                    title: title + (r.rest.length ? " · " + r.rest : ""),
+                    url: String(it.url), sec: si, item: ii, pinned: pinnedRef
+                });
+            }
+        }
+        const contacts = [];
+        if (q.length > 0) {
+            const cs = docs.contacts || [];
+            for (let ci = 0; ci < cs.length; ci++) {
+                const c = cs[ci];
+                if (!c || (!has(c.name) && !has(c.role) && !has(c.channel) && !has(c.mattermost))) continue;
+                const handle = String(c.mattermost || c.channel || c.name || "");
+                contacts.push({ kind: "contact", tag: "", title: String(c.name || "") + (c.role ? " · " + c.role : ""), handle: handle });
             }
         }
         const noteTitles = ({});
@@ -119,7 +185,7 @@ Rectangle {
                 if (!has(t)) continue;
                 // A page named like a note says where it is from.
                 const shown = noteTitles[t.toLowerCase()] ? t + " " + I18n.t("knowledge.fromDocs") : t;
-                pages.push({ kind: "page", id: String(dp.data(idx, rpId)), title: shown });
+                pages.push({ kind: "page", id: String(dp.data(idx, rpId)), title: shown, name: t });
             }
         }
         const snippets = [];
@@ -137,11 +203,11 @@ Rectangle {
         const folders = Object.keys(byFolder).sort();
         for (const f of folders) {
             rows.push({ kind: "header", label: f, folder: f });
-            byFolder[f].sort(byTitle);
+            byFolder[f].sort(newest);
             for (const n of byFolder[f]) rows.push({ kind: "note", note: n });
         }
         if (loose.length > 0) {
-            if (rows.length > 0) rows.push({ kind: "header", label: I18n.t("notes.other") });
+            rows.push({ kind: "header", label: I18n.t("notes.other") });
             for (const n of loose) rows.push({ kind: "note", note: n });
         }
         if (pages.length > 0) {
@@ -152,6 +218,17 @@ Rectangle {
             rows.push({ kind: "header", label: I18n.t("knowledge.snippets") });
             for (const sn of snippets) rows.push(sn);
         }
+        if (otherRefs.length > 0) {
+            rows.push({ kind: "header", label: I18n.t("knowledge.refs") });
+            for (const r of otherRefs) rows.push(r);
+        }
+        if (contacts.length > 0) {
+            rows.push({ kind: "header", label: I18n.t("knowledge.contacts") });
+            for (const c of contacts) rows.push(c);
+        }
+        // The first header sits closer to the search than the others to
+        // the group above them.
+        if (rows.length > 0 && rows[0].kind === "header") rows[0].first = true;
         return rows;
     }
 
@@ -279,23 +356,25 @@ Rectangle {
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.spSm
+            Layout.topMargin: Style.quiet ? Theme.px(18) : Theme.spXs
             Text {
                 text: I18n.t("sidebar.knowledge")
                 color: Theme.text
-                font.pixelSize: Theme.fsLg
+                font.pixelSize: Style.quiet ? Theme.fsXl : Theme.px(18)  // sheet H2-Knowledge: 18px (R4-066)
                 font.weight: Theme.fwHeading
                 Layout.fillWidth: true
             }
+            // Bold: a framed "+"; quiet: the mark alone (sheets H2/Q-Knowledge).
             Rectangle {
                 objectName: "note-new"
-                width: 22; height: 22; radius: Theme.radiusSm
-                color: newMA.hovered ? Theme.panel3 : Theme.panel2
-                border.color: Theme.border; border.width: 1
-                Text {
+                width: Theme.px(26); height: Theme.px(26); radius: Theme.radiusSm
+                color: newMA.hovered ? Theme.panel3 : (Style.quiet ? "transparent" : Theme.panel2)
+                border.color: Style.quiet ? "transparent" : Theme.border
+                border.width: 1
+                PlusGlyph {
                     anchors.centerIn: parent
-                    text: "+"
-                    color: Theme.text
-                    font.pixelSize: Theme.fsLg
+                    size: Theme.px(9)
+                    color: Style.quiet ? Theme.textMuted : Theme.text
                 }
                 ClickArea {
                     id: newMA
@@ -316,22 +395,34 @@ Rectangle {
             QQC.ContextMenu.menu: TextEditMenu { editor: filterField }
             objectName: "note-filter"
             Layout.fillWidth: true
-            placeholderText: I18n.t("notes.filter")
+            placeholderText: Style.quiet ? I18n.t("notes.filter.short") : I18n.t("notes.filter")
             placeholderTextColor: Theme.textDim
             color: Theme.text
             font.pixelSize: Theme.fsSm
-            background: FieldFrame {}
+            leftPadding: Style.quiet ? 0 : Theme.spMd
+            // Quiet: a line under the words, no box.
+            background: Item {
+                implicitHeight: Theme.px(30)
+                FieldFrame { anchors.fill: parent; visible: !Style.quiet }
+                Rectangle {
+                    visible: Style.quiet
+                    anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+                    height: 1
+                    color: filterField.activeFocus ? Theme.accent : Theme.border
+                }
+            }
             onTextChanged: root.filter = text
         }
 
         EmptyState {
             objectName: "notes-empty"
-            visible: root.rows.length === 0
+            // No notes, even with pinned links and snippets listed (R3-134).
+            visible: root.filter.length > 0 ? root.rows.length === 0 : !root.rows.some(r => r.kind === "note")
             Layout.fillWidth: true
             Layout.topMargin: Theme.sp2xl
-            icon: root.filter.length > 0 ? "" : "heap-09-notes"
+            Layout.bottomMargin: root.rows.length > 0 ? Theme.sp2xl : 0
             title: root.filter.length > 0 ? I18n.t("notes.noMatches") : I18n.t("notes.empty")
-            line: root.filter.length > 0 ? I18n.t("notes.noMatches.hint") : ""
+            line: root.filter.length > 0 ? I18n.t("notes.noMatches.hint") : I18n.t("notes.empty.line").arg(AppController.shortcutText("notes.new"))
         }
 
         ListView {
@@ -372,16 +463,16 @@ Rectangle {
                 Item {
                     id: headerItem
                     property var rowData: ({})
-                    height: 22
+                    height: headerItem.rowData.first ? Theme.px(30) : Theme.px(40)
                     Text {
                         anchors.left: parent.left
                         anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        anchors.bottomMargin: Theme.sp2xs
-                        text: rowData.label || ""
+                        anchors.bottom: parent.bottom
+                        anchors.leftMargin: Theme.spMd
+                        anchors.bottomMargin: Theme.spSm
+                        text: headerItem.rowData.label || ""
                         color: Theme.textDim
-                        font.pixelSize: Theme.fsSm
-                        font.weight: Theme.fwTitle
+                        font.pixelSize: Theme.fsXs
                         elide: Text.ElideRight
                     }
                     // A folder header is the folder: right-click renames it or
@@ -418,12 +509,20 @@ Rectangle {
                     height: Theme.px(30)
                     radius: Theme.radiusMd
                     color: drowCA.hovered ? Theme.panel2 : "transparent"
+                    readonly property bool current: drow.rowData.kind === "page" && drow.rowData.id === root.openPageId
+                    // Quiet draws no tag chip: a reference reads "RFC 9110 · title".
+                    readonly property string shownTitle: {
+                        const r = drow.rowData;
+                        if (Style.quiet && r.kind === "ref")
+                            return (r.rest || "").length > 0 ? r.tag + " " + r.rest + " · " + r.name : r.name;
+                        return r.title || "";
+                    }
                     RowLayout {
                         anchors.fill: parent
                         anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spMd
                         spacing: Theme.spMd
                         Rectangle {
-                            visible: (drow.rowData.tag || "").length > 0
+                            visible: !Style.quiet && (drow.rowData.tag || "").length > 0
                             implicitWidth: tagTxt.implicitWidth + 2 * Theme.spXs
                             implicitHeight: tagTxt.implicitHeight + Theme.sp2xs
                             radius: Theme.radiusSm
@@ -433,7 +532,7 @@ Rectangle {
                             Text {
                                 id: tagTxt
                                 anchors.centerIn: parent
-                                text: String(drow.rowData.tag || "").substring(0, 4)
+                                text: String(drow.rowData.tag || "")
                                 color: Theme.textDim
                                 font.family: Theme.fontMono
                                 font.pixelSize: Theme.fsXs
@@ -441,10 +540,16 @@ Rectangle {
                         }
                         Text {
                             Layout.fillWidth: true
-                            text: drow.rowData.title || ""
+                            text: drow.shownTitle
                             color: Theme.text
                             font.pixelSize: Theme.fsSm
+                            font.weight: drow.current ? Theme.fwHeading : Theme.fwBody
                             elide: Text.ElideRight
+                            CursorBar {
+                                shown: drow.current
+                                anchors.left: parent.left
+                                anchors.top: parent.bottom
+                            }
                         }
                     }
                     ClickArea {
@@ -456,6 +561,37 @@ Rectangle {
                             if (r.kind === "ref") root.refActivated(r.url);
                             else if (r.kind === "page") root.pageActivated(r.id);
                             else if (r.kind === "snippet") root.snippetActivated(r.title, r.code);
+                            else if (r.kind === "contact") root.contactActivated(r.handle);
+                        }
+                    }
+                    // Right-click: pin a reference, rename or delete a page.
+                    MouseArea {
+                        anchors.fill: parent
+                        enabled: drow.rowData.kind === "ref" || drow.rowData.kind === "page"
+                        acceptedButtons: Qt.RightButton
+                        onClicked: docMenu.popup()
+                    }
+                    AppMenu {
+                        id: docMenu
+                        AppMenuItem {
+                            objectName: "knowledge-ref-pin"
+                            visible: drow.rowData.kind === "ref"
+                            height: visible ? implicitHeight : 0
+                            text: drow.rowData.pinned ? I18n.t("notes.unpin") : I18n.t("notes.pin")
+                            onTriggered: root.setRefPinned(drow.rowData.sec, drow.rowData.item, !drow.rowData.pinned)
+                        }
+                        AppMenuItem {
+                            visible: drow.rowData.kind === "page"
+                            height: visible ? implicitHeight : 0
+                            text: I18n.t("notes.rename")
+                            onTriggered: pageRenamePopup.openFor(drow.rowData.id, drow.rowData.name || "")
+                        }
+                        AppMenuItem {
+                            visible: drow.rowData.kind === "page"
+                            height: visible ? implicitHeight : 0
+                            text: I18n.t("common.delete")
+                            danger: true
+                            onTriggered: AppController.deleteDocPage(drow.rowData.id)
                         }
                     }
                 }
@@ -470,7 +606,8 @@ Rectangle {
                     objectName: "note-row-" + (row.note.id || "")
                     height: Theme.px(30)
                     radius: Theme.radiusMd
-                    readonly property bool current: row.note.id === AppController.activeNoteId
+                    // A doc page open in the document is the current row instead.
+                    readonly property bool current: row.note.id === AppController.activeNoteId && root.openPageId.length === 0
                     color: rowMA.containsMouse ? Theme.panel2 : "transparent"
                     Accessible.role: Accessible.ListItem
                     Accessible.name: row.note.title || ""
@@ -593,26 +730,44 @@ Rectangle {
                         z: 9
                     }
 
+                    // The note's menu (R2-062, sheet X/N-Menus-Other). Merging
+                    // stays on drag and drop: a row dropped on another.
                     AppMenu {
                         id: rowMenu
+                        objectName: "note-row-menu"
+                        AppMenuHeader {
+                            text: I18n.t("notes.menu.header").arg(row.note.title || "")
+                        }
                         AppMenuItem {
+                            objectName: "note-menu-open"
+                            text: I18n.t("notes.menu.open")
+                            keyText: "↵"
+                            onTriggered: root.noteActivated(row.note.id)
+                        }
+                        AppMenuItem {
+                            objectName: "note-menu-pin"
                             text: row.note.pinned ? I18n.t("notes.unpin") : I18n.t("notes.pin")
                             onTriggered: AppController.setNotePinned(row.note.id, !row.note.pinned)
                         }
                         AppMenuItem {
-                            text: I18n.t("notes.rename")
+                            objectName: "note-menu-rename"
+                            text: I18n.t("notes.menu.rename")
+                            shortcutId: "notes.rename"
                             onTriggered: renamePopup.openFor(row.note.id, row.note.title, row.note.folder)
                         }
-                        // The keyboard's way to merge: this note into the one open.
                         AppMenuItem {
-                            objectName: "note-merge-into-open"
-                            visible: !row.current && AppController.activeNoteId.length > 0
-                            height: visible ? implicitHeight : 0
-                            text: I18n.t("notes.mergeIntoOpen")
-                            onTriggered: AppController.mergeNotes(row.note.id, AppController.activeNoteId)
+                            objectName: "note-menu-copy-link"
+                            text: I18n.t("notes.menu.copyLink")
+                            onTriggered: AppController.copyToClipboard("[[" + (row.note.title || "") + "]]")
+                        }
+                        AppMenuItem {
+                            objectName: "note-menu-export"
+                            text: I18n.t("notes.menu.export")
+                            onTriggered: root.exportNote(row.note.id, row.note.title || "")
                         }
                         AppMenuSeparator {}
                         AppMenuItem {
+                            objectName: "note-menu-delete"
                             text: I18n.t("common.delete")
                             danger: true
                             onTriggered: AppController.deleteNote(row.note.id)
@@ -698,6 +853,45 @@ Rectangle {
             Item { Layout.fillWidth: true }
             PillButton { text: I18n.t("common.cancel"); onClicked: folderPopup.close() }
             PillButton { text: I18n.t("editor.btn.save"); primary: true; onClicked: folderPopup.commit() }
+        }
+    }
+
+    // A page keeps its name and body; renaming is all the list offers.
+    QQC.Dialog {
+        id: pageRenamePopup
+        objectName: "knowledge-page-rename"
+        property string pageId: ""
+        modal: true
+        QQC.Overlay.modal: ModalScrim {}
+        anchors.centerIn: QQC.Overlay.overlay
+        parent: QQC.Overlay.overlay
+        padding: Theme.inset
+        width: 380
+        title: I18n.t("notes.rename")
+        function openFor(id, title) {
+            pageRenamePopup.pageId = id;
+            pageName.text = title;
+            pageRenamePopup.open();
+            pageName.forceActiveFocus();
+            pageName.selectAll();
+        }
+        function commit() {
+            if (pageName.text.trim().length > 0) AppController.renameDocPage(pageRenamePopup.pageId, pageName.text.trim());
+            pageRenamePopup.close();
+        }
+        background: ModalSurface {}
+        contentItem: QQC.TextField {
+            id: pageName
+            color: Theme.text
+            background: FieldFrame {}
+            onAccepted: pageRenamePopup.commit()
+        }
+        footer: RowLayout {
+            spacing: Theme.spMd
+            Layout.margins: Theme.sp2xl
+            Item { Layout.fillWidth: true }
+            PillButton { text: I18n.t("common.cancel"); onClicked: pageRenamePopup.close() }
+            PillButton { text: I18n.t("editor.btn.save"); primary: true; onClicked: pageRenamePopup.commit() }
         }
     }
 

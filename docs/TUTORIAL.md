@@ -1,6 +1,6 @@
-# Your first day in heap.
+# Your first day in lowkey
 
-A ten-minute walkthrough of the whole app. heap. is one native binary — no
+A ten-minute walkthrough of the whole app. It is one native binary — no
 account, no server, no browser. Everything you create lives on your machine.
 
 > Keyboard-first throughout. The full shortcut list is in
@@ -8,7 +8,7 @@ account, no server, no browser. Everything you create lives on your machine.
 
 ## 1. Launch & the layout
 
-On first run heap. seeds an **Example** profile so nothing is empty. The window
+On first run lowkey seeds an **Example** profile so nothing is empty. The window
 has three regions: the **side rail** (view switcher, left), the **main view**
 (center), and the **calendar + people** column (right).
 
@@ -23,15 +23,15 @@ rail icon to see its shortcut.
 Press **`Ctrl+Shift+Space`** for Quick-capture, type a line, hit `Ctrl+Enter`. The
 popup previews what it parsed (date chip, title) before you commit.
 
-It works from **any app**. When heap. is not the focused window, the hotkey
+It works from **any app**. When lowkey is not the focused window, the hotkey
 brings up only the capture line, over whatever you are working in. The main
 window stays minimized, in the tray or behind your editor. `Esc` puts it away.
 Clicking elsewhere does too, except for a quick note that already has text in
 it: that one waits for `Ctrl+Enter` or `Esc`. `Ctrl+Shift+N` does the same for a
 quick note.
 
-After saving, heap. tells you what it made: a system notification when you
-captured from another app, a toast when heap. was in front. For example:
+After saving, lowkey tells you what it made: a system notification when you
+captured from another app, a toast when lowkey was in front. For example:
 
 ```
 Meeting added to the calendar
@@ -50,7 +50,7 @@ Everything is optional and order-independent, in **English and Russian**.
 
 **What it is**
 
-| You type | heap. does |
+| You type | lowkey does |
 |----------|-----------|
 | `fix login race` | task in the active profile's To Do |
 | `APP-231 fix login race` | the ticket key becomes the task's **id** (and leaves the title) |
@@ -63,7 +63,7 @@ Everything is optional and order-independent, in **English and Russian**.
 
 **When**
 
-| You type | heap. does |
+| You type | lowkey does |
 |----------|-----------|
 | `ship v1 tomorrow` / `ship v1 завтра 14:00` | a deadline: the date, and the time when given |
 | `report by friday` / `отчёт к пятнице` / `до понедельника` | a deadline on that day |
@@ -81,7 +81,7 @@ nothing.
 
 **Where it lands**
 
-| You type | heap. does |
+| You type | lowkey does |
 |----------|-----------|
 | `standup 10:00` / `дейли в 10:00` / `планёрка 9:30` | a **Standup** event |
 | `1:1 with @anna thursday 12:00` | a **1:1** event, with Anna as an attendee |
@@ -148,7 +148,7 @@ Prefer a full form? `Ctrl+N` opens the task editor with every field.
   reads as `Notes › Release › Windows` and opens at that heading.
 
   Images in a note render from disk. A remote image (`https://…`) is shown as a
-  link you can choose to follow rather than being fetched, because heap makes no
+  link you can choose to follow rather than being fetched, because lowkey makes no
   network requests you did not ask for.
 
 ## 6. Profiles

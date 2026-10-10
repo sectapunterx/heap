@@ -35,7 +35,6 @@ Item {
     readonly property bool menuOpen: !!(host.menu && host.menu.visible)
         || !!(host.statusList && host.statusList.visible)
         || !!(host.priorityList && host.priorityList.visible)
-        || !!(host.carryList && host.carryList.visible)
 
     // From the keyboard: at the item, on its first action.
     function openMenu() {
@@ -74,14 +73,6 @@ Item {
     // The status and priority lists are built the same way, on first use.
     property var statusList: null
     property var priorityList: null
-    property var carryList: null
-    function carryMenu() {
-        if (!host.carryList) {
-            host.carryList = carryMenuComponent.createObject(host.anchorItem || host);
-            host.carryList.back.connect(() => host.backToMenu("carry"));
-        }
-        return host.carryList;
-    }
     function statusMenu() {
         if (!host.statusList) {
             host.statusList = statusMenuComponent.createObject(host.anchorItem || host);
@@ -103,15 +94,20 @@ Item {
     // The status or priority list at the card, on the task's current value,
     // so an Enter straight away changes nothing.
     function openSubMenu(which) {
-        const sub = which === "status" ? host.statusMenu()
-                  : which === "carry" ? host.carryMenu() : host.priorityMenu();
+        const sub = which === "status" ? host.statusMenu() : host.priorityMenu();
         sub.popup(host.anchorItem, Theme.spLg, Math.min(host.anchorItem ? host.anchorItem.height : 0, 28));
         let cur = -1;
-        if (which === "carry")
-            cur = 0;
-        else if (host._t && which === "status")
-            cur = AppController.statuses.findIndex(st => st.id === host._t.status);
-        else if (host._t)
+        if (host._t && which === "status") {
+            // The rows are reordered (Done last, a separator before it), so
+            // find the current column's row by its id.
+            for (let i = 0; i < sub.count; i++) {
+                const it = sub.itemAt(i);
+                if (it && it.modelData && it.modelData.id === host._t.status) { cur = i; break; }
+            }
+            sub.currentIndex = cur >= 0 ? cur : 1;
+            return;
+        }
+        if (host._t)
             cur = ["P0", "P1", "P2", "P3"].indexOf(host._t.priority);
         // Row 0 is "‹ back".
         sub.currentIndex = Math.max(0, cur) + 1;
@@ -119,15 +115,14 @@ Item {
     // Left in a list: the card menu again, on the row the list came from.
     function backToMenu(which) {
         host.openMenu();
-        const name = which === "status" ? "tc-menu-status"
-                   : which === "carry" ? "tc-menu-carry" : "tc-menu-priority";
+        const name = which === "status" ? "tc-menu-status" : "tc-menu-priority";
         for (let i = 0; i < host.menu.count; i++) {
             const it = host.menu.itemAt(i);
             if (it && it.objectName === name) { host.menu.currentIndex = i; break; }
         }
     }
     function releaseMenu() {
-        for (const k of ["menu", "statusList", "priorityList", "carryList"]) {
+        for (const k of ["menu", "statusList", "priorityList"]) {
             if (!host[k]) continue;
             host[k].destroy();
             host[k] = null;
@@ -146,22 +141,26 @@ Item {
         property bool canSendPush: false
         property bool canDropPush: false
         signal pushActionRequested(bool send)
-        AppMenuItem {
-            enabled: false
-            contentItem: Text {
-                text: host._t ? (host._t.id + " · " + host._t.title) : ""
-                color: Theme.textDim
-                font.family: Theme.fontMono
-                font.pixelSize: Theme.fsXs
-                font.weight: Theme.fwTitle
-                leftPadding: Theme.spXl
-                rightPadding: Theme.spXl
-            }
+        // The context line (X-Menus-Task): the key and the title.
+        AppMenuHeader {
+            text: host._t ? ((host._isTicket && host._ticket.key ? host._ticket.key : host._t.id) + " · " + host._t.title) : ""
         }
         AppMenuItem {
             objectName: "tc-menu-edit"
             text: I18n.t("taskmenu.open"); onTriggered: host.openRequested()
-            shortcutId: taskMenu.editKey
+            // Return as the sheets write it: ↵.
+            keyText: taskMenu.editKey.length > 0 && AppController.shortcuts.length >= 0
+                ? AppController.shortcutText(taskMenu.editKey).replace(/^(Return|Enter)$/, "↵") : ""
+        }
+        // A tracker's task: "Открыть в GitHub" right under "Открыть"
+        // (X-Menus-Task, R3-046).
+        AppMenuItem {
+            objectName: "tc-menu-open"
+            visible: host._isTicket && String(host._ticket.url || "").length > 0
+            height: visible ? implicitHeight : 0
+            shortcutId: "task.openExternal"
+            text: I18n.t("taskcard.openIn").arg(host._badge.name || host._ticket.provider || "")
+            onTriggered: AppController.openTaskExternal(host.taskId)
         }
         // Done in one action (APP-268); on a done task it puts it back. A
         // tracker card with writes off is done here only, and says so.
@@ -174,8 +173,21 @@ Item {
             onTriggered: Qt.callLater(host.markDone)
         }
         AppMenuSeparator {}
+        // A tracker's task: "Мой приоритет ›, Мой срок…, Запланировать…"
+        // in that order (X-Menus-Task); a task of lowkey's own starts with
+        // "Запланировать…". The rows trade places by name, so whichever is
+        // shown answers to the one objectName.
         AppMenuItem {
-            objectName: "tc-menu-schedule"
+            objectName: host._isTicket ? "tc-menu-priority" : "tc-menu-priority-ticket"
+            visible: host._isTicket
+            height: visible ? implicitHeight : 0
+            text: I18n.t("taskmenu.myPriority"); opensList: true
+            onTriggered: taskMenu._openNext = "priority"
+        }
+        AppMenuItem {
+            objectName: host._isTicket ? "tc-menu-schedule-own" : "tc-menu-schedule"
+            visible: !host._isTicket
+            height: visible ? implicitHeight : 0
             shortcutId: "task.schedule"
             text: I18n.t("taskmenu.schedule")
             enabled: !host._isDone
@@ -184,19 +196,21 @@ Item {
             // length (the estimate, else the focus-block setting).
             onTriggered: if (host._t) AppController.scheduleTaskAtNextFreeSlot(host._t.id, AppController.selectedDate)
         }
-        // Carrying it on by hand (APP-248): only "when" moves, never the
-        // deadline, and only on this click.
-        AppMenuItem {
-            objectName: "tc-menu-carry"
-            text: I18n.t("carry.menu"); opensList: true
-            enabled: !host._isDone
-            onTriggered: taskMenu._openNext = "carry"
-        }
         AppMenuItem {
             objectName: "tc-menu-due"
             shortcutId: "task.due"
             text: host._isTicket ? I18n.t("taskmenu.myDue") : I18n.t("taskmenu.due")
             onTriggered: host.openRequested()
+        }
+        AppMenuItem {
+            objectName: host._isTicket ? "tc-menu-schedule" : "tc-menu-schedule-ticket"
+            visible: host._isTicket
+            height: visible ? implicitHeight : 0
+            shortcutId: "task.schedule"
+            text: I18n.t("taskmenu.schedule")
+            enabled: !host._isDone
+            note: host._isDone ? I18n.t("taskmenu.why.done") : ""
+            onTriggered: if (host._t) AppController.scheduleTaskAtNextFreeSlot(host._t.id, AppController.selectedDate)
         }
         // Status and priority without opening the editor (UX-26). Each opens
         // its own list at the item, so the keyboard can walk it too.
@@ -213,17 +227,25 @@ Item {
             if (which) taskMenu.subMenuRequested(which);
         }
         AppMenuItem {
-            objectName: "tc-menu-priority"
-            text: host._isTicket ? I18n.t("taskmenu.myPriority") : I18n.t("taskmenu.priority"); opensList: true
+            objectName: host._isTicket ? "tc-menu-priority-own" : "tc-menu-priority"
+            visible: !host._isTicket
+            height: visible ? implicitHeight : 0
+            text: I18n.t("taskmenu.priority"); opensList: true
             onTriggered: taskMenu._openNext = "priority"
         }
+        // A tracker's column follows the tracker; its sheet has no move or
+        // timer rows (the board's drag and the t key still do both).
         AppMenuItem {
             objectName: "tc-menu-status"
+            visible: !host._isTicket
+            height: visible ? implicitHeight : 0
             text: I18n.t("taskmenu.move"); opensList: true
             onTriggered: taskMenu._openNext = "status"
         }
         AppMenuItem {
             objectName: "tc-menu-timer"
+            visible: !host._isTicket
+            height: visible ? implicitHeight : 0
             shortcutId: "task.timer"
             text: host._t && host._t.isTiming ? I18n.t("taskcard.stopTimer") : I18n.t("taskcard.startTimer")
             onTriggered: {
@@ -234,20 +256,20 @@ Item {
         }
         AppMenuSeparator { objectName: "tc-menu-ticketSep"; visible: host._isTicket }
         AppMenuItem {
-            objectName: "tc-menu-open"
-            visible: host._isTicket && String(host._ticket.url || "").length > 0
-            height: visible ? implicitHeight : 0
-            shortcutId: "task.openExternal"
-            text: I18n.t("taskcard.openIn").arg(host._badge.name || host._ticket.provider || "")
-            onTriggered: AppController.openTaskExternal(host.taskId)
-        }
-        AppMenuItem {
             objectName: "tc-menu-copylink"
             visible: host._isTicket && String(host._ticket.url || "").length > 0
             height: visible ? implicitHeight : 0
             shortcutId: "task.copyLink"
             text: I18n.t("taskcard.copyLink")
             onTriggered: AppController.copyToClipboard(String(host._ticket.url || ""))
+        }
+        // "Обновить из GitHub": the tracker's copy now, not at the next sync.
+        AppMenuItem {
+            objectName: "tc-menu-refresh"
+            visible: host._isTicket
+            height: visible ? implicitHeight : 0
+            text: I18n.t("taskmenu.refreshFrom").arg(host._badge.name || host._ticket.provider || "")
+            onTriggered: AppController.syncProvider(String(host._ticket.provider || ""))
         }
         // A move that never reached the tracker: send it (after lowkey checks
         // the issue) or drop it and keep the column here only (APP-243).
@@ -265,21 +287,27 @@ Item {
             text: I18n.t("taskcard.discardPush")
             onTriggered: taskMenu.pushActionRequested(false)
         }
-        AppMenuSeparator {}
+        AppMenuSeparator { visible: !host._isTicket }
         AppMenuItem {
             objectName: "tc-menu-copyid"
+            visible: !host._isTicket
+            height: visible ? implicitHeight : 0
             shortcutId: "task.copyId"
             text: I18n.t("taskcard.copyId")
             onTriggered: if (host._t && host._t.id) AppController.copyToClipboard(host._t.id)
         }
         AppMenuItem {
             objectName: "tc-menu-branch"
+            visible: !host._isTicket
+            height: visible ? implicitHeight : 0
             shortcutId: "task.createBranch"
-            text: I18n.t("taskcard.createBranch")
+            text: I18n.t("taskmenu.createBranch")
             onTriggered: if (host._t && host._t.id) AppController.createBranchForTask(host._t.id)
         }
         AppMenuItem {
             objectName: "tc-menu-copybranch"
+            visible: !host._isTicket
+            height: visible ? implicitHeight : 0
             readonly property bool _has: !!(host._t && host._t.branch && String(host._t.branch).length > 0)
             shortcutId: _has ? "task.copyBranch" : ""
             text: I18n.t("taskcard.copyBranch")
@@ -290,6 +318,8 @@ Item {
         AppMenuSeparator {}
         AppMenuItem {
             objectName: "tc-menu-archive"
+            visible: !host._isTicket
+            height: visible ? implicitHeight : 0
             text: host._isArchived ? I18n.t("taskcard.unarchive") : I18n.t("taskcard.archive")
             shortcutId: taskMenu.archiveKey
             onTriggered: AppController.setArchived(host.taskId, !host._isArchived)
@@ -299,8 +329,18 @@ Item {
             objectName: "tc-menu-delete"
             danger: true
             text: host._isTicket ? I18n.t("taskmenu.hide") : I18n.t("common.delete")
-            shortcutId: "selection.deleteSel"
+            shortcutId: host._isTicket ? "" : "selection.deleteSel"
             onTriggered: AppController.deleteTask(host.taskId)
+        }
+        // Says why a tracker's task has no delete: lowkey never deletes in
+        // the tracker (X-Menus-Task, R3-046).
+        AppMenuItem {
+            objectName: "tc-menu-delete-off"
+            visible: host._isTicket
+            height: visible ? implicitHeight : 0
+            enabled: false
+            text: I18n.t("common.delete")
+            note: I18n.t("taskmenu.why.trackerDelete")
         }
     }
     }
@@ -320,43 +360,56 @@ Item {
             text: "‹ " + I18n.t("taskmenu.column")
             onTriggered: statusMenu.goBack()
         }
+        // The columns in order, the Done-stage ones last after a separator,
+        // "Готово" with its key d (X-Menus-Task, R3-044). No number keys are
+        // drawn; a digit still picks a column while the list is open.
+        readonly property var _ordered: {
+            const all = AppController.statuses || [];
+            const open = all.filter(st => AppController.statusCategory(st.id) !== "done");
+            const done = all.filter(st => AppController.statusCategory(st.id) === "done");
+            return open.concat(done);
+        }
+        readonly property int _firstDone: {
+            for (let i = 0; i < statusMenu._ordered.length; i++)
+                if (AppController.statusCategory(statusMenu._ordered[i].id) === "done") return i;
+            return -1;
+        }
+        property var _sep: null
+        Component { id: statusSepComponent; AppMenuSeparator { objectName: "tc-status-doneSep" } }
         Instantiator {
-            model: AppController.statuses
+            model: statusMenu._ordered
             delegate: AppMenuItem {
                 required property var modelData
                 required property int index
+                readonly property bool isDoneStage: index === statusMenu._firstDone
                 text: modelData.name
-                marked: !!(host._t && host._t.status === modelData.id)
-                note: marked ? I18n.t("taskmenu.now") : ""
+                // The current one says "сейчас", no check (X-Menus-Task).
+                note: !!(host._t && host._t.status === modelData.id) ? I18n.t("taskmenu.now") : ""
                 // A column by its number while the list is open.
                 number: index < 9 ? index + 1 : 0
-                keyText: index < 9 ? String(index + 1) : ""
+                shortcutId: isDoneStage ? "task.done" : ""
             }
             onObjectAdded: (index, object) => {
-                statusMenu.insertItem(index + 1, object);
+                const fd = statusMenu._firstDone;
+                if (fd >= 0 && index >= fd) {
+                    if (index === fd) {
+                        if (!statusMenu._sep) statusMenu._sep = statusSepComponent.createObject(statusMenu);
+                        statusMenu.insertItem(index + 1, statusMenu._sep);
+                    }
+                    statusMenu.insertItem(index + 2, object);
+                } else {
+                    statusMenu.insertItem(index + 1, object);
+                }
                 object["triggered"].connect(() => statusMenu.picked(object["modelData"].id));
             }
-            onObjectRemoved: (index, object) => statusMenu.removeItem(object)
-        }
-    }
-    }
-
-    Component {
-        id: carryMenuComponent
-    AppMenu {
-        id: carryMenu
-        objectName: "tc-carry-menu"
-        backOnLeft: true
-        Instantiator {
-            model: ["tomorrow", "window", "someday", "clear"]
-            delegate: AppMenuItem {
-                required property string modelData
-                objectName: "tc-carry-" + modelData
-                text: I18n.t("carry." + modelData)
-                onTriggered: AppController.carryTasks([host.taskId], modelData)
+            onObjectRemoved: (index, object) => {
+                statusMenu.removeItem(object);
+                if (statusMenu._sep && index === 0) {
+                    statusMenu.removeItem(statusMenu._sep);
+                    statusMenu._sep.destroy();
+                    statusMenu._sep = null;
+                }
             }
-            onObjectAdded: (index, object) => carryMenu.insertItem(index, object)
-            onObjectRemoved: (index, object) => carryMenu.removeItem(object)
         }
     }
     }
@@ -379,8 +432,10 @@ Item {
                 required property string modelData
                 required property int index
                 text: modelData === "P0" ? "P0 · " + I18n.t("taskmenu.urgent") : modelData
-                marked: !!(host._t && host._t.priority === modelData)
-                note: marked ? I18n.t("taskmenu.now") : ""
+                // Bold paints P0 red 600 and P1 amber (N-Menus-Task, R3-043).
+                labelColor: Style.urgency && (modelData === "P0" || modelData === "P1") ? Theme.priorityInk(modelData) : "transparent"
+                labelWeight: Style.urgency && modelData === "P0" ? Theme.fwHeading : Theme.fwBody
+                note: !!(host._t && host._t.priority === modelData) ? I18n.t("taskmenu.now") : ""
                 // 1–4, the same keys as on the cursor (keymap.md).
                 shortcutId: "task.priority" + index
                 number: index + 1

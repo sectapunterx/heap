@@ -134,29 +134,4 @@ TestCase {
         compare(todoIds(), manual, "Shift+K under a sort rewrote the manual order");
     }
 
-    // ── TASKS-3: an id that comes back shows its new task on the timeline ──
-    function test_timeline_shows_the_task_behind_a_returning_id() {
-        failOnWarning(/TypeError/);
-        const past = new Date(); past.setDate(past.getDate() - 20);
-        const a = addTask("todo", { title: "alpha old", priority: "P0", dueAt: past });
-        const tl = make('import TodoCpp; TimelineView { anchors.fill: parent }');
-        tl.searchText = tc.probe;
-        tryVerify(() => tl.groups.overdue && tl.groups.overdue.some(t => t.id === a));
-
-        AppController.deleteTask(a);
-        tc.seeded = tc.seeded.filter(x => x !== a);
-        const b = addTask("todo", { title: "beta new", priority: "P3" });
-        const d = Object.assign({}, AppController.taskById(b));
-        d._isNew = false;
-        d._originalId = b;
-        d.id = a;
-        verify(AppController.saveTask(d), "rename into the freed id");
-        tc.seeded = tc.seeded.filter(x => x !== b);
-        tc.seeded.push(a);
-        tryVerify(() => tl.groups.nodl && tl.groups.nodl.some(t => t.id === a), 1000,
-                  "the renamed task is not under No deadline");
-        verify(!tl.groups.overdue.some(t => t.id === a), "the deleted task's row is still shown");
-        compare(tl.groups.nodl.filter(t => t.id === a)[0].title, tc.probe + " beta new");
-        compare(tl.groups.nodl.filter(t => t.id === a)[0].priority, "P3");
-    }
 }

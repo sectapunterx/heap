@@ -49,7 +49,7 @@ TestCase {
     // The three that hold state the user would notice losing.
     function test_board_survives_a_round_trip() {
         const first = show("board");
-        show("timeline");
+        show("list");
         const second = show("board");
         compare(second, first, "the board must be the same item, not a rebuilt one");
     }
@@ -61,24 +61,23 @@ TestCase {
         compare(second, first, "the notes editor must keep its caret, scroll and undo history");
     }
 
-    function test_docs_survives_a_round_trip() {
-        const first = show("docs");
-        show("board");
-        const second = show("docs");
-        compare(second, first);
-    }
-
-    // Board, Notes and Docs coexist once visited — one does not replace another.
+    // Board and Knowledge coexist once visited — one does not replace another.
     function test_the_kept_views_do_not_evict_each_other() {
         const board = show("board");
         const notes = show("notes");
-        const docs = show("docs");
         show("board");
 
         compare(tc.win.activeViewItem(), board);
         verify(notes !== null);
-        verify(docs !== null);
-        verify(board !== notes && notes !== docs);
+        verify(board !== notes);
+    }
+
+    // The 0.7 Docs catalogue is the Knowledge screen now (DG-070).
+    function test_docs_lands_in_knowledge() {
+        const notes = show("notes");
+        show("board");
+        compare(show("docs"), notes);
+        compare(AppController.currentView, "notes");
     }
 
     // Exactly one view is on screen at a time — keeping three alive must not
@@ -96,9 +95,9 @@ TestCase {
     // The cheap views are still rebuilt, which is what keeps three live views
     // from becoming eight.
     function test_a_cheap_view_is_rebuilt() {
-        const first = show("timeline");
+        const first = show("list");
         show("board");
-        const second = show("timeline");
-        verify(second !== first, "timeline is cheap to rebuild and is not kept alive");
+        const second = show("list");
+        verify(second !== first, "the list is cheap to rebuild and is not kept alive");
     }
 }

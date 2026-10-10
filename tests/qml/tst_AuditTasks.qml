@@ -431,18 +431,4 @@ TestCase {
         tryVerify(() => !qc.opened);
     }
 
-    // ── TASKS-30: the timeline walks with the keyboard ──
-    function test_timeline_cursor_walks_rows() {
-        addTask("todo", { title: "tl one" });
-        addTask("todo", { title: "tl two" });
-        const tl = make('import TodoCpp; TimelineView { anchors.fill: parent }');
-        tl.searchText = tc.probe;
-        wait(0);
-        tl.moveCursor(0);
-        const firstId = tl.cursorTaskId;
-        verify(firstId.length > 0);
-        tl.moveCursor(1);
-        verify(tl.cursorTaskId !== firstId);
-        compare(tl.hoveredTaskId, tl.cursorTaskId, "O acts on the cursor row");
-    }
 }

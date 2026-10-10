@@ -1,14 +1,14 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
 PackageIdentifier: sectapunterx.heap
-PackageVersion: 0.5.0
+PackageVersion: 0.8.0
 PackageLocale: en-US
 Publisher: sectapunterx
 PublisherUrl: https://github.com/sectapunterx
-PublisherSupportUrl: https://github.com/sectapunterx/heap/issues
+PublisherSupportUrl: https://github.com/sectapunterx/lowkey/issues
 PackageName: lowkey
-PackageUrl: https://github.com/sectapunterx/heap
+PackageUrl: https://github.com/sectapunterx/lowkey
 License: MIT
-LicenseUrl: https://github.com/sectapunterx/heap/blob/master/LICENSE
+LicenseUrl: https://github.com/sectapunterx/lowkey/blob/master/LICENSE
 Copyright: Copyright (c) sectapunterx
 ShortDescription: A developer's workday in one window.
 Description: |-

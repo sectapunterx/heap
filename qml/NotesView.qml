@@ -44,6 +44,27 @@ Item {
     // caret goes to that line and the property is handed back for clearing.
     property int jumpToLine: -1
     signal jumpConsumed()
+
+    // From Ctrl+K (DG-070): a doc page to open in the document, a catalogue
+    // entry (reference, snippet, contact) to find in the list. Handed back
+    // for clearing, like jumpToLine.
+    property string requestedPage: ""
+    signal pageConsumed()
+    onRequestedPageChanged: _consumePage()
+    function _consumePage() {
+        if (requestedPage.length === 0) return;
+        root.openPage(requestedPage);
+        Qt.callLater(root.pageConsumed);
+    }
+    property string requestedFilter: ""
+    signal filterConsumed()
+    onRequestedFilterChanged: _consumeFilter()
+    function _consumeFilter() {
+        if (requestedFilter.length === 0) return;
+        if (!root._listShown) root._listPref = "shown";
+        notesList.setFilter(requestedFilter);
+        Qt.callLater(root.filterConsumed);
+    }
     onJumpToLineChanged: _consumeJump()
     function _consumeJump() {
         if (jumpToLine < 0) return;
@@ -73,7 +94,6 @@ Item {
     // Shown beside the note when there is room (sheet H2-Knowledge).
     property bool showBacklinks: root.width > Theme.px(1000)
     property var  _incoming: []
-    property var  _outgoing: []
     // APP-269: the tasks the note names, the tasks that link here, the
     // note's links out of lowkey.
     property var  _taskRefs: []
@@ -81,23 +101,23 @@ Item {
     property var  _external: []
     function _externalLinks(text) {
         const out = [], seen = {};
-        const rx = /\[([^\]\n]+)\]\((https?:[^)\s]+)\)|(https?:\/\/[^\s)>\]]+)/g;
+        // [label](url "title") reads "label · title" in the column.
+        const rx = /\[([^\]\n]+)\]\((https?:[^)\s]+)(?:\s+"([^"\n]*)")?\)|(https?:\/\/[^\s)>\]]+)/g;
         let m;
         while ((m = rx.exec(text)) !== null && out.length < 50) {
-            const url = m[2] || m[3];
+            const url = m[2] || m[4];
             if (seen[url]) continue;
             seen[url] = true;
-            out.push({ url: url, label: m[1] || url });
+            out.push({ url: url, label: m[1] || url, title: m[3] || "" });
         }
         return out;
     }
     function _refreshLinks() {
         if (!root.showBacklinks) {
-            root._incoming = []; root._outgoing = []; root._taskRefs = []; root._taskLinks = []; root._external = [];
+            root._incoming = []; root._taskRefs = []; root._taskLinks = []; root._external = [];
             return;
         }
         root._incoming = AppController.backlinksToNote(AppController.activeNoteId);
-        root._outgoing = AppController.outgoingNoteLinks(editor.text);
         root._taskRefs = AppController.noteTaskRefs(editor.text);
         root._taskLinks = AppController.tasksLinkingToNote(AppController.activeNoteId);
         root._external = root._externalLinks(editor.text);
@@ -226,10 +246,12 @@ Item {
     // What the header calls the open note. m.data() is a call, not something
     // a binding can watch, so it is refreshed when the note or the list moves.
     property string _activeTitle: ""
+    property var _activeUpdated: null
     function _refreshTitle() {
         const m = AppController.notes;
         const row = m.indexOfId(AppController.activeNoteId);
         root._activeTitle = row >= 0 ? String(m.data(m.index(row, 0), m.roleOf("title")) || "") : "";
+        root._activeUpdated = row >= 0 ? m.data(m.index(row, 0), m.roleOf("updated")) : null;
     }
     Connections {
         target: AppController.notes
@@ -237,15 +259,69 @@ Item {
         function onModelReset() { root._refreshTitle() }
         function onRowsRemoved() { root._refreshTitle() }
     }
+    Connections {
+        target: AppController
+        function onActiveNoteChanged() { root.pageId = ""; root._refreshTitle(); }
+    }
+
+    // ── A page of the former Docs catalogue, open in the document ────
+    // Empty: the active note is shown. Set from the list or from Ctrl+K.
+    property string pageId: ""
+    function openPage(id) {
+        root._flushPending();
+        root.pageId = id;
+    }
+    property var _pageUpdated: null
+    function _refreshPage() {
+        const m = AppController.docPages;
+        const row = root.pageId.length > 0 ? m.indexOfId(root.pageId) : -1;
+        root._pageUpdated = row >= 0 ? m.data(m.index(row, 0), m.roleOf("updated")) : null;
+        if (root.pageId.length > 0 && row < 0) root.pageId = "";
+    }
+    onPageIdChanged: _refreshPage()
+    Connections {
+        target: AppController.docPages
+        function onDataChanged() { root._refreshPage() }
+        function onModelReset() { root._refreshPage() }
+        function onRowsRemoved() { root._refreshPage() }
+    }
+
+    // ── The line above the title (DG-071) ────────────────────────────
+    // "Заметка · изменена 5 мин назад" (bold), "изменена 5 мин назад"
+    // (quiet). Pure: the clock is passed in, so a test can pin it.
+    function agoText(when, now) {
+        if (!when) return "";
+        const t = new Date(when).getTime();
+        if (isNaN(t)) return "";
+        const min = Math.floor((now.getTime() - t) / 60000);
+        if (min < 1) return I18n.t("know.ago.now");
+        if (min < 60) return I18n.t("know.ago.min").arg(min);
+        const hours = Math.floor(min / 60);
+        if (hours < 24) return I18n.t("know.ago.hours").arg(hours);
+        const days = Math.floor(hours / 24);
+        if (days === 1) return I18n.t("know.ago.yesterday");
+        return I18n.t("know.ago.date").arg(I18n.fmtDate(new Date(t)));
+    }
+    property date _now: new Date()
+    Timer { interval: 30000; running: root.visible; repeat: true; onTriggered: root._now = new Date() }
+    readonly property string _metaLine: {
+        const page = root.pageId.length > 0;
+        const ago = root.agoText(page ? root._pageUpdated : root._activeUpdated, root._now);
+        const edited = ago.length > 0 ? I18n.t("know.edited").arg(ago) : "";
+        if (Style.quiet) return edited;
+        const kind = I18n.t(page ? "know.kind.page" : "know.kind.note");
+        return edited.length > 0 ? kind + " · " + edited : kind;
+    }
+    // Where the document starts: the sheet's 44 px from the list, of which
+    // the drawn note's own side margin is 24.
+    readonly property int _mdSide: 24
+    readonly property int _docInset: Style.quiet ? Theme.px(4) : Theme.px(20)
 
     // The list of notes beside the editor. "auto" shows it when there is room
     // for both; the toggle (and Ctrl+Alt+L) pins it open or shut. At 1440 px
     // with the right panel open it used to be hidden with no way back, which
     // left no way to reach another note at all.
     property string _listPref: "auto"
-    // A header too narrow for its words (150 % beside the right panel)
-    // packs tighter and says "Links" with its "#" alone (SCALE-3).
-    readonly property bool _headerTight: root.width < Theme.px(640)
     readonly property bool _listShown: _listPref === "auto" ? root.width > 560 : _listPref === "shown"
     function toggleList() { root._listPref = root._listShown ? "hidden" : "shown"; }
 
@@ -652,701 +728,486 @@ Item {
 
     Rectangle { anchors.fill: parent; color: Theme.bg }
 
-    ColumnLayout {
+    RowLayout {
         anchors.fill: parent
         spacing: 0
 
-        // ── Header ────────────────────────────────────────────────
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 56
-            color: Theme.bg
-
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: Theme.inset; anchors.rightMargin: Theme.inset
-                spacing: root._headerTight ? Theme.spMd : Theme.sp2xl
-                // The title gives way first when the header runs short — at
-                // 150 % with the right panel open the mode toggle was pushed
-                // past the view's edge, "Preview" under the panel (SCALE-3).
-                ColumnLayout {
-                    objectName: "notes-title-col"
-                    spacing: 1
-                    Layout.fillWidth: true
-                    Layout.minimumWidth: Theme.px(80)
-                    Layout.maximumWidth: Math.min(implicitWidth, root.width * 0.4)
-                    // Which note this is: the header used to say
-                    // "Notes · scratchpad" whatever was open.
-                    Text {
-                        objectName: "notes-title"
-                        text: root._activeTitle.length > 0 ? root._activeTitle : I18n.t("notes.header")
-                        color: Theme.text
-                        font.pixelSize: Theme.fsLg
-                        font.weight: Theme.fwHeading
-                        elide: Text.ElideRight
-                        Layout.fillWidth: true
-                    }
-                    Text {
-                        Layout.fillWidth: true
-                        elide: Text.ElideRight
-                        text: {
-                            const s = root._stats;
-                            const saved = root._savedAgo;
-                            const parts = [I18n.t("notes.summary").arg(s.lines).arg(s.mentions).arg(s.tickets)];
-                            if (saved.length > 0) parts.push(saved);
-                            return parts.join(" · ");
-                        }
-                        color: Theme.textDim
-                        font.family: Theme.fontUi
-                        font.features: Theme.tabularNums
-                        font.pixelSize: Theme.fsSm
-                    }
-                }
-                Item { Layout.fillWidth: true }
-                Text {
-                    visible: editor.length > 0 && root.viewMode !== "preview" && root.width > 900
-                    text: I18n.t("notes.legend")
-                    // Gives way to the buttons when a language runs long
-                    // (APP-189) instead of pushing them off the header.
-                    Layout.fillWidth: true
-                    Layout.maximumWidth: implicitWidth
-                    horizontalAlignment: Text.AlignRight
-                    elide: Text.ElideRight
-                    color: Theme.textDim
-                    font.family: Theme.fontUi
-                    font.features: Theme.tabularNums
-                    font.pixelSize: Theme.fsSm
-                }
-
-                // ── Attach files (Ctrl+Shift+A in the editor) ──────────
-                Rectangle {
-                    id: attachBtn
-                    objectName: "notes-attach"
-                    Layout.preferredHeight: Theme.px(24)
-                    radius: Theme.radiusMd
-                    color: attachMA.containsMouse ? Theme.panel3 : Theme.panel2
-                    border.color: Theme.border
-                    border.width: 1
-                    implicitWidth: attachTxt.implicitWidth + 20
-                    activeFocusOnTab: true
-                    Accessible.role: Accessible.Button
-                    Accessible.name: I18n.t("att.button")
-                    Keys.onReturnPressed: attachDialog.open()
-                    Keys.onEnterPressed: attachDialog.open()
-                    Keys.onSpacePressed: attachDialog.open()
-                    FocusRing {}
-                    Text {
-                        id: attachTxt
-                        anchors.centerIn: parent
-                        text: "📎"
-                        color: Theme.textMuted
-                        font.pixelSize: Theme.fsSm
-                    }
-                    MouseArea {
-                        id: attachMA
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: attachDialog.open()
-                    }
-                    ToolTip.visible: attachMA.containsMouse || activeFocus
-                    ToolTip.delay: 500
-                    ToolTip.text: I18n.t("att.button.tip.note")
-                }
-
-                // ── List toggle ────────────────────────────────────────
-                Rectangle {
-                    objectName: "notes-list-toggle"
-                    Layout.preferredHeight: Theme.px(24)
-                    radius: Theme.radiusMd
-                    color: root._listShown ? Theme.accentSoft : (listToggleMA.hovered ? Theme.panel3 : Theme.panel2)
-                    border.color: root._listShown ? Theme.accent : Theme.border
-                    border.width: 1
-                    implicitWidth: listToggleTxt.implicitWidth + 20
-                    Text {
-                        id: listToggleTxt
-                        anchors.centerIn: parent
-                        text: "☰"
-                        color: root._listShown ? Theme.accentStrong : Theme.textMuted
-                        font.pixelSize: Theme.fsSm
-                    }
-                    ClickArea {
-                        id: listToggleMA
-                        label: I18n.t("notes.toggleList")
-                        role: Accessible.CheckBox
-                        checkable: true
-                        checked: root._listShown
-                        onActivated: root.toggleList()
-                    }
-                }
-
-                // ── Backlinks pane toggle (HEAP-79) ────────────────────
-                Rectangle {
-                    Layout.preferredHeight: Theme.px(24)
-                    radius: Theme.radiusMd
-                    color: root.showBacklinks ? Theme.accent : (blToggleMA.hovered ? Theme.panel3 : Theme.panel2)
-                    border.color: root.showBacklinks ? Theme.accent : Theme.border
-                    border.width: 1
-                    implicitWidth: blToggleTxt.implicitWidth + 20
-                    Text {
-                        id: blToggleTxt
-                        anchors.centerIn: parent
-                        text: root._headerTight ? "#" : I18n.t("notes.links")
-                        color: root.showBacklinks ? Theme.textOnAccent : Theme.textMuted
-                        font.pixelSize: Theme.fsSm
-                        font.weight: Theme.fwTitle
-                    }
-                    ClickArea {
-                        id: blToggleMA
-                        label: I18n.t("notes.links")
-                        showTip: root._headerTight
-                        role: Accessible.CheckBox
-                        checkable: true
-                        checked: root.showBacklinks
-                        onActivated: root.showBacklinks = !root.showBacklinks
-                    }
-                }
-
-                // ── The whole source (APP-269) ─────────────────────────
-                // Off: the note is edited where it is drawn. On: the
-                // source of all of it, for edits across many blocks.
-                Rectangle {
-                    objectName: "notes-mode-toggle"
-                    Layout.preferredHeight: Theme.px(24)
-                    radius: Theme.radiusMd
-                    readonly property bool on: root.viewMode === "edit"
-                    color: on ? Theme.accentSoft : (srcMA.hovered ? Theme.panel3 : Theme.panel2)
-                    border.color: on ? Theme.accent : Theme.border
-                    border.width: 1
-                    implicitWidth: srcTxt.implicitWidth + 2 * Theme.spLg
-                    Text {
-                        id: srcTxt
-                        anchors.centerIn: parent
-                        text: I18n.t("notes.mode.source")
-                        color: parent.on ? Theme.accentStrong : Theme.textMuted
-                        font.pixelSize: Theme.fsSm
-                        font.weight: Theme.fwTitle
-                    }
-                    ClickArea {
-                        id: srcMA
-                        label: srcTxt.text
-                        showTip: false
-                        role: Accessible.CheckBox
-                        checkable: true
-                        checked: parent.on
-                        onActivated: root.viewMode = (root.viewMode === "edit" ? "live" : "edit")
-                    }
-                }
+        // ── The list (DG-070) ─────────────────────────────────────
+        // Which notes there are, and which one is open. Runs the full height
+        // with its own "Knowledge +" on top (sheet H2-Knowledge); folds away
+        // on a narrow window, where the note needs the width more.
+        NotesListPane {
+            id: notesList
+            objectName: "notes-list-pane"
+            visible: root._listShown
+            Layout.preferredWidth: visible ? Math.min(Theme.px(260), root.width * 0.35) : 0
+            Layout.fillHeight: true
+            openPageId: root.pageId
+            onNoteActivated: (id) => {
+                // Flush first: the editor debounces its saves, so the last
+                // keystrokes are still only in the text field here and
+                // switching would drop them.
+                root._flushPending();
+                root.pageId = "";
+                AppController.activeNoteId = id;
             }
+            // "+" makes a note to write in: the cursor goes there.
+            onNoteCreated: (id) => root._focusEditorAtEnd()
+            // A reference opens under the link rules, a page opens here in
+            // the document, a snippet is copied, a contact's handle too.
+            onRefActivated: (url) => preview.openExternal(url)
+            onPageActivated: (id) => root.openPage(id)
+            onSnippetActivated: (title, code) => AppController.copyToClipboard(code)
+            onContactActivated: (handle) => AppController.copyToClipboard(handle)
         }
 
-        // ── The note's files ──────────────────────────────────────
-        Rectangle {
-            objectName: "notes-attachments"
-            visible: root._noteAttachments.length > 0
-            Layout.fillWidth: true
-            Layout.preferredHeight: noteChips.implicitHeight + 2 * Theme.spSm
-            color: Theme.panel
-            Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 1; color: Theme.border }
-            AttachmentChips {
-                id: noteChips
-                objectName: "notes-attachment-chips"
-                anchors.left: parent.left; anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.leftMargin: Theme.inset; anchors.rightMargin: Theme.inset
-                model: root._noteAttachments
-                onRemoveRequested: (attachmentId) => root.removeAttachmentRefs(attachmentId)
-            }
-        }
-
-        // ── Editor + preview body ─────────────────────────────────
-        RowLayout {
+        // ── The document (DG-071) ─────────────────────────────────
+        ColumnLayout {
+            objectName: "notes-document"
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 0
 
-            // Which notes there are, and which one is open. Folds away on a
-            // narrow window, where the editor needs the width more.
-            NotesListPane {
-                id: notesList
-                objectName: "notes-list-pane"
-                visible: root._listShown
-                Layout.preferredWidth: visible ? Math.min(Theme.px(260), root.width * 0.35) : 0
-                Layout.fillHeight: true
-                onNoteActivated: (id) => {
-                    // Flush first: the editor debounces its saves, so the last
-                    // keystrokes are still only in the text field here and
-                    // switching would drop them.
-                    root._flushPending();
-                    AppController.activeNoteId = id;
+            // What this is and how fresh, above the title — no toolbar.
+            // The files, the list, the source and the links stay on their
+            // keys and in Ctrl+K.
+            Text {
+                objectName: "notes-meta"
+                Layout.fillWidth: true
+                Layout.leftMargin: root._docInset + root._mdSide
+                Layout.rightMargin: root._docInset
+                Layout.topMargin: Style.quiet ? Theme.px(40) : Theme.px(26)
+                // 18px down to the title (sheets H2/Q-Knowledge, R4-067).
+                Layout.bottomMargin: Theme.spXs + Theme.sp2xl
+                text: root._metaLine
+                color: Theme.textDim
+                font.pixelSize: Theme.fsSm
+                elide: Text.ElideRight
+            }
+            // ── The note's files ──────────────────────────────────────
+            Rectangle {
+                objectName: "notes-attachments"
+                visible: root._noteAttachments.length > 0 && root.pageId.length === 0
+                Layout.fillWidth: true
+                Layout.preferredHeight: noteChips.implicitHeight + 2 * Theme.spSm
+                color: Theme.panel
+                Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 1; color: Theme.border }
+                AttachmentChips {
+                    id: noteChips
+                    objectName: "notes-attachment-chips"
+                    anchors.left: parent.left; anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.leftMargin: Theme.inset; anchors.rightMargin: Theme.inset
+                    model: root._noteAttachments
+                    onRemoveRequested: (attachmentId) => root.removeAttachmentRefs(attachmentId)
                 }
-                // "+" makes a note to write in: the cursor goes there.
-                onNoteCreated: (id) => root._focusEditorAtEnd()
-                // Docs in Knowledge (APP-269): a reference opens under the
-                // link rules, a page opens in Docs, a snippet is copied.
-                onRefActivated: (url) => preview.openExternal(url)
-                onPageActivated: (id) => root.docPageRequested(id)
-                onSnippetActivated: (title, code) => AppController.copyToClipboard(code)
             }
 
-            // Editor pane — visible in edit + split modes.
-            Flickable {
-                id: notesScroll
-                visible: root.viewMode === "edit"
-                // Scroll sync: the editor leads while the reader scrolls it.
-                onContentYChanged: if (root.viewMode === "split") root._syncFrom("editor")
+            // ── Editor + preview body ─────────────────────────────────
+            RowLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                clip: true
-                contentWidth: width
-                contentHeight: editor.implicitHeight + 48
-                flickableDirection: Flickable.VerticalFlick
-                boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: ThinScrollBar {}
+                Layout.leftMargin: root._docInset
+                spacing: 0
 
-                NumberAnimation {
-                    id: wheelAnim
-                    target: notesScroll
-                    property: "contentY"
-                    duration: Theme.durMove
-                    easing.type: Theme.easeEnter
-                }
-                WheelHandler {
-                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-                    onWheel: (event) => {
-                        const dy = event.angleDelta.y;
-                        if (dy === 0) return;
-                        const maxY = Math.max(0, notesScroll.contentHeight - notesScroll.height);
-                        if (maxY <= 0) return;
-                        const base = wheelAnim.running ? wheelAnim.to : notesScroll.contentY;
-                        const newY = Math.max(0, Math.min(maxY, base - dy * 3));
-                        if (newY === base) return;
-                        wheelAnim.from = notesScroll.contentY;
-                        wheelAnim.to = newY;
-                        wheelAnim.restart();
+
+                // Editor pane — visible in edit + split modes.
+                Flickable {
+                    id: notesScroll
+                    visible: root.viewMode === "edit" && root.pageId.length === 0
+                    // Scroll sync: the editor leads while the reader scrolls it.
+                    onContentYChanged: if (root.viewMode === "split") root._syncFrom("editor")
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    contentWidth: width
+                    contentHeight: editor.implicitHeight + 48
+                    flickableDirection: Flickable.VerticalFlick
+                    boundsBehavior: Flickable.StopAtBounds
+                    ScrollBar.vertical: ThinScrollBar {}
+
+                    NumberAnimation {
+                        id: wheelAnim
+                        target: notesScroll
+                        property: "contentY"
+                        duration: Theme.durMove
+                        easing.type: Theme.easeEnter
                     }
-                }
-
-                TextArea {
-                    id: editor
-                    ContextMenu.menu: TextEditMenu { editor: editor }
-                    objectName: "notesEditor"
-                    x: 24; y: 16
-                    width: notesScroll.width - 48
-                    // Always fill at least the visible viewport so the user can
-                    // click anywhere on the canvas to start typing; grow with
-                    // content otherwise.
-                    height: Math.max(notesScroll.height - 32, implicitHeight + 16)
-                    wrapMode: TextArea.Wrap
-                    selectByMouse: true
-                    placeholderText: I18n.t("notes.placeholderBody")
-                    placeholderTextColor: Theme.textDim
-                    color: Theme.text
-                    font.family: Theme.fontMono
-                    font.pixelSize: Theme.fsMd
-                    background: Item {}
-                    onTextChanged: {
-                        root._scheduleSave();
-                        root._detectAutocomplete();
-                        statsTimer.restart();
-                        if (root.showBacklinks) linksTimer.restart();
-                    }
-                    onCursorPositionChanged: root._detectAutocomplete()
-                    Keys.priority: Keys.BeforeItem
-
-                    // Qt delivers shortcut events before key presses, so a
-                    // global Ctrl+K would open the command palette and this
-                    // field would never see the key. Claiming these while the
-                    // editor has focus is what makes them editor-scoped: they
-                    // still mean what they always did everywhere else.
-                    Keys.onShortcutOverride: (event) => {
-                        if (mdEditor.claimsShortcut(event.key, event.modifiers)) event.accepted = true;
+                    WheelHandler {
+                        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                        onWheel: (event) => {
+                            const dy = event.angleDelta.y;
+                            if (dy === 0) return;
+                            const maxY = Math.max(0, notesScroll.contentHeight - notesScroll.height);
+                            if (maxY <= 0) return;
+                            const base = wheelAnim.running ? wheelAnim.to : notesScroll.contentY;
+                            const newY = Math.max(0, Math.min(maxY, base - dy * 3));
+                            if (newY === base) return;
+                            wheelAnim.from = notesScroll.contentY;
+                            wheelAnim.to = newY;
+                            wheelAnim.restart();
+                        }
                     }
 
-                    Keys.onPressed: (event) => {
-                        // Autocomplete navigation (when popup is open) takes
-                        // priority over markdown continuation.
-                        if (acPopup.opened && acMatches.length > 0) {
-                            if (event.key === Qt.Key_Down) {
-                                root.acSelected = Math.min(root.acMatches.length - 1, root.acSelected + 1);
-                                event.accepted = true; return;
-                            }
-                            if (event.key === Qt.Key_Up) {
-                                root.acSelected = Math.max(0, root.acSelected - 1);
-                                event.accepted = true; return;
-                            }
-                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter
-                                || event.key === Qt.Key_Tab) {
-                                root._commitAutocomplete();
-                                event.accepted = true; return;
-                            }
-                            if (event.key === Qt.Key_Escape) {
-                                root._hideAutocomplete();
-                                event.accepted = true; return;
-                            }
+                    TextArea {
+                        id: editor
+                        ContextMenu.menu: TextEditMenu { editor: editor }
+                        objectName: "notesEditor"
+                        x: 24; y: 16
+                        width: notesScroll.width - 48
+                        // Always fill at least the visible viewport so the user can
+                        // click anywhere on the canvas to start typing; grow with
+                        // content otherwise.
+                        height: Math.max(notesScroll.height - 32, implicitHeight + 16)
+                        wrapMode: TextArea.Wrap
+                        selectByMouse: true
+                        placeholderText: I18n.t("notes.placeholderBody")
+                        placeholderTextColor: Theme.textDim
+                        color: Theme.text
+                        font.family: Theme.fontMono
+                        font.pixelSize: Theme.fsMd
+                        background: Item {}
+                        onTextChanged: {
+                            root._scheduleSave();
+                            root._detectAutocomplete();
+                            statsTimer.restart();
+                            if (root.showBacklinks) linksTimer.restart();
+                        }
+                        onCursorPositionChanged: root._detectAutocomplete()
+                        Keys.priority: Keys.BeforeItem
+
+                        // Qt delivers shortcut events before key presses, so a
+                        // global Ctrl+K would open the command palette and this
+                        // field would never see the key. Claiming these while the
+                        // editor has focus is what makes them editor-scoped: they
+                        // still mean what they always did everywhere else.
+                        Keys.onShortcutOverride: (event) => {
+                            if (mdEditor.claimsShortcut(event.key, event.modifiers)) event.accepted = true;
                         }
 
-                        // Tab indents here, so it cannot also be the way out
-                        // (SHELL-18). Esc steps out to the list of notes;
-                        // Ctrl+Tab / Ctrl+Shift+Tab and F6 / Shift+F6 move on
-                        // along the focus chain, as in any editor that keeps
-                        // Tab for itself.
-                        if (root._leaveEditorKey(editor, event.key, event.modifiers)) {
-                            event.accepted = true;
-                            return;
-                        }
+                        Keys.onPressed: (event) => {
+                            // Autocomplete navigation (when popup is open) takes
+                            // priority over markdown continuation.
+                            if (acPopup.opened && acMatches.length > 0) {
+                                if (event.key === Qt.Key_Down) {
+                                    root.acSelected = Math.min(root.acMatches.length - 1, root.acSelected + 1);
+                                    event.accepted = true; return;
+                                }
+                                if (event.key === Qt.Key_Up) {
+                                    root.acSelected = Math.max(0, root.acSelected - 1);
+                                    event.accepted = true; return;
+                                }
+                                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter
+                                    || event.key === Qt.Key_Tab) {
+                                    root._commitAutocomplete();
+                                    event.accepted = true; return;
+                                }
+                                if (event.key === Qt.Key_Escape) {
+                                    root._hideAutocomplete();
+                                    event.accepted = true; return;
+                                }
+                            }
 
-                        // A file or a bare image on the clipboard is attached
-                        // and linked; anything else pastes as text.
-                        if (event.matches(StandardKey.Paste) && root.pasteAttachment()) {
-                            event.accepted = true;
-                            return;
-                        }
-
-                        // Ctrl+Z with nothing left to undo in the text means the
-                        // last thing done to the notes themselves — a delete, an
-                        // import. The field is always focused here, so without
-                        // this the app-wide undo was unreachable from Notes.
-                        if (root._globalUndoFallback(editor, event)) return;
-
-                        // Slash-commands — /today, /tomorrow, /завтра, etc.
-                        // Tab or Enter replaces "/<word>" with a parsed ISO
-                        // date when the chrono parser recognises the word.
-                        if (event.key === Qt.Key_Tab
-                            || event.key === Qt.Key_Return
-                            || event.key === Qt.Key_Enter)
-                        {
-                            if (root._expandSlashDate() && event.key === Qt.Key_Tab) {
+                            // Tab indents here, so it cannot also be the way out
+                            // (SHELL-18). Esc steps out to the list of notes;
+                            // Ctrl+Tab / Ctrl+Shift+Tab and F6 / Shift+F6 move on
+                            // along the focus chain, as in any editor that keeps
+                            // Tab for itself.
+                            if (root._leaveEditorKey(editor, event.key, event.modifiers)) {
                                 event.accepted = true;
                                 return;
                             }
-                            // Enter still ends the line after expanding: the
-                            // reader pressed it to get a new one.
-                        }
 
-                        // Everything below is markdown editing, which lives
-                        // in C++ so it can be tested without driving the UI,
-                        // and is shared with the doc page editor. See
-                        // MdEditOps: each operation is one undo step.
-                        mdEditor.setSelection(editor.selectionStart, editor.selectionEnd);
-                        if (mdEditor.handleKey(event.key, event.modifiers)) event.accepted = true;
+                            // A file or a bare image on the clipboard is attached
+                            // and linked; anything else pastes as text.
+                            if (event.matches(StandardKey.Paste) && root.pasteAttachment()) {
+                                event.accepted = true;
+                                return;
+                            }
+
+                            // Ctrl+Z with nothing left to undo in the text means the
+                            // last thing done to the notes themselves — a delete, an
+                            // import. The field is always focused here, so without
+                            // this the app-wide undo was unreachable from Notes.
+                            if (root._globalUndoFallback(editor, event)) return;
+
+                            // Slash-commands — /today, /tomorrow, /завтра, etc.
+                            // Tab or Enter replaces "/<word>" with a parsed ISO
+                            // date when the chrono parser recognises the word.
+                            if (event.key === Qt.Key_Tab
+                                || event.key === Qt.Key_Return
+                                || event.key === Qt.Key_Enter)
+                            {
+                                if (root._expandSlashDate() && event.key === Qt.Key_Tab) {
+                                    event.accepted = true;
+                                    return;
+                                }
+                                // Enter still ends the line after expanding: the
+                                // reader pressed it to get a new one.
+                            }
+
+                            // Everything below is markdown editing, which lives
+                            // in C++ so it can be tested without driving the UI,
+                            // and is shared with the doc page editor. See
+                            // MdEditOps: each operation is one undo step.
+                            mdEditor.setSelection(editor.selectionStart, editor.selectionEnd);
+                            if (mdEditor.handleKey(event.key, event.modifiers)) event.accepted = true;
+                        }
+                    }
+                }
+                // Vertical divider — only in split mode.
+                Rectangle {
+                    visible: root.viewMode === "split"
+                    Layout.preferredWidth: 1
+                    Layout.fillHeight: true
+                    color: Theme.border
+                }
+
+                // Preview pane — visible in preview + split modes.
+                //
+                // Draws the parsed document row by row. It replaces a read-only
+                // TextArea with textFormat: MarkdownText, which handed the whole
+                // note to Qt and gave nothing back — no say in how an element
+                // looked, and no way to ask which lines produced it.
+                MdView {
+                    id: preview
+                    objectName: "notesPreview"
+                    // Kept for its link handling (openExternal); the live view
+                    // draws the note now.
+                    visible: false
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    document: mdDocument
+                    editorDocument: editor.textDocument
+
+                    // The checkbox write already went through the editor's own
+                    // document; this only keeps the caret where it was.
+                    onTaskToggled: {
+                        const caret = editor.cursorPosition;
+                        editor.cursorPosition = caret;
+                    }
+
+                    // Clicking a rendered block puts the caret on the line that
+                    // produced it, and shows the editor if it was hidden.
+                    onSourceRequested: (line) => {
+                        if (root.viewMode === "preview") root.viewMode = "split";
+                        editor.forceActiveFocus();
+                        editor.cursorPosition = mdDocument.positionForLine(line);
+                    }
+
+                    onInternalLinkActivated: (kind, target) => root._followLink(kind, target)
+
+                    Text {
+                        anchors.centerIn: parent
+                        visible: preview.count === 0
+                        text: I18n.t("notes.preview.empty")
+                        color: Theme.textDim
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsMd
+                    }
+
+                    // ── Scroll sync (split mode) ──────────────────────────
+                    // Both panes show the same document, so they should show the
+                    // same part of it. Whichever pane the reader is scrolling
+                    // leads; the other follows and its own movement is ignored
+                    // for a moment, or the two would push each other.
+                    onContentYChanged: if (root.viewMode === "split") root._syncFrom("preview")
+                }
+
+                // The note drawn, the block under the caret edited in place.
+                MdBlockEditor {
+                    id: liveEditor
+                    objectName: "notes-live"
+                    visible: root.viewMode === "live" && root.pageId.length === 0
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    text: editor.text
+                    placeholder: I18n.t("notes.placeholderBody")
+                    wikiTargets: root._wiki
+                    headingRules: false
+                    noteType: true
+                    onEdited: (t) => root._applyFromLive(t)
+                    onInternalLinkActivated: (kind, target) => root._followLink(kind, target)
+                    onEscaped: if (root._listShown) notesList.focusList()
+                }
+
+
+                // A page from the former Docs catalogue, drawn and edited in
+                // place like a note (DG-070): pages stay where the list shows
+                // them instead of in a second screen.
+                MdEditorPane {
+                    id: pageEditor
+                    objectName: "knowledge-page"
+                    visible: root.pageId.length > 0
+                    bare: true
+                    mode: "live"
+                    pageId: root.pageId
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    onInternalLinkActivated: (kind, target) => root._followLink(kind, target)
+                }
+            }
+        }
+
+        // ── The note's links (DG-072) ─────────────────────────────
+        // Beside the note when there is room: the tasks it names, what links
+        // here, its links out of lowkey. Sheet order: bold leads with the
+        // tasks, quiet with the backlinks; an empty group is not drawn.
+        Item {
+            objectName: "notes-links-pane"
+            visible: root.showBacklinks && root.pageId.length === 0
+            Layout.preferredWidth: Theme.px(220)
+            Layout.fillHeight: true
+            Flickable {
+                anchors.fill: parent
+                anchors.topMargin: Style.quiet ? Theme.px(112) : Theme.px(60)
+                anchors.rightMargin: Theme.sp2xl
+                clip: true
+                contentHeight: linksCol.implicitHeight
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: ThinScrollBar {}
+                ColumnLayout {
+                    id: linksCol
+                    width: parent.width
+                    spacing: 0
+
+                    Loader {
+                        Layout.fillWidth: true
+                        active: Style.quiet
+                        visible: active
+                        sourceComponent: backlinksGroup
+                    }
+                    Loader {
+                        Layout.fillWidth: true
+                        sourceComponent: tasksGroup
+                    }
+                    Loader {
+                        Layout.fillWidth: true
+                        active: !Style.quiet
+                        visible: active
+                        sourceComponent: backlinksGroup
+                    }
+                    // Q-Knowledge has no external-links group (R3-091).
+                    Loader {
+                        Layout.fillWidth: true
+                        active: !Style.quiet
+                        visible: active
+                        sourceComponent: externalGroup
                     }
                 }
             }
-            // Vertical divider — only in split mode.
-            Rectangle {
-                visible: root.viewMode === "split"
-                Layout.preferredWidth: 1
-                Layout.fillHeight: true
-                color: Theme.border
-            }
+        }
+    }
 
-            // Preview pane — visible in preview + split modes.
-            //
-            // Draws the parsed document row by row. It replaces a read-only
-            // TextArea with textFormat: MarkdownText, which handed the whole
-            // note to Qt and gave nothing back — no say in how an element
-            // looked, and no way to ask which lines produced it.
-            MdView {
-                id: preview
-                objectName: "notesPreview"
-                // Kept for its link handling (openExternal); the live view
-                // draws the note now.
-                visible: false
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                document: mdDocument
-                editorDocument: editor.textDocument
+    // ── The groups of the links column (DG-072) ──────────────────────
+    component LinksHeader: Text {
+        Layout.fillWidth: true
+        Layout.bottomMargin: Theme.spLg
+        color: Theme.textDim
+        // Sheet: 12px, 600 in bold, regular in quiet (R3-088).
+        font.pixelSize: Theme.fsSm
+        font.weight: Style.quiet ? Theme.fwBody : Theme.fwHeading
+        elide: Text.ElideRight
+    }
+    component LinksItem: Text {
+        id: linkItem
+        property string tip: ""
+        signal activated()
+        Layout.fillWidth: true
+        Layout.bottomMargin: Theme.spLg
+        textFormat: Text.StyledText
+        color: Theme.text
+        font.pixelSize: Theme.fsMd
+        font.weight: Style.quiet ? Theme.fwBody : Theme.fwTitle
+        font.underline: linkCA.hovered
+        wrapMode: Text.Wrap
+        maximumLineCount: 2
+        elide: Text.ElideRight
+        ClickArea {
+            id: linkCA
+            label: linkItem.tip.length > 0 ? linkItem.tip : linkItem.text
+            showTip: false
+            role: Accessible.Link
+            onActivated: linkItem.activated()
+        }
+    }
 
-                // The checkbox write already went through the editor's own
-                // document; this only keeps the caret where it was.
-                onTaskToggled: {
-                    const caret = editor.cursorPosition;
-                    editor.cursorPosition = caret;
+    // "APP-101 · В работе": the tasks this note names, with their column now.
+    Component {
+        id: tasksGroup
+        ColumnLayout {
+            spacing: 0
+            visible: root._taskRefs.length > 0
+            LinksHeader { text: I18n.t("notes.tasksInNote") }
+            Repeater {
+                model: root._taskRefs
+                delegate: LinksItem {
+                    required property var modelData
+                    objectName: "note-task-" + modelData.id
+                    readonly property string status: Style.quiet ? String(modelData.statusName).toLowerCase()
+                                                                 : String(modelData.statusName)
+                    // Bold: the ID bold, the column dimmed (H2-Knowledge, R3-088).
+                    text: (Style.quiet ? modelData.id : "<b>" + modelData.id + "</b>")
+                          + "<font color=\"" + (Style.quiet ? Theme.textMuted : Theme.textDim) + "\"> · " + status
+                          + (modelData.profileName.length > 0 ? " · " + modelData.profileName : "") + "</font>"
+                    tip: modelData.id + " " + modelData.title
+                    maximumLineCount: 1
+                    onActivated: root.taskRequested(modelData.id)
                 }
-
-                // Clicking a rendered block puts the caret on the line that
-                // produced it, and shows the editor if it was hidden.
-                onSourceRequested: (line) => {
-                    if (root.viewMode === "preview") root.viewMode = "split";
-                    editor.forceActiveFocus();
-                    editor.cursorPosition = mdDocument.positionForLine(line);
-                }
-
-                onInternalLinkActivated: (kind, target) => root._followLink(kind, target)
-
-                Text {
-                    anchors.centerIn: parent
-                    visible: preview.count === 0
-                    text: I18n.t("notes.preview.empty")
-                    color: Theme.textDim
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsMd
-                }
-
-                // ── Scroll sync (split mode) ──────────────────────────
-                // Both panes show the same document, so they should show the
-                // same part of it. Whichever pane the reader is scrolling
-                // leads; the other follows and its own movement is ignored
-                // for a moment, or the two would push each other.
-                onContentYChanged: if (root.viewMode === "split") root._syncFrom("preview")
             }
+            Item { Layout.preferredHeight: Theme.sp2xl }
+        }
+    }
 
-            // The note drawn, the block under the caret edited in place.
-            MdBlockEditor {
-                id: liveEditor
-                objectName: "notes-live"
-                visible: root.viewMode === "live"
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                text: editor.text
-                placeholder: I18n.t("notes.placeholderBody")
-                wikiTargets: root._wiki
-                onEdited: (t) => root._applyFromLive(t)
-                onInternalLinkActivated: (kind, target) => root._followLink(kind, target)
-                onEscaped: if (root._listShown) notesList.focusList()
-            }
-
-            // ── Links pane (HEAP-79) ──────────────────────────────────
-            Rectangle {
-                objectName: "notes-links-pane"
-                visible: root.showBacklinks
-                Layout.preferredWidth: 240
-                Layout.fillHeight: true
-                color: Theme.panel
-                Rectangle { anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.left: parent.left; width: 1; color: Theme.border }
-                Flickable {
-                    anchors.fill: parent
-                    anchors.margins: Theme.spXl
-                    clip: true
-                    contentHeight: linksCol.implicitHeight
-                    boundsBehavior: Flickable.StopAtBounds
-                    ScrollBar.vertical: ThinScrollBar {}
-                    ColumnLayout {
-                        id: linksCol
-                        width: parent.width
-                        spacing: Theme.spMd
-
-                        // The tasks this note names, with their column now.
-                        Text {
-                            visible: root._taskRefs.length > 0
-                            text: I18n.t("notes.tasksInNote")
-                            color: Theme.textMuted
-                            font.pixelSize: Theme.fsSm
-                            font.weight: Theme.fwTitle
-                        }
-                        Repeater {
-                            model: root._taskRefs
-                            delegate: Text {
-                                id: refTask
-                                required property var modelData
-                                objectName: "note-task-" + modelData.id
-                                Layout.fillWidth: true
-                                text: modelData.id + "  <font color=\"" + Theme.textMuted + "\">· " + modelData.statusName
-                                      + (modelData.profileName.length > 0 ? " · " + modelData.profileName : "") + "</font>"
-                                textFormat: Text.StyledText
-                                color: Theme.text
-                                font.pixelSize: Theme.fsSm
-                                elide: Text.ElideRight
-                                ClickArea {
-                                    label: refTask.modelData.id + " " + refTask.modelData.title
-                                    role: Accessible.Link
-                                    onActivated: root.taskRequested(refTask.modelData.id)
-                                }
-                            }
-                        }
-                        Item { visible: root._taskRefs.length > 0; Layout.preferredHeight: Theme.spMd }
-                        // Tasks that link this note by its title, [[Note]].
-                        Repeater {
-                            model: root._taskLinks
-                            delegate: Text {
-                                id: linkTask
-                                required property var modelData
-                                objectName: "note-linked-task-" + modelData.id
-                                Layout.fillWidth: true
-                                text: I18n.t("notes.linkedTask").arg(modelData.id)
-                                color: Theme.text
-                                font.pixelSize: Theme.fsSm
-                                elide: Text.ElideRight
-                                ClickArea {
-                                    label: linkTask.text + " " + linkTask.modelData.title
-                                    role: Accessible.Link
-                                    onActivated: root.taskRequested(linkTask.modelData.id)
-                                }
-                            }
-                        }
-
-                        // What else refers to this note.
-                        Text {
-                            text: I18n.t("notes.backlinks")
-                            color: Theme.text
-                            font.pixelSize: Theme.fsMd
-                            font.weight: Theme.fwTitle
-                        }
-                        Text {
-                            visible: root._incoming.length === 0
-                            text: I18n.t("notes.backlinks.empty")
-                            color: Theme.textDim
-                            font.pixelSize: Theme.fsSm
-                            wrapMode: Text.WordWrap
-                            Layout.fillWidth: true
-                        }
-                        Repeater {
-                            model: root._incoming
-                            delegate: ColumnLayout {
-                                required property var modelData
-                                objectName: "incoming-" + modelData.noteId
-                                Layout.fillWidth: true
-                                spacing: Theme.sp2xs
-                                Text {
-                                    id: incomingTxt
-                                    Layout.fillWidth: true
-                                    text: "← " + modelData.title
-                                    color: Theme.mdTicket
-                                    font.pixelSize: Theme.fsSm
-                                    font.weight: Theme.fwTitle
-                                    font.underline: incomingMA.hovered
-                                    elide: Text.ElideRight
-                                    ClickArea {
-                                        id: incomingMA
-                                        label: incomingTxt.text
-                                        showTip: false
-                                        role: Accessible.Link
-                                        onActivated: {
-                                            root._flushPending();
-                                            AppController.activeNoteId = modelData.noteId;
-                                        }
-                                    }
-                                }
-                                Text {
-                                    Layout.fillWidth: true
-                                    Layout.leftMargin: Theme.spLg
-                                    text: "└ " + modelData.text
-                                    color: Theme.textMuted
-                                    font.pixelSize: Theme.fsXs
-                                    elide: Text.ElideRight
-                                }
-                            }
-                        }
-
-                        // Links out of lowkey, opened under the usual rules.
-                        Text {
-                            visible: root._external.length > 0
-                            Layout.topMargin: Theme.spMd
-                            text: I18n.t("notes.external")
-                            color: Theme.textMuted
-                            font.pixelSize: Theme.fsSm
-                            font.weight: Theme.fwTitle
-                        }
-                        Repeater {
-                            model: root._external
-                            delegate: Text {
-                                id: extLink
-                                required property var modelData
-                                Layout.fillWidth: true
-                                text: modelData.label
-                                color: Theme.text
-                                font.pixelSize: Theme.fsSm
-                                font.underline: extCA.hovered
-                                wrapMode: Text.Wrap
-                                maximumLineCount: 2
-                                elide: Text.ElideRight
-                                ClickArea {
-                                    id: extCA
-                                    label: extLink.modelData.url
-                                    role: Accessible.Link
-                                    onActivated: preview.openExternal(extLink.modelData.url)
-                                }
-                            }
-                        }
-
-                        Item { Layout.preferredHeight: Theme.spMd }
-
-                        // Where this note points.
-                        Text {
-                            text: I18n.t("notes.outgoing")
-                            color: Theme.text
-                            font.pixelSize: Theme.fsMd
-                            font.weight: Theme.fwTitle
-                        }
-                        Text {
-                            visible: root._outgoing.length === 0
-                            text: I18n.t("notes.outgoing.empty")
-                            color: Theme.textDim
-                            font.pixelSize: Theme.fsSm
-                            wrapMode: Text.WordWrap
-                            Layout.fillWidth: true
-                        }
-                        Repeater {
-                            model: root._outgoing
-                            delegate: ColumnLayout {
-                                required property var modelData
-                                objectName: "outgoing-" + modelData.target
-                                Layout.fillWidth: true
-                                spacing: Theme.sp2xs
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    spacing: Theme.spSm
-                                    Text {
-                                        id: outgoingTxt
-                                        text: (modelData.resolved ? "→ " : "△ ") + modelData.target
-                                        color: modelData.resolved ? Theme.mdTicket : Theme.warning
-                                        font.pixelSize: Theme.fsSm
-                                        font.weight: Theme.fwTitle
-                                        font.underline: outgoingMA.hovered
-                                        elide: Text.ElideRight
-                                        Layout.fillWidth: true
-                                        ClickArea {
-                                            id: outgoingMA
-                                            label: outgoingTxt.text
-                                            showTip: false
-                                            role: Accessible.Link
-                                            // Where a click in the preview would go: the
-                                            // note, the heading, or the offer to write it.
-                                            onActivated: root._followLink("note", modelData.target)
-                                        }
-                                    }
-                                    Text {
-                                        text: modelData.count !== undefined ? modelData.count : modelData.refs.length
-                                        color: Theme.textDim
-                                        font.family: Theme.fontUi
-                                        font.features: Theme.tabularNums
-                                        font.pixelSize: Theme.fsXs
-                                    }
-                                }
-                                Text {
-                                    visible: !modelData.resolved
-                                    Layout.fillWidth: true
-                                    Layout.leftMargin: Theme.spLg
-                                    text: I18n.t("notes.outgoing.missing")
-                                    color: Theme.textDim
-                                    font.pixelSize: Theme.fsXs
-                                    elide: Text.ElideRight
-                                }
-                                Repeater {
-                                    model: modelData.refs
-                                    delegate: Text {
-                                        id: refTxt
-                                        required property var modelData
-                                        Layout.fillWidth: true
-                                        Layout.leftMargin: Theme.spLg
-                                        text: "└ " + modelData.text
-                                        color: Theme.textMuted
-                                        font.pixelSize: Theme.fsXs
-                                        font.underline: refMA.hovered
-                                        elide: Text.ElideRight
-                                        ClickArea {
-                                            id: refMA
-                                            label: refTxt.text
-                                            showTip: false
-                                            role: Accessible.Link
-                                            onActivated: root._jumpToLine(refTxt.modelData.line)
-                                        }
-                                    }
-                                }
-                            }
-                        }
+    // What links here: other notes, and tasks that name this note [[Note]].
+    Component {
+        id: backlinksGroup
+        ColumnLayout {
+            spacing: 0
+            visible: root._incoming.length > 0 || root._taskLinks.length > 0
+            LinksHeader { text: I18n.t("notes.backlinks") }
+            Repeater {
+                model: root._incoming
+                delegate: LinksItem {
+                    required property var modelData
+                    objectName: "incoming-" + modelData.noteId
+                    text: modelData.title
+                    tip: modelData.title + " — " + modelData.text
+                    onActivated: {
+                        root._flushPending();
+                        AppController.activeNoteId = modelData.noteId;
                     }
+                }
+            }
+            Repeater {
+                model: root._taskLinks
+                delegate: LinksItem {
+                    required property var modelData
+                    objectName: "note-linked-task-" + modelData.id
+                    text: I18n.t("notes.linkedTask").arg(modelData.id)
+                    tip: text + " " + modelData.title
+                    onActivated: root.taskRequested(modelData.id)
+                }
+            }
+            Item { Layout.preferredHeight: Theme.sp2xl }
+        }
+    }
+
+    // Links out of lowkey, opened under the usual rules.
+    Component {
+        id: externalGroup
+        ColumnLayout {
+            spacing: 0
+            visible: root._external.length > 0
+            LinksHeader { text: I18n.t("notes.external") }
+            Repeater {
+                model: root._external
+                delegate: LinksItem {
+                    required property var modelData
+                    textFormat: Text.PlainText
+                    text: modelData.title.length > 0 ? modelData.label + " · " + modelData.title : modelData.label
+                    tip: modelData.url
+                    onActivated: preview.openExternal(modelData.url)
                 }
             }
         }
@@ -1585,7 +1446,6 @@ Item {
     // expected to exist.
     signal taskRequested(string taskId)
     signal personRequested(string personId)
-    signal docPageRequested(string pageId)
 
     function _followLink(kind, target) {
         // A ticket in a note is a task: opening it is the whole reason for
@@ -1716,6 +1576,8 @@ Item {
         // A palette hit that opened Notes for the first time: the binding's
         // first value does not fire the change handler.
         if (jumpToLine >= 0) Qt.callLater(root._consumeJump);
+        if (requestedPage.length > 0) Qt.callLater(root._consumePage);
+        if (requestedFilter.length > 0) Qt.callLater(root._consumeFilter);
     }
     Component.onDestruction: _flushPending()
     // Quit is not covered by onDestruction: the engine tears down its root

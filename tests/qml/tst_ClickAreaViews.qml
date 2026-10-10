@@ -158,17 +158,4 @@ TestCase {
         verify(fold._tipText.indexOf(AppController.shortcutText("board.collapseColumn")) > 0, fold._tipText);
     }
 
-    function test_timeline_show_done_is_a_checkbox() {
-        const tl = make('import TodoCpp; TimelineView { anchors.fill: parent }');
-        wait(20);
-        const area = areaIn(byName(tl, "timeline-show-done"));
-        verify(area !== null);
-        compare(area.Accessible.role, Accessible.CheckBox);
-        compare(area.Accessible.name, I18n.t("timeline.showDone"));
-        let n = 0;
-        tl.toggleShowDone.connect(function () { n++; });
-        area.forceActiveFocus(Qt.TabFocusReason);
-        keyClick(Qt.Key_Space);
-        compare(n, 1);
-    }
 }

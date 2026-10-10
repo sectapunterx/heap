@@ -31,8 +31,6 @@ TestCase {
         tc.win.height = 939;
         AppController.resetAllShortcuts();
         wait(1200);   // splash
-        const w = popup("WelcomePopup");
-        if (w && w.opened) w.close();
         tc.win.requestActivate();
         AppController.currentView = "board";
         tryVerify(function () { return tc.win.activeViewItem() !== null; }, 3000);
@@ -140,15 +138,6 @@ TestCase {
         verify(!s.activeFocus);
     }
 
-    // The tour going away leaves the keyboard in the view, not on the window.
-    function test_closing_the_tour_focuses_the_view() {
-        const w = popup("WelcomePopup");
-        w.open();
-        tryCompare(w, "opened", true);
-        w.close();
-        tryCompare(w, "opened", false);
-        tryVerify(focusIsInView, 2000, "focus after the tour: " + typeName(tc.win.activeFocusItem));
-    }
 
     // SHELL-3: the day keys wait while a text field or a dialog has the
     // keyboard, and work from the view.
@@ -188,29 +177,4 @@ TestCase {
         compare(Qt.formatDate(AppController.selectedDate, "yyyy-MM-dd"), "2031-05-13", "Alt+Left from the view");
     }
 
-    // SHELL-17: in the archive, Down from the view enters the list and moves
-    // from card to card.
-    function test_archive_rows_are_reachable_from_the_keyboard() {
-        for (let i = 0; i < 2; i++) {
-            const d = AppController.newTaskDraft("todo");
-            d._isNew = true;
-            d.id = "FOCUSARCH-" + i;
-            d.title = "focusflow archived " + i;
-            AppController.saveTask(d);
-            AppController.setArchived(d.id, true);
-            tc.seeded.push(d.id);
-        }
-        tc.win.searchText = "focusflow archived";
-        switchTo("archive");
-        const v = tc.win.activeViewItem();
-        tryCompare(v, "count", 2);
-        tryVerify(focusIsInView, 2000);
-        keyClick(Qt.Key_Down);
-        tryVerify(function () { return typeName(tc.win.activeFocusItem).indexOf("TaskCard") === 0; }, 2000,
-                  "Down did not reach a card: " + typeName(tc.win.activeFocusItem));
-        const first = tc.win.activeFocusItem.taskId;
-        keyClick(Qt.Key_Down);
-        tryVerify(function () { return tc.win.activeFocusItem.taskId !== first; }, 2000, "Down did not move to the next card");
-        verify(tc.win.activeFocusItem.Accessible.name.indexOf("focusflow archived") >= 0);
-    }
 }

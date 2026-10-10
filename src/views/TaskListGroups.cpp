@@ -1,6 +1,7 @@
 #include "views/TaskListGroups.h"
 
 #include <QHash>
+#include <QMap>
 #include <QStringList>
 
 #include <algorithm>
@@ -81,6 +82,31 @@ QString dateGroupOf(const Item& t, const QDate& today) {
 
 QVector<Group> group(const QVector<Item>& items, const QString& by, const QDate& today) {
   QVector<Group> out;
+  if(by == QStringLiteral("month")) {
+    QMap<QString, QVector<int>> byMonth;  // "yyyy-MM" sorts as the calendar does
+    for(int i = 0; i < items.size(); ++i) {
+      const QDate d = items.at(i).changed;
+      byMonth[d.isValid() ? d.toString(QStringLiteral("yyyy-MM")) : QString()].append(i);
+    }
+    for(auto it = byMonth.constEnd(); it != byMonth.constBegin();) {
+      --it;
+      Group g;
+      g.key = QStringLiteral("month");
+      g.value = it.key();
+      const QDate first = QDate::fromString(it.key() + QStringLiteral("-01"), QStringLiteral("yyyy-MM-dd"));
+      if(first.isValid()) {
+        g.from = first;
+        g.to = first.addMonths(1).addDays(-1);
+      }
+      g.members = it.value();
+      std::stable_sort(g.members.begin(), g.members.end(), [&items](int a, int b) {
+        return items.at(a).changed > items.at(b).changed;
+      });
+      // Newest first; "" (no date) sorts first in the map, so it ends last.
+      out.append(g);
+    }
+    return out;
+  }
   if(by == QStringLiteral("status") || by == QStringLiteral("priority") || by == QStringLiteral("profile")) {
     // key → (sort key, group)
     QHash<QString, int> at;

@@ -42,6 +42,14 @@ TestCase {
         return null;
     }
 
+    // Mark trackers connected: their settings rows show only then (DG-093).
+    function connect(ids) {
+        const s = JSON.parse(AppController.appSettingsJson || "{}");
+        s.integrations = s.integrations || ({});
+        for (const id of ids) s.integrations[id] = Object.assign({}, s.integrations[id], { connected: true });
+        AppController.appSettingsJson = JSON.stringify(s);
+    }
+
     function makeCard(ticketFields, taskFields) {
         const ticket = Object.assign({ provider: "gitea", key: "#5", url: "https://gitea.example.com/a/b/issues/5" },
                                      ticketFields);
@@ -54,44 +62,44 @@ TestCase {
 
     // ── Settings → Integrations: one switch per tracker that can be written ──
     function test_every_writable_tracker_has_its_own_switch_off_by_default() {
+        const catalog = AppController.integrationCatalog();
+        connect(catalog.map((c) => c.id));
         const sv = createTemporaryQmlObject('import TodoCpp; SettingsView { anchors.fill: parent }', host);
         sv.activeSection = "integrations";
-        const catalog = AppController.integrationCatalog();
         let writable = 0;
         for (let i = 0; i < catalog.length; i++) {
             const id = catalog[i].id;
             let card = null;
             tryVerify(function () { card = find(sv, "int-card-" + id); return card !== null; }, 2000, id + " card");
-            card.open = true;
+            sv.pickedTracker = id;
+            tryVerify(function () { return card.visible; }, 1000);
+            // "Запись в <tracker>": выключено | включено (DG-093).
             const sw = find(card, "int-write-status-" + id);
-            verify(sw !== null, id + " has no write switch row");
-            compare(sw.visible, catalog[i].writesStatus === true, id + ": switch shown on the wrong tracker");
+            verify(sw !== null, id + " has no write row");
+            compare(sw.visible, catalog[i].writesStatus === true, id + ": write row shown on the wrong tracker");
             if (!sw.visible) continue;
             ++writable;
-            verify(!sw.checked, id + " starts switched on");
+            compare(sw.value, "off", id + " starts switched on");
             verify(sw.label.indexOf(catalog[i].name) >= 0, id + ": the label does not name the tracker");
             verify(sw.hint.length > 0, id + " has no hint");
-            compare(sw.Accessible.role, Accessible.CheckBox);
-            verify(sw.activeFocusOnTab, id + ": the switch is off the Tab path");
+            verify(find(sw, "int-write-status-" + id + "-on-click") !== null, id + ": no way to switch it on");
         }
         compare(writable, 5, "GitHub, GitLab, Gitea, Forgejo and Jira");
     }
 
     function test_switch_turns_on_only_its_own_tracker() {
+        connect(["gitlab"]);
         const sv = createTemporaryQmlObject('import TodoCpp; SettingsView { anchors.fill: parent }', host);
         sv.activeSection = "integrations";
         let card = null;
         tryVerify(function () { card = find(sv, "int-card-gitlab"); return card !== null; }, 2000);
-        card.open = true;
+        sv.pickedTracker = "gitlab";
         const sw = find(card, "int-write-status-gitlab");
-        const offHint = sw.hint;
-        sw.forceActiveFocus(Qt.TabFocusReason);
-        keyClick(Qt.Key_Space);
-        tryVerify(function () { return AppController.trackerWriteEnabled("gitlab"); }, 1000, "Space did not switch it on");
+        find(sw, "int-write-status-gitlab-on-click").activated();
+        tryVerify(function () { return AppController.trackerWriteEnabled("gitlab"); }, 1000, "picking on did not switch it on");
         compare(AppController.trackerWriteProviders, ["gitlab"]);
-        tryVerify(function () { return sw.checked; }, 1000);
-        verify(sw.hint !== offHint, "the hint does not say what changed");
-        keyClick(Qt.Key_Space);
+        tryVerify(function () { return sw.value === "on"; }, 1000);
+        find(sw, "int-write-status-gitlab-off-click").activated();
         tryVerify(function () { return !AppController.trackerWriteEnabled("gitlab"); }, 1000);
     }
 
@@ -110,13 +118,13 @@ TestCase {
     // ── The card ──
     function test_unsent_move_with_writes_off_says_not_sent() {
         const card = makeCard({ syncState: "queued", unsynced: true, queued: true });
-        compare(findChild(card, "tc-sync-state-text").text, I18n.t("taskcard.unsent"));
-        verify(findChild(card, "tc-sync-state").tip.indexOf(I18n.t("taskcard.unsent.tip")) === 0);
+        verify(findChild(card, "tc-mark").text.indexOf(I18n.t("taskcard.mark.unsent")) >= 0);
+        verify(findChild(card, "tc-mark").tip.indexOf(I18n.t("taskcard.unsent.tip")) === 0);
         card.destroy();
         // With the switch on it is the old "queued": it goes out on the next sync.
         AppController.setTrackerWriteEnabled("gitea", true);
         const on = makeCard({ syncState: "queued", unsynced: true, queued: true });
-        compare(findChild(on, "tc-sync-state-text").text, I18n.t("taskcard.queued"));
+        verify(findChild(on, "tc-mark").text.indexOf(I18n.t("taskcard.mark.waiting")) >= 0);
         on.destroy();
     }
 
@@ -139,7 +147,7 @@ TestCase {
         const card = makeCard({ syncState: "synced", remoteStatus: "closed", remoteColumn: "done" }, { status: "prog" });
         verify(card.hoverDetails.indexOf(I18n.t("taskcard.trackerStatus").arg("closed")) >= 0,
                "the tracker's status is not told");
-        verify(!findChild(card, "tc-sync-state").visible, "a local move reads as out of step");
+        verify(!findChild(card, "tc-mark").visible, "a local move reads as out of step");
         card.destroy();
         // In the column the tracker has: nothing to say.
         const same = makeCard({ syncState: "synced", remoteStatus: "closed", remoteColumn: "done" }, { status: "done" });
@@ -163,10 +171,11 @@ TestCase {
         const dlg = createTemporaryQmlObject('import TodoCpp; TrackerPushConfirmDialog { }', host);
         dlg.ask("tw-none", "WEB-5", "Fix it", "Jira", "In Review", "Done");
         tryCompare(dlg, "opened", true);
-        const body = findChild(dlg.contentItem, "trackerPushConfirmBody");
-        verify(body.text.indexOf("WEB-5") >= 0 && body.text.indexOf("In Review") >= 0 && body.text.indexOf("Done") >= 0,
-               "the dialog does not name the issue, its status and the target: " + body.text);
-        const cancel = findChild(dlg.footer, "trackerPushConfirmCancel");
+        // Whose ticket it is, and the question (X/N-Dlg-Conflict, R2-033).
+        verify(dlg.fact.indexOf("WEB-5") >= 0 && dlg.fact.indexOf("Jira") >= 0,
+               "the dialog does not name the issue and the tracker: " + dlg.fact);
+        compare(dlg.title, I18n.t("tracker.notMine.outside").arg("Jira"));
+        const cancel = findChild(dlg.contentItem, "trackerPushConfirmCancel");
         tryVerify(function () { return cancel.activeFocus; }, 1000, "Cancel is not the default");
         keyClick(Qt.Key_Return);
         tryCompare(dlg, "visible", false);

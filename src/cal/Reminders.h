@@ -39,6 +39,12 @@ struct DueReminder {
   // Whole minutes until the event starts, rounded up: 0 only once it has
   // started, so "starting now" is never said a minute early.
   int minutesLeft = 0;
+  // What the notification says under the title (R3-025): "11:00–11:30 ·
+  // Zoom", and whether it can offer "Подключиться".
+  double start = 0;
+  double end = 0;
+  QString location;
+  QString url;
 };
 
 // The key of a meeting reminder: the event and the instant it starts.
@@ -80,7 +86,7 @@ inline QVector<DueReminder> dueMeetingReminders(const QVector<CalEvent>& occurre
     }
     const qint64 secs = now.secsTo(startsAt);
     const int minutes = secs <= 0 ? 0 : static_cast<int>((secs + 59) / 60);
-    out.append({key, e.id, e.title, minutes});
+    out.append({key, e.id, e.title, minutes, e.start, e.end, e.location, e.url});
   }
   return out;
 }

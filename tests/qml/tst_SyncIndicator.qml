@@ -46,50 +46,52 @@ TestCase {
 
     function test_in_step_shows_nothing() {
         const card = make({ syncState: "synced" });
-        verify(!findChild(card, "tc-sync-state").visible, "an indicator on a synced card");
-        verify(!findChild(card, "tc-conflict").visible);
+        verify(!findChild(card, "tc-mark").visible, "a mark on a synced card");
         card.destroy();
     }
 
     function test_each_out_of_step_state_has_its_word() {
-        const cases = [["pushing", "taskcard.pushing"], ["queued", "taskcard.queued"],
-                       ["error", "taskcard.unsynced"], ["gone", "taskcard.gone"]];
+        // Words in the meta line (X/N-Err-Tracker, R2-034); writes are on
+        // here, so a move waits to be sent or was refused.
+        const cases = [["pushing", "taskcard.pushing"], ["queued", "taskcard.mark.waiting"],
+                       ["error", "taskcard.mark.refused"], ["gone", "taskcard.mark.gone"]];
         for (let i = 0; i < cases.length; ++i) {
             const card = make({ syncState: cases[i][0], gone: cases[i][0] === "gone" });
-            const chip = findChild(card, "tc-sync-state");
-            verify(chip.visible, cases[i][0] + " is not shown");
-            compare(findChild(card, "tc-sync-state-text").text, I18n.t(cases[i][1]));
+            const mark = findChild(card, "tc-mark");
+            verify(mark.visible, cases[i][0] + " is not shown");
+            const word = I18n.t(cases[i][1]).replace("%1", "").trim();
+            verify(mark.text.indexOf(word) >= 0, cases[i][0] + ": " + mark.text);
             card.destroy();
         }
     }
 
     function test_refusal_carries_the_trackers_reason() {
         const card = make({ syncState: "error", unsynced: true, syncError: "HTTP 403 — forbidden" });
-        verify(findChild(card, "tc-sync-state").tip.indexOf("HTTP 403 — forbidden") >= 0, "the reason is lost");
+        verify(findChild(card, "tc-mark").tip.indexOf("HTTP 403 — forbidden") >= 0, "the reason is lost");
         card.destroy();
     }
 
     function test_older_task_maps_still_show_the_state() {
         // The archive builds its own map without syncState.
         const card = make({ unsynced: true, queued: true });
-        verify(findChild(card, "tc-sync-state").visible);
-        compare(findChild(card, "tc-sync-state-text").text, I18n.t("taskcard.queued"));
+        verify(findChild(card, "tc-mark").visible);
+        verify(findChild(card, "tc-mark").text.indexOf(I18n.t("taskcard.mark.waiting")) >= 0);
         card.destroy();
     }
 
     function test_conflict_opens_a_side_by_side_choice() {
         const card = make({ syncState: "conflict", conflict: true, conflicts: ["status"],
                             remoteColumn: "done", remoteStatus: "closed" });
-        verify(findChild(card, "tc-conflict").visible);
+        verify(findChild(card, "tc-mark").conflict);
         card.openConflictDialog();
         const dlg = card.conflictDialog;
         verify(dlg !== null, "no dialog");
         tryCompare(dlg, "opened", true);
         compare(dlg.rows.length, 1);
         compare(dlg.rows[0].field, "status");
-        verify(dlg.rows[0].theirs.indexOf("closed") >= 0, "the tracker's side is not shown");
-        verify(findChild(dlg.contentItem, "sync-conflict-keep-status") !== null);
-        verify(findChild(dlg.contentItem, "sync-conflict-take-status") !== null);
+        compare(dlg.rows[0].theirs, dlg.statusName("done"), "the tracker side is not shown as its column");
+        verify(findChild(dlg.contentItem, "sync-conflict-mine-status") !== null);
+        verify(findChild(dlg.contentItem, "sync-conflict-theirs-status") !== null);
         dlg.close();
         tryCompare(dlg, "visible", false);
         card.destroy();

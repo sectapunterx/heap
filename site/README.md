@@ -1,7 +1,7 @@
 # lowkey website
 
-The site at <https://sectapunterx.github.io/heap/>: one page in two languages — `/` English, `/ru/` Russian —
-plus a download page for each (`/download/`, `/ru/download/`) and a 404. Pages of the heap 0.7 site
+The site at <https://sectapunterx.github.io/lowkey/>: one page in two languages — `/` English, `/ru/` Russian —
+plus a download page for each (`/download/`, `/ru/download/`) and a 404. Pages of the 0.7 site
 (`/demo/`, `/docs/…`, `/features/…`, `/compare/`, `/privacy/`, `/changelog/`, `/brand/`) redirect to the
 closest place (`astro.config.mjs`).
 
@@ -14,7 +14,7 @@ change its row.
   `prefers-reduced-motion`.
 - Fonts are self-hosted via `@fontsource` (Golos Text, JetBrains Mono). The site makes no third-party
   requests, runs no analytics and sets no cookies — an e2e test fails if a page requests another host.
-- The app's screens are not pictures: they are live HTML from the heap 2 mockups, put on the page by
+- The app's screens are not pictures: they are live HTML from the 0.8.0 redesign mockups, put on the page by
   `src/components/Screen.astro` inside a declarative shadow root (so the site's styles cannot leak in) and
   scaled from a 1440×900 canvas by `src/scripts/landing.ts`.
 

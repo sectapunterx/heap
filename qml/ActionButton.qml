@@ -38,16 +38,14 @@ Rectangle {
     implicitHeight: 30
     radius: Theme.radiusMd
     opacity: !enabled ? 0.45 : (busy ? 0.75 : 1)
+    // Outlined (DG-005): the primary action has the brighter line.
     color: {
-        if (btn.kind === "primary") return btn.hot ? Theme.accentHover : Theme.accent
-        if (btn.kind === "danger") return btn.armed ? Theme.danger
-            : Theme.withAlpha(Theme.danger, btn.hot ? 0.20 : 0.10)
-        if (btn.hoverAccent && btn.hot) return Theme.accent
-        return btn.hot ? Theme.panel3 : Theme.panel2
+        if (btn.kind === "danger" && btn.armed) return Theme.danger
+        return btn.hot ? Theme.withAlpha(Theme.text, 0.05) : "transparent"
     }
-    border.color: btn.kind === "primary" ? Theme.accent
-                : (btn.kind === "danger" || btn.armed) ? Theme.danger
-                : Theme.border
+    border.color: (btn.kind === "danger" || btn.armed) ? Theme.withAlpha(Theme.danger, btn.hot ? 0.7 : 0.45)
+                : btn.kind === "primary" || (btn.hoverAccent && btn.hot) ? (btn.hot ? Theme.textDim : Theme.buttonLinePrimary)
+                : (btn.hot ? Theme.buttonLinePrimary : Theme.buttonLine)
     border.width: 1
 
     activeFocusOnTab: true
@@ -64,14 +62,12 @@ Rectangle {
         text: btn.shownText
         font.family: Theme.fontUi
         font.pixelSize: Theme.fsMd
-        font.weight: btn.kind === "primary" ? Theme.fwTitle
-                   : btn.kind === "danger" ? Theme.fwTitle : Theme.fwBody
+        font.weight: Theme.fwBody
         color: {
-            if (btn.kind === "primary") return Theme.textOnAccent
             if (btn.kind === "danger") return btn.armed ? Theme.textOnDanger : Theme.danger
             if (btn.armed) return Theme.danger
-            if (btn.hoverAccent && btn.hot) return Theme.textOnAccent
-            return btn.kind === "quiet" ? Theme.textDim : Theme.text
+            if (btn.kind === "primary" || btn.hot) return Theme.buttonTextPrimary
+            return btn.kind === "quiet" ? Theme.textDim : Theme.buttonText
         }
         // A slow pulse says "working" without a spinner asset.
         SequentialAnimation on opacity {

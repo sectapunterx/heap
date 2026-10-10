@@ -47,6 +47,7 @@ QVariantList AppController::savedViews() const {
   out.reserve(m_savedViews.size());
   for(const SavedView& v : m_savedViews) {
     QVariantMap m = heap::savedviews::toVariant(v);
+    m[QStringLiteral("name")] = heap::savedviews::displayName(v, m_language == QStringLiteral("ru"));
     m[QStringLiteral("problems")] = heap::query::TaskQuery::compile(v.query, m_today, m_statuses).unknownClauses();
     out.append(m);
   }

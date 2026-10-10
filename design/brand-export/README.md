@@ -1,6 +1,6 @@
 # heap. — brand export for Qt 6 / QML
 
-Brand bundle for `sectapunterx/heap` (Qt 6 + QML + CMake). The 2026 rebrand introduces a new mark (three-node binary
+Brand bundle for `sectapunterx/lowkey` (Qt 6 + QML + CMake). The 2026 rebrand introduces a new mark (three-node binary
 heap), a new tagline (`Work, in one place.`), and two identity-only color tokens (`brandInk` / `brandAccent`) that sit
 beside the existing product palette (cyan `accent` etc., untouched).
 

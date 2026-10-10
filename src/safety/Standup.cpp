@@ -23,15 +23,13 @@ QString hhmm(double hour) {
   return QStringLiteral("%1:%2").arg(total / 60, 2, 10, QLatin1Char('0')).arg(total % 60, 2, 10, QLatin1Char('0'));
 }
 
+// One prose line per section (N-Dlg-Recap, R3-072): "Yesterday: a, b." An
+// empty section keeps its place with a dash.
 QString section(const QString& heading, const QStringList& lines) {
-  QString out = heading + QLatin1Char('\n');
   if(lines.isEmpty()) {
-    return out + QStringLiteral("- —\n");
+    return heading + QStringLiteral(" \u2014");
   }
-  for(const QString& l : lines) {
-    out += QStringLiteral("- ") + l + QLatin1Char('\n');
-  }
-  return out;
+  return heading + QLatin1Char(' ') + lines.join(QStringLiteral(", ")) + QLatin1Char('.');
 }
 
 }  // namespace
@@ -113,7 +111,7 @@ QString buildStandup(const StandupFacts& facts, bool ru) {
     if(facts2.isEmpty()) {
       continue;
     }
-    yesterday << taskLine(byId.value(id), id) + QStringLiteral(": ") + facts2.join(QStringLiteral(" · "));
+    yesterday << taskLine(byId.value(id), id) + QStringLiteral(" (") + facts2.join(QStringLiteral(" · ")) + QLatin1Char(')');
   }
   QSet<QString> seenMeetings;
   for(const StandupMeeting& m : facts.meetings) {
@@ -145,7 +143,7 @@ QString buildStandup(const StandupFacts& facts, bool ru) {
     return a.start < b.start;
   });
   for(const StandupMeeting& m : todays) {
-    today << (m.allDay ? m.title : hhmm(m.start) + QLatin1Char(' ') + m.title);
+    today << (m.allDay ? m.title : text(QStringLiteral("safety.standup.at"), ru).arg(m.title, hhmm(m.start)));
   }
 
   // ── Blockers ──
@@ -156,9 +154,9 @@ QString buildStandup(const StandupFacts& facts, bool ru) {
     }
   }
 
-  return section(text(QStringLiteral("safety.standup.yesterday"), ru), yesterday) +
-         section(text(QStringLiteral("safety.standup.today"), ru), today) +
-         section(text(QStringLiteral("safety.standup.blockers"), ru), blockers).trimmed();
+  return section(text(QStringLiteral("safety.standup.yesterday"), ru), yesterday) + QLatin1Char('\n') +
+         section(text(QStringLiteral("safety.standup.today"), ru), today) + QLatin1Char('\n') +
+         section(text(QStringLiteral("safety.standup.blockers"), ru), blockers);
 }
 
 }  // namespace heap::safety
