@@ -191,3 +191,50 @@ Result: **56 KEEP · 4 CHANGE · 0 OWNER** (60 decisions).
 3. **Splash never blocks**: no fixed 0.9 s hold; the first key/click dismisses it and is delivered;
    wait only for the crash card — `qml/Main.qml`, `qml/SplashScreen.qml`.
 4. **R3-027/103 text**: replace the stale "session-only" DnD wording — `docs/DESIGN-DECISIONS.md`.
+
+## Review 3 — r4 calendar/dialogs and r5 decisions
+
+Entries of `docs/DESIGN-DECISIONS.md` added or rewritten after Review 2 (`git log -p 8e2bb96..232feda`,
+heap2/0.8.1 @ 232feda: "r4 · Calendar / dialogs", "0.8.1 r5 — Knowledge, command line, keys",
+"r5 · Today, notifications, system", "r5 · tasks, settings, errors group", the R3-095 / R3-017/018 /
+R3-027/103 rewrites and the r5 lead note). Each checked against the sheet's markup and data
+(`New heap design/screens/*.dc.html`) and the code, judged with ui-ux-pro-max rule ids. Owner
+decisions in the header of `docs/DESIGN-GAPS-0.8.1-r4.md` are fixed; sheet beats ticket text.
+
+Result: **23 KEEP · 1 CHANGE · 1 REVERT** (25 decisions).
+
+| Section | Decision (short) | Verdict | Reason (guideline · sheet) | Change needed |
+|---|---|---|---|---|
+| r4 Calendar / dialogs | R4-056 ↵ (U+21B5) added to the five bundled TTFs | KEEP | one fix for every hint; "←" read as "back" (keyboard-shortcuts, consistency) · N/X-Dlg-Schedule, N-Keys. OFL 1.1 without a Reserved Font Name allows a modified version. Follow-up, not a design change: keep the glyph build script in the repo and note the modification in `resources/fonts/*-OFL.txt`, or a font update silently drops the glyph | — |
+| r4 Calendar / dialogs | R4-055 series question preselects "Только эту встречу" | KEEP | the sheet data says so (`scope = [{ 'Только эту встречу', on: true }, …]` in N- and X-Dlg-Event); the r4 gap line was wrong; least-change default keeps Return safe | — |
+| r4 Calendar / dialogs | R4-059 `TextLeading`: fixed-px line height on TextArea (standup 22px) | KEEP | line-height 1.5–1.75; Qt TextArea has no lineHeight, fixed px is the only exact match · N/X-Dlg-Recap 1.7 | — |
+| r4 Calendar / dialogs | R4-062/063 small-dialog spacing; fact "13px at 1.45" | CHANGE | spacing, width 428 and the link / "Убрать пример?" dialogs on one template are right (consistency · X-Dlg-Small). The leading in this entry is stale: the r5 lead note set SmallDialog.fact to 1.5, so the doc now states two values for one property | Docs only, `docs/DESIGN-DECISIONS.md` R4-062/063: "Fact 13px at 1.45 leading" → "Fact 13px at 1.5 leading (r5 lead note; the sheet's template draws 1.45, its in-context cards 1.5)" |
+| r4 Calendar / dialogs | R4-065 event-log error mark = line icon "warning", danger ink | KEEP | icon-style-consistent / no-emoji-icons over the sheet's "⚠" text glyph (font-dependent); same position after the source, colour plus shape · N-Dlg-Log-Import | — |
+| r5 Knowledge… | R4-073 quick note always to «Входящие»; open note stays open; toast says where | KEEP | the sheet header is "быстрая заметка → «Входящие»" · N/X-Oth-Capture; state-preservation; success-feedback. Code only sets the active note when none is open, no view switch | — |
+| r5 Knowledge… | R2-069 quick-note draft in `settings.quickNoteDraft`, 0.6 s debounce, shared by both windows | KEEP | form-autosave, no data loss; implements Review 2 CHANGE 1 | — |
+| r5 Knowledge… | R4-077 "Перейти к докам / заметкам" off the command line, ids kept while bound | KEEP | one way to Knowledge · H2/Q-Command (no such rows); a user's binding is not lost (back-stack-integrity, no silent loss) | — |
+| r5 Knowledge… | R4-080 Enter written ↵ in every key label | KEEP | consistency · N/X-Keys ("Открыть ↵") and every sheet hint | — |
+| r5 Knowledge… | R4-081 no "Панель дня Ctrl \\" row | KEEP | N-Keys is the one sheet that still lists it; no shell sheet draws a day panel and Review 1 kept DG-002 (sheet internally inconsistent). A key for a missing feature would be a dead control | — |
+| r5 Knowledge… | R4-082 cheat-sheet footer + link to Settings → Клавиши, intro wraps ~900px | KEEP | matches N/X-Keys ("Изменить сочетание — Настройки → Клавиши · Ctrl / тоже открывает этот экран", both parts in `keys.sheet.edit` / `keys.sheet.footer`); line-length | — |
+| r5 Knowledge… | R3-095 git line off for a fresh profile, kept on for data from before 0.8.1 (migration) | KEEP | implements Review 2 CHANGE 2: the sheet's default (X-Oth-Knowledge, X-Set-GitLangAbout) for new installs, upgrade-lossless for everyone who had it. Note for the lead: the r4 gaps header lists "git 'working on' line on by default" among owner decisions, while the plan log records it as a lead override. If the owner did make that call, flip only the fresh-profile default to on in `src/AppController.cpp` | — |
+| r5 Knowledge… | R3-017/018 splash leaves on the first frame, never takes input; only the crash card waits | KEEP | no-blocking-animation, loading-states; implements Review 2 CHANGE 3 (`qml/SplashScreen.qml`: MouseArea passes presses, focus only when crashed) · N/X-Ntf-Focus | — |
+| r3 Today… | R3-027/103 DnD wording: held until `notifications.dndUntil` | KEEP | consistency with R3-103 and the code; implements Review 2 CHANGE 4 | — |
+| r5 Today… | R4-006 first-run sidebar: no section key hints, no Ctrl K footer, no profile dot | KEEP | matches H2-First / Q-First (Ctrl N on "Новая задача…" stays in bold, as the sheet draws it); progressive-disclosure | — |
+| r5 Today… | R4-011 folded active section = 34px rounded tile (`panel2`) | KEEP | N/X-Oth-Small draw the tile; nav-state-active by form, not a colour bar | — |
+| r5 Today… | R4-017 every sync source: reason + "повторить"; 429 = amber pending ring "просит подождать (429)" | KEEP | error-recovery (message + action); same wording and "Повторить сейчас" as N-Err-Tracker; pending ring as N-Ntf-Toasts. Retry is the person's press, nothing is written | — |
+| r5 Today… | R4-019 update line wraps inside the sidebar gutters | KEEP | fixes the A-level overflow (no horizontal push; truncation-strategy: elide only the version) · N/X-Ntf-OS | — |
+| r5 tasks… | APP-281 A3 branch name + icon row on the checked-out branch's card | REVERT | H2-Board's card meta is id · when · priority only (no branch anywhere in its markup or data); the entry's "H2-Board allows Icon branch + name" is not in the sheet. DG-023 "No branch" on cards, and the owner's 1.0 direction (cards show no branch; the cursor's expanded state shows no branch). "What am I on" already has its place: the git working-on line at the top (X-Oth-Knowledge). Sheet and owner beat the ticket | Remove the `_branchMatched` row (Icon "branch" + `tc-branch`) from `qml/TaskCard.qml` (~l.380, ~l.609–630) and its case in `tests/qml/tst_Heap2Board.qml`; rewrite the APP-281 entry in `docs/DESIGN-DECISIONS.md` as "no branch on any card; the current branch is the top-bar git line" |
+| r5 tasks… | R4-113 picked conflict cell = 1px outline + bright text, no fill | KEEP | exactly N-Dlg-Conflict (`inset 0 0 0 1px #4a525d; color: #ffffff`, other side #8f99a6); color-not-only | — |
+| r5 tasks… | R4-037 empty rings on every card while a selection exists | KEEP | exactly N/X-Oth-Select-Drag (unselected 1.5px ring, selected filled with ✓); the affordance shows where the choice is offered | — |
+| r5 tasks… | R4-105 one SmallDialog fact style; ticket-naming fact a step brighter (`factColor`) | KEEP | N-Dlg-Conflict: write-ask fact #c4ccd6, "Тикет назначен" fact #8f99a6, both 1.5; consistency | — |
+| r5 tasks… | R4-104 "state.json не читается с позиции N." only when the parse failed | KEEP | matches N-Err-Storage text (digits grouped as "18 230"); error-clarity; no invented position for a shape error | — |
+| r5 tasks… | R3-045 quiet danger ink held at 4.5:1 on menu fill and highlight (tst_Theme) | KEEP | color-accessible-pairs; closes Review 2's verify note | — |
+| r5 tasks… | Lead r5 merge: small-dialog fact leading 1.5; ↵ from the R4-056 font fix | KEEP | the sheets disagree (X-Dlg-Small template `d.sub` 1.45; storage, keychain, tracker push and "нет Готово" cards 1.5 in N-Err-Storage / N-Dlg-Conflict / N-Err-Empty); one value for one component, 0.65 px apart. The lead's "every small-dialog fact at 1.5" overstates it — see the R4-062/063 row | — |
+
+### Review 3 CHANGE / REVERT items
+
+1. **REVERT APP-281 A3 branch row on the card**: delete the `_branchMatched` RowLayout and the
+   property from `qml/TaskCard.qml` and its test in `tests/qml/tst_Heap2Board.qml`; rewrite the entry
+   in `docs/DESIGN-DECISIONS.md` (no branch on any card, DG-023; the current branch lives in the git line).
+2. **R4-062/063 text**: replace "13px at 1.45 leading" with the 1.5 the lead note set —
+   `docs/DESIGN-DECISIONS.md` only.
