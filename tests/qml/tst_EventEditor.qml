@@ -295,4 +295,50 @@ TestCase {
         compare(findChild(ed, "event-saved").text, I18n.t("event.saved"));
         ed.close();
     }
+
+    // IDIOT-CAL-2: a generated occurrence carries the master's id, which is
+    // stored, so the editor took it for an override and never asked the
+    // scope; a Repeat change became a one-off and was lost.
+    function _series(title, offset) {
+        const day = new Date();
+        day.setDate(day.getDate() + offset);
+        day.setHours(0, 0, 0, 0);
+        const ev = AppController.newEventDraft(9, day);
+        ev.title = title;
+        ev.end = 10;
+        ev.date = day;
+        ev.rrule = "FREQ=DAILY;COUNT=5";
+        AppController.saveEvent(ev);
+        const third = new Date(day);
+        third.setDate(third.getDate() + 2);
+        const occ = AppController.eventOccurrences(third, third).filter(o => o.title === title);
+        compare(occ.length, 1);
+        return { ev: ev, occ: occ[0] };
+    }
+    function test_a_generated_occurrence_asks_the_scope_for_a_rule_change() {
+        const s = tc._series("scope probe series", 460);
+        const ed = make('import TodoCpp; EventEditor { }');
+        ed.showForOccurrence(s.occ);
+        verify(ed._generated, "an occurrence the series made");
+        ed.setRepeat("weekly");
+        verify(ed.scopePrompt.opened, "the this / following / all question");
+        ed.scopePrompt.answer("all");
+        compare(AppController.eventSeriesMaster(s.ev.id).rrule.indexOf("FREQ=WEEKLY") >= 0, true);
+        ed.close();
+        AppController.deleteEvent(s.ev.id);
+    }
+    // IDIOT-CAL-1: opened on its own day, Delete asks the scope; Esc keeps
+    // the series.
+    function test_delete_on_an_occurrence_asks_the_scope() {
+        const s = tc._series("delete scope probe", 470);
+        const ed = make('import TodoCpp; EventEditor { }');
+        ed.showForOccurrence(s.occ);
+        compare(Qt.formatDate(ed.pickedDate, "yyyy-MM-dd"), Qt.formatDate(s.occ.occurrenceDate, "yyyy-MM-dd"));
+        ed.deleteEvent();
+        verify(ed.scopePrompt.opened);
+        ed.scopePrompt.close();
+        verify(AppController.eventById(s.ev.id).id === s.ev.id, "cancel keeps the series");
+        ed.close();
+        AppController.deleteEvent(s.ev.id);
+    }
 }

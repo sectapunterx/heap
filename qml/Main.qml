@@ -1396,7 +1396,7 @@ ApplicationWindow {
                         prioritiesFilter: win.prioritiesFilter
                         showArchived: win.tasksShowArchived
                         onTaskClicked: (id) => win.showTask(AppController.taskById(id))
-                        onEventClicked: (id, occurrence) => occurrence ? eventEditor.showForOccurrence(occurrence) : eventEditor.showForId(id)
+                        onEventClicked: (id, occurrence) => win.openEvent(id, occurrence)
                         // An empty slot or a dragged stretch opens the editor on
                         // a draft: the meeting is named before it exists.
                         onCreateRequested: (startHour, endHour, day) => {
@@ -1680,8 +1680,24 @@ ApplicationWindow {
     }
     // The day's hands, for Today and the day panel.
     function openEvent(id, occurrence) {
+        // Today hands the occurrence over as its ISO date (IDIOT-CAL-1): the
+        // series' row opened instead, and a change moved every past day too.
+        if (typeof occurrence === "string") occurrence = win._occurrenceOf(id, occurrence);
         if (occurrence) eventEditor.showForOccurrence(occurrence);
         else eventEditor.showForId(id);
+    }
+    // The occurrence of series `id` (master or override) on ISO day `iso`;
+    // null for a meeting that does not repeat.
+    function _occurrenceOf(id, iso) {
+        const p = String(iso).split("-");
+        if (p.length !== 3) return null;
+        const day = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+        const list = AppController.eventOccurrences(day, day);
+        for (let i = 0; i < list.length; i++) {
+            const o = list[i];
+            if (String(o.masterId || "").length > 0 && (o.id === id || o.masterId === id)) return o;
+        }
+        return null;
     }
     function createEventAt(startHour, endHour, day) {
         eventCapture.openAt({ date: day, start: startHour, end: endHour });

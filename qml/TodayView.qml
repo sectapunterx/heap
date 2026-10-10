@@ -246,7 +246,9 @@ FocusScope {
         const it = root._cursorItem();
         if (!it) { root.moveCursor(0, 0); return; }
         if (it.kind === "task") root.taskClicked(it.id);
-        else root.eventClicked(it.id, null);
+        // The day's occurrence, not the series (IDIOT-CAL-1): Main finds it
+        // by the ISO date the block carries.
+        else root.eventClicked(it.id, it.block.occurrence || null);
     }
     function toggleCursorSelection() {
         const it = root._cursorItem();
@@ -1173,7 +1175,7 @@ FocusScope {
             width: parent.width - x
             height: parent.height
             label: dr.b.title || ""
-            onActivated: dr.meeting ? root.eventClicked(dr.b.id, null) : root.taskClicked(dr.b.id)
+            onActivated: dr.meeting ? root.eventClicked(dr.b.id, dr.b.occurrence || null) : root.taskClicked(dr.b.id)
         }
 
         // Bold: a free window and the end of the day, facts beside a line.

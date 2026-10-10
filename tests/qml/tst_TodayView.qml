@@ -168,4 +168,30 @@ TestCase {
         compare(AppController.todayData(new Date(2026, 9, 8), false).recapDay, false, "Thursday");
         compare(AppController.todayData(new Date(2026, 9, 10), false).recapDay, false, "Saturday");
     }
+
+    // IDIOT-CAL-1: Return on a meeting of a series hands its day's occurrence
+    // up, not null (which opened the whole series on its first day).
+    function test_a_series_meeting_opens_its_occurrence() {
+        const day = tc.probeDay();
+        const first = new Date(day); first.setDate(first.getDate() - 3);
+        const ev = AppController.newEventDraft(8, first);
+        ev.title = "today series probe";
+        ev.end = 8.5;
+        ev.date = first;
+        ev.rrule = "FREQ=DAILY";
+        AppController.saveEvent(ev);
+        tc.events.push(ev.id);
+        AppController.selectedDate = day;
+        const v = createTemporaryQmlObject('import TodoCpp; TodayView { anchors.fill: parent }', host);
+        const spy = createTemporaryQmlObject('import QtTest; SignalSpy { signalName: "eventClicked" }', host);
+        spy.target = v;
+        v.moveCursor(0, 0);
+        const items = v._items();
+        const at = items.findIndex(it => it.id === ev.id);
+        verify(at >= 0, "the meeting is a cursor stop");
+        v._placeIdx(at);
+        v.openCursor();
+        compare(spy.count, 1);
+        compare(spy.signalArguments[0][1], Qt.formatDate(day, "yyyy-MM-dd"));
+    }
 }

@@ -61,14 +61,12 @@ FocusScope {
     property int reminderMinutes: -1
     property var _stored: ({})
     readonly property bool repeating: root.masterId.length > 0 || root.rule.length > 0
-    // An occurrence the series generated (not a stored override of it).
-    readonly property bool _generated: root.masterId.length > 0 && !!root.originalDate
-                                       && !root._storedHere(root.eventId)
-
-    function _storedHere(id) {
-        const e = AppController.eventById(id);
-        return !!e && String(e["id"] || "").length > 0;
-    }
+    // An occurrence the series generated (not a stored override of it). Told
+    // by the occurrence itself (IDIOT-CAL-2): a generated one carries the
+    // master's id, which is stored, so "is its id stored" was always yes and
+    // the this / following / all question never came.
+    property bool _occGenerated: false
+    readonly property bool _generated: root.masterId.length > 0 && !!root.originalDate && root._occGenerated
     readonly property var types: ["none", "standup", "oneone", "sync", "focus"]
     readonly property var repeatKinds: ["never", "daily", "weekdays", "weekly", "biweekly", "monthly", "yearly", "custom"]
     readonly property var reminderChoices: [-1, -2, 0, 5, 10, 15, 30, 60]
@@ -126,6 +124,7 @@ FocusScope {
     function showForDraft(draft) {
         root._switchTo();
         root._isDraft = true;
+        root._occGenerated = false;
         root.masterId = draft.masterId || "";
         root.originalDate = draft.originalDate;
         root.rule = draft.rrule || "";
@@ -137,6 +136,7 @@ FocusScope {
     function showForOccurrence(occ) {
         root._switchTo();
         root._isDraft = false;
+        root._occGenerated = !!occ.generated;
         root.masterId = occ.masterId || "";
         root.originalDate = occ.occurrenceDate || occ.originalDate;
         const master = root.masterId.length > 0 ? AppController.eventSeriesMaster(root.masterId) : null;
@@ -150,6 +150,7 @@ FocusScope {
         if (!ev || !ev.id) return;
         root._switchTo();
         root._isDraft = false;
+        root._occGenerated = false;
         root.masterId = String(ev.masterId || "");
         root.originalDate = ev.masterId ? ev.originalDate : undefined;
         root.rule = String(ev.rrule || "");
@@ -393,6 +394,7 @@ FocusScope {
         }
         if (!best) return;
         root.eventId = best.id;
+        root._occGenerated = !!best.generated;
         root.masterId = best.masterId || "";
         root.originalDate = best.masterId ? (best.occurrenceDate || best.originalDate) : undefined;
         const master = root.masterId.length > 0 ? AppController.eventSeriesMaster(root.masterId) : null;
