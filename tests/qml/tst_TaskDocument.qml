@@ -56,18 +56,46 @@ TestCase {
         body.focusEditor();
         const field = findChild(body, "md-block-field");
         tryVerify(() => field.visible && field.activeFocus, 1000, "no block open for editing");
-        compare(field.text, "first line");
+        // The whole text opens, not a block of it (0.8.2).
+        compare(field.text, "first line\n\n- [ ] item");
         keyClick(Qt.Key_End);
         typeText(" more");
         doc.flush();
         compare(AppController.taskById(id).desc, "first line more\n\n- [ ] item");
-        // Down at the block's end goes to the next block.
-        keyClick(Qt.Key_Down);
-        tryCompare(field, "text", "- [ ] item");
-        // First Esc leaves the block, the second the document.
+        // First Esc leaves the text, the second the document.
         keyClick(Qt.Key_Escape);
         verify(!field.visible);
         verify(doc.opened);
+    }
+
+    // One click on the drawn text opens all of it for typing: the row's
+    // read-only text took the press and nothing opened (0.8.2).
+    function test_a_click_on_the_text_opens_it() {
+        const id = mkTask("click probe", "first line here\n\nsecond para");
+        const doc = make();
+        doc.open(id);
+        const body = findChild(doc, "task-doc-body");
+        const field = findChild(body, "md-block-field");
+        waitForRendering(doc);
+        const p = body.mapToItem(doc, 40, 20);
+        mouseClick(doc, p.x, p.y);
+        tryVerify(() => field.visible && field.activeFocus, 1000, "the click did not open the text");
+        compare(field.text, "first line here\n\nsecond para");
+    }
+
+    // The "write right here" hint types at the end.
+    function test_the_slash_hint_types_at_the_end() {
+        const id = mkTask("hint probe", "a line");
+        const doc = make();
+        doc.open(id);
+        const body = findChild(doc, "task-doc-body");
+        const field = findChild(body, "md-block-field");
+        const hint = findChild(doc, "task-doc-slash-hint-click");
+        verify(hint, "no click on the hint");
+        tryVerify(() => hint.visible, 1000);
+        mouseClick(hint);
+        tryVerify(() => field.visible && field.activeFocus, 1000, "the hint did not open the text");
+        compare(field.cursorPosition, field.length);
     }
 
     function test_empty_properties_are_not_shown() {

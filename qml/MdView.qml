@@ -93,6 +93,22 @@ ListView {
     // document reads at 1.65 (H2-Task / Q-Task, R3-038).
     property real paragraphLineHeight: 0
 
+    // The link at (x, y) of `item` (a row), or "": the row's text is off for
+    // the mouse in an editable document, so the row asks it here.
+    function _linkUnder(item, x, y) {
+        let it = item, px = x, py = y;
+        for (let d = 0; d < 32 && it; d++) {
+            if (typeof it.linkAt === "function") {
+                const l = it.linkAt(px, py);
+                if (l && l.length > 0) return l;
+            }
+            const c = it.childAt(px, py);
+            if (!c) break;
+            const q = it.mapToItem(c, px, py);
+            it = c; px = q.x; py = q.y;
+        }
+        return "";
+    }
     function _handleLink(link, line) {
         if (link.startsWith("heap://")) {
             const rest = link.substring(7);
@@ -239,7 +255,12 @@ ListView {
         // Double-click anywhere on a row jumps the editor to its source.
         TapHandler {
             acceptedButtons: Qt.LeftButton
-            onTapped: if (view.clickToEdit) view.rowClicked(rowItem.index, rowItem.model.firstLine)
+            onTapped: (point) => {
+                if (!view.clickToEdit) return;
+                const link = view._linkUnder(rowItem, point.position.x, point.position.y);
+                if (link.length > 0) view._handleLink(link, rowItem.model.firstLine);
+                else view.rowClicked(rowItem.index, rowItem.model.firstLine);
+            }
             onDoubleTapped: view.sourceRequested(rowItem.model.firstLine)
         }
 
@@ -265,6 +286,11 @@ ListView {
                     objectName: "mdParagraph"
                     Layout.fillWidth: true
                     readOnly: true
+                    // Off for the mouse in an editable document: a readOnly
+                    // TextEdit takes every press, so a click never reached the
+                    // row and the text could not be opened (links: see the
+                    // row's TapHandler).
+                    enabled: !view.clickToEdit
                     selectByMouse: true
                     wrapMode: TextEdit.Wrap
                     textFormat: TextEdit.RichText
@@ -366,6 +392,7 @@ ListView {
                     objectName: "mdHeading"
                     Layout.fillWidth: true
                     readOnly: true
+                    enabled: !view.clickToEdit
                     selectByMouse: true
                     wrapMode: TextEdit.Wrap
                     textFormat: TextEdit.RichText
@@ -481,7 +508,8 @@ ListView {
                             id: codeText
                             objectName: "mdCodeBody"
                             readOnly: true
-                            selectByMouse: true
+                            enabled: !view.clickToEdit
+                    selectByMouse: true
                             textFormat: TextEdit.PlainText
                             text: rowItem.model.code
                             color: Theme.text
@@ -539,7 +567,8 @@ ListView {
                                 anchors.fill: parent
                                 anchors.margins: Theme.spSm
                                 readOnly: true
-                                selectByMouse: true
+                                enabled: !view.clickToEdit
+                    selectByMouse: true
                                 textFormat: TextEdit.RichText
                                 text: parent.modelData
                                 color: Theme.text
@@ -848,6 +877,7 @@ ListView {
                 TextEdit {
                     Layout.fillWidth: true
                     readOnly: true
+                    enabled: !view.clickToEdit
                     selectByMouse: true
                     wrapMode: TextEdit.Wrap
                     textFormat: TextEdit.RichText
