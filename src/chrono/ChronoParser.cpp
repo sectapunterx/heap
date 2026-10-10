@@ -1365,8 +1365,8 @@ class ChronoParser::Impl {
         ++last;
       } else if(inListAny(w, primary->hourSuffixes, fallback->hourSuffixes)) {
         // "2h" is a length ("estimate 2h"), not two at night, unless "at"
-        // says so (IDIOT-TASKS-8); "14ч" stays a clock time.
-        if(w == QStringLiteral("h") &&
+        // says so (IDIOT-TASKS-8); "16h" and "14ч" stay clock times.
+        if(w == QStringLiteral("h") && hour <= 12 && minute == 0 &&
            !(i > 0 && toks[i - 1].kind == TokenKind::Word && inListAny(toks[i - 1].lower, primary->atWords, fallback->atWords))) {
           return false;
         }
