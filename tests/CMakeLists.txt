@@ -690,7 +690,10 @@ foreach(qml_test IN LISTS HEAP_QML_TEST_FILES)
                   -o ${CMAKE_CURRENT_BINARY_DIR}/qml-results/${qml_name}.xml,xml -o -,txt)
   set_tests_properties(heap_qml_tests.${qml_name} PROPERTIES
           ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_QUICK_CONTROLS_STYLE=Basic;HEAP_QML_TEST_FILE=${qml_name}"
-          TIMEOUT 300)
+          # Every QML test function runs ~10x slower on the Linux and macOS
+          # runners than on Windows (cause not found yet); SettingsView took
+          # 260-290 s there, against 34 s on Windows.
+          TIMEOUT 900)
 endforeach()
 
 # HEAP-71: the static TodoCpp module's file-based components (SideRail,
