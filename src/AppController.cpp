@@ -13463,8 +13463,7 @@ QString AppController::duplicateProfile(const QString& id, const QString& newNam
     snapshotActiveProfile();
   }
   Profile copy = m_profiles[i];
-  copy.name = uniqueProfileName(newName.trimmed().isEmpty() ? (m_profiles[i].name + " copy")
-                                                           : newName.trimmed().left(kMaxProfileName));
+  copy.name = uniqueProfileName(newName.trimmed().isEmpty() ? (m_profiles[i].name + " copy") : newName.trimmed().left(kMaxProfileName));
   copy.id = makeProfileId(copy.name);
   copy.createdAt = QDateTime::currentDateTime();
   // Events live in the global pool, attributed to a profile by id: the copy
