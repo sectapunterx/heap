@@ -377,7 +377,6 @@ Rectangle {
         || card._attachmentCount > 0 || card._waiting !== undefined || card._isTicket
     readonly property bool _hasDetails: card._excerpt.length > 0 || (card._cl.total || 0) > 0 || card._hasFacts
         || localMarks.hasContent
-    readonly property bool _branchMatched: card.taskId.length > 0 && AppController.focusedTaskId === card.taskId
     // The detailed card (APP-281 A1) keeps the description's first line, the
     // checklist and the pull request at rest; the other facts wait for the
     // cursor as on a compact one.
@@ -606,30 +605,6 @@ Rectangle {
             writeOn: card._writeOn
             onResolveRequested: card.openConflictDialog()
         }
-        // The branch checked out now is this task's (APP-281 A3): the one
-        // fact of "what am I on", so it shows in both styles — and only on
-        // this card.
-        RowLayout {
-            Layout.fillWidth: true
-            visible: card._branchMatched
-            spacing: Theme.spXs
-            Icon {
-                name: "branch"
-                size: Theme.px(12)
-                color: Theme.textMuted
-            }
-            Text {
-                objectName: "tc-branch"
-                Layout.fillWidth: true
-                text: AppController.focusedBranch
-                textFormat: Text.PlainText
-                color: Theme.textMuted
-                font.family: Theme.fontMono
-                font.pixelSize: Theme.fsXs
-                elide: Text.ElideMiddle
-            }
-        }
-
         // Under the cursor: the description's first line, the checklist, and
         // the quieter facts. Opens and closes in a pop; `visible` holds while
         // it closes so the height can run down to nothing.

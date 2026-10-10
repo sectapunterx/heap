@@ -40,6 +40,10 @@ prep (no fpgm, cvt or glyph programs), so nothing depends on the old em.
     pip install fonttools
     python tools/gen_bundled_fonts.py            # downloads upstream, writes resources/fonts/
     python tools/gen_bundled_fonts.py <dir>      # uses <dir>/GolosText[wght].ttf etc. instead
+    python tools/fonts/add_return_glyph.py       # then: the ↵ glyph the upstream fonts lack (R4-056)
+
+A download also rewrites each *-OFL.txt from upstream: put back the
+"Modified Version (lowkey)" note under its header.
 """
 
 import sys
