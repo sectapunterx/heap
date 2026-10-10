@@ -156,6 +156,8 @@ FocusScope {
     readonly property var _ipLines: root.cards ? root.otherInProgress : root.inProgress
     readonly property int _ipCap: 5
     property bool _ipAll: false
+    readonly property int _dlCap: 8
+    property bool _dlAll: false
     // Quiet keeps only today's deadlines (H2-Today-Calm "Срок сегодня").
     readonly property var deadlines: (root.dayData.deadlines || []).filter(t => root.cards || !t.tomorrow)
     readonly property var people: Style.todayExtras === "hidden" ? [] : (root.dayData.people || [])
@@ -622,7 +624,9 @@ FocusScope {
                             text: I18n.t(root.cards ? "today.deadlines" : "today.q.dueToday")
                         }
                         Repeater {
-                            model: root.deadlines
+                            // Capped like the work in progress: thousands of rows
+                            // froze the day on every change (DATA-11, EYES-3).
+                            model: root._dlAll ? root.deadlines : root.deadlines.slice(0, root._dlCap)
                             delegate: TaskLine {
                                 required property var modelData
                                 task: modelData
@@ -642,6 +646,15 @@ FocusScope {
                                 when: !root.cards ? "" : modelData.tomorrow ? I18n.t("quick.day.tomorrow") : I18n.t("quick.day.today")
                                 whenSignal: !modelData.tomorrow
                             }
+                        }
+                        Text {
+                            objectName: "today-deadlines-more"
+                            visible: !root._dlAll && root.deadlines.length > root._dlCap
+                            text: I18n.t("week.more").arg(root.deadlines.length - root._dlCap)
+                            color: Theme.textMuted
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsSm
+                            ClickArea { label: parent.text; onActivated: root._dlAll = true }
                         }
                         Text {
                             objectName: "today-overdue"

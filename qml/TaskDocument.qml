@@ -69,7 +69,20 @@ FocusScope {
     // (IDIOT-DOC-10, the owner's "/" report).
     function takeFocus() {
         if (String(titleField.text).trim().length === 0) root.focusTitle();
-        else root.forceActiveFocus();
+        else root.focusDocument();
+    }
+    // The document itself, not whatever field inside it had focus last: a
+    // FocusScope hands the keyboard back to that child, a hidden chip field
+    // included (IDIOT-DOC-6). The sink sits in the scope; the keys it takes
+    // travel up to the document's own handlers.
+    function focusDocument() {
+        docFocus.forceActiveFocus();
+    }
+    Item {
+        id: docFocus
+        objectName: "task-doc-focus"
+        width: 0
+        height: 0
     }
     function focusTitle() {
         titleField.forceActiveFocus();
@@ -1144,11 +1157,11 @@ FocusScope {
             font.pixelSize: Theme.fsSm
             color: Theme.text
             background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.focusRing; border.width: 1 }
-            onAccepted: { tc._editing = false; tc.committed(tcField.text); root.forceActiveFocus(); }
+            onAccepted: { tc._editing = false; tc.committed(tcField.text); root.focusDocument(); }
             onActiveFocusChanged: if (!activeFocus && tc._editing) { tc._editing = false; tc.committed(tcField.text); }
             // Hidden, the field kept the keyboard: what was typed went
             // nowhere and Esc no longer closed the document (IDIOT-DOC-6).
-            Keys.onEscapePressed: (e) => { tc._editing = false; root.forceActiveFocus(); e.accepted = true; }
+            Keys.onEscapePressed: (e) => { tc._editing = false; root.focusDocument(); e.accepted = true; }
             Keys.onReturnPressed: (e) => { tcField.accepted(); e.accepted = true; }
             Keys.onEnterPressed: (e) => { tcField.accepted(); e.accepted = true; }
         }

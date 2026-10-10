@@ -8392,7 +8392,7 @@ QVariantMap AppController::weekFacts(const QDate& day) const {
   const QDate end = start.addDays(7);
   QVector<const Task*> closed;
   for(const Task& t : m_tasks.items()) {
-    if(t.status == QStringLiteral("done") && t.statusChangedAt.isValid() && t.statusChangedAt.date() >= start &&
+    if(statusCategory(t.status) == QLatin1String("done") && t.statusChangedAt.isValid() && t.statusChangedAt.date() >= start &&
        t.statusChangedAt.date() < end) {
       closed.push_back(&t);
     }
@@ -8422,7 +8422,7 @@ void AppController::copyWeeklyReportToClipboard() {
   QVector<const Task*> shipped;
   int totalSecs = 0;
   for(const Task& t : p.tasks) {
-    if(t.status == QStringLiteral("done") && t.statusChangedAt.isValid() && t.statusChangedAt.date() >= since) {
+    if(statusCategory(t.status) == QLatin1String("done") && t.statusChangedAt.isValid() && t.statusChangedAt.date() >= since) {
       shipped.push_back(&t);
       totalSecs += t.trackedSeconds;
     }
@@ -8649,7 +8649,28 @@ int AppController::exampleChanges() const {
       ++n;
     }
   }
+  // Meetings the person added to the example are theirs too (DATA-1).
+  for(const CalEvent& e : m_events.items()) {
+    if(e.profileId == p.id && !isSampleEvent(e)) {
+      ++n;
+    }
+  }
   return n;
+}
+
+// A meeting the example came with, in either language; matched by title,
+// since the sample's dates follow the day it was opened on.
+bool AppController::isSampleEvent(const CalEvent& e) {
+  static const QSet<QString> titles = [] {
+    QSet<QString> out;
+    for(const SampleData::Lang lang : {SampleData::Lang::En, SampleData::Lang::Ru}) {
+      for(const CalEvent& s : SampleData::events(QDate::currentDate(), lang)) {
+        out.insert(s.title);
+      }
+    }
+    return out;
+  }();
+  return titles.contains(e.title);
 }
 
 void AppController::removeExample() {
@@ -8667,9 +8688,12 @@ void AppController::removeExample() {
     m_profiles.push_back(own);
   }
   // Its sample meetings go with it rather than staying behind unassigned.
+  // The person's own stay: deleteProfile detaches them into its undo entry,
+  // so Undo gives them back with the profile (DATA-1: they were deleted for
+  // good, without a question).
   for(int r = m_events.rowCount() - 1; r >= 0; --r) {
     const CalEvent& e = m_events.items().at(r);
-    if(e.profileId == id) {
+    if(e.profileId == id && isSampleEvent(e)) {
       m_events.removeById(e.id);
     }
   }
@@ -14095,12 +14119,10 @@ QString AppController::importProfileFromJson(const QString& jsonText, bool activ
   // Hoist the imported calendar events into the global pool, re-attributed to
   // the (possibly re-slugged) imported profile and given fresh ids so they can
   // never collide with existing events — including on a same-instance
-  // round-trip where the source ids are already present.
-  for(CalEvent& e : importedEvents) {
-    e.profileId = imported.id;
-    e.id = QStringLiteral("ev-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
-    m_events.upsert(e);
-  }
+  // round-trip where the source ids are already present. A series' moved
+  // occurrence follows its own copy of the series: left on the source id it
+  // took over the source profile's occurrence (DATA-3).
+  addEventsAsCopies(importedEvents, imported.id);
 
   if(activate) {
     clearPendingUndo();  // undo is scoped to the active workspace

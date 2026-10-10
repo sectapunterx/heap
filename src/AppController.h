@@ -2528,6 +2528,7 @@ class AppController : public QObject {
   // `profileId`'s own: each gets a fresh id, and an override follows its
   // series to the copy's (PLAT-10, TM-1).
   void addEventsAsCopies(const QVector<CalEvent>& events, const QString& profileId);
+  static bool isSampleEvent(const CalEvent& e);
   int statusIndexOf(const QString& id) const;
   // Whether another column (not `exceptId`) already carries `name`, ignoring case.
   bool statusNameTaken(const QString& name, const QString& exceptId) const;
