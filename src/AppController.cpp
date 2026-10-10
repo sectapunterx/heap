@@ -4998,6 +4998,15 @@ void AppController::saveOccurrence(const QVariantMap& draft, const QString& scop
         const CalEvent before = m_events.items().at(m_events.indexOfId(id));
         CalEvent ov = before;
         ov.originalDate = movedDay(ov.originalDate);
+        // The override goes with its slot (IDIOT-CAL-12): only the slot
+        // moved, and the meeting sat a day before it, next to a regular one.
+        const qint64 slotShift = before.originalDate.daysTo(ov.originalDate);
+        if(slotShift != 0 && ov.date.isValid()) {
+          ov.date = ov.date.addDays(slotShift);
+          if(ov.endDate.isValid()) {
+            ov.endDate = ov.endDate.addDays(slotShift);
+          }
+        }
         follow(ov.title, master.title, m.title);
         follow(ov.type, master.type, m.type);
         follow(ov.attendees, master.attendees, m.attendees);
