@@ -219,7 +219,9 @@ TestCase {
         keyClick(Qt.Key_Backtab, Qt.ShiftModifier);
         compare(desc.text, "- item");
         keyClick(Qt.Key_Escape);
-        keyClick(Qt.Key_D);
+        // The prompt answers Ctrl+D, not a bare d, and not at once (IDIOT-DOC-19).
+        wait(450);
+        keyClick(Qt.Key_D, Qt.ControlModifier);
         tryCompare(te, "opened", false);
     }
 

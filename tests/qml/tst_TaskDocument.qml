@@ -149,7 +149,8 @@ TestCase {
         compare(AppController.taskById(id).title, "keep me");
         const saved = findChild(doc, "task-doc-saved");
         compare(saved.text, I18n.t("taskdoc.needsTitle"));
-        doc.forceActiveFocus();
+        findChild(doc, "task-doc-body").focusEditor();
+        tryVerify(() => !title.activeFocus);
         tryCompare(title, "text", "keep me");
         doc.close();
     }
