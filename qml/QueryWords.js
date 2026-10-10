@@ -10,7 +10,11 @@ function clause(raw) {
     const body = neg ? raw.slice(1) : raw;
     const at = body.indexOf(":");
     if (at <= 0) return null;
-    const k = body.slice(0, at).toLowerCase();
+    // The chips' Russian keys typed back ("статус:заблок", "приоритет:p0")
+    // are the same clauses (DG-080, R3-136).
+    const ruKeys = { "статус": "status", "приоритет": "priority" };
+    const k0 = body.slice(0, at).toLowerCase();
+    const k = ruKeys[k0] || k0;
     const v = body.slice(at + 1);
     const lv = v.toLowerCase();
     const keys = { status: "status", priority: "priority", tag: "label", due: "due", deadline: "due",
@@ -26,7 +30,12 @@ function clause(raw) {
     else if (k === "priority") value = v.toUpperCase().split(",").join(", ");
     else if (k === "status") {
         const sts = AppController.statuses;
-        value = v.split(",").map(id => { const st = sts.find(x => x.id === id.toLowerCase()); return st ? st.name : id; }).join(", ");
+        // By id, else by the start of the name ("заблок" → Заблокировано).
+        value = v.split(",").map(id => {
+            const l = id.toLowerCase();
+            const st = sts.find(x => x.id === l) || sts.find(x => String(x.name || "").toLowerCase().startsWith(l));
+            return st ? st.name : id;
+        }).join(", ");
     } else if (k === "due" || k === "deadline") {
         const words = ["today", "tomorrow", "week", "overdue", "none"];
         value = words.indexOf(lv) >= 0 ? I18n.t("query.due." + lv) : v;

@@ -43,9 +43,10 @@ Column {
         width: root.width
         horizontalAlignment: Text.AlignHCenter
         text: root.title
-        color: root.compact ? Theme.textDim : Theme.text
+        // N/X-Err-Empty: one plain line in the muted text, then the key.
+        color: root.compact ? Theme.textDim : Theme.textMuted
         font.pixelSize: root.compact ? Theme.fsSm : Theme.fsMd
-        font.weight: root.compact ? Theme.fwBody : Theme.fwTitle
+        font.weight: Theme.fwBody
         wrapMode: Text.WordWrap
     }
     Text {
@@ -55,7 +56,7 @@ Column {
         horizontalAlignment: Text.AlignHCenter
         text: root.line
         color: root.lineLink && lineCA.hovered ? Theme.text : Theme.textDim
-        font.pixelSize: root.compact ? Theme.fsXs : Theme.fsSm
+        font.pixelSize: root.compact ? Theme.fsXs : Theme.fsMd
         wrapMode: Text.WordWrap
         ClickArea {
             id: lineCA

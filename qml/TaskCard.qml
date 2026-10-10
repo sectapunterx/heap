@@ -553,81 +553,18 @@ Rectangle {
             }
         }
 
-        // Out of step with the tracker, in the sheet's words (X/N-Err-
-        // Tracker, R2-034): "ждёт отправки статуса", "вне фильтра Jira —
-        // только у вас", "удалён в Jira · оставить у себя / убрать",
-        // "изменён и у вас, и в Jira · решить". The actions are links in
-        // the line; nothing is sent from here unless writes are on. Its own
+        // Out of step with the tracker (X/N-Err-Tracker, R2-034); its own
         // line under the key: beside the date and priority it had no room.
-        Text {
+        TrackerMark {
             id: markT
             objectName: "tc-mark"
             Layout.fillWidth: true
-            // syncState comes from the model; a hand-built task map (the
-            // archive, tests) may only carry the older flags.
-            readonly property string state: !card._isTicket ? "synced"
-                : (card._ticket.syncState
-                   || (card._ticket.gone ? "gone"
-                       : card._ticket.unsynced ? (card._ticket.queued ? "queued" : "error") : "synced"))
-            // A move left over while the tracker's switch is off: it only
-            // goes out when the user sends it (APP-243).
-            readonly property bool unsent: !card._writeOn && (state === "queued" || state === "error")
-            readonly property bool gone: card._isTicket && (state === "gone" || !!card._ticket.gone)
-            readonly property bool conflict: card._isTicket && !!card._ticket.conflict && !gone
-            readonly property bool outOfScope: card._isTicket && !!card._ticket.outOfScope && !gone
-            readonly property bool pending: card._isTicket && !gone
-                && (state === "pushing" || state === "queued" || state === "error")
-            readonly property string tracker: card._badge.name || card._ticket.provider || ""
-            function _a(href, label) { return "<a href=\"" + href + "\">" + label + "</a>"; }
-            readonly property string words: {
-                if (!card._isTicket) return "";
-                if (gone)
-                    return I18n.t("taskcard.mark.gone").arg(tracker) + " · "
-                        + _a("keep", I18n.t("taskcard.mark.keep")) + " / " + _a("remove", I18n.t("taskcard.mark.remove"));
-                const parts = [];
-                if (conflict)
-                    parts.push(I18n.t("taskcard.mark.conflict").arg(tracker) + " · " + _a("resolve", I18n.t("taskcard.mark.resolve")));
-                if (pending) {
-                    if (state === "pushing") parts.push(I18n.t("taskcard.pushing"));
-                    else if (unsent) parts.push(I18n.t("taskcard.mark.unsent"));
-                    else if (state === "queued") parts.push(I18n.t("taskcard.mark.waiting"));
-                    else parts.push(I18n.t("taskcard.mark.refused") + " · " + _a("retry", I18n.t("taskcard.mark.retry")));
-                }
-                if (outOfScope) parts.push(I18n.t("taskcard.mark.outOfScope").arg(tracker));
-                return parts.join(" · ");
-            }
-            readonly property string tip: gone ? I18n.t("taskcard.gone.tip")
-                : conflict ? I18n.t("taskcard.conflict.tip")
-                : state === "pushing" ? I18n.t("taskcard.pushing.tip")
-                : unsent ? I18n.t("taskcard.unsent.tip")
-                    + (card._ticket.syncError ? "\n" + I18n.t("taskcard.syncError").arg(card._ticket.syncError) : "")
-                : state === "queued" ? I18n.t("taskcard.queued.tip")
-                : state === "error" ? I18n.t("taskcard.unsynced.tip")
-                    + (card._ticket.syncError ? "\n" + I18n.t("taskcard.syncError").arg(card._ticket.syncError) : "")
-                : outOfScope ? I18n.t("taskcard.outOfScope.tip") + (card._writeOn ? " " + I18n.t("taskcard.outOfScope.noSync") : "")
-                : ""
-            visible: words.length > 0
-            text: words
-            textFormat: Text.StyledText
-            linkColor: Theme.textMuted
-            color: Theme.textDim
-            font.family: Theme.fontUi
-            font.pixelSize: Theme.fsXs
             wrapMode: Text.Wrap
-            onLinkActivated: (link) => {
-                if (!card.task) return;
-                if (link === "keep") AppController.keepGoneTicketLocally(card.task.id);
-                else if (link === "remove") AppController.setArchived(card.task.id, true);
-                else if (link === "resolve") card.openConflictDialog();
-                else if (link === "retry") AppController.retryTrackerPush(card.task.id);
-            }
-            HoverHandler {
-                id: markHover
-                cursorShape: markT.hoveredLink.length > 0 ? Qt.PointingHandCursor : Qt.ArrowCursor
-            }
-            QQC.ToolTip.visible: markHover.hovered && markT.hoveredLink.length === 0 && markT.tip.length > 0
-            QQC.ToolTip.delay: 600
-            QQC.ToolTip.text: markT.tip
+            taskId: card.task ? card.task.id : ""
+            ticket: card._ticket
+            trackerName: card._badge.name || ""
+            writeOn: card._writeOn
+            onResolveRequested: card.openConflictDialog()
         }
         // The branch checked out now is this task's (APP-281 A3): the one
         // fact of "what am I on", so it shows in both styles — and only on

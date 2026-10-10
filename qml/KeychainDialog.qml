@@ -12,6 +12,7 @@ SmallDialog {
     property string _name: ""
     readonly property bool windows: Qt.platform.os === "windows"
 
+    eyebrow: I18n.t("keychain.eyebrow")
     title: I18n.t("keychain.title").arg(root._name)
     fact: I18n.t(root.windows ? "keychain.fact.win" : "keychain.fact.other").arg(AppController.keychainName())
     onAccepted: { AppController.retryKeychain(); root.close(); }

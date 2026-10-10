@@ -43,7 +43,7 @@ TestCase {
     // Design audit DES-15: the first-run hints name rebindable shortcuts, so
     // they take them as arguments instead of spelling out the defaults.
     function test_first_run_hints_take_the_shortcuts_as_arguments() {
-        const keys = ["board.empty.hint",
+        const keys = ["tasks.empty.line", "calendar.empty.hint",
                       "board.empty.archivedHint", "timeline.empty.none.hint"];
         for (const lang of ["en", "ru"]) {
             for (const k of keys) {

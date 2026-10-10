@@ -444,6 +444,8 @@ qt_add_qml_module(heap_core
         qml/PeopleDialog.qml
         qml/PersonMenu.qml
         qml/ProfileDeleteDialog.qml
+        qml/DoneColumnDialog.qml
+        qml/TrackerMark.qml
         qml/Toast.qml
         qml/ToastTiming.js
         qml/AppMenu.qml
