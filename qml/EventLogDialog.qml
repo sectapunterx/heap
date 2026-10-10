@@ -199,13 +199,30 @@ Popup {
                         font.family: Theme.fontMono
                         font.pixelSize: Theme.fsXs
                     }
-                    Text {
+                    // The source; a failed line carries a warning mark
+                    // after it (N-Dlg-Log-Import, R4-065).
+                    RowLayout {
                         Layout.preferredWidth: Theme.px(80)
-                        text: root.sourceOf(row.modelData)
-                        color: Theme.textMuted
-                        font.family: Theme.fontUi
-                        font.pixelSize: Theme.fsSm
-                        elide: Text.ElideRight
+                        Layout.maximumWidth: Theme.px(80)
+                        spacing: Theme.spXs
+                        Text {
+                            Layout.fillWidth: !srcMark.visible
+                            Layout.maximumWidth: Theme.px(80) - (srcMark.visible ? srcMark.width + Theme.spXs : 0)
+                            text: root.sourceOf(row.modelData)
+                            color: Theme.textMuted
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsSm
+                            elide: Text.ElideRight
+                        }
+                        Icon {
+                            id: srcMark
+                            objectName: "event-log-error-mark"
+                            visible: row.modelData.kind === "error"
+                            name: "warning"
+                            size: Theme.px(11)
+                            color: Theme.dangerInk
+                        }
+                        Item { Layout.fillWidth: srcMark.visible }
                     }
                     Text {
                         objectName: "event-log-message"

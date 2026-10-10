@@ -1575,58 +1575,30 @@ ApplicationWindow {
             AppController.removeExample();
         }
     }
-    Popup {
+    // On the small-dialog template (X-Dlg-Small, R4-063).
+    SmallDialog {
         id: removeExampleDialog
         objectName: "remove-example-dialog"
         property int changes: 0
-        modal: true
-        focus: true
-        parent: Overlay.overlay
-        anchors.centerIn: parent
-        width: Math.min(Theme.px(440), (parent ? parent.width : 440) - 2 * Theme.sp2xl)
-        padding: Theme.inset
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-        Overlay.modal: ModalScrim {}
-        background: ModalSurface {}
+        title: I18n.t("example.remove.title")
+        fact: I18n.t("example.remove.body") + " " + I18n.count(removeExampleDialog.changes, "example.remove.changed")
         onOpened: keepExample.forceActiveFocus()
-        contentItem: ColumnLayout {
-            spacing: Theme.spLg
-            Text {
-                Layout.fillWidth: true
-                text: I18n.t("example.remove.title")
-                color: Theme.text
-                font.pixelSize: Theme.fsLg
-                font.weight: Theme.fwHeading
-                wrapMode: Text.WordWrap
-            }
-            Text {
-                objectName: "remove-example-body"
-                Layout.fillWidth: true
-                text: I18n.t("example.remove.body") + " " + I18n.count(removeExampleDialog.changes, "example.remove.changed")
-                color: Theme.textMuted
-                font.pixelSize: Theme.fsSm
-                wrapMode: Text.WordWrap
-            }
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Theme.spMd
-                Item { Layout.fillWidth: true }
-                PillButton {
-                    id: keepExample
-                    text: I18n.t("example.remove.keep")
-                    onClicked: removeExampleDialog.close()
-                }
-                PillButton {
-                    objectName: "remove-example-confirm"
-                    text: I18n.t("example.remove.confirm")
-                    danger: true
-                    onClicked: {
-                        removeExampleDialog.close();
-                        AppController.removeExample();
-                    }
+        buttons: [
+            PillButton {
+                id: keepExample
+                text: I18n.t("example.remove.keep")
+                onClicked: removeExampleDialog.close()
+            },
+            PillButton {
+                objectName: "remove-example-confirm"
+                text: I18n.t("example.remove.confirm")
+                danger: true
+                onClicked: {
+                    removeExampleDialog.close();
+                    AppController.removeExample();
                 }
             }
-        }
+        ]
     }
 
     // A query in the Tasks search, on a lens (Today's "N without a date").

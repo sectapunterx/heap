@@ -107,7 +107,8 @@ Popup {
         ColumnLayout {
             Layout.topMargin: Theme.spLg
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
-            spacing: Theme.spSm
+            // 32px rows, no gap between them (X-Dlg-Event, R4-051).
+            spacing: 0
             Repeater {
                 model: ["this", "following", "all"]
                 delegate: Item {
@@ -116,19 +117,21 @@ Popup {
                     readonly property bool on: root.choice === opt.modelData
                     objectName: "series-scope-" + opt.modelData
                     implicitWidth: optRow.implicitWidth
-                    implicitHeight: Theme.rowH
+                    implicitHeight: Theme.px(32)
                     // Answers with this option (keyboard: pick, then Return).
                     function clicked() { root.answer(opt.modelData); }
                     RowLayout {
                         id: optRow
                         anchors.fill: parent
                         spacing: Theme.spMd
+                        // A plain radio: the empty ring is drawn in
+                        // the text colour so it reads on the panel.
                         Rectangle {
-                            implicitWidth: Theme.spLg; implicitHeight: Theme.spLg
+                            implicitWidth: Theme.px(14); implicitHeight: Theme.px(14)
                             radius: width / 2
                             color: "transparent"
-                            border.width: opt.on ? 4 : 1
-                            border.color: opt.on ? Theme.accent : Theme.borderStrong
+                            border.width: opt.on ? 4 : 1.5
+                            border.color: opt.on ? Theme.accent : Theme.textMuted
                         }
                         Text {
                             text: I18n.t("repeat.scope." + opt.modelData)
@@ -156,6 +159,7 @@ Popup {
                 objectName: "series-scope-cancel"
                 text: I18n.t("common.cancel")
                 shortcutId: ""
+                keyHint: "Esc"
                 onClicked: root.close()
             }
             PillButton {
@@ -167,6 +171,7 @@ Popup {
                 solid: Style.fills && root.mode !== "delete"
                 text: root.mode === "delete" ? I18n.t("common.delete")
                     : root.mode === "move" ? I18n.t("repeat.scope.moveBtn") : I18n.t("editor.btn.save")
+                keyHint: "↵"
                 onClicked: root.answer(root.choice)
             }
         }
