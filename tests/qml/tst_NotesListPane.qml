@@ -219,19 +219,26 @@ TestCase {
     // Design audit DES-3: the list is on the Tab path, the arrows walk it and
     // the menu key opens the open note's menu (pin, rename, delete).
     function test_the_keyboard_walks_the_list_and_opens_the_menu() {
-        const a = note("aaa keys probe");
-        const b = note("bbb keys probe");
+        note("aaa keys probe");
+        note("bbb keys probe");
         const pane = makePane();
         pane.filter = "keys probe";
+        // The list's own order: newest first, so which of the two leads
+        // depends on whether they were made in the same millisecond. Taking
+        // "aaa" as the first row failed about one run in fifteen.
+        const ids = [];
+        for (let i = 0; i < pane.rows.length; i++)
+            if (pane.rows[i].kind === "note") ids.push(pane.rows[i].note.id);
+        compare(ids.length, 2);
         let got = "";
         pane.noteActivated.connect(function (x) { got = x; AppController.activeNoteId = x; });
-        AppController.activeNoteId = a;
+        AppController.activeNoteId = ids[0];
 
         const list = findChild(pane, "note-list");
         verify(list.activeFocusOnTab, "the note list is not on the Tab path");
         list.forceActiveFocus(Qt.TabFocusReason);
         keyClick(Qt.Key_Down);
-        compare(got, b);
+        compare(got, ids[1]);
 
         const row = pane._activeRowItem();
         verify(row !== null);

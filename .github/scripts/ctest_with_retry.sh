@@ -19,6 +19,22 @@ fi
 
 failed_log="$dir/Testing/Temporary/LastTestsFailed.log"
 failed=$(cut -d: -f2 "$failed_log" 2>/dev/null | paste -sd' ' -)
+
+# A QML suite's retry rewrites its results file, and on Windows that file is
+# all there is (stdout never reaches ctest): a flake that then passed left no
+# trace of what failed. Keep the first attempt's results and show them.
+for name in $failed; do
+  case "$name" in
+    heap_qml_tests.*)
+      first="$dir/qml-results/${name#heap_qml_tests.}.txt"
+      [[ -f $first ]] || continue
+      cp "$first" "${first%.txt}.first-attempt.txt"
+      echo "::group::first attempt of $name"
+      grep -A4 '^FAIL!' "$first" || true
+      echo "::endgroup::"
+      ;;
+  esac
+done
 echo "::group::Re-running the failed suites once: $failed"
 # Same arguments minus --output-junit, so the first run's report is kept.
 retry_args=()
