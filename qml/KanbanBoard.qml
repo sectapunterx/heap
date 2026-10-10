@@ -286,11 +286,13 @@ Item {
     // The index of the folded column that holds `id`, or -1.
     function _foldedColumnOf(id) {
         if (!id) return -1;
-        for (let c = 0; c < colRepeater.count; c++) {
-            const col = colRepeater.itemAt(c);
-            if (col && col.folded && col.taskFilter && col.taskFilter.ids().indexOf(id) >= 0) return c;
-        }
+        for (let c = 0; c < colRepeater.count; c++)
+            if (root._columnHolds(colRepeater.itemAt(c), id)) return c;
         return -1;
+    }
+    // Whether the folded column `col` holds `id`.
+    function _columnHolds(col, id) {
+        return !!col && col.folded && !!col.taskFilter && col.taskFilter.ids().indexOf(id) >= 0;
     }
 
     // Where the cursor currently sits, or null when it points at nothing on
@@ -562,12 +564,8 @@ Item {
     // cards: Ctrl+A, Del deleted the ones it hid (IDIOT-TASKS-14).
     function _flatVisibleIds() {
         const out = [];
-        for (let c = 0; c < colRepeater.count; c++) {
-            const col = colRepeater.itemAt(c);
-            if (!col || !col.taskFilter || col.folded) continue;
-            const ids = col.taskFilter.ids();
-            for (let i = 0; i < ids.length; i++) out.push(ids[i]);
-        }
+        for (const col of root._visibleByColumn())
+            for (let i = 0; i < col.ids.length; i++) out.push(col.ids[i]);
         return out;
     }
 
