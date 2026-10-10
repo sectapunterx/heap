@@ -1270,7 +1270,7 @@ ApplicationWindow {
                         readonly property bool shown: (taskDoc.opened && !taskDoc.full) || eventEditor.opened
                         anchors.fill: parent
                         z: 59
-                        color: Theme.withAlpha("#000000", Theme.dark ? 0.5 : 0.28)
+                        color: Theme.withAlpha(Theme.scrim, Theme.dark ? 0.5 : 0.28)
                         visible: opacity > 0
                         opacity: shown ? 1 : 0
                         Behavior on opacity { NumberAnimation { duration: Theme.durPop; easing.type: Theme.easeEnter } }
