@@ -62,7 +62,7 @@ ColumnLayout {
         if (offline && !root.hidden["offline:" + offlineKey + waiting]) {
             out.push({ key: "offline:" + offlineKey + waiting, id: "", icon: "pending", action: "log",
                        fact: I18n.t("trk.strip.offline"),
-                       more: waiting > 0 ? I18n.t("trk.strip.offlineWaiting").arg(waiting) : I18n.t("trk.strip.offlineSaved"),
+                       more: waiting > 0 ? I18n.count(waiting, "trk.strip.offlineWaiting") : I18n.t("trk.strip.offlineSaved"),
                        actionText: I18n.t("trk.strip.log") });
         }
         return out;
@@ -111,7 +111,10 @@ ColumnLayout {
                 spacing: Theme.spMd
                 Icon {
                     name: line.modelData.icon
-                    color: line.modelData.icon === "info" && Style.urgency ? Theme.danger : Theme.text
+                    // N-Err-Tracker: an error ring in red, a waiting one
+                    // (429, offline) in amber; quiet keeps both neutral (R4-107).
+                    color: !Style.urgency ? (line.modelData.icon === "info" ? Theme.text : Theme.textMuted)
+                         : line.modelData.icon === "info" ? Theme.danger : Theme.warning
                     Layout.alignment: Qt.AlignVCenter
                 }
                 Text {
@@ -120,7 +123,7 @@ ColumnLayout {
                     textFormat: Text.PlainText
                     color: Theme.text
                     font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsSm
+                    font.pixelSize: Theme.fsMd
                     font.weight: Theme.fwTitle
                     Layout.alignment: Qt.AlignVCenter
                 }
@@ -129,9 +132,9 @@ ColumnLayout {
                     Layout.fillWidth: true
                     text: line.modelData.more
                     textFormat: Text.PlainText
-                    color: Theme.textMuted
+                    color: Theme.textDim
                     font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsSm
+                    font.pixelSize: Theme.fsMd
                     elide: Text.ElideRight
                     Layout.alignment: Qt.AlignVCenter
                 }
@@ -141,7 +144,7 @@ ColumnLayout {
                     text: line.modelData.actionText
                     color: actCA.hovered ? Theme.textMuted : Theme.text
                     font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsSm
+                    font.pixelSize: Theme.fsMd
                     font.weight: Theme.fwTitle
                     font.underline: true
                     Layout.alignment: Qt.AlignVCenter

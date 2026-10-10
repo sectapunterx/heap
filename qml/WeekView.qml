@@ -6,6 +6,7 @@ import TodoCpp
 import "Overlap.js" as Overlap
 import "Segments.js" as Seg
 import "Search.js" as Search
+import "QueryWords.js" as QueryWords
 import "Reschedule.js" as Resched
 import "EventRule.js" as EventRule
 
@@ -27,6 +28,8 @@ Item {
     // plans it there instead of starting a meeting (APP-264).
     property string armedTaskId: ""
     signal armedUsed()
+    // "сбросить фильтр · Esc" under a search that finds nothing (R4-100).
+    signal resetFilterRequested()
 
     signal taskClicked(string id)
     // The task menu (APP-268), one for the view, refilled per task.
@@ -2541,9 +2544,13 @@ Item {
         visible: root.weekEmpty
         // The default "не готово" (is:open) is not a search (DG-020).
         readonly property bool searching: root.searchText.replace(/(^|\s)is:open(?=\s|$)/gi, " ").trim().length > 0
-        title: I18n.t(searching ? "view.empty.noMatch.title" : "week.empty.title")
-        line: searching ? I18n.t("view.empty.noMatch.hint")
+        // A search that finds nothing reads as on the board (N/X-Err-Empty, R4-100).
+        title: searching ? I18n.t("view.empty.noMatchFor").arg(QueryWords.label(root.searchText, []))
+                         : I18n.t("week.empty.title")
+        line: searching ? I18n.t("view.empty.resetFilter")
                         : I18n.t("calendar.empty.hint").arg(AppController.shortcutText("task.schedule"))
+        lineLink: searching
+        onLineActivated: root.resetFilterRequested()
     }
 
     // What a drag would set, at the pointer; Esc cancels it (APP-249).

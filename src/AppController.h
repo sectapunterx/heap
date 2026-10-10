@@ -222,6 +222,9 @@ class AppController : public QObject {
   Q_PROPERTY(QString storageReason READ storageReason NOTIFY storageStateChanged)
   // The file names the message carries (the damaged copy, the backup shown).
   Q_PROPERTY(QStringList storageArgs READ storageArgs NOTIFY storageStateChanged)
+  // Where a damaged state.json stops parsing, as a byte offset; -1 when it
+  // parsed but had the wrong shape, or nothing is damaged (R4-104).
+  Q_PROPERTY(int storageDamagedAt READ storageDamagedAt NOTIFY storageStateChanged)
   Q_PROPERTY(QVariantList syncSources READ syncSources NOTIFY integrationHealthChanged)
   Q_PROPERTY(QVariantMap keychainProblem READ keychainProblem NOTIFY keychainProblemChanged)
   // The previous window session did not end cleanly (R3-018): its marker
@@ -287,6 +290,10 @@ class AppController : public QObject {
 
   QStringList storageArgs() const {
     return m_storageSpec.isEmpty() ? QStringList() : m_storageSpec.first().second;
+  }
+
+  int storageDamagedAt() const {
+    return m_storageDamagedAt;
   }
 
   // The strip's "Save a copy elsewhere…" (R2-037): the whole state as it is
@@ -2459,6 +2466,7 @@ class AppController : public QObject {
   QString m_sessionMarkerPath;  // empty = no marker kept (CLI, tests)
   QString m_storageMessage;
   QString m_storageReason;
+  int m_storageDamagedAt = -1;
   // How the message is worded: string keys with their arguments, so a
   // language switch re-words it (R2-039).
   QVector<QPair<QString, QStringList>> m_storageSpec;

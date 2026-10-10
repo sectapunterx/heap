@@ -279,14 +279,17 @@ Rectangle {
         id: originComp
         DashedRect {
             objectName: "tc-drag-origin"
+            // The card's own fill and title, faded, inside a dashed edge — in
+            // both styles (R4-038: quiet showed an empty outline).
             opacity: 0.35
             radius: Theme.radius
+            fillColor: Theme.surfaceCard
             Text {
                 anchors.fill: parent
                 anchors.margins: Theme.spLg
                 text: card.task ? card.task.title : ""
                 textFormat: Text.PlainText
-                color: Theme.textMuted
+                color: Theme.text
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsMd
                 font.weight: Theme.fwTaskTitle
@@ -432,16 +435,21 @@ Rectangle {
             spacing: Theme.spSm
         // Selected (DG-026, N-Oth-Select-Drag): a check in a filled ring
         // before the title — form, not colour; the card's fill says it too.
+        // While a selection exists the other cards carry the empty ring, so
+        // the choice is offered on them as well (R4-037).
         Rectangle {
             objectName: "tc-selected-mark"
-            visible: card._selected
+            visible: card._selected || AppController.selectionCount > 0
             Layout.alignment: Qt.AlignTop
-            Layout.topMargin: Math.max(0, (titleT.font.pixelSize * 1.35 - height) / 2)
+            Layout.topMargin: Math.max(0, (titleT.lineHeight - height) / 2)
             implicitWidth: Theme.statusRingSize
             implicitHeight: implicitWidth
             radius: width / 2
-            color: Theme.textMuted
+            color: card._selected ? Theme.textMuted : "transparent"
+            border.width: card._selected ? 0 : 1.5
+            border.color: Theme.textMuted
             Icon {
+                visible: card._selected
                 anchors.centerIn: parent
                 name: "check"
                 size: Math.round(parent.width * 0.75)
@@ -462,8 +470,10 @@ Rectangle {
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
             font.weight: Theme.fwTaskTitle
-            // H2-Board 1.35, Q-Board 1.4 (R3-031).
-            lineHeight: Style.fills ? 1.35 : 1.4
+            // H2-Board 1.35, Q-Board 1.4 (R3-031) of the em. A proportional
+            // lineHeight multiplies the font's own leading (R4-021).
+            lineHeightMode: Text.FixedHeight
+            lineHeight: Math.round(font.pixelSize * (Style.fills ? 1.35 : 1.4))
             // Wrap, not WordWrap: a URL or a long identifier has no space to
             // break at and ran off the card (TASKS-27).
             wrapMode: Text.Wrap
@@ -476,7 +486,7 @@ Rectangle {
         RowLayout {
             objectName: "tc-meta"
             Layout.fillWidth: true
-            spacing: Theme.spLg
+            spacing: Theme.spMd
             Text {
                 objectName: "tc-key"
                 // A mirrored issue is known by its tracker key, not by the

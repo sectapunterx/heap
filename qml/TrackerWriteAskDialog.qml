@@ -54,6 +54,7 @@ SmallDialog {
     width: Math.min(428, (parent ? parent.width : 428) - 32)
     title: I18n.t("tracker.ask.title").arg(root.tracker)
     fact: root.key + " · " + root.issueTitle
+    factColor: Theme.textMuted
     onOpened: sendBtn.forceActiveFocus(Qt.TabFocusReason)
     onAccepted: root._answer(true)
 

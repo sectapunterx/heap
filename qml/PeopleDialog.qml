@@ -112,6 +112,9 @@ Dialog {
                     objectName: "people-dialog-list"
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    // "+ человек" follows the last person, not the dialog's
+                    // bottom (R4-042); a long list still scrolls.
+                    Layout.maximumHeight: Math.max(list.contentHeight, Theme.px(120))
                     clip: true
                     spacing: Theme.sp2xs
                     model: AppController.activePeople
@@ -155,11 +158,11 @@ Dialog {
                             RowLayout {
                                 Layout.fillWidth: true
                                 spacing: Theme.spSm
+                                // Names in body weight (R4-040).
                                 Text {
                                     text: row.name
                                     color: Theme.text
                                     font.pixelSize: Theme.fsMd
-                                    font.weight: Theme.fwHeading
                                 }
                                 Text {
                                     Layout.fillWidth: true
@@ -170,8 +173,8 @@ Dialog {
                                 }
                                 Text {
                                     text: root._stateText(row.model.state, row.model.stateAt)
-                                    color: Theme.textMuted
-                                    font.pixelSize: Theme.fsXs
+                                    color: Theme.textDim
+                                    font.pixelSize: Theme.fsSm
                                 }
                             }
                             Text {
@@ -179,8 +182,9 @@ Dialog {
                                 visible: row.question.length > 0
                                 text: row.question
                                 elide: Text.ElideRight
-                                color: Theme.textMuted
-                                font.pixelSize: Theme.fsSm
+                                // N-Oth-Archive-People: 13 px, dim (R4-039).
+                                color: Theme.textDim
+                                font.pixelSize: Theme.fsMd
                             }
                         }
                         ClickArea {
@@ -204,6 +208,7 @@ Dialog {
                         onActivated: root.addRequested()
                     }
                 }
+                Item { Layout.fillHeight: true }
             }
 
             Rectangle {
@@ -222,7 +227,7 @@ Dialog {
                 Text {
                     text: root.current.name || ""
                     color: Theme.text
-                    font.pixelSize: Theme.fsLg
+                    font.pixelSize: Theme.typeStep(2)
                     font.weight: Theme.fwHeading
                 }
                 Text {
@@ -243,8 +248,11 @@ Dialog {
                     visible: text.length > 0
                     text: root.current.question || ""
                     wrapMode: Text.Wrap
-                    color: Theme.text
-                    font.pixelSize: Theme.fsSm
+                    // The detail values: 13 px, muted, line-height 1.7 (R4-039).
+                    color: Theme.textMuted
+                    font.pixelSize: Theme.fsMd
+                    lineHeight: Math.round(font.pixelSize * 1.7)
+                    lineHeightMode: Text.FixedHeight
                 }
                 // What lowkey knows links to the person (DG-002): tasks
                 // waiting on them, their next meetings. A block with nothing
@@ -266,7 +274,9 @@ Dialog {
                         text: (lt.modelData.key ? lt.modelData.key + " · " : "") + lt.modelData.title
                         elide: Text.ElideRight
                         color: ltCA.hovered ? Theme.text : Theme.textMuted
-                        font.pixelSize: Theme.fsSm
+                        font.pixelSize: Theme.fsMd
+                        lineHeight: Math.round(font.pixelSize * 1.7)
+                        lineHeightMode: Text.FixedHeight
                         ClickArea {
                             id: ltCA
                             label: lt.modelData.title
@@ -291,7 +301,9 @@ Dialog {
                         text: root.meetingWhen(mt.modelData) + " · " + mt.modelData.title
                         elide: Text.ElideRight
                         color: mtCA.hovered ? Theme.text : Theme.textMuted
-                        font.pixelSize: Theme.fsSm
+                        font.pixelSize: Theme.fsMd
+                        lineHeight: Math.round(font.pixelSize * 1.7)
+                        lineHeightMode: Text.FixedHeight
                         ClickArea {
                             id: mtCA
                             label: mt.modelData.title

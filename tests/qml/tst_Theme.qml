@@ -334,6 +334,27 @@ TestCase {
         compare(fails.length, 0, fails.join("; "));
     }
 
+    // The quiet destructive menu label stays readable on the menu and its
+    // highlighted row in every built-in theme (R3-045).
+    function test_quiet_danger_ink_meets_wcag_aa_on_menus() {
+        const saved = AppController.appSettingsJson;
+        const savedTheme = AppController.theme;
+        Style.apply("quiet");
+        const fails = [];
+        for (const t of Presets.PRESETS) {
+            AppController.theme = t.base;
+            AppController.appSettingsJson = JSON.stringify({ appearance: { darkPreset: t.id, lightPreset: t.id } });
+            for (const surface of [Theme.popupFill, Theme.rowHighlight]) {
+                const ratio = _contrast(Theme.dangerInk, surface);
+                if (ratio < 4.5) fails.push(t.id + ": dangerInk on " + surface + " is " + ratio.toFixed(2) + ":1");
+            }
+        }
+        Style.apply("bold");
+        AppController.appSettingsJson = saved;
+        AppController.theme = savedTheme;
+        compare(fails.length, 0, fails.join("; "));
+    }
+
     // A card stands on the ground by lightness, one step per level (APP-196):
     // on every dark theme 8–10 L* above bg and no border; a light theme keeps
     // its white card and the hairline. Columns have no fill at all.

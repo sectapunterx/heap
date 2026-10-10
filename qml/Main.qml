@@ -1346,6 +1346,7 @@ ApplicationWindow {
                         }
                         onTaskCaptureRequested: (text) => quickCapture.openWithText(text)
                         onScheduleRequested: (id) => schedulePopup.openFor([id], "scheduled")
+                        onResetFilterRequested: win.resetTaskFilter()
                     }
                 }
                 Component {

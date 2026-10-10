@@ -528,3 +528,28 @@ progressive disclosure, content priority, state preservation). One entry each.
   [error-recovery: message + action.]
 - **R4-019 · Update line** wraps inside the sidebar gutters (left and right) instead of setting
   the column's width; the version text elides only if it alone is wider than the sidebar.
+
+## r5 · tasks, settings, errors group (DESIGN-GAPS-0.8.1-r4)
+
+- **APP-281 A3 · the checked-out branch's card keeps its mark.** r4 read DG-023 ("no branch on
+  cards") as having removed it; it had not: `TaskCard` still draws, on that one card only, a muted
+  row `Icon "branch"` + the branch name (mono, elided in the middle) when
+  `AppController.focusedTaskId` is the card's task — in both styles. Re-verified with a real
+  `.git/HEAD` (`APP-108-…`) in a scratch repo. Kept as a text + icon row, not an accent border:
+  the meaning must not ride on colour alone, and H2-Board's card meta allows "Icon branch + name".
+  Every other card stays branch-free (DG-023).
+- **R4-113 · picked conflict cell = outline + bright text, no fill.** The cue is form (the 1 px
+  `buttonLinePrimary` outline, ≈ the sheet's #4a525d) plus the white-vs-dim text, so it never
+  depends on a fill colour; the keyboard cursor keeps the focus ring.
+- **R4-037 · empty rings while a selection exists.** Every card shows the 1.5 px ring once anything
+  is selected; the selected ones fill it with the check (N/X-Oth-Select-Drag).
+- **R4-105 · one small-dialog fact style.** `SmallDialog.fact` is dim body type at 1.5
+  (N/X-Dlg-Small, -Err-Storage). A fact that names the ticket acted on ("APP-101 · title",
+  write ask) is a step brighter via `factColor` (N-Dlg-Conflict).
+- **R4-104 · where the file breaks.** `storageDamagedAt` is the JSON parse offset; the card opens
+  with "state.json не читается с позиции N." only when the file did not parse (a file that parsed
+  with the wrong shape has no position, so the sentence is left out rather than invented).
+- **R3-045 · quiet danger ink at AA.** `Theme.dangerInk` (quiet) is held at 4.5:1 on the menu
+  fill and its highlighted row in every built-in theme (`ensureContrast`; tst_Theme checks).
+
+- Lead (2026-10-10, r5 merge): two groups set the small-dialog fact leading (1.45 from R4-062, 1.5 from R4-105); the sheet draws every small-dialog fact (keychain, tracker push, no Done column, storage) at 1.5, so 1.5 stays. The ↵ glyph R4-080 needed is the R4-056 font fix.

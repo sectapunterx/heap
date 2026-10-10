@@ -14,6 +14,7 @@ import QtQuick.Controls
 import TodoCpp
 import "Segments.js" as Seg
 import "Search.js" as Search
+import "QueryWords.js" as QueryWords
 import "Reschedule.js" as Resched
 
 Item {
@@ -44,6 +45,8 @@ Item {
     property bool chrome: true
     property string armedTaskId: ""
     signal armedUsed()
+    // "сбросить фильтр · Esc" under a search that finds nothing (R4-100).
+    signal resetFilterRequested()
     signal dayRequested(date day)
     // Heap 2 month: at most three things a day, then "+N more" (APP-264).
     readonly property int maxPerDay: root.chrome ? 99 : 3
@@ -953,9 +956,13 @@ Item {
             readonly property bool searching: root.searchText.replace(/(^|\s)is:open(?=\s|$)/gi, " ").trim().length > 0
             anchors.centerIn: parent
             width: Math.min(root.width - 2 * Theme.sp3xl - 96, 360)
-            title: I18n.t(searching ? "view.empty.noMatch.title" : "month.empty.title")
-            line: searching ? I18n.t("view.empty.noMatch.hint")
+            // A search that finds nothing reads as on the board (N/X-Err-Empty, R4-100).
+            title: searching ? I18n.t("view.empty.noMatchFor").arg(QueryWords.label(root.searchText, []))
+                             : I18n.t("month.empty.title")
+            line: searching ? I18n.t("view.empty.resetFilter")
                             : I18n.t("calendar.empty.hint").arg(AppController.shortcutText("task.schedule"))
+            lineLink: searching
+            onLineActivated: root.resetFilterRequested()
         }
     }
 
