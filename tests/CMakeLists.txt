@@ -46,10 +46,27 @@ set(HEAP_QUERY_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_en.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_ru.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoParser.cpp
+    # Models.cpp reads the local checklist and sessions (APP-236, 251).
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/TaskLocal.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/Checklist.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/Sessions.cpp
 )
+
+# The local checklist and timer sessions as pure rules (APP-236, 251).
+add_executable(heap_local_rules_tests
+    test_local_checklist.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/TaskLocal.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/Checklist.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/Sessions.cpp
+)
+target_include_directories(heap_local_rules_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_local_rules_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
+add_test(NAME heap_local_rules_tests COMMAND heap_local_rules_tests)
 
 add_executable(heap_chrono_tests
     test_chrono_parser.cpp
+    test_capture_parse.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/capture/CaptureParse.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoTokenizer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_en.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_ru.cpp
@@ -68,6 +85,26 @@ target_link_libraries(heap_chrono_tests PRIVATE
 )
 
 add_test(NAME heap_chrono_tests COMMAND heap_chrono_tests)
+
+# The day as Today draws it (APP-260/247): a pure function.
+add_executable(heap_day_plan_tests
+    test_day_plan.cpp
+    test_free_window.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/plan/DayPlan.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/plan/FreeWindow.cpp
+)
+target_include_directories(heap_day_plan_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_day_plan_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
+add_test(NAME heap_day_plan_tests COMMAND heap_day_plan_tests)
+
+# The groups of the Tasks → List lens (APP-263): a pure function.
+add_executable(heap_task_list_groups_tests
+    test_task_list_groups.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/views/TaskListGroups.cpp
+)
+target_include_directories(heap_task_list_groups_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_task_list_groups_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
+add_test(NAME heap_task_list_groups_tests COMMAND heap_task_list_groups_tests)
 
 # Vendored md4c — proves the static library builds and links everywhere, that
 # the GFM extension flags heap relies on are really enabled, and that text
@@ -131,6 +168,15 @@ target_link_libraries(heap_paths_tests PRIVATE
 
 add_test(NAME heap_paths_tests COMMAND heap_paths_tests)
 
+# heap → lowkey (APP-280): the one-time copy of a 0.7.x data folder.
+add_executable(heap_legacy_data_tests
+    test_legacy_data.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/LegacyData.cpp
+)
+target_include_directories(heap_legacy_data_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_legacy_data_tests PRIVATE Qt6::Core GTest::gtest)
+add_test(NAME heap_legacy_data_tests COMMAND heap_legacy_data_tests)
+
 # Board ranking — header-only, so only the test TU compiles.
 add_executable(heap_rank_tests test_rank.cpp)
 target_include_directories(heap_rank_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
@@ -140,6 +186,26 @@ target_link_libraries(heap_rank_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Qml GTest:
 add_test(NAME heap_rank_tests COMMAND heap_rank_tests)
 
 # "There is a key for that" counter (APP-166) — header-only.
+# The 0.8.0 keymap: key names, physical keys, prefixes (APP-272/279).
+add_executable(heap_keys_tests test_keys.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../src/keys/KeyNames.cpp)
+target_include_directories(heap_keys_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_keys_tests PRIVATE Qt6::Core Qt6::Gui GTest::gtest GTest::gtest_main)
+add_test(NAME heap_keys_tests COMMAND heap_keys_tests)
+
+# The command line's input language (APP-267).
+add_executable(heap_command_query_tests
+    test_command_query.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/query/CommandQuery.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/capture/CaptureParse.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoTokenizer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_en.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_ru.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoParser.cpp
+)
+target_include_directories(heap_command_query_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_command_query_tests PRIVATE Qt6::Core heap_markdown GTest::gtest GTest::gtest_main)
+add_test(NAME heap_command_query_tests COMMAND heap_command_query_tests)
+
 add_executable(heap_shortcut_hints_tests test_shortcut_hints.cpp)
 target_include_directories(heap_shortcut_hints_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(heap_shortcut_hints_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
@@ -386,6 +452,14 @@ heap_add_appcontroller_test(heap_int_audit_tests test_int_audit.cpp)
 # New tickets on the board, the sync flag and the event log (APP-180/186/187).
 heap_add_appcontroller_test(heap_sync_visibility_tests test_sync_visibility.cpp)
 # Tracker writes are opt-in per tracker, and checked before they go (APP-243/204).
+# The local layer (ADR 0001, APP-244): no sync path touches Task.local.
+heap_add_appcontroller_test(heap_local_layer_tests test_local_layer.cpp)
+# The local layer as the UI works it (APP-236…241, 246, 250, 251).
+heap_add_appcontroller_test(heap_local_features_tests test_local_features.cpp)
+# Upgrading 0.7.x (schema 11) to 0.8.0 loses no key (APP-244).
+heap_add_appcontroller_test(heap_upgrade_lossless_tests test_upgrade_lossless.cpp)
+target_compile_definitions(heap_upgrade_lossless_tests PRIVATE
+        HEAP_STATE_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/state")
 heap_add_appcontroller_test(heap_tracker_writes_tests test_tracker_writes.cpp)
 target_compile_definitions(heap_tracker_writes_tests PRIVATE
         HEAP_STATE_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/state")
@@ -509,6 +583,7 @@ heap_add_appcontroller_test(heap_profile_io_tests test_profile_io.cpp)
 # Cover AppController welcomeSeen / demoActive persistence and startFresh()
 # (HEAP-51). Same headless boot as the other AppController suites.
 heap_add_appcontroller_test(heap_onboarding_tests test_onboarding.cpp)
+heap_add_appcontroller_test(heap_knowledge_tests test_knowledge.cpp)
 
 # ─── Sample data (seed content) tests ───
 # Cover SampleData seed invariants (HEAP-56): events spread across the week and
@@ -784,6 +859,9 @@ add_executable(heap_sync_tests
         test_sync_serializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/sync/SyncSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/sync/SyncSerializer.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/TaskLocal.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/Checklist.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/Sessions.cpp
 )
 
 target_include_directories(heap_sync_tests PRIVATE
@@ -935,6 +1013,9 @@ add_executable(heap_roundtrip_tests
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/sync/SyncSerializer.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/TaskLocal.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/Checklist.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/Sessions.cpp
 )
 set_target_properties(heap_roundtrip_tests PROPERTIES AUTOMOC ON)
 target_include_directories(heap_roundtrip_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)

@@ -1,0 +1,160 @@
+<style>
+:host{margin:0;background:#0c0e11}
+a{color:#e9edf2;text-decoration-color:#4a525d;text-underline-offset:3px}a:hover{color:#ffffff}
+button{font-family:inherit}
+</style>
+<div style="width: 100%; min-height: 900px; display: flex; flex-wrap: wrap; background: #0c0e11; color: #e9edf2; font-family: 'Golos Text', sans-serif; font-size: 13px">
+<nav aria-label="Разделы" style="flex: 0 0 208px; box-sizing: border-box; background: #0f1216; border-right: 1px solid #1f252d; padding: 16px 12px; display: flex; flex-direction: column; gap: 2px">
+<div style="display: flex; align-items: center; gap: 8px; padding: 0 6px 14px">
+<span style="font-weight: 500; font-size: 18px; letter-spacing: -0.035em"><span style="border-bottom: 0.075em solid #b1a7f0; padding-bottom: 0.06em">low</span>key</span>
+<span style="flex: 1"></span>
+<button style="display: flex; align-items: center; gap: 6px; background: transparent; border: 0; color: #c4ccd6; font-size: 12px; padding: 4px 6px"><span style="width: 6px; height: 6px; border-radius: 3px; background: #6fcf97"></span>Example</button>
+</div>
+<button style="display: flex; align-items: center; gap: 8px; background: #14181d; border: 1px solid #232a33; color: #8f99a6; border-radius: 8px; padding: 8px 10px; margin-bottom: 14px; font-size: 13px; text-align: left">
+<span style="flex: 1">Новая задача…</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 11px">Ctrl N</span>
+</button>
+<a style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; background: linear-gradient(#b1a7f0, #b1a7f0) no-repeat left 8px bottom 2px / 18px 2px; color: #ffffff; font-weight: 600;"><span style="flex: 1">Сегодня</span><span style="font-size: 11px; color: #8f99a6; font-family: 'JetBrains Mono', monospace">Ctrl 1</span></a>
+<a style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #c4ccd6;"><span style="flex: 1">Задачи</span><span style="font-size: 11px; color: #8f99a6; font-family: 'JetBrains Mono', monospace">Ctrl 2</span></a>
+<a style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #c4ccd6;"><span style="flex: 1">Знания</span><span style="font-size: 11px; color: #8f99a6; font-family: 'JetBrains Mono', monospace">Ctrl 3</span></a>
+<div style="padding: 16px 8px 6px; font-size: 11px; color: #8f99a6">Мои виды</div>
+<a style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #c4ccd6;"><span style="flex: 1">Заблокировано</span><span style="font-size: 11px; color: #8f99a6; font-family: 'JetBrains Mono', monospace">1</span></a>
+<a style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #c4ccd6;"><span style="flex: 1">На ревью</span><span style="font-size: 11px; color: #8f99a6; font-family: 'JetBrains Mono', monospace">2</span></a>
+<a style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #c4ccd6;"><span style="flex: 1">Срочное</span><span style="font-size: 11px; color: #8f99a6; font-family: 'JetBrains Mono', monospace">7</span></a>
+<a style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #c4ccd6;"><span style="flex: 1">Эта неделя</span><span style="font-size: 11px; color: #8f99a6; font-family: 'JetBrains Mono', monospace">6</span></a>
+<div style="flex: 1"></div>
+<a style="display: flex; padding: 7px 8px; border-radius: 7px; color: #c4ccd6; text-decoration: none"><span style="flex: 1">Настройки</span><span style="font-size: 11px; color: #8f99a6; font-family: 'JetBrains Mono', monospace">Ctrl ,</span></a>
+<div style="padding: 10px 8px 0; font-size: 11px; color: #8f99a6; line-height: 1.6"><b style="font-family: 'JetBrains Mono', monospace; color: #c4ccd6">Ctrl K</b> — всё остальное</div>
+</nav>
+<main style="flex: 999 1 640px; min-width: 0; padding: 28px 36px; box-sizing: border-box">
+<header style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; margin-bottom: 26px">
+<div>
+<div style="font-size: 13px; color: #8f99a6">Сегодня</div>
+<h1 style="margin: 2px 0 0; font-size: 30px; font-weight: 600; letter-spacing: -0.02em">Четверг, 8 октября</h1>
+<div style="margin-top: 6px; color: #c4ccd6">2 встречи · 2 задачи в плане · 1 срок истекает сегодня</div>
+</div>
+<span style="flex: 1"></span>
+<div style="display: flex; gap: 6px">
+<button aria-label="Вчера" style="background: transparent; border: 1px solid #232a33; color: #c4ccd6; border-radius: 8px; padding: 6px 10px">‹</button>
+<button aria-label="Завтра" style="background: transparent; border: 1px solid #232a33; color: #c4ccd6; border-radius: 8px; padding: 6px 10px">›</button>
+</div>
+</header>
+<div style="display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start">
+<section aria-label="День" style="flex: 3 1 420px; min-width: 0">
+<h2 style="margin: 0 0 10px; font-size: 13px; font-weight: 600; color: #8f99a6">День</h2>
+<div style="display: flex; gap: 14px; padding: 4px 0">
+<span style="width: 52px; text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #c4ccd6; padding-top: 11px">10:00</span>
+<div style="flex: 1; display: flex; gap: 10px; align-items: flex-start; background: #172131; border-radius: 10px; padding: 10px 14px;">
+<span style="width: 3px; align-self: stretch; border-radius: 2px; background: #7aa7ff; flex-shrink: 0;"></span>
+<div style="flex: 1; min-width: 0">
+<div style="font-weight: 500">Дейлик</div>
+<div style="font-size: 12px; color: #8f99a6; margin-top: 2px">Встреча · Zoom</div>
+</div>
+<span style="font-size: 12px; color: #8f99a6">30 мин</span>
+</div>
+</div>
+<div style="display: flex; gap: 14px; padding: 6px 0">
+<span style="width: 52px; text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8f99a6">10:30</span>
+<span style="flex: 1; border-left: 1px dashed #2a313b; padding: 4px 0 4px 14px; color: #8f99a6; font-size: 12px">Свободно 2 ч 30 мин</span>
+</div>
+<div style="display: flex; gap: 14px; padding: 4px 0">
+<span style="width: 52px; text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #c4ccd6; padding-top: 11px">13:00</span>
+<div style="flex: 1; display: flex; gap: 10px; align-items: flex-start; background: #172131; border-radius: 10px; padding: 10px 14px;">
+<span style="width: 3px; align-self: stretch; border-radius: 2px; background: #7aa7ff; flex-shrink: 0;"></span>
+<div style="flex: 1; min-width: 0">
+<div style="font-weight: 500">Фокус-блок</div>
+<div style="font-size: 12px; color: #8f99a6; margin-top: 2px">Встреча с собой</div>
+</div>
+<span style="font-size: 12px; color: #8f99a6">2 ч</span>
+</div>
+</div>
+<div style="display: flex; gap: 14px; padding: 4px 0">
+<span style="width: 52px; text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #c4ccd6; padding-top: 11px">15:00</span>
+<div style="flex: 1; display: flex; gap: 10px; align-items: flex-start; border: 1px solid #2a313b; border-radius: 10px; padding: 10px 14px;">
+<span style="display: inline-block; width: 14px; height: 14px; border-radius: 7px; box-sizing: border-box; flex-shrink: 0; margin-top: 2px; border: 1.5px solid #ef6b63; background: linear-gradient(#ef6b63, #ef6b63) center / 7px 2px no-repeat;"></span>
+<div style="flex: 1; min-width: 0">
+<div style="font-weight: 500">Оформление заказа: таймаут 10 с</div>
+<div style="font-size: 12px; color: #8f99a6; margin-top: 2px">APP-105 · запланировано вами</div>
+</div>
+<span style="font-size: 12px; color: #8f99a6">1 ч</span>
+</div>
+</div>
+<div style="display: flex; align-items: center; gap: 10px; margin: 6px 0">
+<span style="width: 52px; text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #f2a65a">16:00</span>
+<span style="width: 8px; height: 8px; border-radius: 4px; background: #f2a65a"></span>
+<span style="flex: 1; height: 1.5px; background: #f2a65a"></span>
+</div>
+<div style="display: flex; gap: 14px; padding: 4px 0">
+<span style="width: 52px; text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #c4ccd6; padding-top: 11px">17:00</span>
+<div style="flex: 1; display: flex; gap: 10px; align-items: flex-start; border: 1px solid #2a313b; border-radius: 10px; padding: 10px 14px;">
+<span style="display: inline-block; width: 14px; height: 14px; border-radius: 7px; box-sizing: border-box; flex-shrink: 0; margin-top: 2px; border: 1.5px solid #e9edf2; background: conic-gradient(#e9edf2 0 50%, transparent 0);"></span>
+<div style="flex: 1; min-width: 0">
+<div style="font-weight: 500">Обход ограничения попыток входа</div>
+<div style="font-size: 12px; color: #8f99a6; margin-top: 2px">APP-101 · запланировано вами</div>
+</div>
+<span style="font-size: 12px; color: #8f99a6">1 ч 30 мин</span>
+</div>
+</div>
+<div style="display: flex; gap: 14px; padding: 6px 0">
+<span style="width: 52px; text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8f99a6">18:30</span>
+<span style="flex: 1; border-left: 1px dashed #2a313b; padding: 4px 0 4px 14px; color: #8f99a6; font-size: 12px">Конец рабочего дня в 19:00</span>
+</div>
+</section>
+<aside style="flex: 2 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 30px">
+<section>
+<h2 style="margin: 0 0 10px; font-size: 13px; font-weight: 600; color: #8f99a6">Сейчас в работе</h2>
+<div style="background: #14181d; border-radius: 12px; padding: 14px 16px">
+<div style="display: flex; gap: 10px; align-items: center">
+<span style="width: 14px; height: 14px; border-radius: 7px; box-sizing: border-box; border: 1.5px solid #e9edf2; background: conic-gradient(#e9edf2 0 50%, transparent 0)"></span>
+<span style="flex: 1; font-weight: 600; font-size: 15px">Обход ограничения попыток входа</span>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 10px; padding-left: 24px; font-size: 12px; color: #c4ccd6">
+<span style="font-family: 'JetBrains Mono', monospace; color: #8f99a6">APP-101</span>
+<span>PR #482 · CI ✓</span>
+<span style="flex: 1"></span>
+<span style="font-family: 'JetBrains Mono', monospace; color: #f2a65a">● 0:42</span>
+</div>
+</div>
+</section>
+<section>
+<h2 style="margin: 0 0 10px; font-size: 13px; font-weight: 600; color: #8f99a6">Сроки</h2>
+<div style="display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-bottom: 1px solid #1a1f26">
+<span style="display: inline-block; width: 14px; height: 14px; border-radius: 7px; box-sizing: border-box; flex-shrink: 0; margin-top: 2px; border: 1.5px solid #ef6b63; background: linear-gradient(#ef6b63, #ef6b63) center / 7px 2px no-repeat;"></span>
+<div style="flex: 1; min-width: 0">
+<div style="font-weight: 500">Оформление заказа: таймаут 10 с</div>
+<div style="font-size: 12px; color: #8f99a6; margin-top: 2px">APP-105 · заблокировано: ждёт ответа платёжки</div>
+</div>
+<span style="font-size: 12px; color: #ef6b63; font-weight: 600">сегодня</span>
+</div>
+<div style="display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-bottom: 1px solid #1a1f26">
+<span style="display: inline-block; width: 14px; height: 14px; border-radius: 7px; box-sizing: border-box; flex-shrink: 0; margin-top: 2px; border: 1.5px solid #e9edf2; background: conic-gradient(#e9edf2 0 50%, transparent 0);"></span>
+<div style="flex: 1; min-width: 0">
+<div style="font-weight: 500">Обход ограничения попыток входа</div>
+<div style="font-size: 12px; color: #8f99a6; margin-top: 2px">APP-101 · P0</div>
+</div>
+<span style="font-size: 12px; color: #f2a65a">завтра</span>
+</div>
+</section>
+<section>
+<h2 style="margin: 0 0 10px; font-size: 13px; font-weight: 600; color: #8f99a6">Кому написать</h2>
+<div style="display: flex; gap: 10px; align-items: center; padding: 8px 0">
+<span style="width: 28px; height: 28px; border-radius: 14px; background: #1f252d; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: #c4ccd6; flex-shrink: 0">ОТ</span>
+<div style="flex: 1; min-width: 0">
+<div><b style="font-weight: 600">Олег</b> <span style="color: #8f99a6">— какие метрики в пустом дашборде</span></div>
+</div>
+<button style="background: transparent; border: 1px solid #2a313b; color: #e9edf2; border-radius: 7px; padding: 5px 10px; font-size: 12px">Написал</button>
+</div>
+<div style="display: flex; gap: 10px; align-items: center; padding: 8px 0">
+<span style="width: 28px; height: 28px; border-radius: 14px; background: #1f252d; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: #c4ccd6; flex-shrink: 0">МК</span>
+<div style="flex: 1; min-width: 0">
+<div><b style="font-weight: 600">Маша</b> <span style="color: #8f99a6">— repro-trace по APP-105</span></div>
+</div>
+<button style="background: transparent; border: 1px solid #2a313b; color: #e9edf2; border-radius: 7px; padding: 5px 10px; font-size: 12px">Написал</button>
+</div>
+</section>
+<a style="display: flex; align-items: center; gap: 8px; color: #c4ccd6; text-decoration: none; padding: 12px 0; border-top: 1px solid #1a1f26">
+<span style="flex: 1">3 задачи без даты — посмотреть и решить</span><span>→</span>
+</a>
+</aside>
+</div>
+</main>
+</div>

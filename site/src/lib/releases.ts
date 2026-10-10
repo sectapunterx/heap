@@ -16,29 +16,29 @@ export interface Release {
   assets: Asset[];
 }
 
+/** Which kind of download a release file is; the page names it in its own language. */
+export type AssetKind = 'installer' | 'portable' | 'dmg' | 'appimage';
+
 export interface ClassifiedAsset extends Asset {
   os: DesktopOS;
-  /** Human label, e.g. "AppImage" or "Installer". */
-  label: string;
-  /** What the file is for, one line. */
-  note: string;
+  kind: AssetKind;
   /** Lower comes first within an OS. */
   rank: number;
 }
 
-// Releases up to 0.5.1 also carried a .deb and a tarball built against Qt 6.4,
-// on which the UI does not run; they are deliberately not offered.
-const KINDS: Array<{ test: RegExp; os: DesktopOS; label: string; note: string; rank: number }> = [
-  { test: /windows-setup\.exe$/i, os: 'windows', label: 'Installer', note: 'Start-menu entry and uninstaller', rank: 0 },
-  { test: /windows-portable\.zip$/i, os: 'windows', label: 'Portable', note: 'Unzip and run from anywhere', rank: 1 },
-  { test: /\.dmg$/i, os: 'macos', label: 'Disk image', note: 'Drag heap. into Applications', rank: 0 },
-  { test: /\.appimage$/i, os: 'linux', label: 'AppImage', note: 'Qt inside — runs on any distro', rank: 0 },
+// By suffix, so both the heap-* files of 0.7.x and the lowkey-* files from 0.8.0 on are found.
+// Releases up to 0.5.1 also carried a .deb and a tarball built against Qt 6.4, on which the UI
+// does not run; they are deliberately not offered. Checksums and the SBOM are not downloads.
+const KINDS: Array<{ test: RegExp; os: DesktopOS; kind: AssetKind; rank: number }> = [
+  { test: /windows-setup\.exe$/i, os: 'windows', kind: 'installer', rank: 0 },
+  { test: /windows-portable\.zip$/i, os: 'windows', kind: 'portable', rank: 1 },
+  { test: /\.dmg$/i, os: 'macos', kind: 'dmg', rank: 0 },
+  { test: /\.appimage$/i, os: 'linux', kind: 'appimage', rank: 0 },
 ];
 
 export function classifyAsset(asset: Asset): ClassifiedAsset | null {
-  const kind = KINDS.find((k) => k.test.test(asset.name));
-  if (!kind) return null;
-  return { ...asset, os: kind.os, label: kind.label, note: kind.note, rank: kind.rank };
+  const k = KINDS.find((x) => x.test.test(asset.name));
+  return k ? { ...asset, os: k.os, kind: k.kind, rank: k.rank } : null;
 }
 
 export function assetsByOS(release: Release): Record<DesktopOS, ClassifiedAsset[]> {
@@ -51,81 +51,26 @@ export function assetsByOS(release: Release): Record<DesktopOS, ClassifiedAsset[
   return out;
 }
 
-export function formatSize(bytes: number): string {
-  if (bytes < 1_000_000) return `${Math.max(1, Math.round(bytes / 1000))} KB`;
-  return `${(bytes / 1_000_000).toFixed(1)} MB`;
+/** Megabytes the way the page prints them: 39 715 428 bytes → "39.7". */
+export function megabytes(bytes: number): string {
+  return (bytes / 1_000_000).toFixed(1);
 }
 
 export function versionOf(tag: string): string {
   return tag.replace(/^v/i, '');
 }
 
-export function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+export function formatDate(iso: string, lang: 'ru' | 'en'): string {
+  return new Date(iso).toLocaleDateString(lang === 'ru' ? 'ru-RU' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
 
-export interface NoteItem {
-  scope: string;
-  text: string;
-  pr?: number;
-  prUrl?: string;
-}
-
-export interface NoteGroup {
-  title: string;
-  items: NoteItem[];
-}
-
-const GROUP_TITLES: Record<string, string> = {
-  feat: 'Features',
-  fix: 'Fixes',
-  perf: 'Performance',
-  docs: 'Docs',
-  build: 'Build & CI',
-  ci: 'Build & CI',
-  test: 'Tests',
-  refactor: 'Internals',
-  chore: 'Internals',
-};
-const GROUP_ORDER = ['Features', 'Fixes', 'Performance', 'Changes', 'Docs', 'Tests', 'Build & CI', 'Internals'];
-
-/**
- * Turn GitHub's generated release notes ("* feat(scope): text by @x in <pr url>")
- * into groups by conventional-commit type. Lines that don't follow the
- * convention land under "Changes".
- */
-export function parseNotes(body: string): NoteGroup[] {
-  const groups = new Map<string, NoteItem[]>();
-  for (const raw of body.split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line.startsWith('* ') && !line.startsWith('- ')) continue;
-    let text = line.slice(2).trim();
-    let pr: number | undefined;
-    let prUrl: string | undefined;
-    const tail = text.match(/\s+by @[\w-]+ in (https:\/\/github\.com\/\S+\/pull\/(\d+))\s*$/);
-    if (tail) {
-      prUrl = tail[1];
-      pr = Number(tail[2]);
-      text = text.slice(0, tail.index).trim();
-    }
-    const cc = text.match(/^(\w+)(?:\(([^)]+)\))?!?:\s*(.+)$/);
-    let title = 'Changes';
-    let scope = '';
-    if (cc && GROUP_TITLES[cc[1].toLowerCase()]) {
-      title = GROUP_TITLES[cc[1].toLowerCase()];
-      scope = cc[2] ?? '';
-      text = cc[3];
-    }
-    text = text.charAt(0).toUpperCase() + text.slice(1);
-    if (!groups.has(title)) groups.set(title, []);
-    groups.get(title)!.push({ scope, text, pr, prUrl });
+/** The file the big download button offers on each platform. */
+export function primaryAssets(release: Release): Partial<Record<DesktopOS, { url: string; name: string }>> {
+  const by = assetsByOS(release);
+  const out: Partial<Record<DesktopOS, { url: string; name: string }>> = {};
+  for (const os of ['windows', 'macos', 'linux'] as const) {
+    const a = by[os][0];
+    if (a) out[os] = { url: a.url, name: a.name };
   }
-  return [...groups.entries()]
-    .sort(([a], [b]) => GROUP_ORDER.indexOf(a) - GROUP_ORDER.indexOf(b))
-    .map(([title, items]) => ({ title, items }));
-}
-
-export function summarize(groups: NoteGroup[]): string {
-  const parts = groups.map((g) => `${g.items.length} ${g.title.toLowerCase()}`);
-  return parts.length ? parts.join(' · ') : 'Maintenance release';
+  return out;
 }

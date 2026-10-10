@@ -216,14 +216,14 @@ jobs:
           # GUI-subsystem binary with no console: the verdict goes to the
           # redirected stderr, the run's log is kept as logs\smoke.log.
           $err = Join-Path $env:RUNNER_TEMP 'smoke-stderr.txt'
-          $p = Start-Process -FilePath build\heap-portable\heap.exe `
+          $p = Start-Process -FilePath build\heap-portable\lowkey.exe `
                  -ArgumentList '--smoke', '--data-dir', $dataDir `
                  -RedirectStandardError $err -Wait -PassThru
           Get-Content $err -ErrorAction SilentlyContinue
           Get-Content (Join-Path $dataDir 'logs\smoke.log') -ErrorAction SilentlyContinue
           if ($p.ExitCode -ne 0) { Write-Error "smoke failed with exit code $($p.ExitCode)"; exit 1 }
 
-      # Authenticode-sign heap.exe + the bundled Qt DLLs before they are
+      # Authenticode-sign lowkey.exe + the bundled Qt DLLs before they are
       # packaged, so both the portable zip and the installer carry signed
       # binaries. Signing runs via SignPath Foundation (free OSS code signing):
       # the unsigned bundle is uploaded as a workflow artifact, SignPath pulls
@@ -287,7 +287,7 @@ jobs:
 
       - name: Zip portable bundle
         shell: pwsh
-        run: Compress-Archive -Path "build\heap-portable\*" -DestinationPath "heap-${{ needs.meta.outputs.tag }}-windows-portable.zip"
+        run: Compress-Archive -Path "build\heap-portable\*" -DestinationPath "lowkey-${{ needs.meta.outputs.tag }}-windows-portable.zip"
 
       # Inno Setup ships an installer that drops Start-menu shortcuts and an
       # uninstaller. It packages the exact same portable bundle directory.
@@ -301,8 +301,8 @@ jobs:
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" `
             /DAppVersion="${{ needs.meta.outputs.tag }}" `
             /DBundleDir="$($PWD.Path)\build\heap-portable" `
-            "/Fheap-${{ needs.meta.outputs.tag }}-windows-setup" `
-            installer\heap.iss
+            "/Flowkey-${{ needs.meta.outputs.tag }}-windows-setup" `
+            installer\lowkey.iss
 
       # Sign the finished installer .exe (the portable binaries it wraps were
       # already signed above). Same SignPath flow, second artifact config — the
@@ -314,7 +314,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: unsigned-installer
-          path: installer/Output/heap-${{ needs.meta.outputs.tag }}-windows-setup.exe
+          path: installer/Output/lowkey-${{ needs.meta.outputs.tag }}-windows-setup.exe
 
       - name: Sign installer (SignPath)
         if: ${{ env.SIGNPATH_API_TOKEN != '' }}
@@ -333,7 +333,7 @@ jobs:
         if: ${{ env.SIGNPATH_API_TOKEN != '' }}
         shell: pwsh
         run: |
-          $sig = Get-AuthenticodeSignature "installer\Output\heap-${{ needs.meta.outputs.tag }}-windows-setup.exe"
+          $sig = Get-AuthenticodeSignature "installer\Output\lowkey-${{ needs.meta.outputs.tag }}-windows-setup.exe"
           if ($sig.Status -ne 'Valid') { Write-Error "setup.exe signature: $($sig.Status)"; exit 1 }
           Write-Host "setup.exe signed by $($sig.SignerCertificate.Subject)"
 
@@ -349,8 +349,8 @@ jobs:
         with:
           name: dist-windows
           path: |
-            heap-${{ needs.meta.outputs.tag }}-windows-portable.zip
-            installer/Output/heap-${{ needs.meta.outputs.tag }}-windows-setup.exe
+            lowkey-${{ needs.meta.outputs.tag }}-windows-portable.zip
+            installer/Output/lowkey-${{ needs.meta.outputs.tag }}-windows-setup.exe
           if-no-files-found: error
 
   # ──────────────────────────────────────────────────────────────────
@@ -443,13 +443,13 @@ jobs:
           export LD_LIBRARY_PATH="$QT_ROOT_DIR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           export QML_SOURCES_PATHS="$PWD/qml"
           export EXTRA_QT_PLUGINS="svg"
-          export OUTPUT="heap-${{ needs.meta.outputs.tag }}-linux-x86_64.AppImage"
-          # --icon-filename must match the desktop file's Icon=heap key.
+          export OUTPUT="lowkey-${{ needs.meta.outputs.tag }}-linux-x86_64.AppImage"
+          # --icon-filename must match the desktop file's Icon=lowkey key.
           ./linuxdeploy --appdir AppDir \
-            --executable build/heap \
-            --desktop-file packaging/linux/heap.desktop \
-            --icon-file design/brand-export/icon/heap-icon.svg \
-            --icon-filename heap \
+            --executable build/lowkey \
+            --desktop-file packaging/linux/lowkey.desktop \
+            --icon-file design/brand-export/lowkey/lowkey-icon.svg \
+            --icon-filename lowkey \
             --plugin qt --output appimage
           test -f "$OUTPUT"
 
@@ -460,14 +460,14 @@ jobs:
       - name: Smoke-test the AppImage in a clean container
         timeout-minutes: 10
         env:
-          IMG: heap-${{ needs.meta.outputs.tag }}-linux-x86_64.AppImage
+          IMG: lowkey-${{ needs.meta.outputs.tag }}-linux-x86_64.AppImage
         run: docker run --rm -v "$PWD:/w" -w /w ubuntu:24.04 bash packaging/linux/smoke-appimage.sh "$IMG"
 
       - name: Upload Linux artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dist-linux
-          path: heap-${{ needs.meta.outputs.tag }}-linux-x86_64.AppImage
+          path: lowkey-${{ needs.meta.outputs.tag }}-linux-x86_64.AppImage
           if-no-files-found: error
 
   # ──────────────────────────────────────────────────────────────────
@@ -510,24 +510,8 @@ jobs:
           version: "6.9.1"
           modules: qtnetworkauth
 
-      # Generate the macOS app icon (.icns) from the brand SVG BEFORE configure,
-      # so CMake's `if(EXISTS heap.icns)` (a configure-time check) wires it into
-      # the bundle. Recipe mirrors design/brand-export/README.md
-      # (librsvg → iconset → iconutil). Without this the .app carries Qt's
-      # generic icon.
-      - name: Generate app icon (.icns)
-        run: |
-          set -eu
-          brew install librsvg
-          SVG=design/brand-export/icon/heap-icon.svg
-          ICONSET="$RUNNER_TEMP/heap.iconset"
-          mkdir -p "$ICONSET"
-          for sz in 16 32 128 256 512; do
-            rsvg-convert -w "$sz"       -h "$sz"       -a "$SVG" -o "$ICONSET/icon_${sz}x${sz}.png"
-            rsvg-convert -w "$((sz*2))" -h "$((sz*2))" -a "$SVG" -o "$ICONSET/icon_${sz}x${sz}@2x.png"
-          done
-          iconutil -c icns "$ICONSET" -o design/brand-export/icon/heap.icns
-          test -f design/brand-export/icon/heap.icns
+      # The app icon (.icns) is in the repo (design/brand-export/lowkey,
+      # built with the rest of the logo package), so there is nothing to make.
 
       # arm64 (native to macos-14). CMAKE_OSX_DEPLOYMENT_TARGET pins the Mach-O
       # `minos` to match Info.plist's LSMinimumSystemVersion (12.0) — otherwise it
@@ -559,7 +543,7 @@ jobs:
             -DHEAP_BUILD_TESTS=OFF \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0
           cmake --build build --parallel --target heap
-          test -d build/heap.app
+          test -d build/lowkey.app
 
       # Bundle Qt frameworks/plugins into the .app. NOTE: no -dmg — the .app must
       # be code-signed AFTER macdeployqt (its install_name_tool rpath rewrites
@@ -569,9 +553,9 @@ jobs:
       - name: Deploy Qt into the bundle
         run: |
           set -eu
-          macdeployqt build/heap.app -qmldir="$PWD/qml"
-          test -d build/heap.app/Contents/Frameworks/QtCore.framework
-          if otool -L build/heap.app/Contents/MacOS/heap | grep -Eiq '/Users/runner/work/.*Qt|/aqt'; then
+          macdeployqt build/lowkey.app -qmldir="$PWD/qml"
+          test -d build/lowkey.app/Contents/Frameworks/QtCore.framework
+          if otool -L build/lowkey.app/Contents/MacOS/lowkey | grep -Eiq '/Users/runner/work/.*Qt|/aqt'; then
             echo "::error::macdeployqt left absolute Qt paths — relocation failed"
             exit 1
           fi
@@ -585,7 +569,7 @@ jobs:
       - name: Codesign the app
         run: |
           set -eu
-          APP=build/heap.app
+          APP=build/lowkey.app
           if [ -n "${MACOS_CERT_P12:-}" ]; then
             echo "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
             security create-keychain -p ci build.keychain
@@ -611,23 +595,23 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$APP"
 
       # Assemble a drag-to-Applications .dmg by hand (hdiutil). This replaces
-      # `macdeployqt -dmg`, whose bare image (just heap.app, no /Applications
+      # `macdeployqt -dmg`, whose bare image (just lowkey.app, no /Applications
       # target) is what made the mounted dmg look like a lone icon rather than an
       # installer. create-dmg is avoided — it drives Finder via AppleScript, which
       # hangs on headless runners.
       - name: Build .dmg
         run: |
           set -eu
-          bash packaging/macos/make-dmg.sh build/heap.app "heap-${{ needs.meta.outputs.tag }}-macos.dmg"
+          bash packaging/macos/make-dmg.sh build/lowkey.app "lowkey-${{ needs.meta.outputs.tag }}-macos.dmg"
 
       # Run the app from the mounted dmg — the bundle a user drags out.
       - name: Smoke-test the app from the dmg
         timeout-minutes: 5
         run: |
           set -eu
-          hdiutil attach "heap-${{ needs.meta.outputs.tag }}-macos.dmg" -nobrowse -mountpoint /Volumes/heap
-          trap 'hdiutil detach /Volumes/heap' EXIT
-          /Volumes/heap/heap.app/Contents/MacOS/heap --smoke --data-dir "$RUNNER_TEMP/smoke"
+          hdiutil attach "lowkey-${{ needs.meta.outputs.tag }}-macos.dmg" -nobrowse -mountpoint /Volumes/lowkey
+          trap 'hdiutil detach /Volumes/lowkey' EXIT
+          /Volumes/lowkey/lowkey.app/Contents/MacOS/lowkey --smoke --data-dir "$RUNNER_TEMP/smoke"
 
       # Notarize only when the Apple secrets are configured — the .app is already
       # signed + hardened above. Sign the dmg, submit, staple, accept-check. Do
@@ -637,7 +621,7 @@ jobs:
         if: ${{ env.MACOS_CERT_P12 != '' }}
         run: |
           set -eu
-          DMG="heap-${{ needs.meta.outputs.tag }}-macos.dmg"
+          DMG="lowkey-${{ needs.meta.outputs.tag }}-macos.dmg"
           codesign --force --timestamp --sign "Developer ID Application" "$DMG"
           xcrun notarytool submit "$DMG" \
             --apple-id "$MACOS_NOTARY_APPLE_ID" --password "$MACOS_NOTARY_PASSWORD" \
@@ -657,7 +641,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dist-macos
-          path: heap-${{ needs.meta.outputs.tag }}-macos.dmg
+          path: lowkey-${{ needs.meta.outputs.tag }}-macos.dmg
           if-no-files-found: error
 
   # ──────────────────────────────────────────────────────────────────
@@ -710,6 +694,19 @@ jobs:
             echo "::error::two artifacts share a file name"; find dist -mindepth 2 -type f; exit 1
           fi
 
+      # heap 0.7.x looks for its update under heap's names (Updater::assetNameFor
+      # before APP-280). The same files go up under those names too, so every
+      # 0.7 install finds 0.8 and moves to lowkey by its own updater. Drop this
+      # once 0.7 is no longer worth carrying.
+      - name: Copies under heap's names for 0.7.x updaters
+        working-directory: dist
+        run: |
+          set -eu
+          for f in lowkey-*-windows-setup.exe lowkey-*-windows-portable.zip lowkey-*-macos.dmg lowkey-*-linux-x86_64.AppImage; do
+            [ -f "$f" ] && cp "$f" "heap-${f#lowkey-}"
+          done
+          ls -1
+
       - name: List artifacts
         run: find dist -type f -printf '%p (%s bytes)\n'
 
@@ -720,7 +717,7 @@ jobs:
         with:
           path: dist
           format: spdx-json
-          output-file: dist/heap-${{ needs.meta.outputs.tag }}-sbom.spdx.json
+          output-file: dist/lowkey-${{ needs.meta.outputs.tag }}-sbom.spdx.json
           upload-artifact: false
           upload-release-assets: false
 
@@ -747,7 +744,7 @@ jobs:
         run: |
           {
             if [ "$MACOS_NOTARIZED" != "true" ]; then
-              echo "> **macOS:** this build is not notarized. On first launch, right-click heap.app → **Open**."
+              echo "> **macOS:** this build is not notarized. On first launch, right-click lowkey.app → **Open**."
               echo
             fi
             if [ "$WINDOWS_SIGNED" != "true" ]; then
@@ -774,7 +771,7 @@ jobs:
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ needs.meta.outputs.tag }}
-          name: "heap ${{ needs.meta.outputs.tag }}"
+          name: "lowkey ${{ needs.meta.outputs.tag }}"
           body_path: notes.md
           generate_release_notes: true
           # A full release becomes /releases/latest (the updater's target); a

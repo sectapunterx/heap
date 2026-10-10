@@ -1,0 +1,4 @@
+// Windows resource: the multi-resolution app icon inside lowkey.exe, so
+// Explorer and the taskbar show it before QApplication runs. setWindowIcon()
+// in main.cpp covers the window once Qt is up.
+IDI_ICON1 ICON "lowkey.ico"

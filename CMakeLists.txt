@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.21)
 # C is enabled for the vendored md4c parser (third_party/md4c), the only C in
 # the tree.
-project(heap VERSION 0.7.2 LANGUAGES C CXX)
+project(heap VERSION 0.8.0 LANGUAGES C CXX)
 
 # Windows resource compiler (windres on mingw / rc.exe on MSVC). Required so
-# design/brand-export/icon/heap-icon.rc is actually compiled into heap.exe —
+# design/brand-export/lowkey/lowkey-icon.rc is actually compiled into lowkey.exe —
 # without this, CMake silently skips .rc inputs and the PE icon resource is
 # missing, leaving Explorer/taskbar with the default Qt icon in release.
 if (WIN32)
@@ -186,11 +186,19 @@ qt_add_library(heap_core STATIC
     src/RecoveryLog.cpp
     src/SampleData.cpp
     src/StateSerializer.cpp
+    # The task's local layer (ADR 0001, APP-244).
+    src/local/TaskLocal.cpp
+    src/local/Checklist.cpp
+    src/local/Sessions.cpp
     src/CodeHighlighter.cpp
     src/chrono/ChronoTokenizer.cpp
     src/chrono/ChronoLocale_en.cpp
     src/chrono/ChronoLocale_ru.cpp
     src/chrono/ChronoParser.cpp
+    src/capture/CaptureParse.cpp
+    src/plan/DayPlan.cpp
+    src/plan/FreeWindow.cpp
+    src/capture/SpanHighlighter.cpp
     src/git/BranchTaskMatcher.cpp
     src/git/BranchTaskResolve.cpp
     src/git/GitWatcher.cpp
@@ -211,6 +219,7 @@ qt_add_library(heap_core STATIC
     src/platform/GlobalHotkey.cpp
     src/platform/X11Keys.cpp
     src/platform/Paths.cpp
+    src/platform/LegacyData.cpp
     src/platform/Accessibility.cpp
     src/platform/AltGrGuard.cpp
     src/platform/Autostart.cpp
@@ -221,6 +230,10 @@ qt_add_library(heap_core STATIC
     # The window frame follows heap's theme, not the system's app mode.
     src/platform/WindowFrame.cpp
     src/TypeAhead.cpp
+    # The 0.8.0 keymap: physical keys, two-key sequences (APP-272).
+    src/keys/KeyNames.cpp
+    src/keys/KeyRouter.cpp
+    src/query/CommandQuery.cpp
     # ── audit-plat: begin ──
     src/storage/StateIO.cpp
     src/storage/AsyncSaver.cpp
@@ -230,12 +243,15 @@ qt_add_library(heap_core STATIC
     # ── audit-plat: end ──
     # ── audit-tasks: begin ──
     src/AppControllerTaskEdits.cpp
+    src/AppControllerLocal.cpp
     src/AppControllerSavedViews.cpp
     src/AppControllerSafety.cpp
     src/safety/SafetyText.cpp
     src/safety/ErrorSignature.cpp
     src/safety/Standup.cpp
     src/views/SavedViewMatch.cpp
+    src/views/TaskListGroups.cpp
+    src/AppControllerTaskList.cpp
     # ── audit-tasks: end ──
     # ── audit-time: begin ──
     # ── audit-time: end ──
@@ -243,11 +259,13 @@ qt_add_library(heap_core STATIC
     src/storage/Attachments.cpp
     src/AppControllerAttachments.cpp
     src/AppControllerPresence.cpp
+    src/AppControllerCalendar.cpp
     # ── audit-know: end ──
     # ── audit-ux: begin ──
     # ── audit-ux: end ──
     # ── audit-int: begin ──
     src/integrations/TrackerMerge.cpp
+    src/integrations/Sprints.cpp
     src/integrations/SyncHealth.cpp
     src/history/TaskHistory.cpp
     src/integrations/AutoSync.h
@@ -297,6 +315,7 @@ qt_add_library(heap_core STATIC
 
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 set_source_files_properties(qml/Brand.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(qml/Style.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 set_source_files_properties(qml/I18n.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 set_source_files_properties(qml/IntegrationActivity.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
@@ -321,6 +340,16 @@ qt_add_qml_module(heap_core
         qml/Main.qml
         qml/Theme.qml
         qml/ThemePresets.js
+        # heap 2 design system (APP-259) and the two styles (APP-275)
+        qml/Style.qml
+        qml/StatusRing.qml
+        qml/PropertyChip.qml
+        qml/KeyHint.qml
+        qml/CursorBar.qml
+        qml/SectionHeader.qml
+        qml/MeetingIcon.qml
+        qml/LensTabs.qml
+        qml/QueryBar.qml
         qml/Pseudo.js
         # ── audit-plat: begin ──
         qml/StorageBanner.qml
@@ -329,6 +358,7 @@ qt_add_qml_module(heap_core
         qml/PlainText.js
         qml/SavedViewsHost.qml
         qml/SavedViewNameDialog.qml
+        qml/SchedulePopup.qml
         # ── audit-tasks: end ──
         # ── audit-time: begin ──
         qml/SeriesScopeDialog.qml
@@ -337,6 +367,7 @@ qt_add_qml_module(heap_core
         qml/IntegrationHealthCard.qml
         qml/IntegrationsInfoCard.qml
         qml/CalendarSubscriptionsCard.qml
+        qml/SprintMarker.qml
         qml/AutoSyncCard.qml
         qml/WeeklyRecapDialog.qml
         qml/EventLogDialog.qml
@@ -359,6 +390,7 @@ qt_add_qml_module(heap_core
         qml/ActionButton.qml
         qml/EmptyState.qml
         qml/Motion.js
+        qml/TaskDates.js
         qml/IntegrationActivity.qml
         qml/PopupSurface.qml
         qml/ModalSurface.qml
@@ -371,14 +403,32 @@ qt_add_qml_module(heap_core
         # ── audit-perf: end ──
         qml/I18n.qml
         qml/TopBar.qml
-        qml/SideRail.qml
+        qml/Sidebar.qml
+        qml/ProfileSwitcher.qml
+        qml/TodayView.qml
+        qml/FirstRunHero.qml
+        qml/AppSwitch.qml
+        qml/TaskMenuHost.qml
+        qml/TaskDocument.qml
+        # The local layer in the document and on the card (APP-236…241, 251).
+        qml/TaskLocalChecklist.qml
+        qml/TaskLocalTags.qml
+        qml/TaskRelations.qml
+        qml/TaskCommentDraft.qml
+        qml/TaskSessions.qml
+        qml/TaskCardLocal.qml
+        qml/MdBlockEditor.qml
         qml/FilterBar.qml
         qml/KanbanBoard.qml
         qml/TaskCard.qml
+        qml/TaskListView.qml
         qml/SelectionBar.qml
         qml/ArchiveView.qml
         qml/TimelineView.qml
         qml/WeekView.qml
+        qml/CalendarView.qml
+        qml/CalendarNav.qml
+        qml/UndatedTray.qml
         qml/MonthView.qml
         qml/DocsView.qml
         qml/DocsEditor.qml
@@ -390,7 +440,6 @@ qt_add_qml_module(heap_core
         qml/EventEditor.qml
         qml/PersonEditor.qml
         qml/PersonPicker.qml
-        qml/TweaksPanel.qml
         qml/Toast.qml
         qml/ToastTiming.js
         qml/AppMenu.qml
@@ -404,6 +453,8 @@ qt_add_qml_module(heap_core
         qml/ProfileEditor.qml
         qml/CommandPalette.qml
         qml/HotkeysPanel.qml
+        qml/KeyCheatSheet.qml
+        qml/KeyPendingBar.qml
         qml/NotesView.qml
         qml/MdView.qml
         qml/SettingsView.qml
@@ -439,12 +490,14 @@ qt_add_qml_module(heap_core
         qml/Search.js
         qml/SettingsIndex.js
         qml/PopupStack.js
+        qml/KeyRules.js
     SOURCES
         src/AppController.h
         src/Models.h
         src/TaskFilterProxy.h
         src/SampleData.h
         src/CodeHighlighter.h
+        src/capture/SpanHighlighter.h
         src/cal/EventClamp.h
         src/chrono/ChronoTypes.h
         src/chrono/ChronoTokenizer.h
@@ -470,6 +523,7 @@ qt_add_qml_module(heap_core
         src/platform/Sound.h
         src/hints/ShortcutHints.h
         src/TypeAhead.h
+        src/keys/KeyRouter.h
         src/integrations/IntegrationTypes.h
         src/integrations/StatusMap.h
         src/integrations/SyncState.h
@@ -499,7 +553,7 @@ qt_add_qml_module(heap_core
 
 # src/markdown too: qt_add_qml_module's generated registration file includes
 # each QML-exposed header by its bare name.
-target_include_directories(heap_core PUBLIC src src/markdown)
+target_include_directories(heap_core PUBLIC src src/markdown src/capture src/keys)
 target_compile_options(heap_core PRIVATE "${HEAP_WARNING_OPTIONS}")
 target_link_libraries(heap_core PUBLIC
     heap_markdown
@@ -594,7 +648,7 @@ target_compile_options(heap_provider_registry PRIVATE "${HEAP_WARNING_OPTIONS}")
 # operate on. Each keyword applies only to its own platform. (HEAP-28)
 qt_add_executable(heap WIN32 MACOSX_BUNDLE
     src/main.cpp
-    $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/design/brand-export/icon/heap-icon.rc>
+    $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/design/brand-export/lowkey/lowkey-icon.rc>
 )
 # Link the QML module plugin too: for a statically-linked qml module the plugin
 # carries the type-registration + qmlcache resource init. Linking only the
@@ -602,6 +656,9 @@ qt_add_executable(heap WIN32 MACOSX_BUNDLE
 # Main.qml) fail to load at runtime. Linking the plugin force-references them.
 target_link_libraries(heap PRIVATE heap_core heap_coreplugin heap_provider_registry)
 target_compile_options(heap PRIVATE "${HEAP_WARNING_OPTIONS}")
+# The product is lowkey since 0.8.0 (APP-280); the CMake targets keep their
+# names, the files they make carry the new one.
+set_target_properties(heap PROPERTIES OUTPUT_NAME lowkey)
 
 # ── heap-updater (APP-125) — puts a downloaded update in place on Windows ──
 # A running exe and its DLLs cannot be overwritten there, so heap starts this
@@ -620,7 +677,21 @@ if(WIN32)
     if(MINGW)
         target_link_options(heap-updater PRIVATE -municode -static)
     endif()
+    set_target_properties(heap-updater PROPERTIES OUTPUT_NAME lowkey-updater)
     add_dependencies(heap heap-updater)
+
+    # ── heap.exe, kept as a launcher (APP-280) ──
+    # What 0.7.x left pointing at heap.exe — its updater's restart, shortcuts,
+    # a login entry — starts lowkey.exe through this. No Qt, static runtime.
+    add_executable(heap-legacy-launcher WIN32 src/updater/legacy_launcher_win.cpp)
+    set_target_properties(heap-legacy-launcher PROPERTIES OUTPUT_NAME heap)
+    target_compile_definitions(heap-legacy-launcher PRIVATE UNICODE _UNICODE)
+    target_link_libraries(heap-legacy-launcher PRIVATE user32)
+    target_compile_options(heap-legacy-launcher PRIVATE "${HEAP_WARNING_OPTIONS}")
+    if(MINGW)
+        target_link_options(heap-legacy-launcher PRIVATE -municode -static)
+    endif()
+    add_dependencies(heap heap-legacy-launcher)
 
     # ── heap-cli (APP-173) — the console front door to heap.exe ──
     # heap.exe is a GUI-subsystem binary, so cmd and PowerShell neither wait
@@ -638,9 +709,13 @@ if(WIN32)
         src/git/BranchTaskMatcher.cpp
         src/git/BranchTaskResolve.cpp
         src/platform/Paths.cpp
+        src/platform/LegacyData.cpp
         src/platform/SingleInstance.cpp
         src/storage/StateIO.cpp
         src/StateSerializer.cpp
+        src/local/TaskLocal.cpp
+        src/local/Checklist.cpp
+        src/local/Sessions.cpp
         src/Models.cpp
     )
     set_target_properties(heap-cli PROPERTIES AUTOMOC ON)
@@ -648,6 +723,7 @@ if(WIN32)
     target_compile_definitions(heap-cli PRIVATE HEAP_VERSION="${PROJECT_VERSION}")
     target_link_libraries(heap-cli PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Network heap_markdown shell32)
     target_compile_options(heap-cli PRIVATE "${HEAP_WARNING_OPTIONS}")
+    set_target_properties(heap-cli PROPERTIES OUTPUT_NAME lowkey-cli)
     add_dependencies(heap heap-cli)
 endif()
 
@@ -681,22 +757,21 @@ qt_add_resources(heap_core "fonts"
         resources/fonts/JetBrainsMono-Medium.ttf
 )
 
-# ── Brand assets (heap. logo + app icon, exported by design/brand-export) ──
+# ── Brand assets (lowkey logo + app icon, design/brand-export/lowkey — APP-280) ──
 # On heap_core, not the app, so every binary that loads the QML — the test
 # runner included — has the icons the QML asks for.
 qt_add_resources(heap_core "brand"
     PREFIX "/brand"
     BASE "design/brand-export"
     FILES
-        design/brand-export/logo/heap-mark.svg
-        design/brand-export/logo/heap-mark-light.svg
-        design/brand-export/logo/heap-mark-mono.svg
-        design/brand-export/logo/heap-lockup.svg
-        design/brand-export/logo/heap-lockup-light.svg
-        design/brand-export/logo/heap-wordmark.svg
-        design/brand-export/logo/heap-wordmark-light.svg
-        design/brand-export/icon/heap-icon.svg
-        design/brand-export/icon/favicon.svg
+        design/brand-export/lowkey/lowkey-icon.svg
+        design/brand-export/lowkey/lowkey-icon-light.svg
+        design/brand-export/lowkey/lowkey-wordmark-on-dark.svg
+        design/brand-export/lowkey/lowkey-wordmark-on-light.svg
+        design/brand-export/lowkey/lowkey-tray-light.svg
+        design/brand-export/lowkey/lowkey-tray-dark.svg
+        design/brand-export/lowkey/lowkey-tray-template.svg
+        design/brand-export/lowkey/favicon.svg
         design/brand-export/icons/heap-01-board.svg
         design/brand-export/icons/heap-02-timeline.svg
         design/brand-export/icons/heap-03-week.svg
@@ -747,16 +822,16 @@ qt_add_resources(heap_core "brand"
 # macOS build (local dev, CI, release) carries the icon rather than only the
 # release pipeline. If the tools are missing it falls back to Qt's default.
 if(APPLE)
-    set(MACOSX_BUNDLE_EXECUTABLE_NAME "heap")
-    set(MACOSX_BUNDLE_BUNDLE_NAME "heap.")
-    set(MACOSX_BUNDLE_GUI_IDENTIFIER "local.heap.app")
+    set(MACOSX_BUNDLE_EXECUTABLE_NAME "lowkey")
+    set(MACOSX_BUNDLE_BUNDLE_NAME "lowkey")
+    set(MACOSX_BUNDLE_GUI_IDENTIFIER "local.lowkey.app")
     set(MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}")
     set(MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}")
     set_target_properties(heap PROPERTIES
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/packaging/macos/Info.plist.in")
 
-    set(_heap_icns "${CMAKE_SOURCE_DIR}/design/brand-export/icon/heap.icns")
-    set(_heap_icon_svg "${CMAKE_SOURCE_DIR}/design/brand-export/icon/heap-icon.svg")
+    set(_heap_icns "${CMAKE_SOURCE_DIR}/design/brand-export/lowkey/lowkey.icns")
+    set(_heap_icon_svg "${CMAKE_SOURCE_DIR}/design/brand-export/lowkey/lowkey-icon.svg")
     if(NOT EXISTS "${_heap_icns}")
         find_program(RSVG_CONVERT rsvg-convert)
         find_program(ICONUTIL iconutil)
@@ -777,7 +852,8 @@ if(APPLE)
         endif()
     endif()
     if(EXISTS "${_heap_icns}")
-        set(MACOSX_BUNDLE_ICON_FILE "heap.icns")
+        get_filename_component(_heap_icns_name "${_heap_icns}" NAME)
+        set(MACOSX_BUNDLE_ICON_FILE "${_heap_icns_name}")
         target_sources(heap PRIVATE "${_heap_icns}")
         set_source_files_properties("${_heap_icns}" PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
     endif()
@@ -851,12 +927,13 @@ if(WIN32)
         endif()
 
         add_custom_target(portable
-                DEPENDS heap heap-updater heap-cli
+                DEPENDS heap heap-updater heap-cli heap-legacy-launcher
                 COMMAND ${CMAKE_COMMAND} -E rm -rf          "${PORTABLE_DIR}"
                 COMMAND ${CMAKE_COMMAND} -E make_directory  "${PORTABLE_DIR}"
                 COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:heap>" "${PORTABLE_DIR}/"
                 COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:heap-updater>" "${PORTABLE_DIR}/"
                 COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:heap-cli>" "${PORTABLE_DIR}/"
+                COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:heap-legacy-launcher>" "${PORTABLE_DIR}/"
                 COMMAND ${CMAKE_COMMAND} -E env "PATH=${_windeploy_path}"
                         ${WINDEPLOYQT_EXECUTABLE}
                         --no-translations
@@ -885,7 +962,7 @@ if(WIN32)
                 # Tells an in-app update this folder is a release's portable
                 # bundle (APP-125). The installer packs it too, but there
                 # unins000.exe beside heap.exe decides first.
-                COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_SOURCE_DIR}/packaging/windows/heap-portable.txt" "${PORTABLE_DIR}/"
+                COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_SOURCE_DIR}/packaging/windows/lowkey-portable.txt" "${PORTABLE_DIR}/"
                 COMMENT "Assembling portable bundle → ${PORTABLE_DIR}"
         )
     else()

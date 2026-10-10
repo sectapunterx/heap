@@ -33,10 +33,8 @@ TestCase {
         if (tc.win) tc.win.destroy();
     }
     function cleanup() {
-        const prompt = findChild(tc.win, "te-discard-prompt");
-        if (prompt && prompt.opened) prompt.discard();
-        const te = tc.editor();
-        if (te && te.opened) te.close();
+        const d = tc.doc();
+        if (d && d.opened) d.close();
         AppController.activeProfileId = tc.pA;
         for (let i = 0; i < tc.seeded.length; i++) AppController.deleteTask(tc.seeded[i]);
         tc.seeded = [];
@@ -45,8 +43,11 @@ TestCase {
         AppController.clearPendingUndo();
     }
 
-    function editor() {
-        return findChild(tc.win, "task-editor");
+    // The task document (APP-265) in place of the modal editor: it saves by
+    // itself, so "settling" it is writing what is typed into its own task
+    // before anything switches the profile.
+    function doc() {
+        return findChild(tc.win, "task-doc");
     }
 
     function mk(title) {
@@ -71,8 +72,8 @@ TestCase {
         return out;
     }
 
-    // T1 in A (active), T2 in a fresh profile B; T1 open in the editor with
-    // its title edited.
+    // T1 in A (active), T2 in a fresh profile B; T1 open as a document with
+    // its title edited and not yet saved.
     function setUp(tag) {
         const t1 = mk("pres1 T1 " + tag);
         tc.seeded.push(t1);
@@ -82,44 +83,37 @@ TestCase {
         const t2 = mk("pres1 T2 " + tag);
         AppController.activeProfileId = tc.pA;
         verify(AppController.handleNotificationUri("heap://notify?id=deadline:" + t1 + "&action=open"));
-        tryVerify(() => tc.editor() && tc.editor().opened, 3000, "T1 did not open");
-        findChild(tc.win, "te-title").text = "pres1 EDITED " + tag;
-        verify(tc.editor().isDirty());
+        tryVerify(() => tc.doc() && tc.doc().opened && tc.doc().taskId === t1, 3000, "T1 did not open");
+        findChild(tc.doc(), "task-doc-title").text = "pres1 EDITED " + tag;
         return { t1: t1, t2: t2, pB: pB };
     }
 
     function test_open_settles_the_editor_before_switching() {
         const s = tc.setUp("open");
         verify(AppController.handleNotificationUri("heap://notify?id=deadline:" + s.t2 + "&action=open"));
-        const prompt = findChild(tc.win, "te-discard-prompt");
-        tryVerify(() => prompt.opened, 3000, "the edits were not asked about");
-        compare(AppController.activeProfileId, tc.pA, "the profile switched before the editor was settled");
-
-        prompt.save();
-        // Saved where T1 lives, then on to T2 in its profile.
-        compare(tc.where(s.t1), [tc.pA + ":todo:pres1 EDITED open"]);
         tryCompare(AppController, "activeProfileId", s.pB);
-        tryVerify(() => tc.editor().opened && findChild(tc.win, "te-title").text === "pres1 T2 open", 3000,
-                  "T2 did not open after the save");
+        tryVerify(() => tc.doc().opened && tc.doc().taskId === s.t2, 3000, "T2 did not open");
+        compare(findChild(tc.doc(), "task-doc-title").text, "pres1 T2 open");
+        // T1's edit was saved where T1 lives (where() walks the profiles).
+        compare(tc.where(s.t1), [tc.pA + ":todo:pres1 EDITED open"]);
     }
 
     function test_done_leaves_the_open_editor_in_its_profile() {
         const s = tc.setUp("done");
         verify(AppController.handleNotificationUri("heap://notify?id=deadline:" + s.t2 + "&action=done"));
         wait(100);
-        compare(AppController.activeProfileId, tc.pA, "Done switched the profile under the editor");
+        compare(AppController.activeProfileId, tc.pA, "Done switched the profile under the document");
         compare(tc.where(s.t2), [s.pB + ":done:pres1 T2 done"]);
-
-        verify(tc.editor()._save());
+        tc.doc().flush();
         compare(tc.where(s.t1), [tc.pA + ":todo:pres1 EDITED done"]);
     }
 
-    // Whatever switched the profile, the editor saves into its own.
+    // Whatever switches the profile, the document saves into its own first.
     function test_save_goes_back_to_the_editors_profile() {
         const s = tc.setUp("back");
         AppController.activeProfileId = s.pB;
-        verify(tc.editor()._save());
-        compare(AppController.activeProfileId, tc.pA);
+        verify(!tc.doc().opened, "the document stayed open over another profile");
+        AppController.activeProfileId = tc.pA;
         compare(tc.where(s.t1), [tc.pA + ":todo:pres1 EDITED back"]);
     }
 }

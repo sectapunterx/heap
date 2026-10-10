@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
@@ -6,6 +7,8 @@ import TodoCpp
 Rectangle {
     id: bar
     visible: AppController.selectionCount > 0
+    // Carries the selection on (APP-248): "tomorrow", "window", "someday", "clear".
+    function carry(mode) { AppController.carryTasks(AppController.selectedTaskIds, mode); }
     opacity: visible ? 1 : 0
     Behavior on opacity {
         NumberAnimation {
@@ -32,6 +35,21 @@ Rectangle {
             font.pixelSize: Theme.fsMd
             font.weight: Theme.fwTitle
         }
+        // The selection's estimates added up (APP-246): "~6 h · 3 without
+        // an estimate". A fact; nothing is asked for.
+        Text {
+            id: estSum
+            objectName: "selection-estimate"
+            readonly property var sum: AppController.selectionCount > 0
+                ? AppController.estimateSummary(AppController.selectedTaskIds) : ({ minutes: 0, without: 0 })
+            visible: estSum.sum.minutes > 0
+            text: "~" + I18n.fmtMinutes(estSum.sum.minutes)
+                + (estSum.sum.without > 0 ? " · " + I18n.count(estSum.sum.without, "estimate.without") : "")
+            color: Theme.textMuted
+            font.family: Theme.fontUi
+            font.features: Theme.tabularNums
+            font.pixelSize: Theme.fsSm
+        }
         Rectangle {
             Layout.preferredWidth: 1; Layout.preferredHeight: 18; color: Theme.border
         }
@@ -46,6 +64,13 @@ Rectangle {
             objectName: "sel-priority"
             text: I18n.t("selection.bar.priority")
             onClicked: priorityMenu.popup()
+        }
+        // Carry the whole selection on (APP-248): tomorrow, the next free
+        // windows one after another, someday, or no date.
+        PillButton {
+            objectName: "sel-carry"
+            text: I18n.t("carry.menu")
+            onClicked: carryMenu.popup()
         }
         PillButton {
             id: labelBtn
@@ -81,6 +106,20 @@ Rectangle {
                 required property string modelData
                 text: modelData
                 onTriggered: AppController.setSelectedTasksPriority(modelData)
+            }
+        }
+    }
+
+    AppMenu {
+        id: carryMenu
+        objectName: "sel-carry-menu"
+        Repeater {
+            model: ["tomorrow", "window", "someday", "clear"]
+            AppMenuItem {
+                required property string modelData
+                objectName: "sel-carry-" + modelData
+                text: I18n.t("carry." + modelData)
+                onTriggered: bar.carry(modelData)
             }
         }
     }

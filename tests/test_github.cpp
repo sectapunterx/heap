@@ -3,6 +3,8 @@
 
 #include "integrations/GithubProvider.h"
 
+#include <QJsonArray>
+
 #include <gtest/gtest.h>
 
 using heap::integrations::ExternalTask;
@@ -115,4 +117,48 @@ TEST(GithubPushState, MapsColumnToIssueState) {
   EXPECT_EQ(githubStateForColumn(QStringLiteral("prog")), QStringLiteral("open"));
   EXPECT_EQ(githubStateForColumn(QStringLiteral("review")), QStringLiteral("open"));
   EXPECT_EQ(githubStateForColumn(QString()), QStringLiteral("open"));
+}
+
+// ── Pull requests (APP-242) ───────────────────────────────────────────────
+
+TEST(GithubPulls, SearchItemsInEveryStage) {
+  const QByteArray json = R"({"total_count": 5, "items": [
+    {"number": 7, "html_url": "https://github.com/o/r/pull/7", "title": "Feature", "body": "Fixes #3",
+     "state": "open", "draft": false, "repository_url": "https://api.github.com/repos/o/r",
+     "pull_request": {"merged_at": null}, "user": {"login": "ann"}, "comments": 2},
+    {"number": 8, "html_url": "https://github.com/o/r/pull/8", "title": "Draft", "state": "open", "draft": true,
+     "pull_request": {}},
+    {"number": 9, "html_url": "https://github.com/o/r/pull/9", "title": "Merged", "state": "closed",
+     "pull_request": {"merged_at": "2026-10-08T09:00:00Z"}},
+    {"number": 10, "html_url": "https://github.com/o/r/pull/10", "title": "Closed", "state": "closed",
+     "pull_request": {"merged_at": null}},
+    {"number": 11, "html_url": "https://github.com/o/r/issues/11", "title": "An issue", "state": "open"}
+  ]})";
+  const QVector<ExternalTask> prs = heap::integrations::parseGithubPulls(json);
+  ASSERT_EQ(prs.size(), 4);  // the issue is not one
+  EXPECT_EQ(prs.at(0).externalId, QStringLiteral("7"));
+  EXPECT_EQ(prs.at(0).status, QStringLiteral("PR open"));
+  EXPECT_EQ(prs.at(0).issueType, QStringLiteral("PR"));
+  EXPECT_EQ(prs.at(0).project, QStringLiteral("o/r"));
+  EXPECT_EQ(prs.at(0).author, QStringLiteral("ann"));
+  EXPECT_EQ(prs.at(0).details.value(QStringLiteral("kind")).toString(), QStringLiteral("pr"));
+  EXPECT_EQ(prs.at(0).details.value(QStringLiteral("closes")).toArray(), QJsonArray{QStringLiteral("#3")});
+  EXPECT_EQ(prs.at(1).status, QStringLiteral("PR draft"));
+  EXPECT_EQ(prs.at(2).status, QStringLiteral("PR merged"));
+  EXPECT_EQ(prs.at(2).details.value(QStringLiteral("state")).toString(), QStringLiteral("merged"));
+  EXPECT_EQ(prs.at(3).status, QStringLiteral("PR closed"));
+}
+
+TEST(GithubPulls, APullsListCarriesTheBranches) {
+  const QByteArray json = R"([{"number": 5, "html_url": "https://github.com/o/r/pull/5", "title": "x", "state": "open",
+    "merged_at": null, "head": {"ref": "feature/x"}, "base": {"ref": "main", "repo": {"full_name": "o/r"}},
+    "requested_reviewers": [{"login": "me"}], "mergeable_state": "dirty"}])";
+  const QVector<ExternalTask> prs = heap::integrations::parseGithubPulls(json);
+  ASSERT_EQ(prs.size(), 1);
+  EXPECT_EQ(prs.at(0).project, QStringLiteral("o/r"));
+  EXPECT_EQ(prs.at(0).details.value(QStringLiteral("sourceBranch")).toString(), QStringLiteral("feature/x"));
+  EXPECT_EQ(prs.at(0).details.value(QStringLiteral("targetBranch")).toString(), QStringLiteral("main"));
+  EXPECT_EQ(prs.at(0).details.value(QStringLiteral("reviewers")).toArray(), QJsonArray{QStringLiteral("me")});
+  EXPECT_EQ(prs.at(0).details.value(QStringLiteral("mergeStatus")).toString(), QStringLiteral("dirty"));
+  EXPECT_TRUE(heap::integrations::parseGithubPulls("garbage").isEmpty());
 }

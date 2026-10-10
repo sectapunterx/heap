@@ -1,5 +1,7 @@
 #include "integrations/GitlabProvider.h"
 
+#include <QJsonArray>
+
 #include <gtest/gtest.h>
 
 using heap::integrations::ExternalTask;
@@ -135,4 +137,72 @@ TEST(GitlabProvider, ParseGitlabIssues_ConfidentialIssue_CarriesAMarkLabel) {
   EXPECT_EQ(issues.at(0).labels.first(), QStringLiteral("confidential"));
   EXPECT_TRUE(issues.at(0).labels.contains(QStringLiteral("bug")));
   EXPECT_EQ(issues.at(0).labelColors.value(QStringLiteral("confidential")), QStringLiteral("#e6624c"));
+}
+
+// ── Merge requests (APP-242) ──────────────────────────────────────────────
+
+TEST(GitlabMergeRequests, EveryStageAndItsFacts) {
+  const QByteArray json = R"([
+    {"iid": 17, "web_url": "https://gitlab.com/acme/app/-/merge_requests/17", "title": "Login fix",
+     "description": "Closes #12 and fixes acme/web#3", "state": "opened", "draft": false,
+     "source_branch": "fix/login", "target_branch": "main", "detailed_merge_status": "not_approved",
+     "has_conflicts": true, "references": {"full": "acme/app!17"},
+     "author": {"username": "ann"}, "assignees": [{"username": "me"}], "reviewers": [{"username": "bob"}, {"username": "me"}],
+     "user_notes_count": 4, "updated_at": "2026-10-08T10:00:00Z", "labels": ["backend"]},
+    {"iid": 18, "web_url": "https://gitlab.com/acme/app/-/merge_requests/18", "title": "WIP", "state": "opened", "draft": true},
+    {"iid": 19, "web_url": "https://gitlab.com/acme/app/-/merge_requests/19", "title": "Old WIP", "state": "opened", "work_in_progress": true},
+    {"iid": 20, "web_url": "https://gitlab.com/acme/app/-/merge_requests/20", "title": "Shipped", "state": "merged",
+     "head_pipeline": {"status": "success"}},
+    {"iid": 21, "web_url": "https://gitlab.com/acme/app/-/merge_requests/21", "title": "Dropped", "state": "closed"},
+    {"iid": 22, "web_url": "https://gitlab.com/acme/app/-/merge_requests/22", "title": "Locked", "state": "locked"},
+    {"title": "no iid"}
+  ])";
+  const QVector<ExternalTask> mrs = heap::integrations::parseGitlabMergeRequests(json);
+  ASSERT_EQ(mrs.size(), 6);
+  const ExternalTask& a = mrs.at(0);
+  EXPECT_EQ(a.externalId, QStringLiteral("!17"));
+  EXPECT_EQ(a.status, QStringLiteral("MR open"));
+  EXPECT_EQ(a.issueType, QStringLiteral("MR"));
+  EXPECT_EQ(a.project, QStringLiteral("acme/app"));
+  EXPECT_EQ(a.author, QStringLiteral("ann"));
+  EXPECT_EQ(a.assignee, QStringLiteral("me"));
+  EXPECT_EQ(a.commentCount, 4);
+  EXPECT_EQ(a.labels, QStringList{QStringLiteral("backend")});
+  EXPECT_EQ(a.details.value(QStringLiteral("kind")).toString(), QStringLiteral("mr"));
+  EXPECT_EQ(a.details.value(QStringLiteral("state")).toString(), QStringLiteral("opened"));
+  EXPECT_EQ(a.details.value(QStringLiteral("sourceBranch")).toString(), QStringLiteral("fix/login"));
+  EXPECT_EQ(a.details.value(QStringLiteral("targetBranch")).toString(), QStringLiteral("main"));
+  EXPECT_EQ(a.details.value(QStringLiteral("mergeStatus")).toString(), QStringLiteral("not_approved"));
+  EXPECT_TRUE(a.details.value(QStringLiteral("conflicts")).toBool());
+  EXPECT_EQ(a.details.value(QStringLiteral("reviewers")).toArray().size(), 2);
+  EXPECT_EQ(a.details.value(QStringLiteral("closes")).toArray(), (QJsonArray{QStringLiteral("#12"), QStringLiteral("acme/web#3")}));
+
+  EXPECT_EQ(mrs.at(1).status, QStringLiteral("MR draft"));
+  EXPECT_TRUE(mrs.at(1).details.value(QStringLiteral("draft")).toBool());
+  EXPECT_EQ(mrs.at(2).status, QStringLiteral("MR draft"));
+  EXPECT_EQ(mrs.at(3).status, QStringLiteral("MR merged"));
+  EXPECT_EQ(mrs.at(3).details.value(QStringLiteral("pipeline")).toString(), QStringLiteral("success"));
+  EXPECT_EQ(mrs.at(4).status, QStringLiteral("MR closed"));
+  EXPECT_EQ(mrs.at(5).status, QStringLiteral("MR closed"));
+  EXPECT_EQ(mrs.at(5).details.value(QStringLiteral("state")).toString(), QStringLiteral("closed"));
+  // The project comes from the web URL when references are missing.
+  EXPECT_EQ(mrs.at(1).project, QStringLiteral("acme/app"));
+}
+
+TEST(GitlabMergeRequests, AnIssueAndAMergeRequestWithTheSameNumberStayApart) {
+  const QVector<ExternalTask> issues =
+      parseGitlabIssues(R"([{"iid": 17, "web_url": "https://gitlab.com/acme/app/-/issues/17", "title": "i", "state": "opened"}])");
+  const QVector<ExternalTask> mrs = heap::integrations::parseGitlabMergeRequests(
+      R"([{"iid": 17, "web_url": "https://gitlab.com/acme/app/-/merge_requests/17", "title": "m", "state": "opened"}])");
+  ASSERT_EQ(issues.size(), 1);
+  ASSERT_EQ(mrs.size(), 1);
+  EXPECT_NE(issues.at(0).externalId, mrs.at(0).externalId);
+  EXPECT_NE(issues.at(0).url, mrs.at(0).url);
+  EXPECT_TRUE(issues.at(0).details.isEmpty());
+}
+
+TEST(GitlabMergeRequests, HandlesEmptyAndInvalid) {
+  EXPECT_TRUE(heap::integrations::parseGitlabMergeRequests("[]").isEmpty());
+  EXPECT_TRUE(heap::integrations::parseGitlabMergeRequests("{}").isEmpty());
+  EXPECT_TRUE(heap::integrations::parseGitlabMergeRequests("nope").isEmpty());
 }

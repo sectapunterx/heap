@@ -7,12 +7,14 @@
 #include "cli/CliMain.h"
 #include "cli/CliQuery.h"
 #include "cli/VerbScan.h"
+#include "platform/LegacyData.h"
 #include "platform/Paths.h"
 #include "platform/SingleInstance.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDeadlineTimer>
+#include <QDir>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
@@ -40,9 +42,9 @@ constexpr int kWindowWaitMs = 4000;
 Response headless(const Request& request) {
   // The same models and save path as the window, minus everything that
   // reaches outside the data dir (see AppController::setHeadless). The log
-  // goes to heap.log only: the quiet handler installed first drops the echo.
+  // goes to lowkey.log only: the quiet handler installed first drops the echo.
   heap::logging::installFileLogger();
-  qInfo("command line: %s", request.verb == Verb::Add ? "add" : "done");
+  qInfo("command line: %s", qPrintable(verbName(request.verb)));
   AppController::setHeadless(true);
   const Response r = applyHeadless(request, QDateTime::currentDateTime());
   heap::logging::closeFileLogger();
@@ -55,11 +57,12 @@ Response launchOnTask(const Request& request, bool dataDirSet) {
   QString error;
   const std::optional<Snapshot> s = readSnapshot(&error);
   if(!s) {
-    return {kExitData, QString(), QStringLiteral("heap: %1\n").arg(error)};
+    return {kExitData, QString(), QStringLiteral("lowkey: %1\n").arg(error)};
   }
-  const TaskRef ref = findTask(*s, request.taskId, findProfile(*s, QString()));
+  QString why;
+  const TaskRef ref = resolveTaskArg(*s, request.taskId, request.branch, &why);
   if(!ref.found()) {
-    return {kExitNotFound, QString(), QStringLiteral("heap: no task '%1'\n").arg(request.taskId)};
+    return {kExitNotFound, QString(), QStringLiteral("lowkey: %1\n").arg(why)};
   }
   const QString id = s->profiles.at(ref.profile).tasks.at(ref.task).id;
   QStringList args;
@@ -87,12 +90,12 @@ Response launchOnTask(const Request& request, bool dataDirSet) {
   window.setStandardOutputFile(QProcess::nullDevice());
   window.setStandardErrorFile(QProcess::nullDevice());
   if(!window.startDetached()) {
-    return {kExitData, QString(), QStringLiteral("heap: could not start heap\n")};
+    return {kExitData, QString(), QStringLiteral("lowkey: could not start lowkey\n")};
   }
   Response r;
   r.out = request.json
               ? QString::fromUtf8(QJsonDocument(QJsonObject{{QStringLiteral("id"), id}}).toJson(QJsonDocument::Compact)) + QChar('\n')
-              : QStringLiteral("Opening %1\n").arg(id);
+              : cliText(QStringLiteral("opening"), s->language).arg(id) + QChar('\n');
   return r;
 }
 
@@ -117,11 +120,30 @@ int run(int argc, char** argv) {
   if(!parsed.ok) {
     return usage(parsed.error);
   }
-  const Request& request = parsed.request;
+  Request request = parsed.request;
   heap::paths::setDataDir(parsed.dataDirSet ? parsed.dataDir : qEnvironmentVariable("HEAP_DATA_DIR"));
+  // The first lowkey command after an upgrade may come before the window ever
+  // opened: it moves heap 0.7's data over the same way (APP-280).
+  if(!heap::paths::dataDirOverridden()) {
+    using heap::platform::legacy::MoveKind;
+    const auto moved =
+        heap::platform::legacy::moveLegacyData(heap::paths::dataDir(), heap::platform::legacy::legacyDirFor(heap::paths::dataDir()));
+    if(moved.kind == MoveKind::Busy) {
+      return report({kExitData, QString(), QStringLiteral("lowkey: heap 0.7 is still running; close it so its data can move to lowkey\n")});
+    }
+    if(moved.kind == MoveKind::Failed) {
+      return report({kExitData, QString(), QStringLiteral("lowkey: could not move heap's data: %1\n").arg(moved.error)});
+    }
+  }
 
   if(const std::optional<int> answered = runQuery(request)) {
     return *answered;
+  }
+
+  // "." is the task of the branch checked out here (APP-254): read where the
+  // command runs, as for `now`.
+  if(request.taskId == QLatin1String(".")) {
+    request.branch = branchAt(QDir::currentPath());
   }
 
 #ifdef Q_OS_WIN
@@ -158,7 +180,7 @@ int run(int argc, char** argv) {
       }
     }
     if(deadline.hasExpired()) {
-      return report({kExitData, QString(), QStringLiteral("heap: another heap is using this data directory and is not responding\n")});
+      return report({kExitData, QString(), QStringLiteral("lowkey: another lowkey is using this data directory and is not responding\n")});
     }
     QThread::msleep(100);
   }

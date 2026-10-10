@@ -10,6 +10,7 @@
 #include "integrations/ReplyError.h"
 #include "integrations/RestIssueProvider.h"
 #include "integrations/SecretStore.h"
+#include "integrations/StatusMap.h"
 #include "integrations/TrelloProvider.h"
 #include "platform/Paths.h"
 
@@ -1329,4 +1330,231 @@ TEST(ReplyError, DescribeHttpError_BareNotFound_ExplainsAccess) {
 
 TEST(ReplyError, DescribeHttpError_SpecificMessage_IsLeftAlone) {
   EXPECT_EQ(describeHttpError(401, R"({"message":"Bad credentials"})", QString()), QStringLiteral("HTTP 401 — Bad credentials"));
+}
+
+// ─── Merge / pull requests (APP-242): read-only, by role ─────────────
+
+TEST(ClosingReferences, ReadsTheUsualPhrasings) {
+  EXPECT_EQ(closingReferences(QStringLiteral("Closes #12")), QStringList{QStringLiteral("#12")});
+  EXPECT_EQ(closingReferences(QStringLiteral("fixes acme/web#7, #8 and #9.\nResolves: #8")),
+            (QStringList{QStringLiteral("acme/web#7"), QStringLiteral("#8"), QStringLiteral("#9")}));
+  EXPECT_TRUE(closingReferences(QStringLiteral("see #12; prefixes #3")).isEmpty());
+  EXPECT_TRUE(closingReferences(QString()).isEmpty());
+}
+
+namespace {
+
+// The real GitLab / GitHub descriptors, pointed at the fake server.
+ProviderDescriptor forgeAt(const QString& id) {
+  ProviderDescriptor d = *findDescriptor(id);
+  d.baseUrlTemplate = QStringLiteral("{host}");
+  d.retry.baseDelayMs = 1;
+  d.retry.maxDelayMs = 5;
+  return d;
+}
+
+int writes(const heap::testing::FakeHttpServer& srv) {
+  int n = 0;
+  for(const auto& r : srv.requests()) {
+    if(r.method != "GET") {
+      ++n;
+    }
+  }
+  return n;
+}
+
+QList<QByteArray> queriesOf(const heap::testing::FakeHttpServer& srv, const QByteArray& path) {
+  QList<QByteArray> out;
+  for(const auto& r : srv.requests()) {
+    if(r.path == path) {
+      out.append(QByteArray::fromPercentEncoding(r.query));
+    }
+  }
+  return out;
+}
+
+}  // namespace
+
+TEST_F(PagingWalk, GitlabPullsMergeRequestsAssignedAndToReviewByDefault) {
+  heap::testing::FakeHttpServer srv;
+  srv.route("GET /api/v4/issues", {200, R"([{"iid":17,"title":"issue","state":"opened","web_url":"https://g/acme/app/-/issues/17"}])", {}});
+  srv.route("GET /api/v4/user", {200, R"({"username":"me"})", {}});
+  srv.route(
+      "GET /api/v4/merge_requests",
+      {200,
+       R"([{"iid":17,"title":"mr","state":"opened","web_url":"https://g/acme/app/-/merge_requests/17","references":{"full":"acme/app!17"}}])",
+       {}});
+
+  RestIssueProvider p(forgeAt(QStringLiteral("gitlab")));
+  p.setConfig({{QStringLiteral("host"), srv.base()}, {QStringLiteral("token"), QStringLiteral("tok")}});
+  PullWatcher w(&p);
+  p.pullTasks();
+  ASSERT_TRUE(heap::testing::waitUntil([&] {
+    return w.fetched > 0;
+  }));
+  EXPECT_EQ(w.failed, 0) << w.lastError.toStdString();
+  // The issue and the merge request with the same number are two items, and
+  // the same request from four lists is one.
+  ASSERT_EQ(w.tasks.size(), 2);
+  EXPECT_EQ(w.tasks.at(0).externalId, QStringLiteral("17"));
+  EXPECT_EQ(w.tasks.at(1).externalId, QStringLiteral("!17"));
+  EXPECT_TRUE(w.tasks.at(1).crossProject);
+  EXPECT_TRUE(p.lastPullComplete());
+
+  const QList<QByteArray> asked = queriesOf(srv, "/api/v4/merge_requests");
+  ASSERT_EQ(asked.size(), 4) << "assignee and reviewer, open and lately updated";
+  int assigned = 0;
+  int reviewing = 0;
+  for(const QByteArray& q : asked) {
+    assigned += q.contains("scope=assigned_to_me") ? 1 : 0;
+    reviewing += q.contains("reviewer_username=me") ? 1 : 0;
+    EXPECT_FALSE(q.contains("created_by_me")) << q.toStdString();
+    EXPECT_TRUE(q.contains("state=opened") || q.contains("updated_after=")) << q.toStdString();
+  }
+  EXPECT_EQ(assigned, 2);
+  EXPECT_EQ(reviewing, 2);
+  EXPECT_EQ(writes(srv), 0);
+}
+
+TEST_F(PagingWalk, GitlabScopedToAProjectAsksThatProject_AndRolesCanBeTurnedOff) {
+  heap::testing::FakeHttpServer srv;
+  srv.route("GET /api/v4/projects/acme%2Fapp/issues", {200, "[]", {}});
+  srv.route("GET /api/v4/projects/acme%2Fapp/merge_requests", {200, "[]", {}});
+  {
+    RestIssueProvider p(forgeAt(QStringLiteral("gitlab")));
+    p.setConfig({{QStringLiteral("host"), srv.base()},
+                 {QStringLiteral("token"), QStringLiteral("tok")},
+                 {QStringLiteral("projectId"), QStringLiteral("acme/app")},
+                 {QStringLiteral("mrRoles"), QStringLiteral("author")}});
+    PullWatcher w(&p);
+    p.pullTasks();
+    ASSERT_TRUE(heap::testing::waitUntil([&] {
+      return w.fetched > 0;
+    }));
+    const QList<QByteArray> asked = queriesOf(srv, "/api/v4/projects/acme%2Fapp/merge_requests");
+    ASSERT_EQ(asked.size(), 2);
+    for(const QByteArray& q : asked) {
+      EXPECT_TRUE(q.contains("scope=created_by_me")) << q.toStdString();
+    }
+    EXPECT_FALSE(srv.seen().contains("GET /api/v4/user")) << "no reviewer list, no need to know who I am";
+  }
+  const qsizetype before = srv.requests().size();
+  RestIssueProvider off(forgeAt(QStringLiteral("gitlab")));
+  off.setConfig({{QStringLiteral("host"), srv.base()},
+                 {QStringLiteral("token"), QStringLiteral("tok")},
+                 {QStringLiteral("projectId"), QStringLiteral("acme/app")},
+                 {QStringLiteral("mrRoles"), QString()}});
+  PullWatcher w(&off);
+  off.pullTasks();
+  ASSERT_TRUE(heap::testing::waitUntil([&] {
+    return w.fetched > 0;
+  }));
+  EXPECT_EQ(srv.requests().size(), before + 1) << "the issues only";
+}
+
+TEST_F(PagingWalk, AFailingMergeRequestListCostsOnlyItsItems) {
+  heap::testing::FakeHttpServer srv;
+  srv.route("GET /api/v4/issues", {200, R"([{"iid":1,"title":"issue","state":"opened"}])", {}});
+  // No /api/v4/user: the reviewer lists cannot be built; the assignee lists 403.
+  srv.route("GET /api/v4/merge_requests", {403, R"({"message":"403 Forbidden"})", {}});
+  RestIssueProvider p(forgeAt(QStringLiteral("gitlab")));
+  p.setConfig({{QStringLiteral("host"), srv.base()}, {QStringLiteral("token"), QStringLiteral("tok")}});
+  PullWatcher w(&p);
+  p.pullTasks();
+  ASSERT_TRUE(heap::testing::waitUntil([&] {
+    return w.fetched > 0 && w.failed > 0;
+  }));
+  ASSERT_EQ(w.tasks.size(), 1);
+  EXPECT_EQ(w.lastStatus, 0) << "not a sign-in problem";
+  EXPECT_FALSE(p.lastPullComplete()) << "a partial pull must not mark cards gone";
+}
+
+TEST_F(PagingWalk, GithubPullRequestsOnlyWhenSwitchedOn) {
+  heap::testing::FakeHttpServer srv;
+  srv.route("GET /issues", {200, "[]", {}});
+  srv.route(
+      "GET /search/issues",
+      {200,
+       R"({"items":[{"number":7,"html_url":"https://github.com/o/r/pull/7","title":"pr","state":"open","pull_request":{},"repository_url":"https://api.github.com/repos/o/r"}]})",
+       {}});
+  {
+    RestIssueProvider p(forgeAt(QStringLiteral("github")));
+    p.setConfig({{QStringLiteral("host"), srv.base()}, {QStringLiteral("token"), QStringLiteral("tok")}});
+    PullWatcher w(&p);
+    p.pullTasks();
+    ASSERT_TRUE(heap::testing::waitUntil([&] {
+      return w.fetched > 0;
+    }));
+    EXPECT_TRUE(w.tasks.isEmpty());
+    EXPECT_FALSE(srv.seen().contains("GET /search/issues")) << "off by default: nothing changes for those who did not turn it on";
+  }
+  RestIssueProvider p(forgeAt(QStringLiteral("github")));
+  p.setConfig({{QStringLiteral("host"), srv.base()},
+               {QStringLiteral("token"), QStringLiteral("tok")},
+               {QStringLiteral("pullRequests"), QStringLiteral("true")}});
+  PullWatcher w(&p);
+  p.pullTasks();
+  ASSERT_TRUE(heap::testing::waitUntil([&] {
+    return w.fetched > 0;
+  }));
+  ASSERT_EQ(w.tasks.size(), 1);
+  EXPECT_EQ(w.tasks.at(0).status, QStringLiteral("PR open"));
+  const QList<QByteArray> asked = queriesOf(srv, "/search/issues");
+  EXPECT_EQ(asked.size(), 6) << "assignee, review-requested and reviewed-by; open and lately closed";
+  bool requested = false;
+  for(const QByteArray& q : asked) {
+    EXPECT_TRUE(q.contains("is:pr")) << q.toStdString();
+    EXPECT_FALSE(q.contains("author:@me")) << q.toStdString();
+    requested = requested || q.contains("review-requested:@me");
+  }
+  EXPECT_TRUE(requested);
+  EXPECT_EQ(writes(srv), 0);
+}
+
+TEST_F(PagingWalk, AMergeRequestIsNeverWrittenBack) {
+  heap::testing::FakeHttpServer srv;
+  RestIssueProvider p(forgeAt(QStringLiteral("gitlab")));
+  p.setConfig({{QStringLiteral("host"), srv.base()},
+               {QStringLiteral("token"), QStringLiteral("tok")},
+               {QStringLiteral("projectId"), QStringLiteral("42")}});
+  bool answered = false;
+  bool ok = true;
+  QObject::connect(
+      &p, &IntegrationProvider::taskPushed, &p, [&](const QString&, const QString&, bool success, const QString&, const QString&) {
+        answered = true;
+        ok = success;
+      });
+  p.pushStatusChange(QStringLiteral("!17"), QStringLiteral("done"), QStringLiteral("acme/app"));
+  ASSERT_TRUE(heap::testing::waitUntil([&] {
+    return answered;
+  }));
+  EXPECT_FALSE(ok);
+  EXPECT_TRUE(srv.requests().isEmpty());
+}
+
+TEST_F(PagingWalk, MergeRequestNotesComeFromTheMergeRequest) {
+  heap::testing::FakeHttpServer srv;
+  srv.route("GET /api/v4/projects/acme%2Fapp/merge_requests/17/notes",
+            {200, R"([{"id":1,"body":"looks good","author":{"username":"bob"}}])", {}});
+  RestIssueProvider p(forgeAt(QStringLiteral("gitlab")));
+  p.setConfig({{QStringLiteral("host"), srv.base()}, {QStringLiteral("token"), QStringLiteral("tok")}});
+  int got = -1;
+  QObject::connect(&p, &IntegrationProvider::commentsFetched, &p, [&](const QString&, const QVector<ExternalComment>& c, const QString&) {
+    got = static_cast<int>(c.size());
+  });
+  p.fetchComments(QStringLiteral("!17"), QStringLiteral("acme/app"));
+  ASSERT_TRUE(heap::testing::waitUntil([&] {
+    return got >= 0;
+  }));
+  EXPECT_EQ(got, 1);
+}
+
+TEST(StatusMapReview, MergeAndPullRequestsHaveTheirOwnColumns) {
+  using heap::integrations::StatusMap;
+  EXPECT_EQ(StatusMap::column(QStringLiteral("MR open"), {}, QStringLiteral("todo")), QStringLiteral("review"));
+  EXPECT_EQ(StatusMap::column(QStringLiteral("MR draft"), {}, QStringLiteral("todo")), QStringLiteral("prog"));
+  EXPECT_EQ(StatusMap::column(QStringLiteral("MR merged"), {}, QStringLiteral("todo")), QStringLiteral("done"));
+  EXPECT_EQ(StatusMap::column(QStringLiteral("PR closed"), {}, QStringLiteral("todo")), QStringLiteral("done"));
+  // An open GitLab issue is To Do, not a guess.
+  EXPECT_EQ(StatusMap::defaultColumn(QStringLiteral("opened")), QStringLiteral("todo"));
 }

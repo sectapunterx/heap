@@ -32,6 +32,9 @@ TestCase {
         AppController.appSettingsJson = JSON.stringify(s);
     }
 
+    // The logo's lavender, what no pick means since 0.8.0.
+    function lavender() { return Theme.dark ? "#b1a7f0" : "#5a4fb3"; }
+
     function surfaces() {
         return [String(Theme.bg), String(Theme.panel), String(Theme.panel2), String(Theme.panel3)];
     }
@@ -48,15 +51,12 @@ TestCase {
         return null;
     }
 
-    function test_default_is_the_theme_accent() {
+    function test_default_is_lavender() {
         setCursorColor(undefined);
-        compare(Theme.cursorColorPick, "");
-        verify(Qt.colorEqual(Theme.focusRing, Presets.ensureContrast(String(Theme.accent), surfaces(), 3.0)),
-               "no pick is not the accent: " + Theme.focusRing + " vs " + Theme.accent);
-        // The accent itself wherever it already stands out on the surfaces.
-        let fine = true;
-        for (const s of surfaces()) if (Presets.contrast(String(Theme.accent), s) < 3.0) fine = false;
-        if (fine) verify(Qt.colorEqual(Theme.focusRing, Theme.accent));
+        compare(Theme.cursorColorPick, tc.lavender());
+        // No pick is the logo's lavender, on any theme (0.8.0).
+        verify(Qt.colorEqual(Theme.focusRing, Presets.ensureContrast(tc.lavender(), surfaces(), 3.0)),
+               "no pick is not lavender: " + Theme.focusRing);
     }
 
     function test_a_pick_recolours_every_ring() {
@@ -90,7 +90,7 @@ TestCase {
         setCursorColor(undefined);
         const accent = String(Theme.focusRing);
         setCursorColor("red");
-        compare(Theme.cursorColorPick, "");
+        compare(Theme.cursorColorPick, tc.lavender());
         verify(Qt.colorEqual(Theme.focusRing, accent));
     }
 
@@ -140,7 +140,7 @@ TestCase {
         compare(JSON.parse(AppController.appSettingsJson).appearance.cursorColor, Theme.swatches[2]);
 
         row.selected("");
-        compare(Theme.cursorColorPick, "");
+        compare(Theme.cursorColorPick, tc.lavender());
         tryVerify(() => accentDot.picked, 1000);
     }
 }

@@ -16,7 +16,10 @@
 namespace heap::notify {
 
 // The URI scheme heap registers for notification clicks.
-inline constexpr char kUriScheme[] = "heap";
+inline constexpr char kUriScheme[] = "lowkey";
+// What 0.7.x wrote into its toasts: a click on one still left in the Action
+// Center arrives this way after the upgrade (APP-280).
+inline constexpr char kLegacyUriScheme[] = "heap";
 // The action id of a click on the notification itself rather than a button.
 inline constexpr char kDefaultAction[] = "default";
 
@@ -25,6 +28,10 @@ inline constexpr char kSnoozeShort[] = "snoozeShort";
 inline constexpr char kSnoozeLong[] = "snoozeLong";
 inline constexpr char kOpen[] = "open";
 inline constexpr char kDone[] = "done";
+// A task block's start (APP-256): a quarter of an hour later, or the next
+// free window.
+inline constexpr char kSnoozeBlock[] = "snooze15";
+inline constexpr char kNextWindow[] = "nextWindow";
 // Older toasts (and Linux ones still on screen after an update) say this.
 inline constexpr char kLegacySnooze1h[] = "snooze1h";
 

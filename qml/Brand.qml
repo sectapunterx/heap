@@ -1,4 +1,4 @@
-// heap. — brand singleton for Qt 6 / QML
+// lowkey — brand singleton for Qt 6 / QML (heap until 0.8.0, APP-280)
 // Drop this in qml/ and register as a singleton in qt_add_qml_module().
 // Then use Brand.accent, Brand.bg, Brand.fontMono, Brand.tagline, etc.
 
@@ -9,9 +9,10 @@ QtObject {
     id: brand
 
     // ── Identity ──────────────────────────────────────────────
-    readonly property string name:    "heap."
-    readonly property string tagline: "Work, in one place."
-    readonly property string taglineLong: "A quiet place for the work you owe."
+    // Always lowercase, also at the start of a sentence (owner, 2026-10-08).
+    readonly property string name:    "lowkey"
+    readonly property string tagline: "Quiet by default."
+    readonly property string taglineLong: "A developer’s workday in one window."
     // Version is single-sourced from CMake PROJECT_VERSION via
     // AppController.appVersion — do not hardcode it here.
 
@@ -55,13 +56,13 @@ QtObject {
     readonly property color lightBorder:  "#dde3ec"
     readonly property color lightText:    "#11151c"
     readonly property color lightText3:   "#5f6878"
-    readonly property color lightAccent:  "#178ea0"
+    readonly property color lightAccent:  "#5a4fb3"
 
     // ── Typography ────────────────────────────────────────────
     // The bundled cuts (platform/BundledFonts.h): Golos Text and JetBrains
-    // Mono under a "heap " name, so an installed copy can never stand in.
-    readonly property string fontSans: "heap Golos Text"
-    readonly property string fontMono: "heap JetBrains Mono"
+    // Mono under a "lowkey " name, so an installed copy can never stand in.
+    readonly property string fontSans: "lowkey Golos Text"
+    readonly property string fontMono: "lowkey JetBrains Mono"
 
     // Type scale (px)
     readonly property int sizeDisplay:  56
@@ -85,13 +86,9 @@ QtObject {
     readonly property int spacing6:  32
 
     // ── Logo asset paths (resolved against the qrc you set up) ─
-    readonly property string logoMark: "qrc:/brand/logo/heap-mark.svg"
-    readonly property string logoMarkLight: "qrc:/brand/logo/heap-mark-light.svg"
-    readonly property string logoMarkMono: "qrc:/brand/logo/heap-mark-mono.svg"
-    readonly property string logoLockup: "qrc:/brand/logo/heap-lockup.svg"
-    readonly property string logoLockupLight: "qrc:/brand/logo/heap-lockup-light.svg"
-    readonly property string logoWordmark: "qrc:/brand/logo/heap-wordmark.svg"
-    readonly property string logoWordmarkLight: "qrc:/brand/logo/heap-wordmark-light.svg"
-    readonly property string appIcon: "qrc:/brand/icon/heap-icon.svg"
-    readonly property string favicon: "qrc:/brand/icon/favicon.svg"
+    // The in-app logo is BrandLogo.qml (native QML); these are the files.
+    readonly property string logoWordmark: "qrc:/brand/lowkey/lowkey-wordmark-on-dark.svg"
+    readonly property string logoWordmarkLight: "qrc:/brand/lowkey/lowkey-wordmark-on-light.svg"
+    readonly property string appIcon: "qrc:/brand/lowkey/lowkey-icon.svg"
+    readonly property string favicon: "qrc:/brand/lowkey/favicon.svg"
 }

@@ -142,19 +142,19 @@ TestCase {
     // recording binds nothing.
     function test_enter_on_chip_starts_capture_not_unbind() {
         const panel = openPanel();
-        const before = AppController.shortcutFor("view.board");
+        const before = AppController.shortcutFor("section.tasks");
         verify(before.length > 0);
-        tryVerify(function () { return field(panel, "view.board") !== null; }, 2000, "no chip for view.board");
-        const f = field(panel, "view.board");
+        tryVerify(function () { return field(panel, "section.tasks") !== null; }, 2000, "no chip for section.tasks");
+        const f = field(panel, "section.tasks");
         f.forceActiveFocus();
         keyClick(Qt.Key_X);
         compare(panel.capturingId, "", "a letter must not start a capture");
         keyClick(Qt.Key_Return);
-        compare(AppController.shortcutFor("view.board"), before, "Enter unbound the action");
-        compare(panel.capturingId, "view.board", "Enter must start recording");
+        compare(AppController.shortcutFor("section.tasks"), before, "Enter unbound the action");
+        compare(panel.capturingId, "section.tasks", "Enter must start recording");
         keyClick(Qt.Key_Escape);
         compare(panel.capturingId, "");
-        compare(AppController.shortcutFor("view.board"), before);
+        compare(AppController.shortcutFor("section.tasks"), before);
         panel.close();
     }
 
@@ -172,15 +172,16 @@ TestCase {
         panel.close();
     }
 
-    // SHELL-4: Ctrl+P stays the palette's whatever the catalog says; taking it
-    // made both dead. The rebind is refused and the old key kept.
+    // SHELL-4: the board's arrows stay the board's whatever the catalog says;
+    // taking one made both dead. The rebind is refused and the old key kept.
+    // (Ctrl+P is a catalogue entry since APP-279.)
     function test_builtin_key_is_not_taken() {
         const panel = openPanel();
         const before = AppController.shortcutFor("task.new");
         tryVerify(function () { return field(panel, "task.new") !== null; }, 2000, "no chip for task.new");
         field(panel, "task.new").forceActiveFocus();
         keyClick(Qt.Key_Return);
-        keyClick(Qt.Key_P, Qt.ControlModifier);
+        keyClick(Qt.Key_Up);
         keyClick(Qt.Key_Return);
         compare(AppController.shortcutFor("task.new"), before);
         AppController.resetAllShortcuts();

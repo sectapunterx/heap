@@ -81,7 +81,7 @@ TestCase {
         tryVerify(() => list.opened, 1000);
         // On the task's own status, so an Enter straight away changes nothing.
         const cur = AppController.statuses.findIndex(st => st.id === AppController.taskById(id).status);
-        compare(list.currentIndex, cur);
+        compare(list.currentIndex, cur + 1, "row 0 is ‹ back");
 
         // Left: back to the card menu, on the row the list came from.
         tryVerify(() => list.itemAt(list.currentIndex).activeFocus, 1000);
@@ -108,8 +108,8 @@ TestCase {
         tryVerify(() => findChild(m.card, "tc-priority-menu") !== null, 1000, "Right did not open the priority list");
         const list = findChild(m.card, "tc-priority-menu");
         tryVerify(() => list.opened, 1000);
-        list.currentIndex = 0;
-        tryVerify(() => list.itemAt(0).activeFocus, 1000);
+        list.currentIndex = 1;
+        tryVerify(() => list.itemAt(1).activeFocus, 1000);
         keyClick(Qt.Key_Return);
         tryCompare(AppController.taskById(id), "priority", "P0");
         tryVerify(() => !list.visible);
@@ -121,7 +121,7 @@ TestCase {
         const b = makeBoard();
         const m = openCardMenu(b, id);
         const archive = m.menu.itemAt(indexOfItem(m.menu, "tc-menu-archive"));
-        compare(archive.hint, AppController.shortcutFor("board.archive"));
+        compare(archive.hint, AppController.shortcutText("board.archive"));
         verify(archive.hint.length > 0);
         const hint = findChild(archive, "menu-row-hint");
         verify(hint !== null && hint.visible && hint.text === archive.hint);
@@ -167,7 +167,8 @@ TestCase {
     function test_the_board_scrolls_to_a_cursor_past_the_right_edge() {
         const sts = AppController.statuses;
         verify(sts.length >= 4);
-        const last = addTask(sts[sts.length - 1].id, "far right");
+        // Done is folded (APP-262): the last open column.
+        const last = addTask(sts[sts.length - 2].id, "far right");
         const first = addTask(sts[0].id, "far left");
         const narrow = make('import QtQuick; Item { width: 640; height: 600 }');
         const b = makeBoard(narrow);
@@ -179,7 +180,7 @@ TestCase {
         b.cursorTaskId = last;
         tryVerify(() => hs.contentX > 0, 1000, "the board did not scroll to the cursor");
         // The cursor's column is wholly on screen.
-        const col = findColumn(b, sts[sts.length - 1].id);
+        const col = findColumn(b, sts[sts.length - 2].id);
         verify(col !== null);
         verify(col.x >= hs.contentX && col.x + col.width <= hs.contentX + hs.width + 1,
                "the column is still cut: " + col.x + "+" + col.width + " vs " + hs.contentX + "+" + hs.width);

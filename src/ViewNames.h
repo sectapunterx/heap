@@ -9,8 +9,12 @@
 namespace heap::views {
 
 inline const QStringList& all() {
-  static const QStringList names = {QStringLiteral("board"),
+  static const QStringList names = {QStringLiteral("today"),
+                                    QStringLiteral("board"),
+                                    QStringLiteral("list"),
                                     QStringLiteral("timeline"),
+                                    // The calendar lens at the day zoom (APP-264).
+                                    QStringLiteral("day"),
                                     QStringLiteral("week"),
                                     QStringLiteral("month"),
                                     QStringLiteral("docs"),
@@ -22,6 +26,36 @@ inline const QStringList& all() {
 
 inline bool isKnown(const QString& name) {
   return all().contains(name);
+}
+
+// heap 2 (APP-258): the sidebar has four places, and each view belongs to
+// one. Board, timeline, the calendars and the archive are lenses of Tasks;
+// notes and docs are Knowledge.
+inline const QStringList& sections() {
+  static const QStringList names = {
+      QStringLiteral("today"), QStringLiteral("tasks"), QStringLiteral("knowledge"), QStringLiteral("settings")};
+  return names;
+}
+
+inline QString sectionOf(const QString& view) {
+  if(view == QStringLiteral("today") || view == QStringLiteral("settings")) {
+    return view;
+  }
+  if(view == QStringLiteral("notes") || view == QStringLiteral("docs")) {
+    return QStringLiteral("knowledge");
+  }
+  return QStringLiteral("tasks");
+}
+
+// Where a section opens the first time, before it has a last view.
+inline QString defaultViewOf(const QString& section) {
+  if(section == QStringLiteral("tasks")) {
+    return QStringLiteral("board");
+  }
+  if(section == QStringLiteral("knowledge")) {
+    return QStringLiteral("notes");
+  }
+  return sections().contains(section) ? section : QStringLiteral("today");
 }
 
 }  // namespace heap::views

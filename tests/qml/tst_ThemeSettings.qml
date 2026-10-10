@@ -23,7 +23,8 @@ TestCase {
     function init() {
         savedSettings = AppController.appSettingsJson;
         savedTheme = AppController.theme;
-        AppController.appSettingsJson = "";
+        // These start from Classic dark; the default dark is lowkey since 0.8.0.
+        AppController.appSettingsJson = JSON.stringify({ appearance: { darkPreset: "heap-dark" } });
         AppController.theme = "dark";
     }
     function cleanup() {
@@ -54,7 +55,7 @@ TestCase {
         compare(ts.appearance.darkPreset, "heap-light");
         compare(ts.appearance.lightPreset, undefined);
         compare(Theme.activePresetId, "heap-light");
-        compare(String(Theme.bg), "#f3f5f8");
+        compare(String(Theme.bg), "#f7f8fa");
     }
 
     // APP-119: the picker groups themes by contrast. Every built-in names its

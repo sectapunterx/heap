@@ -128,17 +128,7 @@ TestCase {
                "the Jira glyph is under 4.5:1 on its tile");
     }
 
-    // ── Tweaks / Hotkeys ───────────────────────────────────────────────
-    function test_tweaks_close_is_named_and_closes_on_return() {
-        const p = createTemporaryQmlObject('import TodoCpp; TweaksPanel { }', host);
-        p.open();
-        tryVerify(function () { return p.opened; }, 2000);
-        const close = find(p.contentItem, "tweaks-close");
-        compare(close.shortcutId, "tweaks.open");
-        reachable(close, "Tweaks close");
-        tryVerify(function () { return !p.opened; }, 2000, "Return did not close Tweaks");
-    }
-
+    // ── Hotkeys ───────────────────────────────────────────────────────
     function test_hotkeys_close_and_reset_are_tab_stops() {
         const p = createTemporaryQmlObject('import TodoCpp; HotkeysPanel { }', host);
         p.open();

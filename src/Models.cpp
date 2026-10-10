@@ -2,14 +2,30 @@
 #include "TaskDefer.h"
 
 #include "integrations/SyncState.h"
+#include "local/Checklist.h"
+#include "local/Effective.h"
+#include "local/Sessions.h"
 
 #include <QRegularExpression>
 
 #include <algorithm>
 
+bool isReviewItem(const Task& t) {
+  const QString kind = t.externalMeta.details.value(QStringLiteral("kind")).toString();
+  return !t.externalId.isEmpty() && (kind == QLatin1String("mr") || kind == QLatin1String("pr"));
+}
+
 QString externalKeyOf(const Task& t) {
   if(t.externalId.isEmpty()) {
     return {};
+  }
+  // A GitLab merge request is "!17", qualified like an issue number when it
+  // came from a pull across projects ("web!17").
+  if(t.externalId.startsWith(QChar('!'))) {
+    if(t.externalMeta.crossProject && !t.externalMeta.project.isEmpty()) {
+      return t.externalMeta.project.section(QChar('/'), -1) + t.externalId;
+    }
+    return t.externalId;
   }
   // Jira hands us the human key already ("PROJ-123"); the issue-number trackers
   // hand us a bare number, which reads as "#123" everywhere they render it.
@@ -58,6 +74,10 @@ QVariantMap ticketToVariant(const Task& t) {
       // the other side of a status conflict (APP-163).
       {QStringLiteral("remoteStatus"), t.externalMeta.status},
       {QStringLiteral("remoteColumn"), t.externalMeta.column},
+      // A merge / pull request's facts (APP-242) and a Jira sprint (APP-255),
+      // as the tracker gave them; "review" says the card is such a request.
+      {QStringLiteral("details"), t.externalMeta.details.toVariantMap()},
+      {QStringLiteral("review"), isReviewItem(t)},
   };
 }
 
@@ -66,25 +86,72 @@ namespace {
 // Markdown task items in a description: "- [ ] thing" and "- [x] thing".
 // A template ships checklists, so a card that carries one should be able to
 // say how far along it is without the user opening it.
+//
+// The card's own checklist (APP-236) counts with them: `done`/`total` are
+// the sum, `localDone`/`localTotal` and `descDone`/`descTotal` the two parts
+// for the tooltip, and `next` the next step (the local list first, else the
+// first open item of the description's list).
 QVariantMap checklistOf(const Task& t) {
-  if(!t.desc.contains(QStringLiteral("[ ]")) && !t.desc.contains(QStringLiteral("[x]")) && !t.desc.contains(QStringLiteral("[X]"))) {
+  const bool descMayHave =
+      t.desc.contains(QStringLiteral("[ ]")) || t.desc.contains(QStringLiteral("[x]")) || t.desc.contains(QStringLiteral("[X]"));
+  if(!descMayHave && t.local.checklist.isEmpty()) {
     return {};  // the common case: no scan, no allocation
   }
-  static const QRegularExpression rx(QStringLiteral(R"(^\s*(?:[-*+]|\d+[.)])\s+\[([ xX])\])"), QRegularExpression::MultilineOption);
-  int total = 0;
-  int done = 0;
-  auto it = rx.globalMatch(t.desc);
-  while(it.hasNext()) {
-    const auto m = it.next();
-    ++total;
-    if(m.captured(1) != QStringLiteral(" ")) {
-      ++done;
+  int descTotal = 0;
+  int descDone = 0;
+  QString descNext;
+  if(descMayHave) {
+    static const QRegularExpression rx(QStringLiteral(R"(^\s*(?:[-*+]|\d+[.)])\s+\[([ xX])\][ \t]*(.*)$)"),
+                                       QRegularExpression::MultilineOption);
+    auto it = rx.globalMatch(t.desc);
+    while(it.hasNext()) {
+      const auto m = it.next();
+      ++descTotal;
+      if(m.captured(1) != QStringLiteral(" ")) {
+        ++descDone;
+      } else if(descNext.isEmpty()) {
+        descNext = m.captured(2).trimmed();
+      }
     }
   }
-  if(total == 0) {
+  const heap::local::checklist::Progress local = heap::local::checklist::progress(t.local.checklist);
+  if(descTotal + local.total == 0) {
     return {};
   }
-  return {{QStringLiteral("done"), done}, {QStringLiteral("total"), total}};
+  const int nextAt = heap::local::checklist::nextStep(t.local.checklist);
+  return {{QStringLiteral("done"), descDone + local.done},
+          {QStringLiteral("total"), descTotal + local.total},
+          {QStringLiteral("localDone"), local.done},
+          {QStringLiteral("localTotal"), local.total},
+          {QStringLiteral("descDone"), descDone},
+          {QStringLiteral("descTotal"), descTotal},
+          {QStringLiteral("next"), nextAt >= 0 ? t.local.checklist.at(nextAt).text : descNext}};
+}
+
+// What a card shows of its local layer (APP-237…241, 251) in one role, so
+// the card's marks read one map instead of a role each. Empty for a task with
+// nothing local, which is most of them.
+QVariantMap localMarksOf(const Task& t) {
+  const TaskLocal& l = t.local;
+  if(l.notes.trimmed().isEmpty() && l.commentDraft.trimmed().isEmpty() && l.tags.isEmpty() && l.myPriority.isEmpty() &&
+     !l.myDueAt.isValid() && l.related.isEmpty()) {
+    return {};
+  }
+  QVariantList tags;
+  for(const LocalTag& tag : l.tags) {
+    tags.append(QVariantMap{{QStringLiteral("id"), tag.id}, {QStringLiteral("color"), tag.color}});
+  }
+  return {
+      {QStringLiteral("notes"), !l.notes.trimmed().isEmpty()},
+      {QStringLiteral("draft"), !l.commentDraft.trimmed().isEmpty()},
+      {QStringLiteral("tags"), tags},
+      {QStringLiteral("myPriority"), l.myPriority},
+      {QStringLiteral("myDue"), l.myDueAt.isValid()},
+      // The tracker moved its own value since I set mine (APP-238).
+      {QStringLiteral("trackerChanged"),
+       (!l.myPriority.isEmpty() && l.myPriorityBase != t.priority) || (l.myDueAt.isValid() && l.myDueBase != t.dueAt)},
+      {QStringLiteral("related"), static_cast<int>(l.related.size())},
+  };
 }
 
 }  // namespace
@@ -96,6 +163,20 @@ QString TaskModel::searchTextOf(const Task& t) {
   QStringList parts{t.title, t.id, t.desc, externalKeyOf(t), t.assignee, t.externalMeta.project, t.externalMeta.milestone};
   for(const Label& l : t.labels) {
     parts.append(l.id);
+  }
+  // My own layer is findable too (APP-237, 239, 241): the notepad, my tags,
+  // the checklist and the comment draft.
+  if(!t.local.notes.isEmpty()) {
+    parts.append(t.local.notes);
+  }
+  for(const LocalTag& tag : t.local.tags) {
+    parts.append(tag.id);
+  }
+  for(const LocalCheckItem& c : t.local.checklist) {
+    parts.append(c.text);
+  }
+  if(!t.local.commentDraft.isEmpty()) {
+    parts.append(t.local.commentDraft);
   }
   // The search box promises branches (PERA-9). Also with its separators read
   // as spaces, so "rate limit" finds fix/login-rate-limit.
@@ -197,6 +278,7 @@ QHash<int, QByteArray> TaskModel::roleNames() const {
       {AttachmentCountRole, "attachmentCount"},
       {PrMoveRole, "prMove"},
       {PrMoveReasonRole, "prMoveReason"},
+      {LocalRole, "local"},
   };
 }
 
@@ -224,13 +306,13 @@ QVariant TaskModel::data(const QModelIndex& idx, int role) const {
     case DescRole:
       return t.desc;
     case PriorityRole:
-      return t.priority;
+      return heap::local::effectivePriority(t);
     case StatusRole:
       return t.status;
     case DeadlineRole:
       // Kept a QDate: every calendar/timeline view does whole-day arithmetic on
       // it. The clock component lives on DueAtRole / ScheduledAtRole.
-      return t.dueAt.isValid() ? t.dueAt.date() : QDate();
+      return heap::local::effectiveDueAt(t).isValid() ? heap::local::effectiveDueAt(t).date() : QDate();
     case BranchRole:
       return t.branch;
     case StatusChangedAtRole:
@@ -264,10 +346,10 @@ QVariant TaskModel::data(const QModelIndex& idx, int role) const {
     case ScheduledAtRole:
       return t.scheduledAt;
     case DueAtRole:
-      return t.dueAt;
+      return heap::local::effectiveDueAt(t);
     case HasTimeRole:
     case DueHasTimeRole:
-      return t.dueHasTime;
+      return heap::local::effectiveDueHasTime(t);
     case ScheduledHasTimeRole:
       return t.scheduledHasTime;
     case EstimateMinutesRole:
@@ -306,6 +388,8 @@ QVariant TaskModel::data(const QModelIndex& idx, int role) const {
       return t.rank;
     case ChecklistRole:
       return checklistOf(t);
+    case LocalRole:
+      return localMarksOf(t);
     case AttachmentCountRole:
       return static_cast<int>(t.attachments.size());
     case BlocksRole: {
@@ -484,11 +568,13 @@ void TaskModel::stopTiming(const QString& id) {
   if(row < 0 || !m_items[row].timerStartedAt.isValid()) {
     return;
   }
-  const qint64 elapsed = m_items[row].timerStartedAt.secsTo(QDateTime::currentDateTime());
-  if(elapsed > 0) {
-    m_items[row].trackedSeconds += static_cast<int>(elapsed);
-  }
-  m_items[row].timerStartedAt = QDateTime();  // clear → stopped
+  // A session of its own (APP-251); the total is the sessions' sum, with
+  // whatever the task had tracked before sessions kept as one undated one.
+  Task& t = m_items[row];
+  heap::local::sessions::adoptTotal(t.local.sessions, t.trackedSeconds);
+  heap::local::sessions::record(t.local.sessions, t.timerStartedAt, QDateTime::currentDateTime());
+  t.trackedSeconds = heap::local::sessions::total(t.local.sessions);
+  t.timerStartedAt = QDateTime();  // clear → stopped
   const QModelIndex mi = index(row, 0);
   emit dataChanged(mi, mi, {TrackedSecondsRole, IsTimingRole});
 }

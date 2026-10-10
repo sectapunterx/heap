@@ -54,7 +54,7 @@ TestCase {
         const legacy = Theme.fontUi;
         // A pick the machine has (the bundled mono, always there) stays; one
         // it lacks gives way to the bundled face instead of an arbitrary one.
-        AppController.appSettingsJson = JSON.stringify({ appearance: { fontUI: "heap JetBrains Mono" } });
+        AppController.appSettingsJson = JSON.stringify({ appearance: { fontUI: "lowkey JetBrains Mono" } });
         const custom = Theme.fontUi;
         AppController.appSettingsJson = JSON.stringify({ appearance: { fontUI: "No Such Font heap", fontMono: "No Such Mono heap" } });
         const missing = Theme.fontUi;
@@ -63,15 +63,15 @@ TestCase {
 
         // One family each: Qt reads font.family as a single name, so a
         // "A, B, sans-serif" list matched nothing and drew in the system font.
-        compare(fresh, "heap Golos Text");
-        compare(freshMono, "heap JetBrains Mono");
-        compare(seeded, "heap Golos Text");
-        compare(seeded060, "heap Golos Text");
-        compare(seeded060Mono, "heap JetBrains Mono");
-        compare(legacy, "heap Golos Text");
-        compare(custom, "heap JetBrains Mono");
-        compare(missing, "heap Golos Text");
-        compare(missingMono, "heap JetBrains Mono");
+        compare(fresh, "lowkey Golos Text");
+        compare(freshMono, "lowkey JetBrains Mono");
+        compare(seeded, "lowkey Golos Text");
+        compare(seeded060, "lowkey Golos Text");
+        compare(seeded060Mono, "lowkey JetBrains Mono");
+        compare(legacy, "lowkey Golos Text");
+        compare(custom, "lowkey JetBrains Mono");
+        compare(missing, "lowkey Golos Text");
+        compare(missingMono, "lowkey JetBrains Mono");
     }
 
     // quick_test_main registers the bundled fonts as main() does, so a Text
@@ -82,11 +82,11 @@ TestCase {
     Text { id: monoProbe; text: "0"; font.family: Theme.fontMono; font.weight: Font.Medium }
     Text { id: plainProbe; text: "a" }
     function test_bundled_fonts_resolve() {
-        compare(uiProbe.fontInfo.family, "heap Golos Text");
+        compare(uiProbe.fontInfo.family, "lowkey Golos Text");
         compare(uiProbe.fontInfo.weight, Font.DemiBold);
-        compare(monoProbe.fontInfo.family, "heap JetBrains Mono");
+        compare(monoProbe.fontInfo.family, "lowkey JetBrains Mono");
         compare(monoProbe.fontInfo.weight, Font.Medium);
-        compare(plainProbe.fontInfo.family, "heap Golos Text");
+        compare(plainProbe.fontInfo.family, "lowkey Golos Text");
     }
 
     // ── Weights (APP-193): three, one job each, and only the heading at 600 ──
@@ -350,7 +350,11 @@ TestCase {
                 continue;
             }
             const dL = Presets.lightness(String(Theme.surfaceCard)) - Presets.lightness(String(Theme.bg));
-            if (dL < 8 || dL > 10) fails.push(t.id + ": card is " + dL.toFixed(1) + " L* above bg");
+            // A heap 2 theme names its own card, a few L* above the ground
+            // (the mockup's #13161b on #0c0e11); the others derive 8–10.
+            const own = t.colors.card !== undefined;
+            if (own ? (dL < 2 || dL > 6) : (dL < 8 || dL > 10))
+                fails.push(t.id + ": card is " + dL.toFixed(1) + " L* above bg");
             if (Theme.cardBorder.a !== 0) fails.push(t.id + ": dark card has a border");
         }
         AppController.appSettingsJson = saved;
@@ -430,7 +434,7 @@ TestCase {
             for (const tok of Presets.TOKENS)
                 verify(Presets.isHex(t.colors[tok.key]), t.id + "." + tok.key + " = " + t.colors[tok.key]);
             for (const k in t.colors)
-                verify(Presets.isToken(k), t.id + " has unknown token " + k);
+                verify(Presets.isToken(k) || Presets.EXTRA_KEYS.indexOf(k) >= 0, t.id + " has unknown token " + k);
         }
         for (const tok of Presets.TOKENS)
             verify(Presets.GROUPS.indexOf(tok.group) >= 0, tok.key + " in unknown group " + tok.group);
@@ -463,7 +467,8 @@ TestCase {
     function test_heap_presets_match_the_shipped_palette() {
         const saved = AppController.appSettingsJson;
         const savedTheme = AppController.theme;
-        AppController.appSettingsJson = "";
+        // Classic dark by name: the default dark is lowkey since 0.8.0.
+        AppController.appSettingsJson = JSON.stringify({ appearance: { darkPreset: "heap-dark" } });
         AppController.theme = "dark";
         const d = { bg: String(Theme.bg), panel3: String(Theme.panel3), borderStrong: String(Theme.borderStrong),
                     accent: String(Theme.accent), accentStrong: String(Theme.accentStrong),
@@ -483,12 +488,13 @@ TestCase {
         compare(d.stDone, String(Brand.statusDone));
         // Shipped as #808a9a; lifted just enough to read at AA on panel3.
         compare(d.textDim, "#86909f");
-        compare(l.bg, String(Brand.lightBg));
-        compare(l.bg2, String(Qt.darker(Brand.lightBg, 1.04)));
-        compare(l.panel2, String(Qt.darker(Brand.lightPanel, 1.03)));
+        // lowkey light: the heap 2 light palette (APP-259, sheet X-Oth-Light).
+        compare(l.bg, "#f7f8fa");
+        compare(l.bg2, "#eff1f4");
+        compare(l.panel2, "#f2f4f7");
         compare(l.accent, String(Brand.lightAccent));
-        compare(l.accentStrong, String(Qt.darker(Brand.lightAccent, 1.18)));
-        compare(l.p0, "#b54432");  // #be4835, darkened to read at AA on panel3
+        compare(l.accentStrong, "#4a40a0");
+        compare(l.p0, "#b23a33");  // AA on panel3 too
     }
 
     // Each slot shows its own theme; flipping AppController.theme flips slot.
@@ -505,7 +511,7 @@ TestCase {
         AppController.theme = savedTheme;
 
         compare(inDark, "heap-light");
-        compare(darkBg, "#f3f5f8");
+        compare(darkBg, "#f7f8fa");
         // `dark` follows the colours, not the slot
         compare(darkFlag, false);
         compare(inLight, "heap-dark");
@@ -521,7 +527,7 @@ TestCase {
         const bg = String(Theme.bg);
         AppController.appSettingsJson = saved;
         AppController.theme = savedTheme;
-        compare(bg, "#f3f5f8");
+        compare(bg, "#f7f8fa");
     }
 
     // A custom theme paints its own colours; a token it lacks or spells
@@ -649,8 +655,9 @@ TestCase {
                 verify(Presets.isHex(c[tok.key]), t.id + "." + tok.key + " = " + c[tok.key]);
         }
         // a translucent border fades by alpha, not by turning opaque
-        const b = Presets.soften(Presets.builtin("heap-ink").colors).border;
-        verify(parseInt(b.slice(1, 3), 16) < 0x14, "translucent border got " + b);
+        // (Minimal dark's hairlines; lowkey's are opaque since heap 2)
+        const b = Presets.soften(Presets.builtin("minimal-dark").colors).border;
+        verify(parseInt(b.slice(1, 3), 16) < 0x0c, "translucent border got " + b);
     }
 
     // High contrast must still strengthen a theme whose borders are

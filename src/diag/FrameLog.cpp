@@ -248,7 +248,7 @@ bool open(const QString& path) {
   s.clock.start();
   s.pendingSpans.clear();
   s.frames = s.over16 = s.over33 = s.over50 = s.maxGap = s.stalls = s.maxStall = 0;
-  writeLocked(s, QStringLiteral("# heap frame log: kind\tt\tgap\tanim\tsync\trender\tspans"));
+  writeLocked(s, QStringLiteral("# lowkey frame log: kind\tt\tgap\tanim\tsync\trender\tspans"));
   g_on.store(true);
   return true;
 }

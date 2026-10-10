@@ -1,20 +1,22 @@
 ---
-import Base from '../layouts/Base.astro';
-import { url } from '../lib/site';
+// One 404 for both languages: GitHub Pages serves this file for any unknown path.
+import Page from '../layouts/Page.astro';
+import { copy } from '../data/i18n';
+import { RELEASES_URL, url } from '../lib/site';
+
+const en = copy.en.notFound;
+const ru = copy.ru.notFound;
 ---
 
-<Base title="Not found">
-  <section class="section">
-    <div class="wrap stack" style="gap: 20px; align-items: flex-start; min-height: 50vh">
-      <span class="eyebrow">404</span>
-      <h1 class="h1">This page isn’t on the board.</h1>
-      <p class="lead">It may have moved when the site was rebuilt. Search for it, or start from one of these.</p>
-      <div style="display: flex; flex-wrap: wrap; gap: 12px">
-        <button type="button" class="btn btn--primary" data-open-palette>Search the site</button>
-        <a class="btn" href={url()}>Home</a>
-        <a class="btn" href={url('docs')}>Docs</a>
-        <a class="btn" href={url('download')}>Download</a>
-      </div>
+<Page lang="en" path="" title={en.title} description={en.p} downloadHref={RELEASES_URL + '/latest'} primary="{}">
+  <section class="dlp" data-name="404">
+    <p class="kicker">404</p>
+    <h1 class="h2">{en.h}</h1>
+    <p class="lede">{en.p}</p>
+    <div class="cta" style="justify-content: flex-start">
+      <a class="btn solid" href={url()}>{en.home}</a>
+      <a class="btn ghost" href={url('download/')}>{copy.en.download}</a>
     </div>
+    <p class="lede" lang="ru" style="margin-top: 48px">{ru.p} <a href={url('ru/')}>{ru.home}</a></p>
   </section>
-</Base>
+</Page>

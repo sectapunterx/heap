@@ -1,365 +1,329 @@
 [
  {
-  "tag": "v0.5.1",
-  "name": "heap v0.5.1",
-  "date": "2026-09-26T21:14:05Z",
-  "body": "## What's Changed\n* fix: close the 0.5.0 audit tier list (S\u2013D) by @sectapunterx in https://github.com/sectapunterx/heap/pull/155\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.5.0...v0.5.1",
-  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.5.1",
+  "tag": "v0.7.2",
+  "name": "heap v0.7.2",
+  "date": "2026-10-08T12:16:32Z",
+  "body": "> **macOS:** this build is not notarized. On first launch, right-click heap.app → **Open**.\n\n> **Windows:** this build is not code-signed, so SmartScreen may say \"Windows protected your PC\". Choose **More info → Run anyway**, after checking the SHA-256 below.\n\nVerify a download: `sha256sum -c SHA256SUMS`, or `gh attestation verify <file> --repo sectapunterx/heap`.\n\n<details><summary>SHA-256 checksums</summary>\n\n```\n1aeb1a32f3fff112356d74044c903fb5e2a3a2dae0f00b5fd8a9fbfb375897b0  heap-v0.7.2-linux-x86_64.AppImage\n99d1c190b140a0dd0eac34896d16ef8a75e256997c3b56d2d7df52bb7755eafc  heap-v0.7.2-macos.dmg\n686b6e775c64101111be30b5a82c87a96245a4f130c27f7cc9faea372b988406  heap-v0.7.2-sbom.spdx.json\n1d42e79868df7d9e717b7a32099b1eb83f1eaae701af081f6f5bf2870c999272  heap-v0.7.2-windows-portable.zip\nb51a80ecc6e891e70a70541697754d2f7dacc70bb9838f04f36efd5ded5e6c1f  heap-v0.7.2-windows-setup.exe\n```\n\n</details>\n\n\n## What's Changed\n* feat: tracker write-back off by default (APP-243, APP-204) by @sectapunterx in https://github.com/sectapunterx/heap/pull/233\n* feat: drag-to-reschedule in week, month and timeline (APP-249) by @sectapunterx in https://github.com/sectapunterx/heap/pull/231\n* feat: settings search finds single settings, search in Tweaks (APP-207, APP-210) by @sectapunterx in https://github.com/sectapunterx/heap/pull/230\n* feat: weekly recap button on the board, done moment into the counter, thin board icon (APP-211, APP-205, APP-206) by @sectapunterx in https://github.com/sectapunterx/heap/pull/234\n* feat: readable toasts, Quick Capture Ctrl+Enter saves (APP-225, APP-209) by @sectapunterx in https://github.com/sectapunterx/heap/pull/232\n* perf: remove GUI-thread stalls behind mid-animation pauses (APP-203) by @sectapunterx in https://github.com/sectapunterx/heap/pull/235\n* ci: bump source-map-js from 1.2.1 to 1.2.2 in /site by @dependabot[bot] in https://github.com/sectapunterx/heap/pull/214\n* test(site): connect widget e2e matches write-back off by default (APP-243) by @sectapunterx in https://github.com/sectapunterx/heap/pull/237\n* release: 0.7.2 by @sectapunterx in https://github.com/sectapunterx/heap/pull/236\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.7.1...v0.7.2",
+  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.7.2",
   "prerelease": false,
   "draft": false,
   "assets": [
    {
-    "name": "heap-v0.5.1-linux-amd64.deb",
-    "size": 1741202,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.1/heap-v0.5.1-linux-amd64.deb"
+    "name": "heap-v0.7.2-linux-x86_64.AppImage",
+    "size": 50526712,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.2/heap-v0.7.2-linux-x86_64.AppImage"
    },
    {
-    "name": "heap-v0.5.1-linux-x86_64.AppImage",
-    "size": 40851960,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.1/heap-v0.5.1-linux-x86_64.AppImage"
+    "name": "heap-v0.7.2-macos.dmg",
+    "size": 62028398,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.2/heap-v0.7.2-macos.dmg"
    },
    {
-    "name": "heap-v0.5.1-linux-x86_64.tar.gz",
-    "size": 2235386,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.1/heap-v0.5.1-linux-x86_64.tar.gz"
+    "name": "heap-v0.7.2-sbom.spdx.json",
+    "size": 2503,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.2/heap-v0.7.2-sbom.spdx.json"
    },
    {
-    "name": "heap-v0.5.1-macos.dmg",
-    "size": 59071236,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.1/heap-v0.5.1-macos.dmg"
+    "name": "heap-v0.7.2-windows-portable.zip",
+    "size": 58936644,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.2/heap-v0.7.2-windows-portable.zip"
    },
    {
-    "name": "heap-v0.5.1-windows-portable.zip",
-    "size": 62651146,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.1/heap-v0.5.1-windows-portable.zip"
+    "name": "heap-v0.7.2-windows-setup.exe",
+    "size": 39715428,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.2/heap-v0.7.2-windows-setup.exe"
    },
    {
-    "name": "heap-v0.5.1-windows-setup.exe",
-    "size": 40407110,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.1/heap-v0.5.1-windows-setup.exe"
+    "name": "SHA256SUMS",
+    "size": 476,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.2/SHA256SUMS"
    }
   ]
  },
  {
-  "tag": "v0.5.0",
-  "name": "heap v0.5.0",
-  "date": "2026-09-21T02:32:47Z",
-  "body": "## What's Changed\n* feat(search): make the header search box a query box by @sectapunterx in https://github.com/sectapunterx/heap/pull/115\n* fix(archive): stop the binding loop and the recursive rearrange by @sectapunterx in https://github.com/sectapunterx/heap/pull/116\n* fix(qml): stop shadowing base-type properties on Popup and Item by @sectapunterx in https://github.com/sectapunterx/heap/pull/117\n* feat(sync): walk every page of a tracker pull, and wait out a rate limit by @sectapunterx in https://github.com/sectapunterx/heap/pull/118\n* feat(integrations): let the user map a tracker's statuses onto columns by @sectapunterx in https://github.com/sectapunterx/heap/pull/119\n* build(tests): share the AppController dependency list by @sectapunterx in https://github.com/sectapunterx/heap/pull/120\n* fix(notes): flush a pending edit on destruction and on quit by @sectapunterx in https://github.com/sectapunterx/heap/pull/121\n* fix(tests): restore the three suites the source-list refactor emptied by @sectapunterx in https://github.com/sectapunterx/heap/pull/123\n* fix(state): gate the ladder per rung and refuse a newer schema by @sectapunterx in https://github.com/sectapunterx/heap/pull/122\n* fix(calendar): clamp every event write into the day by @sectapunterx in https://github.com/sectapunterx/heap/pull/124\n* fix(calendar): settings defaults, week start in the picker, month paging by @sectapunterx in https://github.com/sectapunterx/heap/pull/125\n* fix(calendar): time-block a task from its own estimate, and find a free slot by @sectapunterx in https://github.com/sectapunterx/heap/pull/126\n* fix(markdown): highlight a fence with its own language's comment syntax by @sectapunterx in https://github.com/sectapunterx/heap/pull/127\n* fix(board): keep statusChangedAt through a column-delete undo, cover status CRUD by @sectapunterx in https://github.com/sectapunterx/heap/pull/128\n* fix(shell): rail-ordered view shortcuts, docs search, window geometry by @sectapunterx in https://github.com/sectapunterx/heap/pull/129\n* feat(state): schema v5 \u2014 per-task rank and dependency links by @sectapunterx in https://github.com/sectapunterx/heap/pull/130\n* feat(undo): a real undo/redo stack by @sectapunterx in https://github.com/sectapunterx/heap/pull/131\n* feat(board): manual card order with drop-position insert by @sectapunterx in https://github.com/sectapunterx/heap/pull/132\n* feat(board): sort a column by priority, due date, recency or title by @sectapunterx in https://github.com/sectapunterx/heap/pull/136\n* feat(task): render the description as markdown, and tick its checklist by @sectapunterx in https://github.com/sectapunterx/heap/pull/137\n* fix(calendar): draw the whole day, and open on the part of it you are in by @sectapunterx in https://github.com/sectapunterx/heap/pull/140\n* feat(cal): a recurrence-rule engine for events by @sectapunterx in https://github.com/sectapunterx/heap/pull/141\n* fix(week): lay overlapping events side by side instead of on top by @sectapunterx in https://github.com/sectapunterx/heap/pull/142\n* feat(week): the whole day, a now line, dropped cards, and click to create by @sectapunterx in https://github.com/sectapunterx/heap/pull/143\n* feat(calendar): remind about meetings, not only the standup by @sectapunterx in https://github.com/sectapunterx/heap/pull/144\n* feat(calendar): all-day, multi-day and cross-midnight events by @sectapunterx in https://github.com/sectapunterx/heap/pull/145\n* feat(calendar): recurring events, .ics, and keyboard navigation by @sectapunterx in https://github.com/sectapunterx/heap/pull/146\n* feat(notes): many notes instead of one blob by @sectapunterx in https://github.com/sectapunterx/heap/pull/147\n* feat(notes): a list of notes beside the one being edited by @sectapunterx in https://github.com/sectapunterx/heap/pull/148\n* feat(notes): import and export a folder of .md files by @sectapunterx in https://github.com/sectapunterx/heap/pull/149\n* feat(notes): links that cross from one note to another by @sectapunterx in https://github.com/sectapunterx/heap/pull/150\n* feat(docs): a tree of pages, not just a catalog by @sectapunterx in https://github.com/sectapunterx/heap/pull/151\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.4.9...v0.5.0\n\n## What's Changed\n* feat(search): make the header search box a query box by @sectapunterx in https://github.com/sectapunterx/heap/pull/115\n* fix(archive): stop the binding loop and the recursive rearrange by @sectapunterx in https://github.com/sectapunterx/heap/pull/116\n* fix(qml): stop shadowing base-type properties on Popup and Item by @sectapunterx in https://github.com/sectapunterx/heap/pull/117\n* feat(sync): walk every page of a tracker pull, and wait out a rate limit by @sectapunterx in https://github.com/sectapunterx/heap/pull/118\n* feat(integrations): let the user map a tracker's statuses onto columns by @sectapunterx in https://github.com/sectapunterx/heap/pull/119\n* build(tests): share the AppController dependency list by @sectapunterx in https://github.com/sectapunterx/heap/pull/120\n* fix(notes): flush a pending edit on destruction and on quit by @sectapunterx in https://github.com/sectapunterx/heap/pull/121\n* fix(tests): restore the three suites the source-list refactor emptied by @sectapunterx in https://github.com/sectapunterx/heap/pull/123\n* fix(state): gate the ladder per rung and refuse a newer schema by @sectapunterx in https://github.com/sectapunterx/heap/pull/122\n* fix(calendar): clamp every event write into the day by @sectapunterx in https://github.com/sectapunterx/heap/pull/124\n* fix(calendar): settings defaults, week start in the picker, month paging by @sectapunterx in https://github.com/sectapunterx/heap/pull/125\n* fix(calendar): time-block a task from its own estimate, and find a free slot by @sectapunterx in https://github.com/sectapunterx/heap/pull/126\n* fix(markdown): highlight a fence with its own language's comment syntax by @sectapunterx in https://github.com/sectapunterx/heap/pull/127\n* fix(board): keep statusChangedAt through a column-delete undo, cover status CRUD by @sectapunterx in https://github.com/sectapunterx/heap/pull/128\n* fix(shell): rail-ordered view shortcuts, docs search, window geometry by @sectapunterx in https://github.com/sectapunterx/heap/pull/129\n* feat(state): schema v5 \u2014 per-task rank and dependency links by @sectapunterx in https://github.com/sectapunterx/heap/pull/130\n* feat(undo): a real undo/redo stack by @sectapunterx in https://github.com/sectapunterx/heap/pull/131\n* feat(board): manual card order with drop-position insert by @sectapunterx in https://github.com/sectapunterx/heap/pull/132\n* feat(board): sort a column by priority, due date, recency or title by @sectapunterx in https://github.com/sectapunterx/heap/pull/136\n* feat(task): render the description as markdown, and tick its checklist by @sectapunterx in https://github.com/sectapunterx/heap/pull/137\n* fix(calendar): draw the whole day, and open on the part of it you are in by @sectapunterx in https://github.com/sectapunterx/heap/pull/140\n* feat(cal): a recurrence-rule engine for events by @sectapunterx in https://github.com/sectapunterx/heap/pull/141\n* fix(week): lay overlapping events side by side instead of on top by @sectapunterx in https://github.com/sectapunterx/heap/pull/142\n* feat(week): the whole day, a now line, dropped cards, and click to create by @sectapunterx in https://github.com/sectapunterx/heap/pull/143\n* feat(calendar): remind about meetings, not only the standup by @sectapunterx in https://github.com/sectapunterx/heap/pull/144\n* feat(calendar): all-day, multi-day and cross-midnight events by @sectapunterx in https://github.com/sectapunterx/heap/pull/145\n* feat(calendar): recurring events, .ics, and keyboard navigation by @sectapunterx in https://github.com/sectapunterx/heap/pull/146\n* feat(notes): many notes instead of one blob by @sectapunterx in https://github.com/sectapunterx/heap/pull/147\n* feat(notes): a list of notes beside the one being edited by @sectapunterx in https://github.com/sectapunterx/heap/pull/148\n* feat(notes): import and export a folder of .md files by @sectapunterx in https://github.com/sectapunterx/heap/pull/149\n* feat(notes): links that cross from one note to another by @sectapunterx in https://github.com/sectapunterx/heap/pull/150\n* feat(docs): a tree of pages, not just a catalog by @sectapunterx in https://github.com/sectapunterx/heap/pull/151\n* fix(notes): never lose text that has no note behind it by @sectapunterx in https://github.com/sectapunterx/heap/pull/152\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.4.9...v0.5.0\n\n## What's Changed\n* feat(search): make the header search box a query box by @sectapunterx in https://github.com/sectapunterx/heap/pull/115\n* fix(archive): stop the binding loop and the recursive rearrange by @sectapunterx in https://github.com/sectapunterx/heap/pull/116\n* fix(qml): stop shadowing base-type properties on Popup and Item by @sectapunterx in https://github.com/sectapunterx/heap/pull/117\n* feat(sync): walk every page of a tracker pull, and wait out a rate limit by @sectapunterx in https://github.com/sectapunterx/heap/pull/118\n* feat(integrations): let the user map a tracker's statuses onto columns by @sectapunterx in https://github.com/sectapunterx/heap/pull/119\n* build(tests): share the AppController dependency list by @sectapunterx in https://github.com/sectapunterx/heap/pull/120\n* fix(notes): flush a pending edit on destruction and on quit by @sectapunterx in https://github.com/sectapunterx/heap/pull/121\n* fix(tests): restore the three suites the source-list refactor emptied by @sectapunterx in https://github.com/sectapunterx/heap/pull/123\n* fix(state): gate the ladder per rung and refuse a newer schema by @sectapunterx in https://github.com/sectapunterx/heap/pull/122\n* fix(calendar): clamp every event write into the day by @sectapunterx in https://github.com/sectapunterx/heap/pull/124\n* fix(calendar): settings defaults, week start in the picker, month paging by @sectapunterx in https://github.com/sectapunterx/heap/pull/125\n* fix(calendar): time-block a task from its own estimate, and find a free slot by @sectapunterx in https://github.com/sectapunterx/heap/pull/126\n* fix(markdown): highlight a fence with its own language's comment syntax by @sectapunterx in https://github.com/sectapunterx/heap/pull/127\n* fix(board): keep statusChangedAt through a column-delete undo, cover status CRUD by @sectapunterx in https://github.com/sectapunterx/heap/pull/128\n* fix(shell): rail-ordered view shortcuts, docs search, window geometry by @sectapunterx in https://github.com/sectapunterx/heap/pull/129\n* feat(state): schema v5 \u2014 per-task rank and dependency links by @sectapunterx in https://github.com/sectapunterx/heap/pull/130\n* feat(undo): a real undo/redo stack by @sectapunterx in https://github.com/sectapunterx/heap/pull/131\n* feat(board): manual card order with drop-position insert by @sectapunterx in https://github.com/sectapunterx/heap/pull/132\n* feat(board): sort a column by priority, due date, recency or title by @sectapunterx in https://github.com/sectapunterx/heap/pull/136\n* feat(task): render the description as markdown, and tick its checklist by @sectapunterx in https://github.com/sectapunterx/heap/pull/137\n* fix(calendar): draw the whole day, and open on the part of it you are in by @sectapunterx in https://github.com/sectapunterx/heap/pull/140\n* feat(cal): a recurrence-rule engine for events by @sectapunterx in https://github.com/sectapunterx/heap/pull/141\n* fix(week): lay overlapping events side by side instead of on top by @sectapunterx in https://github.com/sectapunterx/heap/pull/142\n* feat(week): the whole day, a now line, dropped cards, and click to create by @sectapunterx in https://github.com/sectapunterx/heap/pull/143\n* feat(calendar): remind about meetings, not only the standup by @sectapunterx in https://github.com/sectapunterx/heap/pull/144\n* feat(calendar): all-day, multi-day and cross-midnight events by @sectapunterx in https://github.com/sectapunterx/heap/pull/145\n* feat(calendar): recurring events, .ics, and keyboard navigation by @sectapunterx in https://github.com/sectapunterx/heap/pull/146\n* feat(notes): many notes instead of one blob by @sectapunterx in https://github.com/sectapunterx/heap/pull/147\n* feat(notes): a list of notes beside the one being edited by @sectapunterx in https://github.com/sectapunterx/heap/pull/148\n* feat(notes): import and export a folder of .md files by @sectapunterx in https://github.com/sectapunterx/heap/pull/149\n* feat(notes): links that cross from one note to another by @sectapunterx in https://github.com/sectapunterx/heap/pull/150\n* feat(docs): a tree of pages, not just a catalog by @sectapunterx in https://github.com/sectapunterx/heap/pull/151\n* fix(notes): never lose text that has no note behind it by @sectapunterx in https://github.com/sectapunterx/heap/pull/152\n* fix(integrations): let a card be connected with typed credentials by @sectapunterx in https://github.com/sectapunterx/heap/pull/153\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.4.9...v0.5.0\n\n## What's Changed\n* feat(search): make the header search box a query box by @sectapunterx in https://github.com/sectapunterx/heap/pull/115\n* fix(archive): stop the binding loop and the recursive rearrange by @sectapunterx in https://github.com/sectapunterx/heap/pull/116\n* fix(qml): stop shadowing base-type properties on Popup and Item by @sectapunterx in https://github.com/sectapunterx/heap/pull/117\n* feat(sync): walk every page of a tracker pull, and wait out a rate limit by @sectapunterx in https://github.com/sectapunterx/heap/pull/118\n* feat(integrations): let the user map a tracker's statuses onto columns by @sectapunterx in https://github.com/sectapunterx/heap/pull/119\n* build(tests): share the AppController dependency list by @sectapunterx in https://github.com/sectapunterx/heap/pull/120\n* fix(notes): flush a pending edit on destruction and on quit by @sectapunterx in https://github.com/sectapunterx/heap/pull/121\n* fix(tests): restore the three suites the source-list refactor emptied by @sectapunterx in https://github.com/sectapunterx/heap/pull/123\n* fix(state): gate the ladder per rung and refuse a newer schema by @sectapunterx in https://github.com/sectapunterx/heap/pull/122\n* fix(calendar): clamp every event write into the day by @sectapunterx in https://github.com/sectapunterx/heap/pull/124\n* fix(calendar): settings defaults, week start in the picker, month paging by @sectapunterx in https://github.com/sectapunterx/heap/pull/125\n* fix(calendar): time-block a task from its own estimate, and find a free slot by @sectapunterx in https://github.com/sectapunterx/heap/pull/126\n* fix(markdown): highlight a fence with its own language's comment syntax by @sectapunterx in https://github.com/sectapunterx/heap/pull/127\n* fix(board): keep statusChangedAt through a column-delete undo, cover status CRUD by @sectapunterx in https://github.com/sectapunterx/heap/pull/128\n* fix(shell): rail-ordered view shortcuts, docs search, window geometry by @sectapunterx in https://github.com/sectapunterx/heap/pull/129\n* feat(state): schema v5 \u2014 per-task rank and dependency links by @sectapunterx in https://github.com/sectapunterx/heap/pull/130\n* feat(undo): a real undo/redo stack by @sectapunterx in https://github.com/sectapunterx/heap/pull/131\n* feat(board): manual card order with drop-position insert by @sectapunterx in https://github.com/sectapunterx/heap/pull/132\n* feat(board): sort a column by priority, due date, recency or title by @sectapunterx in https://github.com/sectapunterx/heap/pull/136\n* feat(task): render the description as markdown, and tick its checklist by @sectapunterx in https://github.com/sectapunterx/heap/pull/137\n* fix(calendar): draw the whole day, and open on the part of it you are in by @sectapunterx in https://github.com/sectapunterx/heap/pull/140\n* feat(cal): a recurrence-rule engine for events by @sectapunterx in https://github.com/sectapunterx/heap/pull/141\n* fix(week): lay overlapping events side by side instead of on top by @sectapunterx in https://github.com/sectapunterx/heap/pull/142\n* feat(week): the whole day, a now line, dropped cards, and click to create by @sectapunterx in https://github.com/sectapunterx/heap/pull/143\n* feat(calendar): remind about meetings, not only the standup by @sectapunterx in https://github.com/sectapunterx/heap/pull/144\n* feat(calendar): all-day, multi-day and cross-midnight events by @sectapunterx in https://github.com/sectapunterx/heap/pull/145\n* feat(calendar): recurring events, .ics, and keyboard navigation by @sectapunterx in https://github.com/sectapunterx/heap/pull/146\n* feat(notes): many notes instead of one blob by @sectapunterx in https://github.com/sectapunterx/heap/pull/147\n* feat(notes): a list of notes beside the one being edited by @sectapunterx in https://github.com/sectapunterx/heap/pull/148\n* feat(notes): import and export a folder of .md files by @sectapunterx in https://github.com/sectapunterx/heap/pull/149\n* feat(notes): links that cross from one note to another by @sectapunterx in https://github.com/sectapunterx/heap/pull/150\n* feat(docs): a tree of pages, not just a catalog by @sectapunterx in https://github.com/sectapunterx/heap/pull/151\n* fix(notes): never lose text that has no note behind it by @sectapunterx in https://github.com/sectapunterx/heap/pull/152\n* fix(integrations): let a card be connected with typed credentials by @sectapunterx in https://github.com/sectapunterx/heap/pull/153\n* feat(people): make the rail a to-do list and add someone by searching by @sectapunterx in https://github.com/sectapunterx/heap/pull/154\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.4.9...v0.5.0",
-  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.5.0",
+  "tag": "v0.7.1",
+  "name": "heap v0.7.1",
+  "date": "2026-10-07T05:57:11Z",
+  "body": "> **macOS:** this build is not notarized. On first launch, right-click heap.app → **Open**.\n\n> **Windows:** this build is not code-signed, so SmartScreen may say \"Windows protected your PC\". Choose **More info → Run anyway**, after checking the SHA-256 below.\n\nVerify a download: `sha256sum -c SHA256SUMS`, or `gh attestation verify <file> --repo sectapunterx/heap`.\n\n<details><summary>SHA-256 checksums</summary>\n\n```\n79f3344a1d29bc0e208bf4c5df7ac8ad012418740f02a67976051eb7a27295d5  heap-v0.7.1-linux-x86_64.AppImage\ncebc57c567a520314ae56a92795d647799147deb0913c2bc733a1382853103f2  heap-v0.7.1-macos.dmg\n0131e3278f06ca51c4d54fd5d2dd90b91872b8d98f51a64158989fa8c9cba9de  heap-v0.7.1-sbom.spdx.json\n199798a4bddd6056422872f0d2b1e26a95731de38f94ac56200ddaf32b17b6c2  heap-v0.7.1-windows-portable.zip\nc043653f9c6a92ee7e58bb482baa973c27ab3aac87a93a8490ca8ffc4f1b8d1e  heap-v0.7.1-windows-setup.exe\n```\n\n</details>\n\n\n## What's Changed\n* fix: smooth text, themed title bar, board icon, clicks inside dialogs by @sectapunterx in https://github.com/sectapunterx/heap/pull/229\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.7.0...v0.7.1",
+  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.7.1",
   "prerelease": false,
   "draft": false,
   "assets": [
    {
-    "name": "heap-v0.5.0-linux-amd64.deb",
-    "size": 1670778,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.0/heap-v0.5.0-linux-amd64.deb"
+    "name": "heap-v0.7.1-linux-x86_64.AppImage",
+    "size": 50358776,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.1/heap-v0.7.1-linux-x86_64.AppImage"
    },
    {
-    "name": "heap-v0.5.0-linux-x86_64.AppImage",
-    "size": 40786424,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.0/heap-v0.5.0-linux-x86_64.AppImage"
+    "name": "heap-v0.7.1-macos.dmg",
+    "size": 62431806,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.1/heap-v0.7.1-macos.dmg"
    },
    {
-    "name": "heap-v0.5.0-linux-x86_64.tar.gz",
-    "size": 2149025,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.0/heap-v0.5.0-linux-x86_64.tar.gz"
+    "name": "heap-v0.7.1-sbom.spdx.json",
+    "size": 2503,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.1/heap-v0.7.1-sbom.spdx.json"
    },
    {
-    "name": "heap-v0.5.0-macos.dmg",
-    "size": 59588341,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.0/heap-v0.5.0-macos.dmg"
+    "name": "heap-v0.7.1-windows-portable.zip",
+    "size": 58588427,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.1/heap-v0.7.1-windows-portable.zip"
    },
    {
-    "name": "heap-v0.5.0-windows-portable.zip",
-    "size": 62490554,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.0/heap-v0.5.0-windows-portable.zip"
+    "name": "heap-v0.7.1-windows-setup.exe",
+    "size": 39489575,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.1/heap-v0.7.1-windows-setup.exe"
    },
    {
-    "name": "heap-v0.5.0-windows-setup.exe",
-    "size": 40302877,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.0/heap-v0.5.0-windows-setup.exe"
+    "name": "SHA256SUMS",
+    "size": 476,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.1/SHA256SUMS"
    }
   ]
  },
  {
-  "tag": "v0.4.9",
-  "name": "heap v0.4.9",
-  "date": "2026-09-20T11:58:01Z",
-  "body": "## What's Changed\n* feat(oauth): register Sentry as a public client, dropping its secret by @sectapunterx in https://github.com/sectapunterx/heap/pull/107\n* Ticket enrichment: make a mirrored issue look and behave like one (HEAP-117) by @sectapunterx in https://github.com/sectapunterx/heap/pull/108\n* Stop a task id from silently destroying another task by @sectapunterx in https://github.com/sectapunterx/heap/pull/109\n* Stop a tracker pull from undoing what the user decided by @sectapunterx in https://github.com/sectapunterx/heap/pull/110\n* Let a branch find its own ticket, and stop it finding someone else's by @sectapunterx in https://github.com/sectapunterx/heap/pull/111\n* Restrict the secrets file, refresh the palette, drop a lying toggle by @sectapunterx in https://github.com/sectapunterx/heap/pull/112\n* Build one card per task, not one per task per column by @sectapunterx in https://github.com/sectapunterx/heap/pull/113\n* Stop recomputing what has not changed by @sectapunterx in https://github.com/sectapunterx/heap/pull/114\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.4.8...v0.4.9",
-  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.4.9",
+  "tag": "v0.7.0",
+  "name": "heap v0.7.0",
+  "date": "2026-10-07T01:49:40Z",
+  "body": "> **macOS:** this build is not notarized. On first launch, right-click heap.app → **Open**.\n\n> **Windows:** this build is not code-signed, so SmartScreen may say \"Windows protected your PC\". Choose **More info → Run anyway**, after checking the SHA-256 below.\n\nVerify a download: `sha256sum -c SHA256SUMS`, or `gh attestation verify <file> --repo sectapunterx/heap`.\n\n<details><summary>SHA-256 checksums</summary>\n\n```\nb483ae2aad5dfaf035eca0a1618a571cb2085e7ec34bac7178fd93f10cbb1ed2  heap-v0.7.0-linux-x86_64.AppImage\n5ea4c66138c5e4c0596df72e7cf449585342ce77b5e27e4bd7bf3bdafaab43a6  heap-v0.7.0-macos.dmg\neec7dd8075f873dee486c07e9204c50babbb079ab6b5b9a0fdb7762dd344310d  heap-v0.7.0-sbom.spdx.json\n91e7f7eb07f07b2917e7bd4bd002b9c6f5ce881c7aebc3cf77c015b8c7e8d1de  heap-v0.7.0-windows-portable.zip\nf66017f002765a3c2f528d841e8eba5fa6cb40bde76b82dab519dc926849c3cd  heap-v0.7.0-windows-setup.exe\n```\n\n</details>\n\n\n## What's Changed\n* ui: keyboard cursor in its own colour, selection by form (APP-174) by @sectapunterx in https://github.com/sectapunterx/heap/pull/217\n* ui: motion tokens tap / pop / move and one curve (APP-175) by @sectapunterx in https://github.com/sectapunterx/heap/pull/218\n* feat: low sound palette and meeting chimes (APP-177, APP-178) by @sectapunterx in https://github.com/sectapunterx/heap/pull/219\n* feat: new tickets on the board, sync dot, event log (APP-180, APP-186, APP-187) by @sectapunterx in https://github.com/sectapunterx/heap/pull/220\n* ui: two-line card, done stack, quieter rows (APP-176, APP-179, APP-197, APP-199, APP-200) by @sectapunterx in https://github.com/sectapunterx/heap/pull/221\n* ui: type scale, weights, elevation, surfaces, icons (APP-181, APP-182, APP-193..APP-196, APP-198) by @sectapunterx in https://github.com/sectapunterx/heap/pull/223\n* feat: locale dates, end-of-day summary, empty states, palette coverage (APP-188, APP-190, APP-191, APP-192, APP-201) by @sectapunterx in https://github.com/sectapunterx/heap/pull/224\n* a11y: system text scale, keyboard-reachable hover, not colour alone, pseudo-locale (APP-183, APP-184, APP-185, APP-189) by @sectapunterx in https://github.com/sectapunterx/heap/pull/222\n* ui: bundled fonts sized to the Segoe UI / Consolas scale (APP-202) by @sectapunterx in https://github.com/sectapunterx/heap/pull/225\n* fix: layout at larger scales and long strings (0.7.0 audit SCALE-1..7, FUNC-1) by @sectapunterx in https://github.com/sectapunterx/heap/pull/226\n* fix: 0.7.0 audit visual findings (EYE-1..7) by @sectapunterx in https://github.com/sectapunterx/heap/pull/227\n* release: 0.7.0 by @sectapunterx in https://github.com/sectapunterx/heap/pull/228\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.6.1...v0.7.0",
+  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.7.0",
   "prerelease": false,
   "draft": false,
   "assets": [
    {
-    "name": "heap-v0.4.9-linux-amd64.deb",
-    "size": 1389388,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.9/heap-v0.4.9-linux-amd64.deb"
+    "name": "heap-v0.7.0-linux-x86_64.AppImage",
+    "size": 50362872,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.0/heap-v0.7.0-linux-x86_64.AppImage"
    },
    {
-    "name": "heap-v0.4.9-linux-x86_64.AppImage",
-    "size": 40450552,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.9/heap-v0.4.9-linux-x86_64.AppImage"
+    "name": "heap-v0.7.0-macos.dmg",
+    "size": 62425448,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.0/heap-v0.7.0-macos.dmg"
    },
    {
-    "name": "heap-v0.4.9-linux-x86_64.tar.gz",
-    "size": 1769691,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.9/heap-v0.4.9-linux-x86_64.tar.gz"
+    "name": "heap-v0.7.0-sbom.spdx.json",
+    "size": 2503,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.0/heap-v0.7.0-sbom.spdx.json"
    },
    {
-    "name": "heap-v0.4.9-macos.dmg",
-    "size": 59067371,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.9/heap-v0.4.9-macos.dmg"
+    "name": "heap-v0.7.0-windows-portable.zip",
+    "size": 58577782,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.0/heap-v0.7.0-windows-portable.zip"
    },
    {
-    "name": "heap-v0.4.9-windows-portable.zip",
-    "size": 61899724,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.9/heap-v0.4.9-windows-portable.zip"
+    "name": "heap-v0.7.0-windows-setup.exe",
+    "size": 39481077,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.0/heap-v0.7.0-windows-setup.exe"
    },
    {
-    "name": "heap-v0.4.9-windows-setup.exe",
-    "size": 39912792,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.9/heap-v0.4.9-windows-setup.exe"
+    "name": "SHA256SUMS",
+    "size": 476,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.7.0/SHA256SUMS"
    }
   ]
  },
  {
-  "tag": "v0.4.8",
-  "name": "heap v0.4.8",
-  "date": "2026-09-20T01:06:00Z",
-  "body": "## What's Changed\n* docs(pages): readable screenshots + new landing by @sectapunterx in https://github.com/sectapunterx/heap/pull/74\n* fix(pages): landing fetched a raw {{ }} placeholder; drop build chrome and SRI strip by @sectapunterx in https://github.com/sectapunterx/heap/pull/75\n* docs(landing): add qt6-networkauth-dev to Linux build deps by @sectapunterx in https://github.com/sectapunterx/heap/pull/77\n* fix(build): resolve heap_core link-feature clash in QML tests by @sectapunterx in https://github.com/sectapunterx/heap/pull/78\n* HEAP-104: sync cascade-delete, any-order datetime parse, sync-comment context, column scrollbar by @sectapunterx in https://github.com/sectapunterx/heap/pull/79\n* HEAP-104: harden the task data model for lossless, time-aware persistence by @sectapunterx in https://github.com/sectapunterx/heap/pull/76\n* test(qml): full component coverage + 10 confirmed bug fixes by @sectapunterx in https://github.com/sectapunterx/heap/pull/80\n* fix(ui): visual bugs, dead hit targets and the RU/EN mix by @sectapunterx in https://github.com/sectapunterx/heap/pull/81\n* fix(integrations): make the trackers actually connect and sync by @sectapunterx in https://github.com/sectapunterx/heap/pull/82\n* feat(cli): add --data-dir so a run can use a throwaway profile by @sectapunterx in https://github.com/sectapunterx/heap/pull/83\n* build: vendor md4c as a static library by @sectapunterx in https://github.com/sectapunterx/heap/pull/84\n* feat(markdown): parse notes into an AST that knows its source lines by @sectapunterx in https://github.com/sectapunterx/heap/pull/85\n* feat(markdown): outline, callouts, footnotes and rich-text rendering by @sectapunterx in https://github.com/sectapunterx/heap/pull/86\n* feat(notes): draw the parsed document instead of handing it to Qt by @sectapunterx in https://github.com/sectapunterx/heap/pull/87\n* feat(notes): make the rendered view answer back by @sectapunterx in https://github.com/sectapunterx/heap/pull/88\n* feat(notes): give the editor markdown keys, and move the rules into C++ by @sectapunterx in https://github.com/sectapunterx/heap/pull/89\n* feat(notes): replace the editor's line-by-line highlighting by @sectapunterx in https://github.com/sectapunterx/heap/pull/90\n* docs(notes): describe the editor that now exists by @sectapunterx in https://github.com/sectapunterx/heap/pull/91\n* perf(git): stop freezing the window while a branch is created by @sectapunterx in https://github.com/sectapunterx/heap/pull/92\n* fix(integrations): actually refresh expired OAuth tokens by @sectapunterx in https://github.com/sectapunterx/heap/pull/93\n* feat(integrations): hand-rolled OAuth engine for every provider dialect by @sectapunterx in https://github.com/sectapunterx/heap/pull/94\n* feat(integrations): browser sign-in for Todoist, Asana, ClickUp, Sentry, Bitbucket by @sectapunterx in https://github.com/sectapunterx/heap/pull/95\n* feat(integrations): browser sign-in for Jira and Trello by @sectapunterx in https://github.com/sectapunterx/heap/pull/96\n* docs(help): in-app guide for integrations by @sectapunterx in https://github.com/sectapunterx/heap/pull/97\n* feat(integrations): Mattermost directory \u2014 sign in and fetch contacts by @sectapunterx in https://github.com/sectapunterx/heap/pull/98\n* feat(integrations): import Mattermost contacts into Docs and the People rail by @sectapunterx in https://github.com/sectapunterx/heap/pull/99\n* fix(jira): a pasted ticket URL broke the base URL, and a 401 said nothing by @sectapunterx in https://github.com/sectapunterx/heap/pull/100\n* fix(integrations): crash, credential leaks and a dead Trello flow by @sectapunterx in https://github.com/sectapunterx/heap/pull/101\n* feat(jira): support Server and Data Center by @sectapunterx in https://github.com/sectapunterx/heap/pull/102\n* docs(oauth): a step-by-step setup guide, and fix two things it exposed by @sectapunterx in https://github.com/sectapunterx/heap/pull/103\n* docs(oauth): correct the setup guide against the live consoles by @sectapunterx in https://github.com/sectapunterx/heap/pull/104\n* docs(oauth): Sentry rotates its client secret, it does not need recreating by @sectapunterx in https://github.com/sectapunterx/heap/pull/105\n* fix(oauth): stop asking Trello users for an API key the sign-in supplied by @sectapunterx in https://github.com/sectapunterx/heap/pull/106\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.4.7...v0.4.8",
-  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.4.8",
+  "tag": "v0.6.1",
+  "name": "heap v0.6.1",
+  "date": "2026-10-06T14:52:29Z",
+  "body": "> **macOS:** this build is not notarized. On first launch, right-click heap.app → **Open**.\n\n> **Windows:** this build is not code-signed, so SmartScreen may say \"Windows protected your PC\". Choose **More info → Run anyway**, after checking the SHA-256 below.\n\nVerify a download: `sha256sum -c SHA256SUMS`, or `gh attestation verify <file> --repo sectapunterx/heap`.\n\n<details><summary>SHA-256 checksums</summary>\n\n```\nb4b2a71f4d9adead08da1e2033d15e9b7339306fc5988147d7f976fd534288e1  heap-v0.6.1-linux-x86_64.AppImage\n81daed62750a7e751c3e64264e9dd60565366a5f22f11bcf887e0b84da5dd02b  heap-v0.6.1-macos.dmg\n23317c46141d223ba9599b1254ced71c17d3cf7a38e82232d20fda91595240af  heap-v0.6.1-sbom.spdx.json\n9607effbb5c9f4fcdfaf7358e8ab025276b9f55899e15fce0dc94aed29378104  heap-v0.6.1-windows-portable.zip\ne15f9c221ba8de973aa39604d7ea43fa16a2ef7c42ac81d44f0cee2465056722  heap-v0.6.1-windows-setup.exe\n```\n\n</details>\n\n\n## What's Changed\n* ui: crisp text and less mono texture by @sectapunterx in https://github.com/sectapunterx/heap/pull/215\n* release: 0.6.1 by @sectapunterx in https://github.com/sectapunterx/heap/pull/216\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.6.0...v0.6.1",
+  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.6.1",
   "prerelease": false,
   "draft": false,
   "assets": [
    {
-    "name": "heap-v0.4.8-linux-amd64.deb",
-    "size": 1332628,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.8/heap-v0.4.8-linux-amd64.deb"
+    "name": "heap-v0.6.1-linux-x86_64.AppImage",
+    "size": 50080248,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.6.1/heap-v0.6.1-linux-x86_64.AppImage"
    },
    {
-    "name": "heap-v0.4.8-linux-x86_64.AppImage",
-    "size": 40397304,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.8/heap-v0.4.8-linux-x86_64.AppImage"
+    "name": "heap-v0.6.1-macos.dmg",
+    "size": 62112712,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.6.1/heap-v0.6.1-macos.dmg"
    },
    {
-    "name": "heap-v0.4.8-linux-x86_64.tar.gz",
-    "size": 1696705,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.8/heap-v0.4.8-linux-x86_64.tar.gz"
+    "name": "heap-v0.6.1-sbom.spdx.json",
+    "size": 2503,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.6.1/heap-v0.6.1-sbom.spdx.json"
    },
    {
-    "name": "heap-v0.4.8-macos.dmg",
-    "size": 59010358,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.8/heap-v0.4.8-macos.dmg"
+    "name": "heap-v0.6.1-windows-portable.zip",
+    "size": 58266788,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.6.1/heap-v0.6.1-windows-portable.zip"
    },
    {
-    "name": "heap-v0.4.8-windows-portable.zip",
-    "size": 61789598,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.8/heap-v0.4.8-windows-portable.zip"
+    "name": "heap-v0.6.1-windows-setup.exe",
+    "size": 39266141,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.6.1/heap-v0.6.1-windows-setup.exe"
    },
    {
-    "name": "heap-v0.4.8-windows-setup.exe",
-    "size": 39843625,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.8/heap-v0.4.8-windows-setup.exe"
+    "name": "SHA256SUMS",
+    "size": 476,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.6.1/SHA256SUMS"
    }
   ]
  },
  {
-  "tag": "v0.4.7",
-  "name": "heap v0.4.7",
-  "date": "2026-07-08T20:16:24Z",
-  "body": "## What's Changed\n* docs(pages): replace GitHub Pages landing with new build by @sectapunterx in https://github.com/sectapunterx/heap/pull/72\n* ci: bump first-party actions to Node 24 majors by @sectapunterx in https://github.com/sectapunterx/heap/pull/73\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.4.6...v0.4.7",
-  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.4.7",
+  "tag": "v0.6.0",
+  "name": "heap v0.6.0",
+  "date": "2026-10-06T13:00:58Z",
+  "body": "> **macOS:** this build is not notarized. On first launch, right-click heap.app → **Open**.\n\n> **Windows:** this build is not code-signed, so SmartScreen may say \"Windows protected your PC\". Choose **More info → Run anyway**, after checking the SHA-256 below.\n\nVerify a download: `sha256sum -c SHA256SUMS`, or `gh attestation verify <file> --repo sectapunterx/heap`.\n\n<details><summary>SHA-256 checksums</summary>\n\n```\nca88c218af59c0f6a77fc845d72179ff5fa39bdd44b6fea0112c7573a3d4052d  heap-v0.6.0-linux-x86_64.AppImage\nd6cb9fdd07b8a42052f94ffb977a867ac30b249195d9899017cc39d2522b0eea  heap-v0.6.0-macos.dmg\n7032bb89b3f52b68458abf985b987bfd5c0809377af3596a396398f8e0d8e59b  heap-v0.6.0-sbom.spdx.json\n383b1d37af0c2e190088f80b8403fdca1698738ca31226e6107b88f9023c7b8f  heap-v0.6.0-windows-portable.zip\n7b2383ed32b0bf31164149b02b897cba92a1a114e3ebd35ee56755ad618df6d2  heap-v0.6.0-windows-setup.exe\n```\n\n</details>\n\n\n## What's Changed\n* APP-172: spacious settings layout by @sectapunterx in https://github.com/sectapunterx/heap/pull/200\n* APP-161: performance budgets and CI perf gate by @sectapunterx in https://github.com/sectapunterx/heap/pull/201\n* APP-173: command line — heap add / now / list / today / done / open by @sectapunterx in https://github.com/sectapunterx/heap/pull/202\n* APP-162: time machine — restore state, a profile, a task or a note from any hour by @sectapunterx in https://github.com/sectapunterx/heap/pull/204\n* APP-154/155: start at login, tray start, native notifications with actions by @sectapunterx in https://github.com/sectapunterx/heap/pull/203\n* APP-156/163/164/165: whose move, sync state & conflicts, integrations health, task history by @sectapunterx in https://github.com/sectapunterx/heap/pull/205\n* APP-166/167/168/169/171: shortcut coaching, motion, accessibility, 60-second tour, Linux hotkey by @sectapunterx in https://github.com/sectapunterx/heap/pull/206\n* APP-157/158/159/160/170: safety net — end of day, waiting on, seen before, focus mode, standup draft by @sectapunterx in https://github.com/sectapunterx/heap/pull/207\n* APP-167: opt-in completion sound when a task moves to Done by @sectapunterx in https://github.com/sectapunterx/heap/pull/208\n* Close remaining B-tier findings of the 2026-09-30 e2e audit by @sectapunterx in https://github.com/sectapunterx/heap/pull/199\n* Fix S/A findings of the 0.6.0 pre-merge audit by @sectapunterx in https://github.com/sectapunterx/heap/pull/210\n* people: @-mention by login-style handle and transliterated name by @sectapunterx in https://github.com/sectapunterx/heap/pull/209\n* view: Ctrl+= / Ctrl+- / Ctrl+0 zoom the interface by @sectapunterx in https://github.com/sectapunterx/heap/pull/211\n* fonts: ship Golos Text and JetBrains Mono inside the app by @sectapunterx in https://github.com/sectapunterx/heap/pull/212\n* Release 0.6.0 by @sectapunterx in https://github.com/sectapunterx/heap/pull/213\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.5.8...v0.6.0",
+  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.6.0",
   "prerelease": false,
   "draft": false,
   "assets": [
    {
-    "name": "heap-v0.4.7-linux-amd64.deb",
-    "size": 1004314,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.7/heap-v0.4.7-linux-amd64.deb"
+    "name": "heap-v0.6.0-linux-x86_64.AppImage",
+    "size": 50059768,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.6.0/heap-v0.6.0-linux-x86_64.AppImage"
    },
    {
-    "name": "heap-v0.4.7-linux-x86_64.AppImage",
-    "size": 40081912,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.7/heap-v0.4.7-linux-x86_64.AppImage"
+    "name": "heap-v0.6.0-macos.dmg",
+    "size": 62080545,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.6.0/heap-v0.6.0-macos.dmg"
    },
    {
-    "name": "heap-v0.4.7-linux-x86_64.tar.gz",
-    "size": 1281287,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.7/heap-v0.4.7-linux-x86_64.tar.gz"
+    "name": "heap-v0.6.0-sbom.spdx.json",
+    "size": 2503,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.6.0/heap-v0.6.0-sbom.spdx.json"
    },
    {
-    "name": "heap-v0.4.7-macos.dmg",
-    "size": 58571408,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.7/heap-v0.4.7-macos.dmg"
+    "name": "heap-v0.6.0-windows-portable.zip",
+    "size": 58165821,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.6.0/heap-v0.6.0-windows-portable.zip"
    },
    {
-    "name": "heap-v0.4.7-windows-portable.zip",
-    "size": 61346321,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.7/heap-v0.4.7-windows-portable.zip"
+    "name": "heap-v0.6.0-windows-setup.exe",
+    "size": 39218800,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.6.0/heap-v0.6.0-windows-setup.exe"
    },
    {
-    "name": "heap-v0.4.7-windows-setup.exe",
-    "size": 39483914,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.7/heap-v0.4.7-windows-setup.exe"
+    "name": "SHA256SUMS",
+    "size": 476,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.6.0/SHA256SUMS"
    }
   ]
  },
  {
-  "tag": "v0.4.6",
-  "name": "heap v0.4.6",
-  "date": "2026-07-08T12:40:52Z",
-  "body": "## What's Changed\n* fix(onboarding): keep the welcome guide resumable after a step action by @sectapunterx in https://github.com/sectapunterx/heap/pull/71\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.4.5...v0.4.6",
-  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.4.6",
+  "tag": "v0.5.8",
+  "name": "heap v0.5.8",
+  "date": "2026-10-05T16:59:32Z",
+  "body": "> **macOS:** this build is not notarized. On first launch, right-click heap.app → **Open**.\n\n> **Windows:** this build is not code-signed, so SmartScreen may say \"Windows protected your PC\". Choose **More info → Run anyway**, after checking the SHA-256 below.\n\nVerify a download: `sha256sum -c SHA256SUMS`, or `gh attestation verify <file> --repo sectapunterx/heap`.\n\n<details><summary>SHA-256 checksums</summary>\n\n```\n7443d400b9359f941908cd9b7e84c0ad4fe4847ed58f7081aa57e1a95b11e574  heap-v0.5.8-linux-x86_64.AppImage\n0e595806cfd81a7c6995c8adc07133877208e0fddb68a7ceef2f7c05c54df4b3  heap-v0.5.8-macos.dmg\n26838b042bfb924b4821d28b2618e364139e69783bfa4581f1d41b4e60654fc9  heap-v0.5.8-sbom.spdx.json\n7c33a26e1bae14339226ddf2ec6e8ee68972e8d3a920bdcd28d998f3b9287922  heap-v0.5.8-windows-portable.zip\n1293ebde18ef10476e715c78fb373a502e3e2e8b43d88010cfea4e5616069e11  heap-v0.5.8-windows-setup.exe\n```\n\n</details>\n\n\n## What's Changed\n* APP-125: download, verify and install updates from inside the app by @sectapunterx in https://github.com/sectapunterx/heap/pull/197\n* Release 0.5.8 by @sectapunterx in https://github.com/sectapunterx/heap/pull/198\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.5.7...v0.5.8",
+  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.5.8",
   "prerelease": false,
   "draft": false,
   "assets": [
    {
-    "name": "heap-v0.4.6-linux-amd64.deb",
-    "size": 1003450,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.6/heap-v0.4.6-linux-amd64.deb"
+    "name": "heap-v0.5.8-linux-x86_64.AppImage",
+    "size": 49232376,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.8/heap-v0.5.8-linux-x86_64.AppImage"
    },
    {
-    "name": "heap-v0.4.6-linux-x86_64.AppImage",
-    "size": 40081912,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.6/heap-v0.4.6-linux-x86_64.AppImage"
+    "name": "heap-v0.5.8-macos.dmg",
+    "size": 61250526,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.8/heap-v0.5.8-macos.dmg"
    },
    {
-    "name": "heap-v0.4.6-linux-x86_64.tar.gz",
-    "size": 1280720,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.6/heap-v0.4.6-linux-x86_64.tar.gz"
+    "name": "heap-v0.5.8-sbom.spdx.json",
+    "size": 2503,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.8/heap-v0.5.8-sbom.spdx.json"
    },
    {
-    "name": "heap-v0.4.6-macos.dmg",
-    "size": 58572052,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.6/heap-v0.4.6-macos.dmg"
+    "name": "heap-v0.5.8-windows-portable.zip",
+    "size": 56743763,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.8/heap-v0.5.8-windows-portable.zip"
    },
    {
-    "name": "heap-v0.4.6-windows-portable.zip",
-    "size": 61313777,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.6/heap-v0.4.6-windows-portable.zip"
+    "name": "heap-v0.5.8-windows-setup.exe",
+    "size": 38425264,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.8/heap-v0.5.8-windows-setup.exe"
    },
    {
-    "name": "heap-v0.4.6-windows-setup.exe",
-    "size": 39451000,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.6/heap-v0.4.6-windows-setup.exe"
+    "name": "SHA256SUMS",
+    "size": 476,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.8/SHA256SUMS"
    }
   ]
  },
  {
-  "tag": "v0.4.5",
-  "name": "heap v0.4.5",
-  "date": "2026-07-08T10:52:25Z",
-  "body": "## What's Changed\n* feat(onboarding): interactive stepped welcome guide with skip & replay by @sectapunterx in https://github.com/sectapunterx/heap/pull/70\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.4.4...v0.4.5",
-  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.4.5",
+  "tag": "v0.5.7",
+  "name": "heap v0.5.7",
+  "date": "2026-10-05T15:43:34Z",
+  "body": "> **macOS:** this build is not notarized. On first launch, right-click heap.app → **Open**.\n\n> **Windows:** this build is not code-signed, so SmartScreen may say \"Windows protected your PC\". Choose **More info → Run anyway**, after checking the SHA-256 below.\n\nVerify a download: `sha256sum -c SHA256SUMS`, or `gh attestation verify <file> --repo sectapunterx/heap`.\n\n<details><summary>SHA-256 checksums</summary>\n\n```\n62080708af5d732efddbc7c31eea1b3aa9cc7106ec101ae327fe849cb95ba86c  heap-v0.5.7-linux-x86_64.AppImage\nf8f687600cd1f5d65595de2b44046c9d941b67ead197b864d29a588e4d4b1b2a  heap-v0.5.7-macos.dmg\neecc71ef6bcced046919a3295b1450212c8a3abf5bfdba492397f84885eea75a  heap-v0.5.7-sbom.spdx.json\na40b6d919c00d6f55fa70215590e69f816c1428de575d694b97ece2319565c0a  heap-v0.5.7-windows-portable.zip\n8e58c3cc0cd7ee6798651cba89ad55c5dd1034a6105c57f0799b5b39ab091ce5  heap-v0.5.7-windows-setup.exe\n```\n\n</details>\n\n\n## What's Changed\n* ci: bump anchore/sbom-action from 0.24.2 to 0.24.3 in the actions group by @dependabot[bot] in https://github.com/sectapunterx/heap/pull/188\n* APP-124: bring back Minimal dark as a low-contrast theme by @sectapunterx in https://github.com/sectapunterx/heap/pull/189\n* APP-126: close dialogs with a press beside them by @sectapunterx in https://github.com/sectapunterx/heap/pull/190\n* APP-123: auto-sync at any cadence, up to a month by @sectapunterx in https://github.com/sectapunterx/heap/pull/194\n* APP-127: an update never takes a theme away by @sectapunterx in https://github.com/sectapunterx/heap/pull/191\n* APP-122: auto-archive for any column by @sectapunterx in https://github.com/sectapunterx/heap/pull/193\n* APP-128: select and move cards from the keyboard on the board by @sectapunterx in https://github.com/sectapunterx/heap/pull/195\n* APP-121: a ticket mention reads as the ticket's title by @sectapunterx in https://github.com/sectapunterx/heap/pull/192\n* Release 0.5.7 by @sectapunterx in https://github.com/sectapunterx/heap/pull/196\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.5.6...v0.5.7",
+  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.5.7",
   "prerelease": false,
   "draft": false,
   "assets": [
    {
-    "name": "heap-v0.4.5-linux-amd64.deb",
-    "size": 1002064,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.5/heap-v0.4.5-linux-amd64.deb"
+    "name": "heap-v0.5.7-linux-x86_64.AppImage",
+    "size": 49207800,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.7/heap-v0.5.7-linux-x86_64.AppImage"
    },
    {
-    "name": "heap-v0.4.5-linux-x86_64.AppImage",
-    "size": 40081912,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.5/heap-v0.4.5-linux-x86_64.AppImage"
+    "name": "heap-v0.5.7-macos.dmg",
+    "size": 61208989,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.7/heap-v0.5.7-macos.dmg"
    },
    {
-    "name": "heap-v0.4.5-linux-x86_64.tar.gz",
-    "size": 1278136,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.5/heap-v0.4.5-linux-x86_64.tar.gz"
+    "name": "heap-v0.5.7-sbom.spdx.json",
+    "size": 2503,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.7/heap-v0.5.7-sbom.spdx.json"
    },
    {
-    "name": "heap-v0.4.5-macos.dmg",
-    "size": 58582711,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.5/heap-v0.4.5-macos.dmg"
+    "name": "heap-v0.5.7-windows-portable.zip",
+    "size": 55995684,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.7/heap-v0.5.7-windows-portable.zip"
    },
    {
-    "name": "heap-v0.4.5-windows-portable.zip",
-    "size": 61299017,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.5/heap-v0.4.5-windows-portable.zip"
+    "name": "heap-v0.5.7-windows-setup.exe",
+    "size": 37919692,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.7/heap-v0.5.7-windows-setup.exe"
    },
    {
-    "name": "heap-v0.4.5-windows-setup.exe",
-    "size": 39445188,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.5/heap-v0.4.5-windows-setup.exe"
+    "name": "SHA256SUMS",
+    "size": 476,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.7/SHA256SUMS"
    }
   ]
  },
  {
-  "tag": "v0.4.4",
-  "name": "heap v0.4.4",
-  "date": "2026-07-08T09:36:43Z",
-  "body": "**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.4.3...v0.4.4",
-  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.4.4",
+  "tag": "v0.5.6",
+  "name": "heap v0.5.6",
+  "date": "2026-10-05T12:45:52Z",
+  "body": "> **macOS:** this build is not notarized. On first launch, right-click heap.app → **Open**.\n\n> **Windows:** this build is not code-signed, so SmartScreen may say \"Windows protected your PC\". Choose **More info → Run anyway**, after checking the SHA-256 below.\n\nVerify a download: `sha256sum -c SHA256SUMS`, or `gh attestation verify <file> --repo sectapunterx/heap`.\n\n<details><summary>SHA-256 checksums</summary>\n\n```\n8dbc26ff4a88caab5470dbca86001fde283db8534acd5f4455065c07d6d1474f  heap-v0.5.6-linux-x86_64.AppImage\n0c56ab051074baf3b9a908ed76ad248a8705987289b564ce37061437fa58b7a5  heap-v0.5.6-macos.dmg\nd4a4cf1b45def1d602bc275689fccbc489fec18f3614f000ee5a266b9d4dd27a  heap-v0.5.6-sbom.spdx.json\n7d4a22a8f0237175397dd5fa282dd195fcfdfc1b62d7c974be3638108c855438  heap-v0.5.6-windows-portable.zip\n7f05dbe29a0782eac84cb04ed6cbb4de26c9ae57f667a5b7e6e374dc3bb4951c  heap-v0.5.6-windows-setup.exe\n```\n\n</details>\n\n\n## What's Changed\n* ci: feature branch flow (master = stable, feature = next release) by @sectapunterx in https://github.com/sectapunterx/heap/pull/180\n* APP-119: new dark themes, grouped by contrast; folding colour editor by @sectapunterx in https://github.com/sectapunterx/heap/pull/181\n* APP-1: notes are named after their text, not \"Untitled note\" by @sectapunterx in https://github.com/sectapunterx/heap/pull/182\n* APP-116: drag a note onto another to merge them by @sectapunterx in https://github.com/sectapunterx/heap/pull/183\n* WEAK PECAP: weekly recap of status moves on Monday by @sectapunterx in https://github.com/sectapunterx/heap/pull/185\n* APP-117: type to search on the board, ID sort and reverse order by @sectapunterx in https://github.com/sectapunterx/heap/pull/184\n* ci: bump msys2/setup-msys2 from 2.32.0 to 2.33.0 in the actions group by @dependabot[bot] in https://github.com/sectapunterx/heap/pull/179\n* APP-118: Outlook calendar by ICS link; \"How integrations work\" info block by @sectapunterx in https://github.com/sectapunterx/heap/pull/186\n* Release 0.5.6 by @sectapunterx in https://github.com/sectapunterx/heap/pull/187\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.5.5...v0.5.6",
+  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.5.6",
   "prerelease": false,
   "draft": false,
   "assets": [
    {
-    "name": "heap-v0.4.4-linux-amd64.deb",
-    "size": 991634,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.4/heap-v0.4.4-linux-amd64.deb"
+    "name": "heap-v0.5.6-linux-x86_64.AppImage",
+    "size": 49191416,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.6/heap-v0.5.6-linux-x86_64.AppImage"
    },
    {
-    "name": "heap-v0.4.4-linux-x86_64.AppImage",
-    "size": 40069624,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.4/heap-v0.4.4-linux-x86_64.AppImage"
+    "name": "heap-v0.5.6-macos.dmg",
+    "size": 61155816,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.6/heap-v0.5.6-macos.dmg"
    },
    {
-    "name": "heap-v0.4.4-linux-x86_64.tar.gz",
-    "size": 1251860,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.4/heap-v0.4.4-linux-x86_64.tar.gz"
+    "name": "heap-v0.5.6-sbom.spdx.json",
+    "size": 2503,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.6/heap-v0.5.6-sbom.spdx.json"
    },
    {
-    "name": "heap-v0.4.4-macos.dmg",
-    "size": 57939675,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.4/heap-v0.4.4-macos.dmg"
+    "name": "heap-v0.5.6-windows-portable.zip",
+    "size": 55935444,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.6/heap-v0.5.6-windows-portable.zip"
    },
    {
-    "name": "heap-v0.4.4-windows-portable.zip",
-    "size": 61266207,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.4/heap-v0.4.4-windows-portable.zip"
+    "name": "heap-v0.5.6-windows-setup.exe",
+    "size": 37878973,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.6/heap-v0.5.6-windows-setup.exe"
    },
    {
-    "name": "heap-v0.4.4-windows-setup.exe",
-    "size": 39424493,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.4/heap-v0.4.4-windows-setup.exe"
-   }
-  ]
- },
- {
-  "tag": "v0.4.2",
-  "name": "heap v0.4.2",
-  "date": "2026-07-07T07:24:07Z",
-  "body": "## What's Changed\n* Bugfix: heap 40 no icon release by @sectapunterx in https://github.com/sectapunterx/heap/pull/15\n* bugfix: calendar fix by @sectapunterx in https://github.com/sectapunterx/heap/pull/16\n* UI: heap-37 create manual by @sectapunterx in https://github.com/sectapunterx/heap/pull/17\n* ci: release triggering manually by @sectapunterx in https://github.com/sectapunterx/heap/pull/18\n* ui: some improvements by @sectapunterx in https://github.com/sectapunterx/heap/pull/19\n* ui: new design by @sectapunterx in https://github.com/sectapunterx/heap/pull/20\n* ui: gh pages by @sectapunterx in https://github.com/sectapunterx/heap/pull/21\n* UI/heap 45 gh pages by @sectapunterx in https://github.com/sectapunterx/heap/pull/22\n* Update .clang-format by @sectapunterx in https://github.com/sectapunterx/heap/pull/23\n* ui: en ru toggle by @sectapunterx in https://github.com/sectapunterx/heap/pull/24\n* ui: selecting multiple tickets and archive by @sectapunterx in https://github.com/sectapunterx/heap/pull/25\n* tests: all tests auto in ci and CMakeLists.txt by @sectapunterx in https://github.com/sectapunterx/heap/pull/26\n* feature: capture notes + tests by @sectapunterx in https://github.com/sectapunterx/heap/pull/27\n* MVP release-prep: pre-release blockers + global hotkeys (HEAP-15, 50\u201360) by @sectapunterx in https://github.com/sectapunterx/heap/pull/28\n* test(qml): Notes @mention caret fix + first Qt Quick Test harness (HEAP-65, HEAP-49) by @sectapunterx in https://github.com/sectapunterx/heap/pull/29\n* fix(ui): remove redundant C++ sidebar button (HEAP-70) by @sectapunterx in https://github.com/sectapunterx/heap/pull/30\n* feat(ui): wire dead Blocked & Code Review sidebar buttons (HEAP-69) by @sectapunterx in https://github.com/sectapunterx/heap/pull/31\n* test(ui): component test harness \u2014 extract heap_core lib, test real QML (HEAP-49) by @sectapunterx in https://github.com/sectapunterx/heap/pull/32\n* test(ui): click-driven interaction tests for FilterBar + SideRail (HEAP-49) by @sectapunterx in https://github.com/sectapunterx/heap/pull/33\n* fix: suppress duplicate OS notification when window is focused (HEAP-47) by @sectapunterx in https://github.com/sectapunterx/heap/pull/34\n* feat: hotkeys for archive, theme toggle, new contact/profile (HEAP-48) by @sectapunterx in https://github.com/sectapunterx/heap/pull/35\n* feat: side-by-side layout for overlapping calendar events (HEAP-31) by @sectapunterx in https://github.com/sectapunterx/heap/pull/36\n* docs: onboarding tutorial, hotkeys & data references (HEAP-29) by @sectapunterx in https://github.com/sectapunterx/heap/pull/37\n* docs: public release announcement copy (HEAP-30) by @sectapunterx in https://github.com/sectapunterx/heap/pull/38\n* feat: tracker-sync foundation \u2014 integration types + StatusMap (HEAP-18) by @sectapunterx in https://github.com/sectapunterx/heap/pull/39\n* feat: SyncSerializer \u2014 git-friendly profile/event JSON (HEAP-19) by @sectapunterx in https://github.com/sectapunterx/heap/pull/40\n* feat: Notes query-language parser (HEAP-20) by @sectapunterx in https://github.com/sectapunterx/heap/pull/41\n* feat: JsonMerger \u2014 3-way structural merge for non-git sync (HEAP-27) by @sectapunterx in https://github.com/sectapunterx/heap/pull/42\n* ci: cross-platform packaging + tag-triggered release (HEAP-28) by @sectapunterx in https://github.com/sectapunterx/heap/pull/43\n* test: broaden unit coverage \u2014 models, AppController, text edges (HEAP-49) by @sectapunterx in https://github.com/sectapunterx/heap/pull/44\n* docs: dev-friendly + accurate landing and README (HEAP-72) by @sectapunterx in https://github.com/sectapunterx/heap/pull/45\n* docs: reliable Pages deploy + dev-first README & landing (HEAP-73) by @sectapunterx in https://github.com/sectapunterx/heap/pull/46\n* ci: Authenticode-sign Windows binaries + installer (HEAP-62) by @sectapunterx in https://github.com/sectapunterx/heap/pull/47\n* feat: rotating log file + Report an issue / Open logs folder (HEAP-64) by @sectapunterx in https://github.com/sectapunterx/heap/pull/48\n* feat: auto-update check via GitHub Releases + single-sourced version (HEAP-63) by @sectapunterx in https://github.com/sectapunterx/heap/pull/49\n* feat: 2-way GitHub Issues sync (HEAP-74) by @sectapunterx in https://github.com/sectapunterx/heap/pull/50\n* feat: git write-actions \u2014 branch-from-task, commit\u2194task, inline PR/CI (HEAP-76) by @sectapunterx in https://github.com/sectapunterx/heap/pull/51\n* ci: unblock Release by disabling the macOS package job by @sectapunterx in https://github.com/sectapunterx/heap/pull/52\n* feat: Jira + GitLab tracker-sync providers (HEAP-75) by @sectapunterx in https://github.com/sectapunterx/heap/pull/53\n* feat: global full-text search across tasks, notes, docs, snippets (HEAP-80) by @sectapunterx in https://github.com/sectapunterx/heap/pull/54\n* feat: [[wiki-links]] + backlinks in notes and a searchable snippet library (HEAP-79) by @sectapunterx in https://github.com/sectapunterx/heap/pull/55\n* feat: per-task time tracking + weekly \"what I shipped\" report (HEAP-78) by @sectapunterx in https://github.com/sectapunterx/heap/pull/56\n* feat: recurring tasks + reusable task/checklist templates (HEAP-77) by @sectapunterx in https://github.com/sectapunterx/heap/pull/57\n* content: genericize DocsView demo seed from telecom to generic-dev (HEAP-66) by @sectapunterx in https://github.com/sectapunterx/heap/pull/58\n* ci: run heap_qml_tests on Linux via Qt 6.8 (HEAP-71) by @sectapunterx in https://github.com/sectapunterx/heap/pull/59\n* feat: native macOS support \u2014 .app bundle, Carbon global hotkey, CI (HEAP-68) by @sectapunterx in https://github.com/sectapunterx/heap/pull/60\n* ci: fix macOS Release Qt install (unblocks the whole Release) by @sectapunterx in https://github.com/sectapunterx/heap/pull/61\n* ci: fix macOS release .dmg \u2014 re-sign bundle + drag-install layout by @sectapunterx in https://github.com/sectapunterx/heap/pull/62\n* heap 1.0 polish: settings fixes, calendar, data-reset, macOS chrome by @sectapunterx in https://github.com/sectapunterx/heap/pull/64\n* ci(release): semver release naming + v1.0.0 by @sectapunterx in https://github.com/sectapunterx/heap/pull/63\n* fix(git): re-match focused branch on prefix change + settings hint by @sectapunterx in https://github.com/sectapunterx/heap/pull/65\n* ci(release): sign Windows artifacts via SignPath Foundation by @sectapunterx in https://github.com/sectapunterx/heap/pull/66\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/commits/v0.4.2",
-  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.4.2",
-  "prerelease": false,
-  "draft": false,
-  "assets": [
-   {
-    "name": "heap-v0.4.2-linux-amd64.deb",
-    "size": 942314,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.2/heap-v0.4.2-linux-amd64.deb"
-   },
-   {
-    "name": "heap-v0.4.2-linux-x86_64.AppImage",
-    "size": 39758328,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.2/heap-v0.4.2-linux-x86_64.AppImage"
-   },
-   {
-    "name": "heap-v0.4.2-macos.dmg",
-    "size": 58064026,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.2/heap-v0.4.2-macos.dmg"
-   },
-   {
-    "name": "heap-v0.4.2-windows-portable.zip",
-    "size": 37393667,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.2/heap-v0.4.2-windows-portable.zip"
-   },
-   {
-    "name": "heap-v0.4.2-windows-setup.exe",
-    "size": 24461292,
-    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.2/heap-v0.4.2-windows-setup.exe"
+    "name": "SHA256SUMS",
+    "size": 476,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.6/SHA256SUMS"
    }
   ]
  }

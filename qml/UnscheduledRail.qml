@@ -82,6 +82,7 @@ Rectangle {
                 id:       String(t.id),
                 title:    String(t.title || ""),
                 priority: String(t.priority || "P3"),
+                estimate: Number(t.estimateMinutes || 0),
                 deadline: due
             });
         }
@@ -95,6 +96,10 @@ Rectangle {
         return out;
     }
     readonly property var items: buildItems()
+    // What the rail adds up to (APP-246): a fact, with the tasks that have no
+    // estimate counted apart rather than as zero.
+    readonly property int _estMinutes: root.items.reduce((a, it) => a + (it.estimate > 0 ? it.estimate : 0), 0)
+    readonly property int _noEstimate: root.items.filter(it => !(it.estimate > 0)).length
 
     Rectangle {
         anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
@@ -115,6 +120,16 @@ Rectangle {
                 font.pixelSize: Theme.fsSm
                 font.weight: Theme.fwTitle
                 Layout.fillWidth: true
+            }
+            Text {
+                objectName: "unscheduled-sum"
+                visible: root._estMinutes > 0
+                text: "~" + I18n.fmtMinutes(root._estMinutes)
+                    + (root._noEstimate > 0 ? " · " + I18n.count(root._noEstimate, "estimate.without") : "")
+                color: Theme.textDim
+                font.family: Theme.fontUi
+                font.features: Theme.tabularNums
+                font.pixelSize: Theme.fsXs
             }
             Text {
                 text: root.items.length
@@ -204,6 +219,15 @@ Rectangle {
                             text: chip.modelData.priority
                             color: Theme.textDim
                             font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsXs
+                        }
+                        Text {
+                            objectName: "unscheduled-estimate"
+                            visible: chip.modelData.estimate > 0
+                            text: "~" + I18n.fmtMinutes(chip.modelData.estimate)
+                            color: Theme.textDim
+                            font.family: Theme.fontUi
+                            font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsXs
                         }
                         Text {

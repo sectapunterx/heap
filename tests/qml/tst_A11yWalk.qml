@@ -89,7 +89,7 @@ TestCase {
 
     // The dialogs and panels, open, the same way.
     function test_dialogs_name_every_tab_stop_data() {
-        return ["TaskEditor", "CommandPalette", "WelcomePopup", "TweaksPanel", "HotkeysPanel", "QuickCapturePopup"]
+        return ["TaskEditor", "CommandPalette", "WelcomePopup", "HotkeysPanel", "QuickCapturePopup"]
             .map(function (p) { return { tag: p, prefix: p }; });
     }
     function test_dialogs_name_every_tab_stop(data) {

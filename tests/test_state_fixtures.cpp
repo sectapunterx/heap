@@ -4,7 +4,8 @@
 // itself wrote: its own AppController, booted on a fresh test-mode profile (the
 // demo seed) plus a typed note, saved by its own code — not a hand-written
 // imitation of the format. One per schema generation that shipped: 3 (≤ 0.4.7),
-// 4 (0.4.8–0.4.9), 9 (0.5.0–0.5.2), 10 (0.5.3) and 11 (after 0.5.3).
+// 4 (0.4.8–0.4.9), 9 (0.5.0–0.5.2), 10 (0.5.3), 11 (after 0.5.3, to 0.7.x)
+// and 12 (0.8.0).
 //
 // Every fixture is opened by today's AppController and checked against the file
 // itself: every task, event and person is still there under the same id and

@@ -8,6 +8,7 @@ import QtQuick.Dialogs
 import TodoCpp
 import "DocsStarter.js" as DocsStarter
 import "ThemePresets.js" as Presets
+import "KeyRules.js" as KeyRules
 
 ApplicationWindow {
     id: win
@@ -60,14 +61,17 @@ ApplicationWindow {
         if (v === "board") return boardLoader.item;
         if (v === "notes") return notesLoader.item;
         if (v === "docs") return docsLoader.item;
-        return viewLoader.item;
+        // The calendar lens wraps its grid (APP-264): the keys act on the grid.
+        const it = viewLoader.item;
+        if (it && it.objectName === "calendar-view") return it["calendarView"];
+        return it;
     }
 
     // A #TICKET clicked in a note or doc page: the heap id, or a tracker key
     // ("PROJ-123") that a mirrored task carries.
     function openTaskById(key) {
         const t = AppController.taskById(AppController.taskIdForBranchMatch(key));
-        if (t && t.id) taskEditor.showFor(Object.assign({}, t));
+        if (t && t.id) win.showTask(t);
         else win.notice(I18n.t("notes.link.noTask").arg(key), "warning");
     }
 
@@ -100,7 +104,7 @@ ApplicationWindow {
                 return;
             }
             const t = AppController.taskById(String(target).trim());
-            if (t && t.id) { taskEditor.showFor(Object.assign({}, t)); return; }
+            if (t && t.id) { win.showTask(t); return; }
             win.notice(I18n.t("notes.link.noNote").arg(target), "warning");
         }
     }
@@ -220,14 +224,39 @@ ApplicationWindow {
     // against: the panel's day grid next to them was a second calendar and
     // 420px less of the first. It stays folded there unless asked for, and
     // asking lasts until the app closes.
-    readonly property bool _panelFoldedView: AppController.currentView === "week"
+    readonly property bool _panelFoldedView: AppController.currentView === "day"
+                                             || AppController.currentView === "week"
                                              || AppController.currentView === "month"
                                              || AppController.currentView === "settings"
     property bool _rightPanelInFoldedView: false
-    readonly property bool rightPanelShown: _narrow ? _rightPanelOnNarrow
+    // Board and List (APP-281 A2): the day panel beside them is the user's
+    // call, Ctrl \, remembered (settings.dayPanel). Until it is made, the
+    // quiet style keeps it closed, and the bold one opens it only on a window
+    // wide enough to keep six board columns beside it (APP-262: they fit
+    // 1440 px without a panel).
+    readonly property bool _dayPanelView: AppController.currentView === "board" || AppController.currentView === "list"
+    // "on" | "off" | "" (not chosen yet).
+    property string _dayPanelWanted: {
+        const v = _settingsObject().dayPanel;
+        return v === true ? "on" : v === false ? "off" : "";
+    }
+    readonly property bool dayPanelShown: win._dayPanelWanted === "on" ? true
+        : win._dayPanelWanted === "off" ? false
+        : (!Style.quiet && win.width >= win._rightPanelMinWidth + win.rightPanelDefaultWidth)
+    readonly property bool rightPanelShown: AppController.currentView === "today" ? false
+                                          : _dayPanelView ? dayPanelShown
+                                          : _narrow ? _rightPanelOnNarrow
                                           : _panelFoldedView ? _rightPanelInFoldedView
                                           : _rightPanelWanted
     function toggleRightPanel() {
+        if (_dayPanelView) {
+            const open = !dayPanelShown;
+            _dayPanelWanted = open ? "on" : "off";
+            const ds = _settingsObject();
+            ds.dayPanel = open;
+            AppController.appSettingsJson = JSON.stringify(ds);
+            return;
+        }
         if (_narrow) {
             _rightPanelOnNarrow = !_rightPanelOnNarrow;
             return;
@@ -267,7 +296,8 @@ ApplicationWindow {
     // Left sidebar: labelled (expanded) or the 56px icon rail. The choice is
     // remembered; below _sideRailMinWidth it folds to the rail on its own
     // without overwriting what was chosen, same as the right panel.
-    readonly property int _sideRailMinWidth: 1280
+    // heap 2 (APP-258): the sidebar folds to its icons below ~1100px.
+    readonly property int _sideRailMinWidth: 1100
     property bool _sideRailWanted: _settingsObject().sideRailExpanded !== false
     property bool _sideRailOnNarrow: false
     readonly property bool sideRailExpanded: win.width < _sideRailMinWidth ? _sideRailOnNarrow : _sideRailWanted
@@ -287,6 +317,34 @@ ApplicationWindow {
     // hidden, and so the filter bar and the board agree without either owning
     // the other.
     property string boardSortMode: "manual"
+    // The board's sort and the list's grouping, as the header shows them
+    // beside the lens tabs (APP-262/263).
+    readonly property var _sortOption: {
+        const ids = ["manual", "priority", "due", "updated", "title", "id"];
+        const base = win.boardSortMode.endsWith("-desc") ? win.boardSortMode.slice(0, -5) : win.boardSortMode;
+        return { label: I18n.t("filter.sortBy").replace(/:\s*$/, ""), current: base,
+                 value: I18n.t("filter.sort." + base),
+                 items: ids.map(id => ({ id: id, label: I18n.t("filter.sort." + id) })) };
+    }
+    property string listGroupBy: {
+        const g = _settingsObject().listGroupBy;
+        return ["date", "status", "priority", "profile"].indexOf(g) >= 0 ? g : "date";
+    }
+    function setListGroupBy(g) {
+        win.listGroupBy = g;
+        const s = _settingsObject();
+        s.listGroupBy = g;
+        AppController.appSettingsJson = JSON.stringify(s);
+    }
+    readonly property var _groupOption: {
+        const ids = ["date", "status", "priority", "profile"];
+        return { label: I18n.t("list.groupBy"), current: win.listGroupBy,
+                 value: I18n.t("list.groupBy." + win.listGroupBy),
+                 items: ids.map(id => ({ id: id, label: I18n.t("list.groupBy." + id) })) };
+    }
+    // The archive is a condition of the query on Board and List (heap 2,
+    // X-Oth-Archive-People): "is:archived" lets archived tasks through.
+    readonly property bool tasksShowArchived: win.showArchived || /(^|\s)is:archived(\s|$)/i.test(win.searchText)
 
     // Search, priority chips, sort and the archived / done toggles survive a
     // restart (TASKS-22): they lived only on the window, so every launch
@@ -392,12 +450,22 @@ ApplicationWindow {
         win.seedStarterDocs();
         if (typeof INITIAL_VIEW !== "undefined" && INITIAL_VIEW && INITIAL_VIEW.length > 0)
             AppController.currentView = INITIAL_VIEW;
-        // First run: greet the user once the overlay is ready. Otherwise, on
-        // the first launch of a week, what moved last week (WEAK PECAP).
-        if (!AppController.welcomeSeen)
-            Qt.callLater(welcome.open);
-        else
+        // First run (APP-271): no tour — Today is the first-run screen
+        // until the first task. Otherwise, on the first launch of a week,
+        // what moved last week (WEAK PECAP).
+        if (AppController.welcomeSeen)
             Qt.callLater(win._maybeShowRecap);
+        // Coming from 0.7: say once what the new sidebar moved (APP-258).
+        if (AppController.shellNotice.length > 0)
+            Qt.callLater(win._showShellNotice);
+    }
+    function _showShellNotice() {
+        const msg = AppController.shellNotice;
+        if (msg.length === 0) return;
+        AppController.ackShellNotice();
+        toast.showWithAction(msg, I18n.t("shell.notice.action"), 15, function () {
+            win.openCheatSheet();
+        });
     }
 
     // Close-to-tray: on platforms that have a tray icon (Windows/macOS via the
@@ -524,7 +592,7 @@ ApplicationWindow {
     readonly property bool _overlayOpen: taskEditor.opened || eventEditor.opened
         || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
-        || tweaks.opened || hotkeys.opened || closeAsk.opened || goToDatePopup.opened
+        || hotkeys.opened || cheatSheet.opened || closeAsk.opened || goToDatePopup.opened
         || weeklyRecap.opened || standupDraft.opened || timeMachine.opened || eventLog.opened || endOfDay.opened
 
     // ── Keyboard scope ────────────────────────────────────────────────
@@ -563,6 +631,8 @@ ApplicationWindow {
     onActiveFocusItemChanged: {
         const it = win.activeFocusItem;
         if (!it) return;
+        // The region frame (APP-277) goes once the keyboard leaves the region.
+        if (win.regionShown.length > 0 && win._regionOf(it) !== win.regionShown) win.regionShown = "";
         if (win._focusInPopup) {
             win._focusWasInPopup = true;
             return;
@@ -628,7 +698,7 @@ ApplicationWindow {
     // app usable behind them.
     readonly property bool _focusInPopover: {
         for (let p = win.activeFocusItem; p; p = p.parent)
-            if (p === tweaks.contentItem || p === hotkeys.contentItem) return true;
+            if (p === hotkeys.contentItem) return true;
         return false;
     }
     // Focus on a control outside the view that was reached with Tab — a
@@ -657,7 +727,7 @@ ApplicationWindow {
     // popovers are not modal and keep them.
     readonly property bool _modalOpen: taskEditor.opened || eventEditor.opened
         || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
-        || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
+        || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened || cheatSheet.opened
         || closeAsk.opened || goToDatePopup.opened || eventLog.opened
         || (_focusInPopup && !_focusInPopover) || _dimmerShown
     readonly property bool _globalKeysOn: !hotkeys.isCapturing && !_modalOpen
@@ -735,7 +805,7 @@ ApplicationWindow {
                 if (hit.profileId && hit.profileId !== AppController.activeProfileId)
                     AppController.activeProfileId = hit.profileId;
                 const t = AppController.taskById(hit.id);
-                if (t && t.id) taskEditor.showFor(Object.assign({}, t));
+                if (t && t.id) win.showTask(t);
             });
             return;
         }
@@ -793,7 +863,7 @@ ApplicationWindow {
         AppController.currentView = "board";
         if (list.length === 1) {
             const t = AppController.taskById(list[0]);
-            if (t && t.id) taskEditor.showFor(Object.assign({}, t));
+            if (t && t.id) win.showTask(t);
             return;
         }
         topBar.searchText = list.join(" OR ");
@@ -893,6 +963,40 @@ ApplicationWindow {
                 AppController.undoSettingsReset()
             });
         }
+        // "Next free window" found no room (APP-253): said as a fact, with
+        // the next working day's window and this evening as choices. Nothing
+        // is planned until one is pressed.
+        function onFreeWindowMissing(taskId, title, date, nextDate, nextStart, lateStart) {
+            const today = AppController.today;
+            const isToday = date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth()
+                         && date.getDate() === today.getDate();
+            const dayName = I18n.fmtDate(date, "weekdayDay");
+            const msg = isToday ? I18n.t("freewin.none").arg(taskId) : I18n.t("freewin.noneOn").arg(taskId).arg(dayName);
+            const acts = [];
+            if (nextStart >= 0 && nextDate && nextDate.getFullYear) {
+                const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+                const isTomorrow = nextDate.getFullYear() === tomorrow.getFullYear() && nextDate.getMonth() === tomorrow.getMonth()
+                                && nextDate.getDate() === tomorrow.getDate();
+                const label = isTomorrow ? I18n.t("freewin.tomorrowAt").arg(Theme.fmtHour(nextStart))
+                                         : I18n.t("freewin.dayAt").arg(I18n.fmtDate(nextDate, "weekdayDay")).arg(Theme.fmtHour(nextStart));
+                acts.push({ label: label, fn: function () { AppController.placeTaskAt(taskId, nextDate, nextStart) } });
+            }
+            if (lateStart >= 0) {
+                const late = isToday ? I18n.t("freewin.lateToday").arg(Theme.fmtHour(lateStart))
+                                     : I18n.t("freewin.lateOn").arg(dayName).arg(Theme.fmtHour(lateStart));
+                acts.push({ label: late, fn: function () { AppController.placeTaskAt(taskId, date, lateStart) } });
+            }
+            if (acts.length > 0) toast.showWithActions(msg, acts, 12);
+            else toast.show(msg, "info");
+        }
+        // The start of a planned task block (APP-256, opt-in): its buttons.
+        function onReminderToast(notificationId, msg) {
+            toast.showWithActions(msg, [
+                { label: I18n.t("reminder.open"), fn: function () { AppController.reminderAction(notificationId, "open") } },
+                { label: I18n.t("reminder.snooze15"), fn: function () { AppController.reminderAction(notificationId, "snooze15") } },
+                { label: I18n.t("reminder.window"), fn: function () { AppController.reminderAction(notificationId, "nextWindow") } }
+            ], 15);
+        }
         function onUndoableToast(msg, secs) {
             // Undo takes back the action this toast names — not whatever was
             // done last, which after a silent reorder is something else.
@@ -900,6 +1004,14 @@ ApplicationWindow {
             toast.showWithAction(msg, I18n.t("undo.action"), secs, function () {
                 AppController.undoEntry(serial)
             });
+        }
+        // "Done" with no column of that stage: offer to make one (APP-268).
+        function onDoneColumnMissing() {
+            toast.showWithAction(I18n.t("done.noColumn"), I18n.t("done.noColumn.create"), 10, function () {
+                AppController.addStatus(I18n.t("done.columnName"), "");
+                const sts = AppController.statuses;
+                AppController.setStatusCategory(sts[sts.length - 1].id, "done");
+            }, "warning");
         }
         // A newer release was found. When heap can update this copy itself
         // the action downloads it (APP-125); otherwise it opens the release page.
@@ -925,36 +1037,19 @@ ApplicationWindow {
     GridLayout {
         anchors.fill: parent
         columns: 3
-        rows: 2
+        rows: 1
         columnSpacing: 0
         rowSpacing: 0
 
-        // Top bar spans all columns
-        TopBar {
-            id: topBar
-            // Spans the right panel's column only while it is shown: an
-            // empty spanned column still took its share of the spare width,
-            // so hiding the panel left the board at half the window.
-            Layout.row: 0; Layout.column: 0; Layout.columnSpan: win.rightPanelShown ? 3 : 2
-            Layout.fillWidth: true
-            searchText: win.searchText
-            // Typing reaches the views once the keys pause, not per key: a
-            // keystroke that swaps most rows on a 3k-task board rebinds every
-            // visible card (~100 ms), and a quick "priority:p0" used to pay
-            // that for each intermediate state, including "priority:p" — which
-            // matches nothing. The field itself updates instantly.
-            onSearchTextChanged: searchApply.restart()
-            Timer {
-                id: searchApply
-                interval: 120
-                onTriggered: win.searchText = topBar.searchText
-            }
-            onLeaveRequested: win.focusActiveView()
-            onSeenBeforeActivated: (hit) => win.openSeenBefore(hit)
-            onNewTaskRequested: taskEditor.showFor(AppController.newTaskDraft("todo"))
+        // The heap 2 sidebar (APP-258).
+        Sidebar {
+            id: rail
+            Layout.row: 0; Layout.column: 0
+            Layout.fillHeight: true
+            expanded: win.sideRailExpanded
+            onToggleRequested: win.toggleSideRail()
+            onNewTaskRequested: quickCapture.open()
             onSyncStatusRequested: win.runCommand("settings:integrations")
-            rightPanelShown: win.rightPanelShown
-            onRightPanelToggleRequested: win.toggleRightPanel()
             onNewProfileRequested: profileEditor.showCreate()
             onRenameProfileRequested: {
                 const list = AppController.profiles;
@@ -980,20 +1075,11 @@ ApplicationWindow {
             onExportVaultRequested: exportVaultDialog.open()
             onExportIcsRequested: {
                 exportIcsDialog.currentFile = "file:///" + (
-                    (AppController.activeProfileId || "heap") + ".ics"
+                    (AppController.activeProfileId || "lowkey") + ".ics"
                 );
                 exportIcsDialog.open();
             }
-        }
 
-        // Side rail
-        SideRail {
-            id: rail
-            Layout.row: 1; Layout.column: 0
-            Layout.fillHeight: true
-            expanded: win.sideRailExpanded
-            onToggleRequested: win.toggleSideRail()
-            onOpenTweaks:  (anchor) => win._togglePopover(tweaks, anchor)
             onOpenHotkeys: (anchor) => win._togglePopover(hotkeys, anchor)
             activeSavedViewId: savedViewsHost.activeView ? savedViewsHost.activeId : ""
             savedViewModified: savedViewsHost.modified
@@ -1007,7 +1093,7 @@ ApplicationWindow {
         Item {
             id: mainColumn
             objectName: "main-column"
-            Layout.row: 1; Layout.column: 1
+            Layout.row: 0; Layout.column: 1
             Layout.fillWidth: true
             Layout.fillHeight: true
             ColumnLayout {
@@ -1017,64 +1103,102 @@ ApplicationWindow {
                 // state.json unreadable / from a newer heap / not saving.
                 StorageBanner { Layout.fillWidth: true }
 
-                // First-run demo banner: offer to clear the seeded sample data.
+                // The example profile (APP-271): says so, and takes it away
+                // in one action — asking first when it was worked in.
                 Rectangle {
+                    objectName: "example-banner"
                     Layout.fillWidth: true
-                    visible: AppController.demoActive
-                    implicitHeight: visible ? 40 : 0
+                    readonly property bool isExample: AppController.activeProfileId === "lowkey-example"
+                    visible: isExample
+                    implicitHeight: visible ? Theme.px(36) : 0
                     color: Theme.panel2
-                    border.color: Theme.border
-                    border.width: 1
                     RowLayout {
                         anchors.fill: parent
                         anchors.leftMargin: Theme.sp2xl
                         anchors.rightMargin: Theme.spLg
                         spacing: Theme.spLg
                         Text {
-                            text: "✦  " + I18n.t("demo.banner.text")
-                            color: Theme.text
-                            font.pixelSize: Theme.fsMd
+                            text: I18n.t("example.banner")
+                            color: Theme.textMuted
+                            font.pixelSize: Theme.fsSm
                             Layout.fillWidth: true
                             elide: Text.ElideRight
                         }
-                        // Two-step: the first click arms, the second wipes.
-                        // One stray click used to take every task with it.
                         PillButton {
-                            id: startFreshBtn
-                            objectName: "demo-start-fresh"
-                            property bool armed: false
-                            text: armed ? I18n.t("demo.banner.startFresh.confirm") : I18n.t("demo.banner.startFresh")
-                            // Quiet until armed (APP-198): a banner is no
-                            // dialog, and its offer was the brightest spot.
-                            danger: armed
-                            onClicked: {
-                                if (!armed) {
-                                    armed = true;
-                                    startFreshDisarm.restart();
-                                    return;
-                                }
-                                armed = false;
-                                startFreshDisarm.stop();
-                                AppController.startFresh();
-                            }
-                            Timer { id: startFreshDisarm; interval: 4000; onTriggered: startFreshBtn.armed = false }
-                        }
-                        PillButton {
-                            text: I18n.t("demo.banner.keep")
-                            onClicked: AppController.dismissDemo()
+                            objectName: "example-remove"
+                            text: I18n.t("example.remove")
+                            onClicked: win.removeExample()
                         }
                     }
                 }
 
+            TopBar {
+                id: topBar
+                Layout.fillWidth: true
+                // The tasks and knowledge sections; Today and Settings carry
+                // their own titles.
+                // Knowledge is one screen with its own header (APP-269); the
+                // full Docs catalogue keeps this one, to come back.
+                visible: section === "tasks" || view === "docs"
+                section: AppController.currentSection
+                view: AppController.currentView
+                onLensSelected: (id) => win.openLens(id)
+                // Board: the sort; List: the grouping (APP-262/263).
+                option: view === "board" ? win._sortOption : view === "list" ? win._groupOption : null
+                onOptionPicked: (id) => {
+                    if (topBar.view === "board") win.boardSortMode = id;
+                    else win.setListGroupBy(id);
+                }
+                onZoomSelected: (id) => AppController.currentView = id
+                // The header writes its own query as chips are added and
+                // removed, so a binding would break on the first one: follow
+                // the window's query instead (a saved view, a link, a reset).
+                Component.onCompleted: topBar.searchText = win.searchText
+                Connections {
+                    target: win
+                    function onSearchTextChanged() {
+                        if (topBar.searchText !== win.searchText) topBar.searchText = win.searchText;
+                    }
+                }
+                // Typing reaches the views once the keys pause, not per key: a
+                // keystroke that swaps most rows on a 3k-task board rebinds every
+                // visible card (~100 ms), and a quick "priority:p0" used to pay
+                // that for each intermediate state, including "priority:p" — which
+                // matches nothing. The field itself updates instantly.
+                onSearchTextChanged: searchApply.restart()
+                Timer {
+                    id: searchApply
+                    interval: 120
+                    onTriggered: win.searchText = topBar.searchText
+                }
+                onLeaveRequested: win.focusActiveView()
+                onSeenBeforeActivated: (hit) => win.openSeenBefore(hit)
+                resultCount: section === "tasks" ? filterBar._fc.total : -1
+                onSaveViewRequested: savedViewsHost.openSave()
+            }
+
                 FilterBar {
+                    id: filterBar
                     Layout.fillWidth: true
+                    // The conditions and the count moved to the query row
+                    // under the Tasks header (APP-261).
+                    slim: AppController.currentSection === "tasks"
                     // Archive brings its own header and its own counter, and the
-                    // fall-through label used to caption it "Docs".
+                    // fall-through label used to caption it "Docs". Board and
+                    // List (APP-262/263) show it only for an applied saved
+                    // view (its chip, update, save as new): their one setting
+                    // (sort, grouping) sits beside the lens tabs, the archive
+                    // is the query's "is:archived", saving is the header's.
+                    readonly property bool _lensView: AppController.currentView === "board"
+                                                      || AppController.currentView === "list"
                     visible: AppController.currentView !== "docs"
+                          && (!_lensView || !!savedViewsHost.activeView)
+                          && AppController.currentView !== "today"
                           && AppController.currentView !== "notes"
                           && AppController.currentView !== "settings"
                           && AppController.currentView !== "archive"
                     viewLabel: AppController.currentView === "timeline" ? I18n.t("siderail.timeline")
+                             : AppController.currentView === "day" ? I18n.t("calzoom.day")
                              : AppController.currentView === "week" ? I18n.t("siderail.week")
                              : AppController.currentView === "month" ? I18n.t("siderail.month")
                              : I18n.t("siderail.board")
@@ -1083,16 +1207,19 @@ ApplicationWindow {
                     // counts used to include archived tasks and ignore the
                     // search and the priority chips.
                     readonly property var _fc: AppController.filteredCounts(win.searchText, win._activePriorities,
-                        win.showArchived, AppController.currentView === "timeline" && !win.showDoneTimeline, win._counts)
+                        win.tasksShowArchived, AppController.currentView === "timeline" && !win.showDoneTimeline, win._counts)
                     totalCount: _fc.total
                     activeCount: _fc.active
                     blockedCount: _fc.blocked
                     reviewCount: _fc.review
                     showArchived: win.showArchived
-                    showSort: AppController.currentView === "board"
+                    showSort: false
+                    showArchivedToggle: !_lensView
                     sortMode: win.boardSortMode
-                    // The weekly recap from the board (APP-211).
-                    showRecap: AppController.currentView === "board"
+                    // The weekly recap (APP-211) is in the palette
+                    // (recap.open); the heap 2 board has no bar for it
+                    // (APP-262, sheet H2-Board).
+                    showRecap: false
                     recapUnseen: weeklyRecap.unseen
                     onRecapRequested: win.runCommand("recap.open")
                     onSortModeRequested: (mode) => win.boardSortMode = mode
@@ -1111,6 +1238,7 @@ ApplicationWindow {
                     onLeaveViewRequested: savedViewsHost.leave()
                 }
                 Item {
+                    id: viewArea
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     // A view wider than its column is cut at the column, not
@@ -1154,13 +1282,51 @@ ApplicationWindow {
                         anchors.fill: parent
                         visible: !boardLoader.visible && !notesLoader.visible && !docsLoader.visible
                         sourceComponent: {
+                            if (AppController.currentView === "today") return todayComp;
+                            if (AppController.currentView === "list") return listComp;
                             if (AppController.currentView === "timeline") return timelineComp;
-                            if (AppController.currentView === "week") return weekComp;
-                            if (AppController.currentView === "month") return monthComp;
+                            if (["day", "week", "month"].indexOf(AppController.currentView) >= 0) return calendarComp;
                             if (AppController.currentView === "archive") return archiveComp;
                             if (AppController.currentView === "settings") return settingsComp;
                             return null;
                         }
+                    }
+
+                    // The list (APP-263) gets the window's query from here,
+                    // outside its Component, and hands its clicks back.
+                    Binding { when: win._listOn; target: viewLoader.item; property: "searchText"; value: win.searchText }
+                    Binding { when: win._listOn; target: viewLoader.item; property: "prioritiesFilter"; value: win.prioritiesFilter }
+                    Binding { when: win._listOn; target: viewLoader.item; property: "showArchived"; value: win.tasksShowArchived }
+                    Binding { when: win._listOn; target: viewLoader.item; property: "groupBy"; value: win.listGroupBy }
+                    Connections {
+                        target: viewLoader.item as TaskListView
+                        ignoreUnknownSignals: true
+                        function onTaskClicked(id) { win.showTask(AppController.taskById(id)); }
+                    }
+                    // A doc page in the Knowledge list opens in Docs (APP-269).
+                    Connections {
+                        target: notesLoader.item as NotesView
+                        ignoreUnknownSignals: true
+                        function onDocPageRequested(id) {
+                            AppController.currentView = "docs";
+                            docsBridge.requestedAnchor = "page:" + id;
+                        }
+                    }
+
+                    // Today's day hands its clicks up here, where the editors are.
+                    Connections {
+                        target: viewLoader.item as TodayView
+                        ignoreUnknownSignals: true
+                        function onEventClicked(id, occurrence) { win.openEvent(id, occurrence); }
+                        function onCreateRequested(startHour, endHour, day) { win.createEventAt(startHour, endHour, day); }
+                        function onTaskClicked(id) { win.openTask(id); }
+                        function onUndatedRequested() { win.showQuery("is:undated", "list"); }
+                        function onRecapRequested() { win.runCommand("recap.open"); }
+                        // The first-run screen (APP-271).
+                        function onFirstTaskCreated(id) { win.notice(quickCapture.headline(id)); }
+                        function onConnectRequested() { win.runCommand("settings:integrations"); }
+                        function onImportRequested() { importVaultDialog.open(); }
+                        function onExampleRequested() { win.openExample(); }
                     }
 
                     // First visit to one of the kept-alive views builds it.
@@ -1176,6 +1342,19 @@ ApplicationWindow {
                         }
                     }
                     Component.onCompleted: win.activateCurrentView()
+                    // The task document (APP-265): a panel over the right
+                    // of the view, or the whole width.
+                    TaskDocument {
+                        id: taskDoc
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        width: taskDoc.full ? parent.width
+                             : Math.min(parent.width, Math.max(Theme.px(560), parent.width * 0.58))
+                        z: 60
+                        onClosed: Qt.callLater(win.focusActiveView)
+                        onInternalLinkActivated: (kind, target) => win.followMdLink(kind, target)
+                    }
                     SelectionBar {
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.bottom: parent.bottom
@@ -1189,11 +1368,19 @@ ApplicationWindow {
                         searchText: win.searchText
                         prioritiesFilter: win.prioritiesFilter
                         scheduleMap: win._scheduleMap
-                        showArchived: win.showArchived
+                        showArchived: win.tasksShowArchived
                         sortMode: win.boardSortMode
-                        onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
-                        onCreateInStatus: (s) => taskEditor.showFor(AppController.newTaskDraft(s))
+                        onTaskClicked: (id) => win.showTask(AppController.taskById(id))
+                        onCreateInStatus: (s) => quickCapture.openIn(s)
                     }
+                }
+                Component {
+                    id: todayComp
+                    TodayView {}
+                }
+                Component {
+                    id: listComp
+                    TaskListView {}
                 }
                 Component {
                     id: timelineComp
@@ -1203,35 +1390,33 @@ ApplicationWindow {
                         scheduleMap: win._scheduleMap
                         showDone: win.showDoneTimeline
                         showArchived: win.showArchived
-                        onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+                        onTaskClicked: (id) => win.showTask(AppController.taskById(id))
                         onToggleShowDone: win.showDoneTimeline = !win.showDoneTimeline
                     }
                 }
+                // The Calendar lens (APP-264): Day / Week / Month as one zoom,
+                // with the "Without a date" tray. The zoom follows the view id,
+                // so the grid is kept across Day <-> Week.
                 Component {
-                    id: weekComp
-                    WeekView {
+                    id: calendarComp
+                    CalendarView {
+                        zoom: AppController.currentView
                         searchText: win.searchText
                         prioritiesFilter: win.prioritiesFilter
                         showArchived: win.showArchived
-                        onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+                        onTaskClicked: (id) => win.showTask(AppController.taskById(id))
                         onEventClicked: (id, occurrence) => occurrence ? eventEditor.showForOccurrence(occurrence) : eventEditor.showForId(id)
-                        // A click on an empty slot opens the editor on a draft
-                        // rather than saving an untitled event: the user names
-                        // it before it exists.
-                        onCreateRequested: (hour, day) => {
-                            const draft = AppController.newEventDraft(hour, day);
+                        // An empty slot or a dragged stretch opens the editor on
+                        // a draft: the meeting is named before it exists.
+                        onCreateRequested: (startHour, endHour, day) => {
+                            const draft = AppController.newEventDraft(startHour, day);
+                            draft.end = endHour;
                             eventEditor.showForDraft(draft);
                         }
-                    }
-                }
-                Component {
-                    id: monthComp
-                    MonthView {
-                        searchText: win.searchText
-                        prioritiesFilter: win.prioritiesFilter
-                        showArchived: win.showArchived
-                        onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
-                        onEventClicked: (id, occurrence) => occurrence ? eventEditor.showForOccurrence(occurrence) : eventEditor.showForId(id)
+                        onDayRequested: (day) => {
+                            AppController.selectedDate = day;
+                            AppController.currentView = "day";
+                        }
                     }
                 }
                 Component {
@@ -1239,7 +1424,7 @@ ApplicationWindow {
                     ArchiveView {
                         searchText: win.searchText
                         prioritiesFilter: win.prioritiesFilter
-                        onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+                        onTaskClicked: (id) => win.showTask(AppController.taskById(id))
                     }
                 }
                 Component {
@@ -1290,9 +1475,10 @@ ApplicationWindow {
 
         // Right column
         Rectangle {
+            id: rightPanel
             objectName: "right-panel"
             visible: win.rightPanelShown
-            Layout.row: 1; Layout.column: 2
+            Layout.row: 0; Layout.column: 2
             Layout.preferredWidth: win.rightPanelWidth
             Layout.minimumWidth: win.rightPanelMinWidth
             Layout.maximumWidth: win.rightPanelMaxWidth
@@ -1376,7 +1562,7 @@ ApplicationWindow {
                             draft.end = endHour;
                             eventEditor.showForDraft(draft);
                         }
-                        onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+                        onTaskClicked: (id) => win.showTask(AppController.taskById(id))
                     }
                     PeopleList {
                         id: peopleList
@@ -1411,10 +1597,10 @@ ApplicationWindow {
         // the popups/editors Main owns. Each _doAction() has paused the tour,
         // so the target surface is visible when we open it.
         onOpenAction: (id) => {
-            if (id === "task-new")            taskEditor.showFor(AppController.newTaskDraft("todo"));
+            if (id === "task-new")            quickCapture.open();
             else if (id === "quick-capture")  quickCapture.open();
             else if (id === "palette")        cmdPalette.open();
-            else if (id === "hotkeys")        rail.openHotkeys(rail.hotkeysAnchor);
+            else if (id === "hotkeys")        win.openCheatSheet();
             // "Bring your stuff" (APP-169): the same pickers as the palette's.
             else if (id === "vault-import")   importVaultDialog.open();
             else if (id === "profile-import") importJsonDialog.open();
@@ -1432,13 +1618,11 @@ ApplicationWindow {
     }
 
     // After a "delete all data" reset the controller rebuilds a fresh install;
-    // jump back to the board and re-greet the user, mirroring true first-run.
+    // back to Today, which is the first-run screen again (APP-271).
     Connections {
         target: AppController
         function onFirstRunReset() {
-            AppController.currentView = "board";
-            welcome.step = 0;
-            Qt.callLater(welcome.open);
+            AppController.openSection("today");
         }
         // Settings → Help "Replay" re-opens the guide from the top without
         // touching any persisted onboarding flags.
@@ -1511,7 +1695,11 @@ ApplicationWindow {
     }
     QuickCapturePopup {
         id: quickCapture
-        onCaptured: (title, body, taskId) => toast.show(title + " — " + body.replace(/\n/g, " · "))
+        // One toast for what was made (APP-266): "Created ID · when · column",
+        // Open / Undo; a task the filters on screen hide says so.
+        onCaptured: (title, body, taskId) => win._toastCaptured(title, taskId)
+        onOpenFullRequested: (draft) => win.showTask(draft)
+        onOpenTaskRequested: (id) => win.openTask(id)
         onSeenBeforeActivated: (hit) => {
             quickCapture.close();
             win.openSeenBefore(hit);
@@ -1576,7 +1764,7 @@ ApplicationWindow {
             taskEditor.settleThen(() => {
                 if (profileId && profileId !== AppController.activeProfileId)
                     AppController.activeProfileId = profileId;
-                taskEditor.showFor(Object.assign({}, AppController.taskById(taskId)));
+                win.showTask(AppController.taskById(taskId));
             });
         }
         // "Open" on a meeting / standup reminder (APP-155): that day in the
@@ -1600,7 +1788,182 @@ ApplicationWindow {
             if (v && v.revealItem) v.revealItem(item);
         });
     }
+    // A task opens as a document (APP-265); a draft is made real first, and
+    // one with no title yet still goes to the editor.
+    function showTask(t) {
+        if (!t) return;
+        if (t._isNew) {
+            const d = Object.assign({}, t);
+            if (String(d.title || "").trim().length === 0 || !AppController.saveTask(d)) {
+                taskEditor.showFor(d);
+                return;
+            }
+            t = d;
+        }
+        if (t.id) taskDoc.open(t.id);
+    }
+    // The example profile (APP-271): opened, it is the active profile and
+    // Today shows its day; a second "Open the example" only switches to it.
+    function openExample() {
+        AppController.openExample();
+        AppController.openSection("today");
+    }
+    // "Remove the example?" only when it was worked in; untouched, it goes.
+    function removeExample() {
+        const n = AppController.exampleChanges();
+        if (n > 0) {
+            removeExampleDialog.changes = n;
+            removeExampleDialog.open();
+        } else {
+            AppController.removeExample();
+        }
+    }
+    Popup {
+        id: removeExampleDialog
+        objectName: "remove-example-dialog"
+        property int changes: 0
+        modal: true
+        focus: true
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(Theme.px(440), (parent ? parent.width : 440) - 2 * Theme.sp2xl)
+        padding: Theme.inset
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        Overlay.modal: ModalScrim {}
+        background: ModalSurface {}
+        onOpened: keepExample.forceActiveFocus()
+        contentItem: ColumnLayout {
+            spacing: Theme.spLg
+            Text {
+                Layout.fillWidth: true
+                text: I18n.t("example.remove.title")
+                color: Theme.text
+                font.pixelSize: Theme.fsLg
+                font.weight: Theme.fwHeading
+                wrapMode: Text.WordWrap
+            }
+            Text {
+                objectName: "remove-example-body"
+                Layout.fillWidth: true
+                text: I18n.t("example.remove.body") + " " + I18n.count(removeExampleDialog.changes, "example.remove.changed")
+                color: Theme.textMuted
+                font.pixelSize: Theme.fsSm
+                wrapMode: Text.WordWrap
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spMd
+                Item { Layout.fillWidth: true }
+                PillButton {
+                    id: keepExample
+                    text: I18n.t("example.remove.keep")
+                    onClicked: removeExampleDialog.close()
+                }
+                PillButton {
+                    objectName: "remove-example-confirm"
+                    text: I18n.t("example.remove.confirm")
+                    danger: true
+                    onClicked: {
+                        removeExampleDialog.close();
+                        AppController.removeExample();
+                    }
+                }
+            }
+        }
+    }
+
+    // A query in the Tasks search, on a lens (Today's "N without a date").
+    function showQuery(q, lens) {
+        topBar.searchText = q;
+        win.searchText = q;
+        AppController.openSection("tasks");
+        win.openLens(lens);
+    }
+    // The day's hands, for Today and the day panel.
+    function openEvent(id, occurrence) {
+        if (occurrence) eventEditor.showForOccurrence(occurrence);
+        else eventEditor.showForId(id);
+    }
+    function createEventAt(startHour, endHour, day) {
+        const draft = AppController.newEventDraft(startHour, day);
+        draft.end = endHour;
+        eventEditor.showForDraft(draft);
+    }
+    function openTask(id) {
+        win.showTask(AppController.taskById(id));
+    }
+    // The tasks a key acts on: the selection, else the one under the
+    // cursor or the pointer in the open view.
+    function _keyTaskIds() {
+        if (AppController.selectionCount > 0) return AppController.selectedTaskIds;
+        const v = win.activeViewItem();
+        if (v && typeof v._actionCardId === "function") {
+            const id = v._actionCardId();
+            return id ? [id] : [];
+        }
+        if (v && v.hoveredTaskId) return [v.hoveredTaskId];
+        return [];
+    }
+    // D (APP-268): nothing under the key, nothing happens. A second d on the
+    // same tasks within half a second is Vim's "dd" habit, not "take it
+    // back" (keymap rule 6).
+    function markDone() {
+        const ids = taskDoc.opened && taskDoc.activeFocus ? [taskDoc.taskId] : win._keyTaskIds();
+        if (ids.length === 0) return;
+        const key = ids.join(",");
+        const now = Date.now();
+        if (KeyRules.isRepeatedDone(key, now, win._lastDoneKey, win._lastDoneAt)) return;
+        win._lastDoneKey = key;
+        win._lastDoneAt = now;
+        AppController.toggleDone(ids);
+    }
+    // The cheat sheet ("?", Ctrl+/); changing keys is the Hotkeys panel.
+    function openCheatSheet() {
+        if (cheatSheet.opened) cheatSheet.close();
+        else cheatSheet.open();
+    }
+    function _toastCaptured(title, taskId) {
+        const line = taskId ? quickCapture.headline(taskId) : "";
+        if (line.length === 0) {
+            toast.show(title);
+            return;
+        }
+        const serial = AppController.undoSerialForToast();
+        const open = { label: I18n.t("capture.open"), fn: function () { win.openTask(taskId); } };
+        const undo = { label: I18n.t("undo.action"), fn: function () { AppController.undoEntry(serial); } };
+        const seen = AppController.taskInCurrentFilter(taskId) || AppController.currentSection !== "tasks";
+        const msg = seen ? line : I18n.t("capture.done.hidden").arg(taskId);
+        toast.showWithActions(msg, [open, undo], 8);
+    }
+    // The calendar lens opens on the calendar last used (week or month).
+    property string _calendarView: "week"
+    Connections {
+        target: AppController
+        function onCurrentViewChanged() {
+            const v = AppController.currentView;
+            if (v === "day" || v === "week" || v === "month") win._calendarView = v;
+            win._noteNav(v);
+        }
+    }
+    function openLens(id) {
+        if (id === "list") AppController.currentView = "list";
+        else if (id === "calendar") AppController.currentView = win._calendarView;
+        else AppController.currentView = id;
+    }
     function runCommand(id) {
+        // The calendar lens is week or month, the one used last (APP-272 g c).
+        if (id === "view.calendar") {
+            win.openLens("calendar");
+            return;
+        }
+        if (id === "palette.open") {
+            cmdPalette.open();
+            return;
+        }
+        if (id.indexOf("section.") === 0) {
+            AppController.openSection(id.slice(8));
+            return;
+        }
         if (id.indexOf("settings:") === 0) {
             const section = id.slice(9);
             AppController.currentView = "settings";
@@ -1637,20 +2000,27 @@ ApplicationWindow {
             return;
         }
         switch (id) {
-        case "task.new":             taskEditor.showFor(AppController.newTaskDraft("todo")); break;
+        case "task.new":             quickCapture.open(); break;
+        case "task.done":            win.markDone(); break;
+        case "task.schedule":        win.scheduleKeyTasks(); break;
         case "quick-capture":        quickCapture.open(); break;
         case "quick-capture-notes":  quickCaptureNotes.open(); break;
         case "panel.right":          win.toggleRightPanel(); break;
         case "rail.toggle":          win.toggleSideRail(); break;
-        case "theme.toggle":         AppController.theme = (AppController.theme === "dark" ? "light" : "dark"); break;
+        case "theme.toggle":         AppController.theme = (Theme.slot === "dark" ? "light" : "dark"); break;
         case "person.new":           personPicker.open_(); break;
         case "profile.new":          profileEditor.showCreate(); break;
         case "profile.next":         win._cycleProfile(1); break;
         case "profile.prev":         win._cycleProfile(-1); break;
         case "profile.exportMd":     AppController.copyActiveProfileMarkdownToClipboard(); break;
         case "profile.weeklyReport": AppController.copyWeeklyReportToClipboard(); break;
-        case "tweaks.open":          rail.openTweaks(rail.tweaksAnchor); break;
-        case "hotkeys.open":         rail.openHotkeys(rail.hotkeysAnchor); break;
+        // The Tweaks popover is gone (APP-270): its key opens Appearance.
+        case "tweaks.open":          win.runCommand("settings:appearance"); break;
+        case "hotkeys.open":         win.openCheatSheet(); break;
+        case "region.next":          win.focusRegion(1); break;
+        case "region.prev":          win.focusRegion(-1); break;
+        case "hotkeys.edit":         rail.openHotkeys(rail.hotkeysAnchor); break;
+        case "palette.commands":     cmdPalette.openWith(">"); break;
         case "search.focus":         win._focusSearch(); break;
         case "event.new":            eventEditor.showForDraft(AppController.newEventDraft(9, AppController.selectedDate)); break;
         case "welcome.replay":       AppController.replayWelcome(); break;
@@ -1706,7 +2076,15 @@ ApplicationWindow {
     CommandPalette {
         id: cmdPalette
         onCommandRequested: (id) => win.runCommand(id)
-        onOpenTask: (taskId) => taskEditor.showFor(Object.assign({}, AppController.taskById(taskId)))
+        // The command line (APP-267): the task the cursor was on, the found
+        // filter shown in Tasks or saved as a view, nothing found → a task.
+        contextProvider: function () { return win._keyTaskIds(); }
+        onQueryRequested: (query, mode) => {
+            win.showQuery(query, mode === "board" ? "board" : "list");
+            if (mode === "save") Qt.callLater(savedViewsHost.openSave);
+        }
+        onCreateRequested: (text) => quickCapture.openWithText(text)
+        onOpenTask: (taskId) => win.showTask(AppController.taskById(taskId))
         onOpenPerson: (personId) => personEditor.showFor(AppController.personById(personId))
         onNavigateToDoc: (sectionId) => docsBridge.requestedAnchor = "sec-" + sectionId
         onNavigateToSnippets: docsBridge.requestedAnchor = "sec-snippets"
@@ -1733,11 +2111,347 @@ ApplicationWindow {
     // Each Shortcut's sequence is bound through _kbd(id), which depends on
     // AppController.shortcuts (a Q_PROPERTY) so the binding re-evaluates on
     // shortcutsChanged — rebinding in the Hotkeys panel applies instantly.
+    //
+    // Only a chord with Ctrl, Alt or Meta is a Qt Shortcut's (APP-272): a bare
+    // letter or a two-key sequence ("g b") is KeyRouter's below, which holds
+    // it back while the person types and reads it by the physical key.
     function _kbd(id) {
         const list = AppController.shortcuts;
         for (let i = 0; i < list.length; i++)
-            if (list[i].id === id) return list[i].sequence;
+            if (list[i].id === id) return KeyRules.isRouterSequence(list[i].sequence) ? "" : list[i].sequence;
         return "";
+    }
+
+    // ── The 0.8.0 keymap (keymap.md, APP-272) ─────────────────────────
+    // Catalogue ids a Qt Shortcut item runs when bound to a Ctrl chord (here,
+    // in SavedViewsHost and in NotesView). KeyRouter leaves those to it unless
+    // the key came from a non-Latin layout; everything else it runs itself
+    // through runShortcut().
+    readonly property var _qtOwned: [
+        "palette.open", "palette.open.alt", "panel.right", "rail.toggle", "task.new", "quick-capture",
+        "quick-capture-notes", "section.today", "section.tasks", "section.knowledge", "view.board",
+        "view.timeline", "view.week", "view.month", "view.docs", "view.notes", "view.settings", "view.archive",
+        "theme.toggle", "person.new", "profile.new", "profile.next", "profile.prev", "profile.exportMd",
+        "profile.weeklyReport", "focus.immersion", "timeMachine.open", "standup.draft", "recap.open",
+        "endOfDay.open", "welcome.replay", "zoom.in", "zoom.out", "zoom.reset", "tweaks.open", "log.open",
+        "hotkeys.open", "undo", "redo", "search.focus", "selection.selectAll", "selection.clearSel",
+        "selection.deleteSel", "cal.today", "cal.prevDay", "cal.nextDay", "cal.newEvent", "cal.prev", "cal.next",
+        "cal.goToDate", "cal.taskEarlier", "cal.taskLater", "cal.taskEarlierWeek", "cal.taskLaterWeek",
+        "cal.taskTimeEarlier", "cal.taskTimeLater", "board.cursorDown", "board.cursorUp", "board.cursorLeft",
+        "board.cursorRight", "board.open", "board.toggleSelect", "board.moveDown", "board.moveUp",
+        "board.moveLeft", "board.moveRight", "board.selectDown", "board.selectUp", "board.selectColumnLeft",
+        "board.selectColumnRight", "board.cardMenu", "board.archive", "board.collapseColumn", "task.done",
+        "task.openExternal", "notes.new", "notes.next", "notes.prev", "notes.rename", "notes.toggleList",
+        "savedView.1", "savedView.2", "savedView.3", "savedView.4", "savedView.5", "savedView.6",
+        "savedView.7", "savedView.8", "savedView.9", "region.next", "region.prev"
+    ]
+    readonly property var _dayViews: ["today", "board", "timeline", "week", "month", "archive"]
+    // Shift V: j / k grow the selection from the cursor until Esc.
+    property bool _rangeMode: false
+    // The last d, so a Vim-habit "dd" does not take Done back (keymap rule 6).
+    property string _lastDoneKey: ""
+    property real _lastDoneAt: 0
+    // Ctrl O / Ctrl I: where the person was, like Vim's jumplist.
+    property var _navBack: []
+    property var _navFwd: []
+    property string _navCur: ""
+    property bool _navMoving: false
+    function _noteNav(v) {
+        if (win._navMoving || v === win._navCur) {
+            win._navCur = v;
+            return;
+        }
+        if (win._navCur.length > 0) {
+            win._navBack.push(win._navCur);
+            if (win._navBack.length > 50) win._navBack.shift();
+            win._navFwd = [];
+        }
+        win._navCur = v;
+    }
+    function navStep(dir) {
+        const from = dir < 0 ? win._navBack : win._navFwd;
+        const to = dir < 0 ? win._navFwd : win._navBack;
+        if (from.length === 0) return;
+        const target = from.pop();
+        to.push(AppController.currentView);
+        win._navMoving = true;
+        AppController.currentView = target;
+        win._navMoving = false;
+        win._navCur = AppController.currentView;
+    }
+
+    // Whether the action of `id` means something where the person is now.
+    // A bare key stands down while anything takes typed text or a popup is
+    // up; a Ctrl chord only behind a modal.
+    function _keyLive(id) {
+        if (hotkeys.isCapturing || win._captureActive) return false;
+        // F6 leaves a text field too: that is how one gets out of it.
+        if (id === "region.next" || id === "region.prev") return !win._modalOpen;
+        const routed = KeyRules.isRouterSequence(AppController.shortcutFor(id));
+        if (routed ? win._viewKeysBlocked : !win._globalKeysOn) return false;
+        const base = KeyRules.baseId(id);
+        const v = AppController.currentView;
+        const b = win.activeViewItem();
+        // One cursor in every view that has one (APP-276): the board, the
+        // list, Today, the calendar, the notes.
+        if (base.indexOf("board.") === 0)
+            return win._cursorOn(b);
+        if (base.indexOf("cursor.") === 0)
+            return win._cursorOn(b) && !win._typing;
+        // s on an empty day of the calendar: go to a date (keymap.md).
+        if (base === "task.schedule" && win._keyTaskIds().length === 0)
+            return ["day", "week", "month"].indexOf(v) >= 0 && !!b && b.cursorVisible === true;
+        if (base.indexOf("notes.") === 0) return v === "notes";
+        if (base.indexOf("savedView.") === 0) return Number(base.slice(10)) <= AppController.savedViews.length;
+        if (base.indexOf("task.") === 0 && base !== "task.new")
+            return win._keyTaskIds().length > 0 || (base === "task.done" && taskDoc.opened && taskDoc.activeFocus);
+        switch (base) {
+        case "cal.prev": case "cal.next":
+            return ["today", "week", "month"].indexOf(v) >= 0;
+        case "cal.today": case "cal.prevDay": case "cal.nextDay": case "cal.goToDate":
+            return win._dayViews.indexOf(v) >= 0;
+        case "cal.zoomDay":
+            return (v === "week" || v === "month") && !!b && typeof b.setZoom === "function";
+        case "cal.newEvent":
+            return !win._overlayOpen;
+        case "cal.taskEarlier": case "cal.taskLater": case "cal.taskEarlierWeek": case "cal.taskLaterWeek":
+        case "cal.taskTimeEarlier": case "cal.taskTimeLater":
+            return win._moveKeysOn;
+        case "selection.toggle": case "selection.range":
+            return v === "board" || win._keyTaskIds().length > 0;
+        case "selection.clearSel":
+            return AppController.selectionCount > 0 || win._rangeMode || win._boardCursorShown();
+        case "selection.deleteSel":
+            return AppController.selectionCount > 0 || win._cursorTaskId().length > 0;
+        case "cal.longer": case "cal.shorter":
+            return !win._viewKeysBlocked && !!b && typeof b.resizeCursor === "function";
+        case "selection.selectAll":
+            return ["board", "timeline", "week", "archive"].indexOf(v) >= 0;
+        case "nav.back": return win._navBack.length > 0 && !win._typing;
+        case "nav.forward": return win._navFwd.length > 0 && !win._typing;
+        case "undo": return AppController.hasPendingUndo && !win._overlayOpen && !win._typing;
+        case "redo": return AppController.canRedo && !win._overlayOpen && !win._typing;
+        case "focus.immersion": return !!(AppController.safety && AppController.safety.immersion);
+        case "standup.draft": return !!(AppController.safety && AppController.safety.standupDraft);
+        }
+        return true;
+    }
+    // The board's keyboard cursor is drawn (there is something for Esc to
+    // let go of), and letting go of it.
+    // The cursor of the view on screen (APP-276: every view walks with the
+    // same keys).
+    function _cursorView() {
+        return win.activeViewItem() || null;
+    }
+    // A view with a keyboard cursor, and no menu of its own up.
+    function _cursorOn(b) {
+        return !!b && typeof b.moveCursor === "function" && b.cardMenuOpen !== true;
+    }
+    // The task under the cursor — never the one under the pointer (Del).
+    function _cursorTaskId() {
+        const v = win.activeViewItem();
+        return v && v.cursorVisible === true && typeof v.cursorTaskId === "string" ? v.cursorTaskId : "";
+    }
+    // Del: the selection, else the task under the cursor; one undo step.
+    function deleteKeyTasks() {
+        if (AppController.selectionCount === 0) {
+            const id = win._cursorTaskId();
+            if (!id) return;
+            AppController.setSelectedTaskIds([id]);
+        }
+        AppController.deleteSelectedTasks();
+    }
+    // s / Shift S (APP-278): the small field; on an empty day of the
+    // calendar, s goes to a date instead.
+    function openSchedule(field) {
+        const ids = win._keyTaskIds();
+        if (ids.length === 0) {
+            if (field === "scheduled") goToDatePopup.openAt(AppController.selectedDate, win.contentItem);
+            return;
+        }
+        schedulePopup.openFor(ids, field);
+    }
+    function _boardCursorShown() {
+        const bi = win._cursorView();
+        return !!bi && bi["cursorVisible"] === true;
+    }
+    function _clearBoardCursor() {
+        const bi = win._cursorView();
+        if (bi && typeof bi["clearCursor"] === "function") bi["clearCursor"]();
+    }
+    // KeyRouter's handler: run the first of `ids` that is live here.
+    function _routeKey(ids, dry) {
+        const list = String(ids).split(",");
+        for (let i = 0; i < list.length; i++) {
+            if (!win._keyLive(list[i])) continue;
+            if (!dry) win.runShortcut(list[i]);
+            return list[i];
+        }
+        return "";
+    }
+    function _eachKeyTask(fn) {
+        const ids = win._keyTaskIds();
+        for (let i = 0; i < ids.length; i++) {
+            const t = AppController.taskById(ids[i]);
+            if (t && t.id) fn(t);
+        }
+        return ids.length;
+    }
+    function _copyKeyTask(field) {
+        const out = [];
+        win._eachKeyTask(function (t) {
+            const v = field === "id" ? t.id
+                : field === "branch" ? String(t.branch || "")
+                : String((t.ticket && t.ticket.url) || t.externalUrl || "");
+            if (v.length > 0) out.push(v);
+        });
+        if (out.length === 0) {
+            toast.show(I18n.t(field === "branch" ? "keys.copy.noBranch" : "keys.copy.noLink"), "warning");
+            return;
+        }
+        AppController.copyToClipboard(out.join(field === "id" ? ", " : "\n"));
+        toast.show(I18n.t("keys.copied").arg(out.join(", ")));
+    }
+    // Runs a catalogue action from the keyboard — every id, whichever way its
+    // key came in.
+    function runShortcut(id) {
+        const base = KeyRules.baseId(id);
+        const b = win.activeViewItem();
+        const call = function (name) {
+            if (b && typeof b[name] === "function") b[name].apply(b, Array.prototype.slice.call(arguments, 1));
+        };
+        switch (base) {
+        case "board.cursorDown":
+            if (win._rangeMode) call("extendSelection", 1); else call("moveCursor", 0, 1);
+            return;
+        case "board.cursorUp":
+            if (win._rangeMode) call("extendSelection", -1); else call("moveCursor", 0, -1);
+            return;
+        case "board.cursorLeft": call("moveCursor", -1, 0); return;
+        case "board.cursorRight": call("moveCursor", 1, 0); return;
+        case "board.open": call("openCursor"); return;
+        case "board.toggleSelect": call("toggleCursorSelection"); return;
+        case "board.moveDown": call("moveCursorCard", 0, 1); return;
+        case "board.moveUp": call("moveCursorCard", 0, -1); return;
+        case "board.moveLeft": call("moveSelectionOrCard", -1); return;
+        case "board.moveRight": call("moveSelectionOrCard", 1); return;
+        case "board.selectDown": call("extendSelection", 1); return;
+        case "board.selectUp": call("extendSelection", -1); return;
+        case "board.selectColumnLeft": call("selectColumnAndStep", -1); return;
+        case "board.selectColumnRight": call("selectColumnAndStep", 1); return;
+        case "board.cardMenu": call("openCursorMenu"); return;
+        case "board.archive":
+            if (b && typeof b.archiveCursor === "function") b.archiveCursor();
+            else win._eachKeyTask(function (t) { AppController.setArchived(t.id, true); });
+            return;
+        case "board.collapseColumn": call("toggleCursorColumn"); return;
+        case "cal.longer": call("resizeCursor", 1); return;
+        case "cal.shorter": call("resizeCursor", -1); return;
+        case "region.next": win.focusRegion(1); return;
+        case "region.prev": win.focusRegion(-1); return;
+        case "cursor.first": call("moveCursor", 0, -100000); return;
+        case "cursor.last": call("moveCursor", 0, 100000); return;
+        case "cursor.pageDown": call("moveCursor", 0, 8); return;
+        case "cursor.pageUp": call("moveCursor", 0, -8); return;
+        case "nav.back": win.navStep(-1); return;
+        case "nav.forward": win.navStep(1); return;
+        case "task.done": win.markDone(); return;
+        case "task.openExternal": {
+            const ids = win._keyTaskIds();
+            // Never a whole multi-selection: one browser tab per card.
+            if (ids.length === 1) AppController.openTaskExternal(ids[0]);
+            return;
+        }
+        case "task.newBelow": case "task.newAbove": {
+            const ids = win._keyTaskIds();
+            const t = ids.length > 0 ? AppController.taskById(ids[0]) : null;
+            if (t && t.status) quickCapture.openIn(t.status);
+            else quickCapture.open();
+            return;
+        }
+        case "task.rename": {
+            const ids = win._keyTaskIds();
+            if (ids.length > 0) win.openTask(ids[0]);
+            return;
+        }
+        case "task.due": win.openSchedule("due"); return;
+        case "task.schedule": win.openSchedule("scheduled"); return;
+        case "task.priority0": case "task.priority1": case "task.priority2": case "task.priority3": {
+            const p = "P" + base.slice(13);
+            win._eachKeyTask(function (t) { AppController.setTaskPriority(t.id, p); });
+            return;
+        }
+        case "task.timer":
+            win._eachKeyTask(function (t) {
+                if (t.isTiming) AppController.stopTaskTimer(t.id); else AppController.startTaskTimer(t.id);
+            });
+            return;
+        case "task.copyId": win._copyKeyTask("id"); return;
+        case "task.copyBranch": win._copyKeyTask("branch"); return;
+        case "task.copyLink": win._copyKeyTask("link"); return;
+        case "task.createBranch": {
+            const ids = win._keyTaskIds();
+            if (ids.length > 0) AppController.createBranchForTask(ids[0]);
+            return;
+        }
+        case "selection.toggle":
+            if (b && typeof b.toggleCursorSelection === "function") { call("toggleCursorSelection"); return; }
+            win._eachKeyTask(function (t) { AppController.toggleTaskSelection(t.id); });
+            return;
+        case "selection.range":
+            win._rangeMode = !win._rangeMode;
+            if (win._rangeMode && AppController.currentView === "board") call("toggleCursorSelection");
+            return;
+        case "selection.clearSel":
+            win._rangeMode = false;
+            AppController.clearSelection();
+            win._clearBoardCursor();
+            return;
+        case "selection.deleteSel": win.deleteKeyTasks(); return;
+        case "selection.selectAll": call("selectAllVisible"); return;
+        case "cal.today": AppController.selectedDate = AppController.today; return;
+        case "cal.prev": case "cal.next": {
+            const dir = base === "cal.prev" ? -1 : 1;
+            if (b && typeof b.step === "function" && AppController.currentView !== "today") { b.step(dir); return; }
+            const d = AppController.selectedDate;
+            AppController.selectedDate = new Date(d.getFullYear(), d.getMonth(), d.getDate() + dir);
+            return;
+        }
+        case "cal.prevDay": case "cal.nextDay": {
+            const d = AppController.selectedDate;
+            AppController.selectedDate = new Date(d.getFullYear(), d.getMonth(), d.getDate() + (base === "cal.prevDay" ? -1 : 1));
+            return;
+        }
+        case "cal.goToDate": goToDatePopup.openAt(AppController.selectedDate, win.contentItem); return;
+        case "cal.zoomDay": call("setZoom", "day"); return;
+        case "cal.newEvent": {
+            const day = AppController.selectedDate;
+            eventEditor.showForDraft(AppController.newEventDraft(AppController.nextFreeSlot(day, 1), day));
+            return;
+        }
+        case "cal.taskEarlier": win._moveViewTask(-1, 0); return;
+        case "cal.taskLater": win._moveViewTask(1, 0); return;
+        case "cal.taskEarlierWeek": win._moveViewTask(-7, 0); return;
+        case "cal.taskLaterWeek": win._moveViewTask(7, 0); return;
+        case "cal.taskTimeEarlier": win._moveViewTask(0, -1); return;
+        case "cal.taskTimeLater": win._moveViewTask(0, 1); return;
+        case "undo": AppController.undo(); return;
+        case "redo": AppController.redo(); return;
+        }
+        win.runCommand(base);
+    }
+
+    KeyRouter {
+        id: keyRouter
+        objectName: "key-router"
+        window: win
+        enabled: !hotkeys.isCapturing && !win._captureActive
+        bindings: AppController.shortcuts
+        qtOwned: win._qtOwned
+        handler: function (ids, dry) { return win._routeKey(ids, dry); }
+        // The old keys of 0.7 say once where their action went (APP-281 A4).
+        onChordPressed: (chord) => { if (AppController.hasKeymapNotice()) AppController.noteKeyPressed(chord); }
+        Component.onCompleted: win._navCur = AppController.currentView
     }
 
     Shortcut {
@@ -1746,12 +2460,12 @@ ApplicationWindow {
         enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: cmdPalette.open()
     }
-    // Built-in alias: Ctrl+P always opens the palette, independent of the
-    // catalog. If the user rebinds palette.open elsewhere, this still works.
+    // Ctrl+P: the same, as a catalogue entry of its own (APP-279) — it can be
+    // rebound or cleared like any other.
     Shortcut {
-        sequence: "Ctrl+P"
+        sequence: win._kbd("palette.open.alt")
         context: Qt.ApplicationShortcut
-        enabled: win._globalKeysOn
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: cmdPalette.open()
     }
 
@@ -1771,7 +2485,7 @@ ApplicationWindow {
         sequence: _kbd("task.new")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: taskEditor.showFor(AppController.newTaskDraft("todo"))
+        onActivated: quickCapture.open()
     }
     Shortcut {
         sequence: _kbd("quick-capture")
@@ -1784,6 +2498,24 @@ ApplicationWindow {
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: quickCaptureNotes.open()
+    }
+    Shortcut {
+        sequence: win._kbd("section.today")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: AppController.openSection("today")
+    }
+    Shortcut {
+        sequence: win._kbd("section.tasks")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: AppController.openSection("tasks")
+    }
+    Shortcut {
+        sequence: win._kbd("section.knowledge")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: AppController.openSection("knowledge")
     }
     Shortcut {
         sequence: _kbd("view.board")
@@ -1837,7 +2569,7 @@ ApplicationWindow {
         sequence: _kbd("theme.toggle")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: AppController.theme = (AppController.theme === "dark" ? "light" : "dark")
+        onActivated: AppController.theme = (Theme.slot === "dark" ? "light" : "dark")
     }
     Shortcut {
         sequence: _kbd("person.new")
@@ -1967,7 +2699,7 @@ ApplicationWindow {
         sequence: _kbd("tweaks.open")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: rail.openTweaks(rail.tweaksAnchor)
+        onActivated: win.runCommand("settings:appearance")
     }
     // The event log (APP-187).
     Shortcut {
@@ -1981,22 +2713,10 @@ ApplicationWindow {
         sequence: _kbd("hotkeys.open")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: rail.openHotkeys(rail.hotkeysAnchor)
+        onActivated: win.openCheatSheet()
     }
-    // `?` opens the same cheat-sheet (APP-166), as in most keyboard-first
-    // apps. A view key: it stands down while anything takes typed text, so a
-    // question mark in a title is still a question mark. Shift+/ is what the
-    // key reports on layouts where Qt does not fold it into Key_Question, and
-    // Shift+? where the event keeps the Shift it took to type it.
-    Shortcut {
-        objectName: "shortcut-question-cheatsheet"
-        sequences: ["?", "Shift+?", "Shift+/"]
-        context: Qt.ApplicationShortcut
-        enabled: !win._viewKeysBlocked && !hotkeys.opened
-        onActivated: rail.openHotkeys(rail.hotkeysAnchor)
-        // Where a layout reports the key both ways, both sequences match.
-        onActivatedAmbiguously: rail.openHotkeys(rail.hotkeysAnchor)
-    }
+    // `?` opens the same cheat sheet (APP-166): hotkeys.open.alt, a key
+    // KeyRouter runs, so it stands down while anything takes typed text.
     Shortcut {
         sequence: _kbd("undo")
         context: Qt.ApplicationShortcut
@@ -2026,7 +2746,9 @@ ApplicationWindow {
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && !win._viewKeysBlocked
             && (AppController.currentView === "board"
+                || AppController.currentView === "list"
                 || AppController.currentView === "timeline"
+                || AppController.currentView === "day"
                 || AppController.currentView === "week"
                 || AppController.currentView === "archive")
         onActivated: {
@@ -2043,12 +2765,10 @@ ApplicationWindow {
         sequence: _kbd("selection.clearSel")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && !win._viewKeysBlocked
-            && (AppController.selectionCount > 0
-                || (AppController.currentView === "board"
-                    && !!boardLoader.item && boardLoader.item["cursorVisible"] === true))
+            && (AppController.selectionCount > 0 || win._boardCursorShown())
         onActivated: {
             AppController.clearSelection();
-            if (boardLoader.item && boardLoader.item.clearCursor) boardLoader.item.clearCursor();
+            win._clearBoardCursor();
         }
     }
     // Esc on a tabbed-to control outside the view (filter chip, mini week, day
@@ -2064,8 +2784,8 @@ ApplicationWindow {
         sequence: _kbd("selection.deleteSel")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && !win._viewKeysBlocked
-            && AppController.selectionCount > 0
-        onActivated: AppController.deleteSelectedTasks()
+            && (AppController.selectionCount > 0 || win._cursorTaskId().length > 0)
+        onActivated: win.deleteKeyTasks()
     }
     // Open the selected (or hovered) mirrored issue in its tracker (HEAP-117).
     // This is the first bare letter in the catalog. Qt hands a focused text
@@ -2084,7 +2804,7 @@ ApplicationWindow {
     component CalKey: Shortcut {
         context: Qt.ApplicationShortcut
         enabled: sequences.length > 0 && !win._viewKeysBlocked
-            && (AppController.currentView === "week" || AppController.currentView === "month")
+            && ["day", "week", "month"].indexOf(AppController.currentView) >= 0
     }
 
     // The day panel follows the selected date in every view it sits beside,
@@ -2095,7 +2815,7 @@ ApplicationWindow {
     component DayKey: Shortcut {
         context: Qt.ApplicationShortcut
         enabled: sequences.length > 0 && !win._viewKeysBlocked
-            && ["board", "timeline", "week", "month", "archive"].indexOf(AppController.currentView) >= 0
+            && ["today", "board", "timeline", "day", "week", "month", "archive"].indexOf(AppController.currentView) >= 0
     }
     DayKey {
         sequences: [_kbd("cal.today")]
@@ -2139,12 +2859,39 @@ ApplicationWindow {
         sequences: [_kbd("cal.next")]
         onActivated: { const v = win.activeViewItem(); if (v && v.step) v.step(1); }
     }
+    // The calendar lens' own keys (keymap.md, APP-264): [ ] a period, 0
+    // today, z d / z w / z m the zoom. Fixed until the catalogue takes them
+    // (APP-272); they stand down like every other view key.
+    CalKey {
+        sequences: ["["]
+        onActivated: { const v = win.activeViewItem(); if (v && v.step) v.step(-1); }
+    }
+    CalKey {
+        sequences: ["]"]
+        onActivated: { const v = win.activeViewItem(); if (v && v.step) v.step(1); }
+    }
+    CalKey {
+        sequences: ["0"]
+        onActivated: AppController.selectedDate = AppController.today
+    }
+    CalKey {
+        sequences: ["Z,D"]
+        onActivated: AppController.currentView = "day"
+    }
+    CalKey {
+        sequences: ["Z,W"]
+        onActivated: AppController.currentView = "week"
+    }
+    CalKey {
+        sequences: ["Z,M"]
+        onActivated: AppController.currentView = "month"
+    }
     // What a drag does in Week, Month and Timeline, from the keyboard
     // (APP-249): the task that has the keyboard (or the pointer) moves a day,
     // a week, or a grid step. Ctrl+arrows are the board's own card moves;
     // these are live only in the three views that drag dates.
     readonly property bool _moveKeysOn: !win._viewKeysBlocked
-        && ["week", "month", "timeline"].indexOf(AppController.currentView) >= 0
+        && ["day", "week", "month", "timeline"].indexOf(AppController.currentView) >= 0
     function _moveViewTask(days, steps) {
         const v = win.activeViewItem();
         if (!v) return;
@@ -2207,7 +2954,7 @@ ApplicationWindow {
 
     WeeklyRecapDialog {
         id: weeklyRecap
-        onTaskActivated: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+        onTaskActivated: (id) => win.showTask(AppController.taskById(id))
         onStandupDraftRequested: standupDraft.showNow()
     }
     // The recap opens by itself only where it can be seen (APP-211): the
@@ -2231,13 +2978,111 @@ ApplicationWindow {
     // The day's summary (APP-190): closed, carrying over, timers. Read-only.
     EndOfDayDialog {
         id: endOfDay
-        onTaskActivated: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+        onTaskActivated: (id) => win.showTask(AppController.taskById(id))
     }
     Connections {
         target: AppController
         function onTodayChanged() {
             win._maybeShowRecap();
         }
+    }
+
+    // ── Regions (APP-277) ──────────────────────────────────────────────
+    // F6 / Shift F6 go round sidebar → content (onto the cursor) → the task
+    // document or the right panel → the header's filter line, instead of a
+    // long Tab through every control. The region it lands in is framed until
+    // the keyboard leaves it.
+    property string regionShown: ""
+    function _regionOf(it) {
+        for (let p = it; p; p = p.parent) {
+            if (p === rail) return "sidebar";
+            if (p === topBar) return "header";
+            if (p === taskDoc || p === rightPanel) return "panel";
+        }
+        return "content";
+    }
+    function _regions() {
+        const out = [];
+        if (rail.visible && rail.width > 0) out.push("sidebar");
+        out.push("content");
+        if (taskDoc.opened || win.rightPanelShown) out.push("panel");
+        if (topBar.visible) out.push("header");
+        return out;
+    }
+    function _regionItem(r) {
+        return r === "sidebar" ? rail : r === "header" ? topBar
+             : r === "panel" ? (taskDoc.opened ? taskDoc : rightPanel) : viewArea;
+    }
+    function _firstTabStop(it) {
+        const kids = it ? it.children : [];
+        for (let i = 0; i < kids.length; i++) {
+            const k = kids[i];
+            if (!k.visible || k.enabled === false) continue;
+            if (k.activeFocusOnTab === true) return k;
+            const r = win._firstTabStop(k);
+            if (r) return r;
+        }
+        return null;
+    }
+    function focusRegion(dir) {
+        const list = win._regions();
+        let i = list.indexOf(win._regionOf(win.activeFocusItem));
+        if (i < 0) i = list.indexOf("content");
+        const next = list[(i + dir + list.length) % list.length];
+        if (next === "content") win.focusActiveView();
+        else if (next === "sidebar") rail.takeFocus();
+        else if (next === "header") topBar.focusSearch();
+        else {
+            const stop = win._firstTabStop(win._regionItem(next));
+            if (stop) stop.forceActiveFocus(Qt.TabFocusReason);
+            else win._regionItem(next).forceActiveFocus(Qt.TabFocusReason);
+        }
+        win.regionShown = next;
+        const r = win._regionItem(next);
+        const pos = r.mapToItem(win.contentItem, 0, 0);
+        regionFrame.x = pos.x;
+        regionFrame.y = pos.y;
+        regionFrame.width = r.width;
+        regionFrame.height = r.height;
+    }
+    Rectangle {
+        id: regionFrame
+        objectName: "region-frame"
+        parent: win.contentItem
+        z: 900
+        visible: win.regionShown.length > 0
+        color: "transparent"
+        border.color: Theme.focusRing
+        border.width: 1
+    }
+    Shortcut {
+        sequences: [win._kbd("region.next")]
+        context: Qt.ApplicationShortcut
+        enabled: sequences.length > 0 && win._keyLive("region.next")
+        onActivated: win.focusRegion(1)
+    }
+    Shortcut {
+        sequences: [win._kbd("region.prev")]
+        context: Qt.ApplicationShortcut
+        enabled: sequences.length > 0 && win._keyLive("region.prev")
+        onActivated: win.focusRegion(-1)
+    }
+
+    // s / Shift S (APP-278): when, or the deadline, in one small field.
+    SchedulePopup {
+        id: schedulePopup
+        parent: win.contentItem
+        x: parent ? Math.round((parent.width - width) / 2) : 0
+        y: parent ? Math.round(parent.height / 4) : 0
+        onPickDateRequested: (current) => schedDatePicker.openAt(current, win.contentItem)
+        onClosed: Qt.callLater(win.returnFocusHome)
+    }
+    DatePickerPopup {
+        id: schedDatePicker
+        objectName: "schedule-date"
+        x: parent ? Math.round((parent.width - width) / 2) : 0
+        y: parent ? Math.round((parent.height - height) / 3) : 0
+        onPicked: (value) => schedulePopup.applyDate(value)
     }
 
     // Jump straight to a day rather than paging to it. Anchored to the window
@@ -2263,12 +3108,18 @@ ApplicationWindow {
         onTyped: (text) => topBar.typeAhead(text)
     }
 
+    // The board's and the list's keys: not while typing, a popup or a
+    // card's menu is up (its arrows and letters belong to it).
+    readonly property bool _boardKeysOn: !win._viewKeysBlocked && win._cursorOn(win.activeViewItem())
+    readonly property bool _boardOrList: AppController.currentView === "board" || AppController.currentView === "list"
+    // The list's query comes from the window (APP-263); see the Bindings
+    // beside the view loaders.
+    readonly property bool _listOn: AppController.currentView === "list" && viewLoader.item !== null
     component BoardKey: Shortcut {
         context: Qt.ApplicationShortcut
         // Not while a card's menu is up: its arrows and letters belong to it.
-        enabled: sequences.length > 0 && !win._viewKeysBlocked
-            && AppController.currentView === "board"
-            && !(boardLoader.item && boardLoader.item.cardMenuOpen === true)
+        // The list (APP-263) walks with the same keys.
+        enabled: sequences.length > 0 && win._boardKeysOn
     }
 
     BoardKey {
@@ -2296,19 +3147,19 @@ ApplicationWindow {
         onActivated: { const b = win.activeViewItem(); if (b && b.toggleCursorSelection) b.toggleCursorSelection(); }
     }
     BoardKey {
-        sequences: [win._kbd("board.moveDown"), "Ctrl+Down"]
+        sequences: [win._kbd("board.moveDown")].concat(win._boardOrList ? ["Ctrl+Down"] : [])
         onActivated: { const b = win.activeViewItem(); if (b && b.moveCursorCard) b.moveCursorCard(0, 1); }
     }
     BoardKey {
-        sequences: [win._kbd("board.moveUp"), "Ctrl+Up"]
+        sequences: [win._kbd("board.moveUp")].concat(win._boardOrList ? ["Ctrl+Up"] : [])
         onActivated: { const b = win.activeViewItem(); if (b && b.moveCursorCard) b.moveCursorCard(0, -1); }
     }
     BoardKey {
-        sequences: [win._kbd("board.moveLeft"), "Ctrl+Left"]
+        sequences: [win._kbd("board.moveLeft")].concat(win._boardOrList ? ["Ctrl+Left"] : [])
         onActivated: { const b = win.activeViewItem(); if (b && b.moveSelectionOrCard) b.moveSelectionOrCard(-1); }
     }
     BoardKey {
-        sequences: [win._kbd("board.moveRight"), "Ctrl+Right"]
+        sequences: [win._kbd("board.moveRight")].concat(win._boardOrList ? ["Ctrl+Right"] : [])
         onActivated: { const b = win.activeViewItem(); if (b && b.moveSelectionOrCard) b.moveSelectionOrCard(1); }
     }
     // Selecting from the keyboard (APP-128).
@@ -2343,13 +3194,43 @@ ApplicationWindow {
         onActivated: { const b = win.activeViewItem(); if (b && b.toggleCursorColumn) b.toggleCursorColumn(); }
     }
 
+    // s: the task (or the selection) into the next free slot of the selected
+    // day, as the menu's "Schedule" does; 1–4: priority P0…P3 (keymap.md).
+    function scheduleKeyTasks() {
+        const ids = win._keyTaskIds();
+        for (let i = 0; i < ids.length; i++)
+            AppController.scheduleTaskAtNextFreeSlot(ids[i], AppController.selectedDate);
+    }
+    function priorityKeyTasks(p) {
+        if (AppController.selectionCount > 0) { AppController.setSelectedTasksPriority(p); return; }
+        const ids = win._keyTaskIds();
+        if (ids.length > 0) AppController.setTaskPriority(ids[0], p);
+    }
+    readonly property bool _taskKeysOn: win._boardKeysOn
+    // v marks the row on the list (H2-List's hint bar), as Space does.
+    Shortcut {
+        sequence: "V"
+        context: Qt.ApplicationShortcut
+        enabled: !win._viewKeysBlocked && AppController.currentView === "list"
+        onActivated: { const v = win.activeViewItem(); if (v && v.toggleCursorSelection) v.toggleCursorSelection(); }
+    }
+
+    // Done (APP-268): a bare letter, held back while typing or a popup is up.
+    Shortcut {
+        sequence: win._kbd("task.done")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !win._viewKeysBlocked
+        onActivated: win.markDone()
+    }
     Shortcut {
         sequence: _kbd("task.openExternal")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && !win._viewKeysBlocked
             && (AppController.currentView === "board"
+                || AppController.currentView === "list"
                 || AppController.currentView === "archive"
                 || AppController.currentView === "timeline"
+                || AppController.currentView === "day"
                 || AppController.currentView === "week")
         onActivated: {
             // One selected card is unambiguous. Otherwise act on whatever the
@@ -2377,16 +3258,9 @@ ApplicationWindow {
         }
     }
 
-    // Tweaks + Hotkeys popovers (opened from the side rail)
-    // Re-clamped whenever their height settles: on the first open the panel
-    // measures itself after it is placed, and the Tweaks panel hung 24px
-    // below a 720px window.
-    TweaksPanel  {
-        id: tweaks
-        onHeightChanged: if (opened && parent) win._placePopover(tweaks, parent)
-        // A setting found by the panel's search (APP-210).
-        onOpenSettingsItem: (item) => win.openSettingsItem(item)
-    }
+    // The Hotkeys popover (opened from the side rail). Re-clamped whenever
+    // its height settles: on the first open it measures itself after it is
+    // placed.
     HotkeysPanel {
         id: hotkeys
         onHeightChanged: if (opened && parent) win._placePopover(hotkeys, parent)
@@ -2502,6 +3376,23 @@ ApplicationWindow {
     // a narrow one its bottom centre (APP-225). Popups and dialogs sit on
     // the overlay above it, so a toast never covers Quick Capture or a
     // dialog's buttons.
+    // The cheat sheet (APP-272): every key by area, with a search.
+    KeyCheatSheet {
+        id: cheatSheet
+        onEditRequested: Qt.callLater(function () { rail.openHotkeys(rail.hotkeysAnchor); })
+    }
+
+    // "g …": the first key of a sequence waits for its second (keymap rule 3).
+    KeyPendingBar {
+        objectName: "key-pending-bar"
+        pending: keyRouter.pending
+        isLive: function (id) { return win._keyLive(id); }
+        x: mainColumn.x + Math.round((mainColumn.width - width) / 2)
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: Theme.spXl + win._selectionBarSpace
+        z: 101
+    }
+
     Toast {
         id: toast
         objectName: "toast"

@@ -120,18 +120,26 @@ TestCase {
     function board() { return tc.win.activeViewItem(); }
 
     // UX-1 / TASKS-10: Ctrl+N and type — the title gets every character.
+    // APP-266: Ctrl+N is the one task input; Tab takes what was typed into
+    // the full editor, its title already there.
+    // APP-266/265: Ctrl+N is the one task input; Tab makes the task and
+    // opens it as a document with its title there.
     function test_new_task_editor_focuses_title() {
-        const te = popup("TaskEditor");
+        const qc = popup("QuickCapturePopup");
+        const doc = byName(tc.win.contentItem, "task-doc");
         keyClick(Qt.Key_N, Qt.ControlModifier);
-        tryCompare(te, "opened", true);
+        tryCompare(qc, "opened", true);
         keyClick(Qt.Key_A); keyClick(Qt.Key_B); keyClick(Qt.Key_C);
-        const title = find(te.contentItem, function (it) { return it.placeholderText === I18n.t("editor.ph.titleShort"); });
-        verify(title !== null);
-        compare(title.text, "abc");
-        // A typed title is an edit: Esc asks, D discards (TASKS-9).
+        keyClick(Qt.Key_Tab);
+        tryCompare(doc, "opened", true);
+        tryCompare(qc, "opened", false);
+        const id = doc.taskId;
+        compare(byName(doc, "task-doc-title").text, "abc");
+        verify(byName(doc, "task-doc-title").activeFocus, "the title does not have the keyboard");
         keyClick(Qt.Key_Escape);
-        keyClick(Qt.Key_D);
-        tryCompare(te, "opened", false);
+        tryCompare(doc, "opened", false);
+        AppController.deleteTask(id);
+        AppController.clearPendingUndo();
     }
 
     // UX-9: Tab leaves the description instead of typing a tab, and a list
@@ -198,11 +206,13 @@ TestCase {
         verify(!search.activeFocus, "a second Esc leaves the search");
     }
 
-    // APP-166: `?` opens the cheat-sheet from the view, and types a question
-    // mark in a text field.
+    // APP-166 / APP-272: `?` opens the cheat sheet from the view, and types a
+    // question mark in a text field.
     function test_question_mark_opens_cheat_sheet() {
-        const hk = popup("HotkeysPanel");
+        const hk = popup("KeyCheatSheet");
         verify(hk !== null);
+        // The task search is in the Tasks header (APP-258).
+        AppController.currentView = "board";
         const search = byName(tc.win.contentItem, "topbar-search");
         search.forceActiveFocus();
         keyClick(Qt.Key_Question, Qt.ShiftModifier);
@@ -215,6 +225,29 @@ TestCase {
         tryCompare(hk, "opened", true);
         hk.close();
         tryCompare(hk, "opened", false);
+    }
+
+    // APP-268: D on the card under the cursor is Done, D again puts it back;
+    // D in a text field types a d.
+    function test_d_is_done_on_the_cursor_card() {
+        const b = board();
+        b.searchText = tc.probe;
+        b.moveCursor(0, 1);
+        const id = b.cursorTaskId;
+        verify(id !== "");
+        const was = AppController.taskById(id).status;
+        tc.win.focusActiveView();
+        keyClick(Qt.Key_D);
+        tryVerify(function () { return AppController.taskById(id).status === AppController.doneColumn(); }, 1000, "D did not make it done");
+        // Done is folded on the heap 2 board (APP-262), so the cursor cannot
+        // follow the card there: the second D acts on it selected.
+        AppController.setSelectedTaskIds([id]);
+        // Within half a second a second d is Vim's "dd", not "put it back".
+        wait(600);
+        keyClick(Qt.Key_D);
+        tryVerify(function () { return AppController.taskById(id).status === was; }, 1000, "a second D did not put it back");
+        AppController.clearSelection();
+        AppController.clearPendingUndo();
     }
 
     // UX-3: a card's context menu keeps Down and Esc.
@@ -256,8 +289,9 @@ TestCase {
 
         keyClick(Qt.Key_M);
         tryVerify(function () { return card._menu && card._menu.opened; });
-        keyClick(Qt.Key_Down);
-        keyClick(Qt.Key_Down);
+        // Down to Priority, wherever the menu has it (APP-268 reordered it).
+        for (let i = 0; i < 12 && card._menu.itemAt(card._menu.currentIndex).objectName !== "tc-menu-priority"; i++)
+            keyClick(Qt.Key_Down);
         compare(card._menu.itemAt(card._menu.currentIndex).objectName, "tc-menu-priority");
         keyClick(Qt.Key_Return);
         // The list is up, has the keyboard, and starts on the current value.
@@ -284,10 +318,11 @@ TestCase {
         keyClick(Qt.Key_Return);
         wait(100);
         compare(AppController.taskById(id).priority, "P3", "Enter changed the priority unseen");
-        const te = popup("TaskEditor");
-        tryCompare(te, "opened", true);
+        // Return on the card opens it — as a document now (APP-265).
+        const doc = byName(tc.win.contentItem, "task-doc");
+        tryCompare(doc, "opened", true);
         keyClick(Qt.Key_Escape);
-        tryCompare(te, "opened", false);
+        tryCompare(doc, "opened", false);
     }
 
     // TASKS-5: Enter in "New column" creates the column, not a task editor.

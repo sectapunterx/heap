@@ -310,3 +310,93 @@ TEST(TaskQuery, NonsenseIsReportedNotSilentlySearched) {
   // A URL is text, not a clause.
   EXPECT_TRUE(qc(QStringLiteral("https://x/y")).unknownClauses().isEmpty());
 }
+
+// ─── APP-250: planning clauses ───
+
+TEST(TaskQueryPlanning, ScheduledReadsLikeDue) {
+  Task today = mk(QStringLiteral("T"));
+  today.scheduledAt = QDateTime(kToday, QTime(10, 0));
+  Task later = mk(QStringLiteral("L"));
+  later.scheduledAt = QDateTime(kToday.addDays(10), QTime(0, 0));
+  const Task none = mk(QStringLiteral("N"));
+  EXPECT_TRUE(q(QStringLiteral("scheduled:today")).matches(today));
+  EXPECT_FALSE(q(QStringLiteral("scheduled:today")).matches(later));
+  EXPECT_TRUE(q(QStringLiteral("scheduled:none")).matches(none));
+  EXPECT_FALSE(q(QStringLiteral("scheduled:none")).matches(today));
+  EXPECT_TRUE(q(QStringLiteral("scheduled:>3d")).matches(later));
+  EXPECT_FALSE(q(QStringLiteral("scheduled:>3d")).matches(none));
+  EXPECT_TRUE(q(QStringLiteral("-scheduled:none")).matches(later));
+  EXPECT_TRUE(q(QStringLiteral("scheduled:banana")).unknownClauses().contains(QStringLiteral("scheduled:banana")));
+}
+
+TEST(TaskQueryPlanning, EstimateComparesMinutesAndNoneIsItsOwnThing) {
+  Task small = mk(QStringLiteral("S"));
+  small.estimateMinutes = 20;
+  Task big = mk(QStringLiteral("B"));
+  big.estimateMinutes = 150;
+  const Task none = mk(QStringLiteral("N"));
+  EXPECT_TRUE(q(QStringLiteral("estimate:<30m")).matches(small));
+  EXPECT_FALSE(q(QStringLiteral("estimate:<30m")).matches(none));  // no estimate is not "small"
+  EXPECT_TRUE(q(QStringLiteral("estimate:>2h")).matches(big));
+  EXPECT_TRUE(q(QStringLiteral("estimate:>1.5ч")).matches(big));
+  EXPECT_TRUE(q(QStringLiteral("estimate:20")).matches(small));
+  EXPECT_TRUE(q(QStringLiteral("estimate:none")).matches(none));
+  EXPECT_FALSE(q(QStringLiteral("estimate:none")).matches(small));
+  EXPECT_FALSE(q(QStringLiteral("estimate:lots")).unknownClauses().isEmpty());
+}
+
+TEST(TaskQueryPlanning, SomedayUnscheduledAndBranch) {
+  Task parked = mk(QStringLiteral("P"));
+  parked.someday = true;
+  Task open = mk(QStringLiteral("O"));
+  open.branch = QStringLiteral("fix/login-rate-limit");
+  Task planned = mk(QStringLiteral("D"));
+  planned.scheduledAt = QDateTime(kToday, QTime(9, 0));
+  const Task done = mk(QStringLiteral("X"), QStringLiteral("done"));
+  EXPECT_TRUE(q(QStringLiteral("is:someday")).matches(parked));
+  EXPECT_FALSE(q(QStringLiteral("is:someday")).matches(open));
+  EXPECT_TRUE(q(QStringLiteral("is:unscheduled")).matches(open));
+  EXPECT_FALSE(q(QStringLiteral("is:unscheduled")).matches(parked));
+  EXPECT_FALSE(q(QStringLiteral("is:unscheduled")).matches(planned));
+  EXPECT_FALSE(q(QStringLiteral("is:unscheduled")).matches(done));
+  EXPECT_TRUE(q(QStringLiteral("branch:login")).matches(open));
+  EXPECT_FALSE(q(QStringLiteral("branch:login")).matches(parked));
+  EXPECT_TRUE(q(QStringLiteral("branch:none")).matches(parked));
+  EXPECT_TRUE(q(QStringLiteral("is:someday OR branch:login")).matches(open));
+}
+
+TEST(TaskQueryPlanning, BlockedNeedsAnOpenBlocker) {
+  Task blocker = mk(QStringLiteral("A"));
+  blocker.links = {TaskLink{QStringLiteral("blocks"), QStringLiteral("B")}};
+  const Task blocked = mk(QStringLiteral("B"));
+  Task doneBlocker = mk(QStringLiteral("C"), QStringLiteral("done"));
+  doneBlocker.links = {TaskLink{QStringLiteral("blocks"), QStringLiteral("D")}};
+  const Task freed = mk(QStringLiteral("D"));
+  const QVector<Task> all{blocker, blocked, doneBlocker, freed};
+  TaskQuery query = q(QStringLiteral("is:blocked"));
+  ASSERT_TRUE(query.usesBlocked());
+  query.setBlockedIds(heap::query::openlyBlockedIds(all, [](const Task& t) {
+    return t.status == QStringLiteral("done");
+  }));
+  EXPECT_TRUE(query.matches(blocked));
+  EXPECT_FALSE(query.matches(freed));
+  EXPECT_FALSE(query.matches(blocker));
+  EXPECT_FALSE(q(QStringLiteral("status:todo")).usesBlocked());
+}
+
+TEST(TaskQueryPlanning, MyTagsAndMyLayer) {
+  Task t = mk(QStringLiteral("T"));
+  t.local.tags = {LocalTag{QStringLiteral("after-release"), QString()}};
+  t.local.notes = QStringLiteral("tried a smaller pool");
+  const Task plain = mk(QStringLiteral("P"));
+  EXPECT_TRUE(q(QStringLiteral("#after-release")).matches(t));
+  EXPECT_FALSE(q(QStringLiteral("#after-release")).matches(plain));
+  EXPECT_TRUE(q(QStringLiteral("has:notes")).matches(t));
+  EXPECT_FALSE(q(QStringLiteral("has:draft")).matches(t));
+  t.local.commentDraft = QStringLiteral("LGTM");
+  EXPECT_TRUE(q(QStringLiteral("has:draft")).matches(t));
+  EXPECT_TRUE(q(QStringLiteral("has:nothing")).unknownClauses().contains(QStringLiteral("has:nothing")));
+  for(const char* f : {"scheduled", "estimate", "branch", "has"}) {
+    EXPECT_TRUE(heap::query::queryFields().contains(QLatin1String(f))) << f;
+  }
+}

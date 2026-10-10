@@ -1,0 +1,102 @@
+<style>
+:host{margin:0;background:#0c0e11}
+a{color:#e9edf2;text-decoration-color:#4a525d;text-underline-offset:3px}a:hover{color:#ffffff}
+button{font-family:inherit}
+</style>
+<div style="width: 100%; min-height: 900px; display: flex; flex-wrap: wrap; background: #0c0e11; color: #e9edf2; font-family: 'Golos Text', sans-serif; font-size: 13px">
+<nav aria-label="Разделы" style="flex: 0 0 208px; box-sizing: border-box; background: #0f1216; border-right: 1px solid #1f252d; padding: 16px 12px; display: flex; flex-direction: column; gap: 2px">
+<div style="display: flex; align-items: center; gap: 8px; padding: 0 6px 14px">
+<span style="font-weight: 500; font-size: 18px; letter-spacing: -0.035em"><span style="border-bottom: 0.075em solid #b1a7f0; padding-bottom: 0.06em">low</span>key</span>
+<span style="flex: 1"></span>
+<button style="display: flex; align-items: center; gap: 6px; background: transparent; border: 0; color: #c4ccd6; font-size: 12px; padding: 4px 6px"><span style="width: 6px; height: 6px; border-radius: 3px; background: #6fcf97"></span>Example</button>
+</div>
+<button style="display: flex; align-items: center; gap: 8px; background: #14181d; border: 1px solid #232a33; color: #8f99a6; border-radius: 8px; padding: 8px 10px; margin-bottom: 14px; font-size: 13px; text-align: left">
+<span style="flex: 1">Новая задача…</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 11px">Ctrl N</span>
+</button>
+<a style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #c4ccd6;"><span style="flex: 1">Сегодня</span><span style="font-size: 11px; color: #8f99a6; font-family: 'JetBrains Mono', monospace">Ctrl 1</span></a>
+<a style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #c4ccd6;"><span style="flex: 1">Задачи</span><span style="font-size: 11px; color: #8f99a6; font-family: 'JetBrains Mono', monospace">Ctrl 2</span></a>
+<a style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; background: linear-gradient(#b1a7f0, #b1a7f0) no-repeat left 8px bottom 2px / 18px 2px; color: #ffffff; font-weight: 600;"><span style="flex: 1">Знания</span><span style="font-size: 11px; color: #8f99a6; font-family: 'JetBrains Mono', monospace">Ctrl 3</span></a>
+<div style="padding: 16px 8px 6px; font-size: 11px; color: #8f99a6">Мои виды</div>
+<a style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #c4ccd6;"><span style="flex: 1">Заблокировано</span><span style="font-size: 11px; color: #8f99a6; font-family: 'JetBrains Mono', monospace">1</span></a>
+<a style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #c4ccd6;"><span style="flex: 1">На ревью</span><span style="font-size: 11px; color: #8f99a6; font-family: 'JetBrains Mono', monospace">2</span></a>
+<a style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #c4ccd6;"><span style="flex: 1">Срочное</span><span style="font-size: 11px; color: #8f99a6; font-family: 'JetBrains Mono', monospace">7</span></a>
+<a style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #c4ccd6;"><span style="flex: 1">Эта неделя</span><span style="font-size: 11px; color: #8f99a6; font-family: 'JetBrains Mono', monospace">6</span></a>
+<div style="flex: 1"></div>
+<a style="display: flex; padding: 7px 8px; border-radius: 7px; color: #c4ccd6; text-decoration: none"><span style="flex: 1">Настройки</span><span style="font-size: 11px; color: #8f99a6; font-family: 'JetBrains Mono', monospace">Ctrl ,</span></a>
+</nav>
+<div style="flex: 0 0 260px; box-sizing: border-box; border-right: 1px solid #1a1f26; padding: 18px 12px; display: flex; flex-direction: column; gap: 2px">
+<div style="display: flex; align-items: center; gap: 8px; padding: 0 6px 12px">
+<h1 style="margin: 0; font-size: 18px; font-weight: 600; flex: 1">Знания</h1>
+<button aria-label="Новая заметка" style="background: transparent; border: 1px solid #232a33; color: #e9edf2; border-radius: 7px; padding: 4px 9px">+</button>
+</div>
+<label for="kq" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Поиск по знаниям</label>
+<input placeholder="Найти в заметках и ссылках" style="background: #14181d; border: 1px solid #232a33; border-radius: 8px; padding: 7px 10px; color: #e9edf2; font-family: inherit; font-size: 12px; margin-bottom: 10px">
+<div style="padding: 14px 8px 6px; font-size: 11px; color: #8f99a6">Закреплено</div>
+<a style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; text-decoration: none; font-size: 13px; color: #c4ccd6;">
+<span style="font-family: JetBrains Mono, monospace; font-size: 10px; color: #8f99a6; border: 1px solid #2a313b; border-radius: 4px; padding: 0 4px">RFC</span>
+<span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Семантика HTTP · 9110</span>
+</a>
+<a style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; text-decoration: none; font-size: 13px; color: #c4ccd6;">
+<span style="font-family: JetBrains Mono, monospace; font-size: 10px; color: #8f99a6; border: 1px solid #2a313b; border-radius: 4px; padding: 0 4px">RFC</span>
+<span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">OAuth 2.0 · 6749</span>
+</a>
+<a style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; text-decoration: none; font-size: 13px; color: #c4ccd6;">
+<span style="font-family: JetBrains Mono, monospace; font-size: 10px; color: #8f99a6; border: 1px solid #2a313b; border-radius: 4px; padding: 0 4px">API</span>
+<span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">OpenAPI нашего бэкенда</span>
+</a>
+<div style="padding: 14px 8px 6px; font-size: 11px; color: #8f99a6">Заметки</div>
+<a style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; text-decoration: none; font-size: 13px; background: linear-gradient(#b1a7f0, #b1a7f0) no-repeat left 8px bottom 2px / 18px 2px; color: #ffffff; font-weight: 600;">
+<span style="display: none"></span>
+<span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Дизайн rate-limit</span>
+</a>
+<a style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; text-decoration: none; font-size: 13px; color: #c4ccd6;">
+<span style="display: none"></span>
+<span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Ретро спринта 41</span>
+</a>
+<a style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; text-decoration: none; font-size: 13px; color: #c4ccd6;">
+<span style="display: none"></span>
+<span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Чек-лист релиза</span>
+</a>
+<a style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; text-decoration: none; font-size: 13px; color: #c4ccd6;">
+<span style="display: none"></span>
+<span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">С чего начать</span>
+</a>
+<div style="padding: 14px 8px 6px; font-size: 11px; color: #8f99a6">Сниппеты</div>
+<a style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; text-decoration: none; font-size: 13px; color: #c4ccd6;">
+<span style="font-family: JetBrains Mono, monospace; font-size: 10px; color: #8f99a6; border: 1px solid #2a313b; border-radius: 4px; padding: 0 4px">sh</span>
+<span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Поднять локальный стенд</span>
+</a>
+</div>
+<main style="flex: 999 1 440px; min-width: 0; padding: 26px 44px; box-sizing: border-box">
+<div style="color: #8f99a6; font-size: 12px; margin-bottom: 18px">Заметка · изменена 5 мин назад</div>
+<h1 style="margin: 0 0 18px; font-size: 30px; font-weight: 600; letter-spacing: -0.02em">Дизайн rate-limit</h1>
+<div style="max-width: 680px; font-size: 15px; line-height: 1.7; color: #d7dde5">
+<p style="margin: 0 0 14px">Лимитер считает попытки по ключу <code style="font-family: 'JetBrains Mono', monospace; font-size: 13px; background: #161a20; border-radius: 4px; padding: 1px 5px">login:&lt;email&gt;</code>. Баг в
+<a style="display: inline-flex; align-items: center; gap: 5px; background: #1a1f26; border-radius: 6px; padding: 0 7px; text-decoration: none; font-size: 13px"><span style="width: 9px; height: 9px; border-radius: 5px; border: 1.5px solid #e9edf2; background: conic-gradient(#e9edf2 0 50%, transparent 0)"></span>APP-101</a>
+— ключ не нормализован.</p>
+<h2 style="margin: 22px 0 8px; font-size: 18px; font-weight: 600; color: #e9edf2">Что отвечаем клиенту</h2>
+<p style="margin: 0 0 14px">429 с заголовком <code style="font-family: 'JetBrains Mono', monospace; font-size: 13px; background: #161a20; border-radius: 4px; padding: 1px 5px">Retry-After</code>, как в <a>RFC 6585</a>. Тело — без подсказки, существует ли аккаунт.</p>
+<h2 style="margin: 22px 0 8px; font-size: 18px; font-weight: 600; color: #e9edf2">Открытые вопросы</h2>
+<ul style="margin: 0; padding-left: 20px">
+<li>Окно 15 мин или скользящее? Спросить Олега.</li>
+<li>Нужна ли капча после 5 попыток — см. <a style="display: inline-flex; align-items: center; gap: 5px; background: #1a1f26; border-radius: 6px; padding: 0 7px; text-decoration: none; font-size: 13px"><span style="width: 9px; height: 9px; border-radius: 5px; box-sizing: border-box; border: 1.5px solid #c4ccd6"></span>APP-108</a></li>
+</ul>
+</div>
+</main>
+<aside style="flex: 1 1 240px; max-width: 260px; box-sizing: border-box; padding: 60px 20px 20px; display: flex; flex-direction: column; gap: 24px">
+<section>
+<h2 style="margin: 0 0 8px; font-size: 12px; font-weight: 600; color: #8f99a6">Задачи в заметке</h2>
+<div style="padding: 5px 0">APP-101 <span style="color: #8f99a6">· В работе</span></div>
+<div style="padding: 5px 0">APP-108 <span style="color: #8f99a6">· К выполнению</span></div>
+</section>
+<section>
+<h2 style="margin: 0 0 8px; font-size: 12px; font-weight: 600; color: #8f99a6">Ссылаются сюда</h2>
+<div style="padding: 5px 0">Ретро спринта 41</div>
+<div style="padding: 5px 0">Задача APP-101</div>
+</section>
+<section>
+<h2 style="margin: 0 0 8px; font-size: 12px; font-weight: 600; color: #8f99a6">Внешние ссылки</h2>
+<div style="padding: 5px 0">RFC 6585 · 429 Too Many Requests</div>
+</section>
+</aside>
+</div>

@@ -53,7 +53,7 @@ Popup {
     function withKeys(key, ids) {
         let text = I18n.t(key);
         const list = ids || [];
-        for (let i = 0; i < list.length; i++) text = text.arg(AppController.shortcutFor(list[i]));
+        for (let i = 0; i < list.length; i++) text = text.arg(AppController.shortcutText(list[i]));
         return text;
     }
 
@@ -91,14 +91,15 @@ Popup {
         return r.action !== "none";
     }
 
-    // The capture step's text, saved as a real task in To Do — exactly what
-    // was typed, nothing added.
+    // The capture step's text, saved as a real task in To Do, read the way
+    // every task input reads it (APP-266): "tomorrow at 15:00 p1" is a date
+    // and a priority, not part of the title.
     function _saveCapture() {
-        const title = captureField.text.trim();
+        const typed = captureField.text.trim();
+        if (typed.length === 0) return false;
+        const draft = AppController.quickTaskDraft(typed, new Date());
+        const title = String(draft.title);
         if (title.length === 0) return false;
-        const draft = AppController.newQuickTaskDraft("");
-        draft._isNew = true;
-        draft.title = title;
         if (!AppController.saveTask(draft)) return false;
         root.captured = root.captured.concat([title]);
         root.lastCapturedId = draft.id;
@@ -140,7 +141,7 @@ Popup {
         // A key that is not in the catalogue (the `?` of the cheat-sheet).
         property string fixedKey: ""
         property string fixedLabel: ""
-        readonly property string combo: chip.fixedKey.length > 0 ? chip.fixedKey : AppController.shortcutFor(sid)
+        readonly property string combo: chip.fixedKey.length > 0 ? chip.fixedKey : AppController.shortcutText(sid)
         visible: combo !== ""
         radius: Theme.radiusMd
         color: Theme.panel2

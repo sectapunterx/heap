@@ -1,0 +1,24 @@
+<style>:host{margin:0;background:#0c0e11}a{color:#e9edf2}a:hover{color:#ffffff}button{font-family:inherit}</style>
+<div style="width: 100%; height: 900px; box-sizing: border-box; background: #1e1f22; color: #e9edf2; font-family: 'Golos Text', sans-serif; font-size: 13px; padding: 0">
+<div style="position: relative; height: 900px; overflow: hidden; background: #1e1f22">
+<div aria-hidden="true" style="padding: 20px 28px; font-family: 'JetBrains Mono', monospace; font-size: 14px; line-height: 1.9; color: #5e6470; padding: 48px 64px">
+<div>func (c *Client) Charge(ctx context.Context, req ChargeReq) error {</div><div>    resp, err := c.http.Do(req.WithContext(ctx))</div><div>    if err != nil {</div><div>        return fmt.Errorf("charge: %w", err)</div><div>    }</div><div>    if resp.StatusCode == 429 {</div><div>        wait := parseRetryAfter(resp.Header.Get("Retry-After"))</div><div>        return &amp;RateLimited{Wait: wait}</div><div>    }</div><div>    defer resp.Body.Close()</div><div>    return decode(resp.Body, &amp;out)</div><div>}</div>
+</div>
+<div role="dialog" aria-label="New task" style="position: absolute; left: 600px; top: 200px; transform: translateX(-50%); width: 600px; box-sizing: border-box; background: #14181d; border: 1px solid #2c3139; border-radius: 12px; padding: 14px 16px; box-shadow: 0 24px 60px rgba(0,0,0,0.6)">
+<div style="display: flex; align-items: center; gap: 10px; font-size: 11px; color: #8f99a6; margin-bottom: 8px"><span style="font-weight: 500; color: #c4ccd6; letter-spacing: -0.035em"><span style="border-bottom: 0.075em solid #b1a7f0; padding-bottom: 0.06em">low</span>key</span><span>new task</span><span style="flex: 1"></span><span>in Example ▾</span></div>
+<div style="border-bottom: 1px solid #4a525d; padding: 6px 2px; font-size: 16px">Check the gateway timeout <span style="color: #a9c3dd">tomorrow 11:00</span> <span style="color: #a9c3dd">p1</span></div>
+<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px">
+<span style="display: inline-flex; align-items: center; gap: 6px; height: 26px; box-sizing: border-box; border: 1px solid #262c34; border-radius: 8px; padding: 0 10px; font-size: 12px; color: #c4ccd6; line-height: 1"><span style="color: #6f7884">when</span>Fri, Oct 9 · 11:00</span><span style="display: inline-flex; align-items: center; gap: 6px; height: 26px; box-sizing: border-box; border: 1px solid #262c34; border-radius: 8px; padding: 0 10px; font-size: 12px; color: #c4ccd6; line-height: 1"><span style="color: #6f7884">priority</span>P1</span><span style="display: inline-flex; align-items: center; gap: 6px; height: 26px; box-sizing: border-box; border: 1px solid #262c34; border-radius: 8px; padding: 0 10px; font-size: 12px; color: #c4ccd6; line-height: 1"><span style="color: #6f7884">column</span>To do</span>
+</div>
+<div style="display: flex; gap: 14px; margin-top: 12px; font-size: 11px; color: #6f7884"><span>↵ create</span><span>Shift ↵ new line</span><span>Esc close</span><span style="flex: 1"></span><span>from branch fix/APP-105 — link it?</span></div>
+</div>
+<div role="dialog" aria-label="Quick note" style="position: absolute; left: 600px; top: 440px; transform: translateX(-50%); width: 600px; box-sizing: border-box; background: #14181d; border: 1px solid #2c3139; border-radius: 12px; padding: 14px 16px; box-shadow: 0 24px 60px rgba(0,0,0,0.6)">
+<div style="display: flex; align-items: center; gap: 10px; font-size: 11px; color: #8f99a6; margin-bottom: 8px"><span style="font-weight: 500; color: #c4ccd6; letter-spacing: -0.035em"><span style="border-bottom: 0.075em solid #b1a7f0; padding-bottom: 0.06em">low</span>key</span><span>quick note → “Inbox”</span><span style="flex: 1"></span><span>attach to APP-101 ▾</span></div>
+<div style="min-height: 90px; color: #c4ccd6; line-height: 1.6">Payments send Retry-After in seconds, not a date — check the parser.<br><span style="color: #6f7884">```</span></div>
+<div style="display: flex; gap: 14px; margin-top: 8px; font-size: 11px; color: #6f7884"><span>Ctrl ↵ save</span><span>Esc — draft is kept</span></div>
+</div>
+<div role="status" style="position: absolute; right: 24px; bottom: 24px; display: inline-flex; align-items: center; gap: 10px; background: #1b2027; border: 1px solid #2a3038; border-radius: 10px; padding: 8px 14px">
+<span style="width: 12px; height: 12px; border-radius: 6px; background: #c4ccd6"></span>lowkey: created TASK-4 · tomorrow 11:00
+</div>
+</div>
+</div>

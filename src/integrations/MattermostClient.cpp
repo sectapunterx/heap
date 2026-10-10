@@ -156,7 +156,7 @@ void MattermostClient::send(const QByteArray& method, const QString& path, const
   // other call. hostIsAcceptable() only ever saw the first URL.
   req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::SameOriginRedirectPolicy);
   req.setRawHeader("Accept", "application/json");
-  req.setRawHeader("User-Agent", "heap-sync");
+  req.setRawHeader("User-Agent", "lowkey-sync");
   if(!m_token.isEmpty()) {
     req.setRawHeader("Authorization", QByteArrayLiteral("Bearer ") + m_token.toUtf8());
   }

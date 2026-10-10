@@ -1,14 +1,15 @@
 import { defineConfig, devices } from '@playwright/test';
+import { BASE } from './repo.mjs';
 
 // Runs against the production build served by `astro preview` under the same
-// /heap/ base GitHub Pages uses.
+// /<repository>/ base GitHub Pages uses (repo.mjs).
 export default defineConfig({
   testDir: 'tests/e2e',
   fullyParallel: true,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
-    baseURL: 'http://localhost:4321/heap/',
+    baseURL: `http://localhost:4321${BASE}/`,
     trace: 'retain-on-failure',
   },
   projects: [
@@ -17,7 +18,7 @@ export default defineConfig({
   ],
   webServer: {
     command: 'npx astro preview --port 4321 --ignore-lock',
-    url: 'http://localhost:4321/heap/',
+    url: `http://localhost:4321${BASE}/`,
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
   },

@@ -30,6 +30,19 @@ ListView {
     // side. Null in a preview with no editor: the boxes then do not toggle.
     property var editorDocument: null
 
+    // Block editing (APP-265/269): the source lines editFirst..editLast are
+    // being edited in a field the editor lays over this view; the rows they
+    // drew make room for it (editHeight) and hide. -1 = none.
+    property int editFirst: -1
+    property int editLast: -1
+    property real editHeight: 0
+    // The row that holds the field's place (the first row of the block).
+    property int editRow: -1
+    // A single click asks for the row's source (the block editor); otherwise
+    // only a double-click does.
+    property bool clickToEdit: false
+    signal rowClicked(int row, int line)
+
     // Emitted when a row is activated (double-click, or Alt+click), with the
     // first source line it came from — the editor uses this to put the caret
     // where the reader was looking.
@@ -126,10 +139,18 @@ ListView {
     delegate: Item {
         id: rowItem
         width: view.width
-        implicitHeight: content.implicitHeight + content.anchors.topMargin + content.anchors.bottomMargin
-
         required property int index
         required property var model
+
+        // Inside the block being edited: hidden; its first row holds the
+        // field's place.
+        readonly property bool _inEdit: view.editFirst >= 0 && rowItem.model.firstLine >= view.editFirst
+                                        && rowItem.model.firstLine <= view.editLast
+        readonly property bool _editHost: rowItem._inEdit && rowItem.index === view.editRow
+        implicitHeight: rowItem._editHost ? view.editHeight
+                      : rowItem._inEdit ? 0
+                      : content.implicitHeight + content.anchors.topMargin + content.anchors.bottomMargin
+        opacity: rowItem._inEdit ? 0 : 1
 
         // Quote bars are drawn per row rather than around a group, so a quote
         // that contains several blocks shows one continuous bar.
@@ -188,6 +209,7 @@ ListView {
         // Double-click anywhere on a row jumps the editor to its source.
         TapHandler {
             acceptedButtons: Qt.LeftButton
+            onTapped: if (view.clickToEdit) view.rowClicked(rowItem.index, rowItem.model.firstLine)
             onDoubleTapped: view.sourceRequested(rowItem.model.firstLine)
         }
 

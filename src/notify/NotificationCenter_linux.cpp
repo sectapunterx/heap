@@ -62,7 +62,7 @@ class LinuxDBusBackend : public NotificationCenter {
     const int expireMs = n.durationSec > 0 ? n.durationSec * 1000 : -1;
 
     const QDBusReply<uint> reply =
-        m_iface.call(QStringLiteral("Notify"), QStringLiteral("heap."), replaceId, iconPath, n.title, n.body, actions, hints, expireMs);
+        m_iface.call(QStringLiteral("Notify"), QStringLiteral("lowkey"), replaceId, iconPath, n.title, n.body, actions, hints, expireMs);
 
     if(reply.isValid()) {
       const uint dbusId = reply.value();

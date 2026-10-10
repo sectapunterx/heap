@@ -25,10 +25,21 @@ QString readFile(const QString& path) {
 // Mirrors CommandPalette._isContextual: actions that only mean something on a
 // surface, with a cursor or a selection, are not offered by the palette.
 bool contextual(const QString& id) {
-  static const QStringList ids = {
-      QStringLiteral("palette.open"), QStringLiteral("task.openExternal"), QStringLiteral("undo"), QStringLiteral("redo")};
-  static const QStringList prefixes = {
-      QStringLiteral("board."), QStringLiteral("savedView."), QStringLiteral("cal."), QStringLiteral("selection.")};
+  static const QStringList ids = {QStringLiteral("palette.open"),
+                                  QStringLiteral("palette.commands"),
+                                  QStringLiteral("task.openExternal"),
+                                  QStringLiteral("undo"),
+                                  QStringLiteral("redo")};
+  static const QStringList prefixes = {QStringLiteral("board."),
+                                       QStringLiteral("savedView."),
+                                       QStringLiteral("cal."),
+                                       QStringLiteral("selection."),
+                                       QStringLiteral("cursor."),
+                                       QStringLiteral("nav.")};
+  // A second key of an action (".alt"), and the task under the cursor's keys.
+  if(id.contains(QStringLiteral(".alt")) || (id.startsWith(QStringLiteral("task.")) && id != QStringLiteral("task.new"))) {
+    return true;
+  }
   return ids.contains(id) || std::any_of(prefixes.cbegin(), prefixes.cend(), [&id](const QString& p) {
            return id.startsWith(p);
          });
@@ -56,7 +67,7 @@ TEST_F(PaletteCatalogTest, MainRunsEveryCommandThePaletteOffers) {
   ASSERT_GE(from, 0);
   const QString body = main.mid(from, main.indexOf(QStringLiteral("default:"), from) - from);
   // runCommand routes whole families by prefix before its switch.
-  const QStringList routed = {QStringLiteral("view."), QStringLiteral("notes.")};
+  const QStringList routed = {QStringLiteral("view."), QStringLiteral("notes."), QStringLiteral("section.")};
   int offered = 0;
   for(const QVariant& v : app_->shortcuts()) {
     const QString id = v.toMap().value(QStringLiteral("id")).toString();

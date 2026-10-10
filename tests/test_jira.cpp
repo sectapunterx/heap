@@ -6,6 +6,9 @@
 #include <QElapsedTimer>
 #include <QEventLoop>
 #include <QHostAddress>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QTcpServer>
 #include <QTcpSocket>
 
@@ -326,7 +329,9 @@ TEST_F(JiraNetwork, PullPostsTheBoundedDefaultJql) {
   // The browse URL is built from the site, never from the API base.
   EXPECT_EQ(got[0].url, server.base() + QStringLiteral("/browse/LTE-1"));
   // POST, not GET: keeps a long JQL out of the URL and `fields` a real array.
-  EXPECT_EQ(server.seen().value(0), QByteArray("POST /rest/api/3/search/jql"));
+  // (After the one-off look for the sprint field, APP-255.)
+  EXPECT_EQ(server.seen().value(0), QByteArray("GET /rest/api/3/field"));
+  EXPECT_EQ(server.seen().value(1), QByteArray("POST /rest/api/3/search/jql"));
   EXPECT_TRUE(server.lastBody().contains("currentUser()")) << server.lastBody().toStdString();
   // The endpoint returns only the fields asked for, so the identity fields the
   // card renders (HEAP-117) have to be in the request or they never arrive.
@@ -808,7 +813,7 @@ TEST_F(JiraNetwork, PullWalksEveryPageOfACloudSearch) {
   EXPECT_EQ(got[1].externalId, QStringLiteral("LTE-2"));
   // One signal for the whole walk: AppController toasts per tasksFetched.
   EXPECT_EQ(emitted, 1);
-  EXPECT_EQ(server.seen().size(), 2);
+  EXPECT_EQ(server.seen().count("POST /rest/api/3/search/jql"), 2);
   // The token from page one has to come back in the body of page two.
   EXPECT_TRUE(server.lastBody().contains("TOK2")) << server.lastBody().toStdString();
 }
@@ -832,7 +837,7 @@ TEST_F(JiraNetwork, ALastPageWithNoTokenEndsTheWalk) {
   ASSERT_TRUE(waitFor(done));
 
   EXPECT_EQ(got.size(), 1);
-  EXPECT_EQ(server.seen().size(), 1) << "no token means no second request";
+  EXPECT_EQ(server.seen().count("POST /rest/api/3/search/jql"), 1) << "no token means no second request";
 }
 
 TEST_F(JiraNetwork, AFailedSecondPageKeepsTheFirst) {
@@ -887,7 +892,7 @@ TEST_F(JiraNetwork, AServerSearchPagesByRowOffset) {
   ASSERT_TRUE(waitFor(done));
 
   EXPECT_EQ(got.size(), 1);
-  EXPECT_EQ(server.seen().size(), 1);
+  EXPECT_EQ(server.seen().count("POST /rest/api/2/search"), 1);
   // The first page must not carry startAt at all — some older Server versions
   // reject startAt=0 alongside an empty JQL clause.
   EXPECT_FALSE(server.lastBody().contains("startAt")) << server.lastBody().toStdString();
@@ -987,4 +992,101 @@ TEST(JiraProvider, ParseJiraComments_CommentId_BecomesAnAnchor) {
   const auto comments = heap::integrations::parseJiraComments(json);
   ASSERT_EQ(comments.size(), 1);
   EXPECT_EQ(comments.at(0).anchor, QStringLiteral("?focusedCommentId=10042"));
+}
+
+// ── Sprints (APP-255): read-only, the field found per site ──────────────────
+
+TEST(JiraSprint, TheFieldIsFoundBySchema) {
+  const QByteArray fields = R"([
+    {"id": "summary", "name": "Summary", "schema": {"type": "string", "system": "summary"}},
+    {"id": "customfield_10020", "name": "Sprint", "schema": {"type": "array", "custom": "com.pyxis.greenhopper.jira:gh-sprint"}},
+    {"id": "customfield_10014", "name": "Epic Link", "schema": {"custom": "com.pyxis.greenhopper.jira:gh-epic-link"}}
+  ])";
+  EXPECT_EQ(heap::integrations::parseJiraSprintField(fields), QStringLiteral("customfield_10020"));
+  EXPECT_TRUE(heap::integrations::parseJiraSprintField(R"([{"id":"summary","schema":{"system":"summary"}}])").isEmpty());
+  EXPECT_TRUE(heap::integrations::parseJiraSprintField("{}").isEmpty());
+}
+
+TEST(JiraSprint, TheActiveOneWins_AClosedOneIsNeverShown) {
+  using heap::integrations::jiraCurrentSprint;
+  // In two sprints: the closed one it carried over from, and the active one.
+  const QJsonArray two = QJsonDocument::fromJson(R"([
+    {"id": 1, "name": "S 13", "state": "closed", "startDate": "2026-09-21T09:00:00.000Z", "endDate": "2026-10-02T17:00:00.000Z"},
+    {"id": 2, "name": "S 14", "state": "active", "startDate": "2026-10-05T09:00:00.000Z", "endDate": "2026-10-16T17:00:00.000Z"}
+  ])")
+                             .array();
+  const QJsonObject s = jiraCurrentSprint(two);
+  EXPECT_EQ(s.value(QStringLiteral("name")).toString(), QStringLiteral("S 14"));
+  EXPECT_EQ(s.value(QStringLiteral("state")).toString(), QStringLiteral("active"));
+  EXPECT_EQ(s.value(QStringLiteral("end")).toString(), QStringLiteral("2026-10-16T17:00:00.000Z"));
+
+  const QJsonArray closedOnly = QJsonDocument::fromJson(R"([{"name": "S 13", "state": "closed"}])").array();
+  EXPECT_TRUE(jiraCurrentSprint(closedOnly).isEmpty());
+  EXPECT_TRUE(jiraCurrentSprint(QJsonValue()).isEmpty());
+
+  const QJsonArray futures = QJsonDocument::fromJson(R"([
+    {"name": "S 16", "state": "future", "startDate": "2026-11-02T09:00:00.000Z"},
+    {"name": "S 15", "state": "future", "startDate": "2026-10-19T09:00:00.000Z"}
+  ])")
+                                 .array();
+  EXPECT_EQ(jiraCurrentSprint(futures).value(QStringLiteral("name")).toString(), QStringLiteral("S 15"));
+}
+
+TEST(JiraSprint, ServerStringsAreRead) {
+  const QJsonArray server{
+      QStringLiteral("com.atlassian.greenhopper.service.sprint.Sprint@1a2b[id=7,rapidViewId=3,state=ACTIVE,name=Team, sprint 7,"
+                     "startDate=2026-10-05T09:00:00.000+03:00,endDate=2026-10-16T18:00:00.000+03:00,completeDate=<null>,sequence=7]")};
+  const QJsonObject s = heap::integrations::jiraCurrentSprint(server);
+  EXPECT_EQ(s.value(QStringLiteral("name")).toString(), QStringLiteral("Team, sprint 7"));
+  EXPECT_EQ(s.value(QStringLiteral("state")).toString(), QStringLiteral("active"));
+  EXPECT_EQ(s.value(QStringLiteral("end")).toString(), QStringLiteral("2026-10-16T18:00:00.000+03:00"));
+}
+
+TEST(JiraSprint, AnIssueCarriesItsSprintOnlyWhenTheSiteHasTheField) {
+  const QByteArray json = R"({"issues": [{"key": "LTE-1", "fields": {"summary": "S", "status": {"name": "To Do"},
+    "customfield_10020": [{"name": "S 14", "state": "active", "endDate": "2026-10-16T17:00:00.000Z"}]}}]})";
+  const QVector<ExternalTask> with = parseJiraIssues(json, QStringLiteral("https://x"), QStringLiteral("customfield_10020"));
+  ASSERT_EQ(with.size(), 1);
+  EXPECT_EQ(with.at(0).details.value(QStringLiteral("sprint")).toObject().value(QStringLiteral("name")).toString(), QStringLiteral("S 14"));
+  const QVector<ExternalTask> without = parseJiraIssues(json, QStringLiteral("https://x"));
+  ASSERT_EQ(without.size(), 1);
+  EXPECT_TRUE(without.at(0).details.isEmpty());
+}
+
+TEST_F(JiraNetwork, PullAsksForTheSprintFieldOnce_AndOnlyWhenTheSiteHasOne) {
+  for(const bool hasSprints : {true, false}) {
+    FakeJira server;
+    server.route("GET /rest/api/3/field",
+                 {200,
+                  hasSprints ? R"([{"id":"customfield_10020","schema":{"custom":"com.pyxis.greenhopper.jira:gh-sprint"}}])"
+                             : R"([{"id":"summary","schema":{"system":"summary"}}])"});
+    server.route("POST /rest/api/3/search/jql",
+                 {200,
+                  R"({"isLast":true,"issues":[{"key":"LTE-1","fields":{"summary":"S","status":{"name":"To Do"},
+                    "customfield_10020":[{"name":"S 14","state":"active","endDate":"2026-10-16"}]}}]})"});
+    heap::integrations::JiraProvider p;
+    p.setConfig(server.base(), QStringLiteral("me@example.com"), QStringLiteral("tok"), QString());
+    p.setDeployment(heap::integrations::JiraDeployment::Cloud);
+    int fetched = 0;
+    QVector<ExternalTask> got;
+    QObject::connect(&p, &heap::integrations::IntegrationProvider::tasksFetched, &p, [&](const QVector<ExternalTask>& t) {
+      got = t;
+      ++fetched;
+    });
+    p.pullTasks();
+    ASSERT_TRUE(heap::testing::waitUntil([&] {
+      return fetched == 1;
+    }));
+    p.pullTasks();
+    ASSERT_TRUE(heap::testing::waitUntil([&] {
+      return fetched == 2;
+    }));
+    EXPECT_EQ(server.seen().count("GET /rest/api/3/field"), 1);
+    EXPECT_EQ(server.lastBody().contains("customfield_10020"), hasSprints) << server.lastBody().toStdString();
+    ASSERT_EQ(got.size(), 1);
+    EXPECT_EQ(got.at(0).details.contains(QStringLiteral("sprint")), hasSprints);
+    for(const auto& r : server.requests()) {
+      EXPECT_TRUE(r.method == "GET" || r.path.endsWith("/search/jql")) << "nothing is written to a sprint: " << r.key().toStdString();
+    }
+  }
 }

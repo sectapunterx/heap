@@ -8,8 +8,11 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QSet>
 #include <QTimer>
 #include <QUrl>
+
+#include <algorithm>
 
 namespace heap::integrations {
 
@@ -241,7 +244,7 @@ QNetworkRequest RestIssueProvider::buildRequest(const QString& url) const {
   // Qt would follow a redirect to another host and carry the credentials
   // with it; keep every authenticated call on the origin it was aimed at.
   req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::SameOriginRedirectPolicy);
-  req.setRawHeader("User-Agent", "heap-sync");
+  req.setRawHeader("User-Agent", "lowkey-sync");
   for(const auto& h : m_desc.auth.extraHeaders) {
     req.setRawHeader(h.first, h.second);
   }
@@ -326,6 +329,15 @@ void RestIssueProvider::fetchPage() {
         return;
       }
       const QString error = describeReplyError(reply);
+      if(m_pull.review) {
+        // A review list that fails costs only its own items: the issues and
+        // the other lists still land, and the pull says it was partial.
+        if(m_pull.reviewError.isEmpty()) {
+          m_pull.reviewError = error;
+        }
+        nextReview();
+        return;
+      }
       if(m_pull.page > 0) {
         // Pages already in hand are real issues; throwing them away because the
         // tail failed would be a worse answer than a short one. Report the
@@ -343,6 +355,23 @@ void RestIssueProvider::fetchPage() {
 }
 
 void RestIssueProvider::onPage(const QByteArray& body, const QByteArray& linkHeader) {
+  if(m_pull.review) {
+    QVector<ExternalTask> items = m_desc.reviewParser(body, m_pull.base);
+    const int count = static_cast<int>(items.size());
+    for(ExternalTask& t : items) {
+      t.crossProject = m_pull.crossProject;
+    }
+    m_pull.reviewTasks += items;
+    ++m_pull.reviewPage;
+    const QUrl next = m_pull.reviewPage < qMax(1, m_desc.paging.maxPages) ? nextPageUrl(body, linkHeader, count) : QUrl();
+    if(next.isValid() && !next.isEmpty()) {
+      m_pull.url = next;
+      fetchPage();
+    } else {
+      nextReview();
+    }
+    return;
+  }
   QVector<ExternalTask> tasks =
       m_desc.parser ? m_desc.parser(body, m_pull.base) : parseWithFieldMap(body, m_desc.fields, m_desc.id, m_pull.base);
   const int count = static_cast<int>(tasks.size());
@@ -420,7 +449,121 @@ QUrl RestIssueProvider::nextPageUrl(const QByteArray& body, const QByteArray& li
   return {};
 }
 
+QStringList RestIssueProvider::reviewRoles() const {
+  if(m_desc.reviewLists.isEmpty() || m_desc.reviewParser == nullptr) {
+    return {};
+  }
+  if(!m_desc.reviewEnabledKey.isEmpty() && m_cfg.value(m_desc.reviewEnabledKey).toString() != QLatin1String("true")) {
+    return {};
+  }
+  if(m_desc.reviewRolesKey.isEmpty() || !m_cfg.contains(m_desc.reviewRolesKey)) {
+    return m_desc.reviewRolesDefault;
+  }
+  QStringList roles;
+  for(const QString& r : m_cfg.value(m_desc.reviewRolesKey).toString().split(QChar(','), Qt::SkipEmptyParts)) {
+    roles.append(r.trimmed().toLower());
+  }
+  return roles;
+}
+
+void RestIssueProvider::startReviews(const QStringList& roles) {
+  m_pull.review = true;
+  const bool needsLogin = std::any_of(m_desc.reviewLists.cbegin(), m_desc.reviewLists.cend(), [&roles](const ReviewList& l) {
+    return l.needsLogin && roles.contains(l.role);
+  });
+  if(!needsLogin) {
+    queueReviews(roles, QString());
+    nextReview();
+    return;
+  }
+  withSelfLogin([this, roles](const QString& me, int, const QString& error) {
+    if(!m_pull.active) {
+      return;
+    }
+    if(me.isEmpty() && m_pull.reviewError.isEmpty()) {
+      m_pull.reviewError = error.isEmpty() ? QStringLiteral("could not tell who is signed in") : error;
+    }
+    queueReviews(roles, me);
+    nextReview();
+  });
+}
+
+void RestIssueProvider::queueReviews(const QStringList& roles, const QString& me) {
+  // Open ones of any age, plus the ones merged or closed lately, so a card
+  // follows its merge request to Done; older closed ones are left alone.
+  const QDateTime since = QDateTime::currentDateTimeUtc().addDays(-qMax(1, m_desc.reviewRecentDays));
+  QVariantMap extra;
+  extra.insert(QStringLiteral("since"), since.toString(Qt::ISODate));
+  extra.insert(QStringLiteral("sinceDate"), since.date().toString(Qt::ISODate));
+  extra.insert(QStringLiteral("me"), me);
+  const bool self = inSelfScope();
+  QStringList seen;
+  for(const ReviewList& l : m_desc.reviewLists) {
+    if(!roles.contains(l.role) || (l.needsLogin && me.isEmpty())) {
+      continue;
+    }
+    const QString path = self ? l.selfPath : l.path;
+    if(path.isEmpty()) {
+      continue;
+    }
+    const QString url = m_pull.base + expand(path, extra);
+    if(!seen.contains(url)) {
+      seen.append(url);
+    }
+  }
+  m_pull.reviewQueue = seen;
+}
+
+void RestIssueProvider::nextReview() {
+  if(!m_pull.active) {
+    return;
+  }
+  if(m_pull.reviewQueue.isEmpty()) {
+    finishAll();
+    return;
+  }
+  m_pull.url = QUrl(m_pull.reviewQueue.takeFirst());
+  m_pull.reviewPage = 0;
+  m_pull.attempt = 0;
+  fetchPage();
+}
+
+void RestIssueProvider::finishAll() {
+  QVector<ExternalTask> tasks = m_pull.tasks;
+  // The same merge request comes back from several lists (mine and assigned
+  // to me, open and recently updated): keep its first copy.
+  QSet<QString> have;
+  for(const ExternalTask& t : std::as_const(m_pull.reviewTasks)) {
+    const QString key = t.url.isEmpty() ? t.project + QChar('\n') + t.externalId : t.url;
+    if(have.contains(key)) {
+      continue;
+    }
+    have.insert(key);
+    tasks.append(t);
+  }
+  const QString truncated = m_pull.issuesTruncated;
+  const QString reviewError = m_pull.reviewError;
+  const int pages = m_pull.page;
+  m_pull = Pull{};
+  setLastPullComplete(truncated.isEmpty() && reviewError.isEmpty());
+  emit tasksFetched(tasks);
+  if(!truncated.isEmpty()) {
+    emit pullFailed(0, QStringLiteral("%1: only %2 page(s) — %3").arg(m_desc.displayName).arg(pages).arg(truncated));
+  } else if(!reviewError.isEmpty()) {
+    emit pullFailed(0, QStringLiteral("%1: merge requests — %2").arg(m_desc.displayName, reviewError));
+  }
+}
+
 void RestIssueProvider::finishPull(const QString& truncatedReason) {
+  // The review lists come after the issues, whatever became of the issues.
+  if(!m_pull.review) {
+    const QStringList roles = reviewRoles();
+    if(!roles.isEmpty()) {
+      m_pull.issuesTruncated = truncatedReason;
+      startReviews(roles);
+      return;
+    }
+  }
   const QVector<ExternalTask> tasks = m_pull.tasks;
   const int pages = m_pull.page;
   m_pull.active = false;
@@ -447,13 +590,20 @@ void RestIssueProvider::fetchComments(const QString& externalId, const QString& 
     return;
   }
   QVariantMap extra;
-  extra.insert(QStringLiteral("externalId"), externalId);
+  // A GitLab merge request ("!17") keeps its notes under merge_requests/17.
+  QString tmpl = m_desc.commentsPathTemplate;
+  if(externalId.startsWith(QChar('!'))) {
+    extra.insert(QStringLiteral("externalId"), externalId.mid(1));
+    tmpl.replace(QStringLiteral("/issues/"), QStringLiteral("/merge_requests/"));
+  } else {
+    extra.insert(QStringLiteral("externalId"), externalId);
+  }
   // The issue's own repo, which in a cross-project pull is not the configured
   // one. expand() prefers `extra` over the config, so this simply wins.
   if(!project.isEmpty() && !m_desc.scopeKey.isEmpty()) {
     extra.insert(m_desc.scopeKey, project);
   }
-  const QString url = resolvedBaseUrl() + expand(m_desc.commentsPathTemplate, extra);
+  const QString url = resolvedBaseUrl() + expand(tmpl, extra);
 
   QNetworkReply* reply = m_nam->get(buildRequest(url));
   connect(reply, &QNetworkReply::finished, this, [this, reply, externalId]() {
@@ -584,6 +734,11 @@ void RestIssueProvider::checkIssue(const QString& externalId, const QString& pro
 }
 
 void RestIssueProvider::pushStatusChange(const QString& externalId, const QString& newStatus, const QString& project) {
+  if(externalId.startsWith(QChar('!'))) {
+    // A merge request (APP-242) is read-only: nothing goes to the tracker.
+    emit taskPushed(externalId, project, false, QStringLiteral("merge requests are read-only"), QString());
+    return;
+  }
   if(m_desc.pushPathTemplate.isEmpty()) {
     // Pull-only provider: report success without touching the remote so
     // moving a linked task never spams the log with "push failed".

@@ -390,7 +390,9 @@ TestCase {
     }
 
     // ── APP-209: Enter and Shift+Enter are new lines, Ctrl+Enter saves ──
-    function test_enter_is_a_new_line_and_ctrl_enter_saves() {
+    // APP-266: Enter creates, Shift+Enter starts a new line; the lines after
+    // the first are the description.
+    function test_enter_saves_and_shift_enter_is_a_new_line() {
         const qc = make('import TodoCpp; QuickCapturePopup { }');
         qc.open();
         tryVerify(() => qc.opened);
@@ -398,19 +400,14 @@ TestCase {
         input.forceActiveFocus();
         input.text = tc.probe + " multi line";
         input.cursorPosition = input.text.length;
-        keyClick(Qt.Key_Return);
-        verify(qc.opened, "Enter saved instead of starting a new line");
-        keyClick(Qt.Key_S);
         keyClick(Qt.Key_Return, Qt.ShiftModifier);
         verify(qc.opened, "Shift+Enter saved instead of starting a new line");
+        keyClick(Qt.Key_S);
+        keyClick(Qt.Key_Return, Qt.ShiftModifier);
         keyClick(Qt.Key_T);
-        compare(input.text, tc.probe + " multi line
-s
-t");
-        keyClick(Qt.Key_Enter);
-        verify(qc.opened, "keypad Enter saved");
-        input.remove(input.length - 1, input.length);
-        keyClick(Qt.Key_Return, Qt.ControlModifier);
+        compare(input.text, tc.probe + " multi line\ns\nt");
+        verify(!findChild(qc, "qc-lines-ask").visible, "typed lines are not a paste");
+        keyClick(Qt.Key_Return);
         tryVerify(() => !qc.opened);
         const m = AppController.tasks;
         let found = null;
@@ -418,10 +415,9 @@ t");
             const t = AppController.taskById(String(m.data(m.index(i, 0), Qt.UserRole + 1)));
             if (t.title === tc.probe + " multi line") found = t;
         }
-        verify(found !== null, "Ctrl+Enter did not save the first line as the title");
+        verify(found !== null, "Enter did not save the first line as the title");
         tc.seeded.push(found.id);
-        compare(found.desc, "s
-t", "the lines after the first are the description");
+        compare(found.desc, "s\nt");
     }
 
     function test_esc_still_closes_capture() {

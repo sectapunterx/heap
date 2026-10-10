@@ -1,9 +1,13 @@
-export const REPO = 'sectapunterx/heap';
+// The GitHub repository, from repo.mjs (GITHUB_REPOSITORY on Actions): every download link, the
+// releases API and the source links follow it, and so does the Pages base in astro.config.mjs.
+import { REPO as REPO_FULL } from '../../repo.mjs';
+export const REPO: string = REPO_FULL;
 export const GITHUB_URL = `https://github.com/${REPO}`;
 export const RELEASES_URL = `${GITHUB_URL}/releases`;
-export const ISSUES_URL = `${GITHUB_URL}/issues`;
+export const LATEST_URL = `${RELEASES_URL}/latest`;
+export const LICENSE_URL = `${GITHUB_URL}/blob/master/LICENSE`;
 
-/** Prefix a site-relative path with the deploy base (`/heap/`), keeping the trailing slash policy. */
+/** Prefix a site-relative path with the deploy base (`/<repository>/`), keeping the trailing slash policy. */
 export function url(path = ''): string {
   const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
   const clean = path.replace(/^\/+/, '');
@@ -12,18 +16,3 @@ export function url(path = ''): string {
   const needsSlash = pathname !== '' && !pathname.endsWith('/') && !/\.[a-z0-9]+$/i.test(pathname);
   return `${base}/${pathname}${needsSlash ? '/' : ''}${hash ? `#${hash}` : ''}`;
 }
-
-export interface NavItem {
-  id: string;
-  label: string;
-  href: string;
-}
-
-export const NAV: NavItem[] = [
-  { id: 'features', label: 'Features', href: 'features' },
-  { id: 'demo', label: 'Try it', href: 'demo' },
-  { id: 'compare', label: 'Compare', href: 'compare' },
-  { id: 'privacy', label: 'Privacy', href: 'privacy' },
-  { id: 'docs', label: 'Docs', href: 'docs' },
-  { id: 'changelog', label: 'Changelog', href: 'changelog' },
-];

@@ -21,7 +21,7 @@ let cache: Promise<Release[]> | undefined;
 async function fetchReleases(): Promise<Release[]> {
   const headers: Record<string, string> = {
     Accept: 'application/vnd.github+json',
-    'User-Agent': 'heap-site-build',
+    'User-Agent': 'lowkey-site-build',
   };
   const token = process.env.GITHUB_TOKEN;
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -43,7 +43,7 @@ async function fetchReleases(): Promise<Release[]> {
     if (!releases.length) throw new Error('no releases');
     return releases;
   } catch (err) {
-    console.warn(`[heap-site] GitHub releases unavailable (${(err as Error).message}); using the committed snapshot.`);
+    console.warn(`[site] GitHub releases unavailable (${(err as Error).message}); using the committed snapshot.`);
     return fallback as Release[];
   }
 }

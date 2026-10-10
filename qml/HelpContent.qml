@@ -17,7 +17,7 @@ Item {
     // cannot leave the guide naming the wrong keys.
     function kbd(id) {
         const list = AppController.shortcuts;
-        for (let i = 0; i < list.length; i++) if (list[i].id === id) return list[i].sequence;
+        for (let i = 0; i < list.length; i++) if (list[i].id === id) return AppController.keyText(list[i].sequence);
         return "";
     }
 
@@ -30,7 +30,7 @@ Item {
         {anchor: "help-profiles", label: root.tr2("Profiles — workspaces, JSON", "Профили — рабочие пространства, JSON")},
         {anchor: "help-search", label: root.tr2("Search & Command Palette", "Поиск и палитра команд")},
         {anchor: "help-filter", label: root.tr2("Filters — priorities, archived, show-done, saved views", "Фильтры — приоритеты, архив, выполненные, сохранённые виды")},
-        {anchor: "help-tweaks", label: root.tr2("Tweaks — theme, density, contrast", "Твики — тема, плотность, контраст")},
+        {anchor: "help-tweaks", label: root.tr2("Appearance — theme, accent, density, style", "Внешний вид — тема, акцент, плотность, стиль")},
         {anchor: "help-hotkeys", label: root.tr2("Hotkeys — rebinding and conflicts", "Горячие клавиши — переназначение и конфликты")},
         {anchor: "help-automation", label: root.tr2("Automation & Notifications", "Автоматизация и уведомления")},
         {anchor: "help-git", label: root.tr2("Git Watcher — branch focus, PR", "Git Watcher — фокус по ветке, PR")},
@@ -124,8 +124,8 @@ Item {
                     spacing: Theme.sp2xs
                     Layout.fillWidth: true
                     H2 {
-                        text: root.tr2("heap. help.",
-                                      "Справка heap.")
+                        text: root.tr2("lowkey help",
+                                      "Справка lowkey")
                     }
                     Text {
                         text: root.tr2("Everything the app can do, in one place.",
@@ -136,8 +136,8 @@ Item {
                 }
             }
             Body {
-                text: root.tr2("heap. — a developer's workday laid out across widgets: board, timeline, week and month calendars, a day panel, notes and documentation. Everything stays local in JSON; nothing goes to the cloud unless you connect a tracker. Below — a tour of the sections. Click an item in the table of contents to jump to the topic you need.",
-                              "heap. — рабочий день разработчика, разложенный по виджетам: доска, лента, календари недели и месяца, панель дня, заметки и документация. Всё хранится локально в JSON; в облако ничего не уходит, пока вы сами не подключите трекер. Ниже — обзор разделов. Нажмите пункт оглавления, чтобы перейти к нужной теме.")
+                text: root.tr2("A developer's workday in lowkey, laid out across widgets: board, timeline, week and month calendars, a day panel, notes and documentation. Everything stays local in JSON; nothing goes to the cloud unless you connect a tracker. Below — a tour of the sections. Click an item in the table of contents to jump to the topic you need.",
+                              "Рабочий день разработчика в lowkey, разложенный по виджетам: доска, лента, календари недели и месяца, панель дня, заметки и документация. Всё хранится локально в JSON; в облако ничего не уходит, пока вы сами не подключите трекер. Ниже — обзор разделов. Нажмите пункт оглавления, чтобы перейти к нужной теме.")
             }
             PillButton {
                 Layout.topMargin: Theme.sp2xs
@@ -664,7 +664,7 @@ Item {
                               "Сохранённые виды")
             }
             Body {
-                text: root.tr2("A saved view is a named set of filters: the search query (status:, priority:, #tag, due:, is:, -, OR), the priority chips, the board sort, Archived, Show done, and the view it opens in. \"Save view…\" in the filter bar or \"Save current view\" in the palette asks for a name (Enter saves, Esc cancels). Views are listed in the sidebar under Saved views, numbered, with how many tasks each one shows; Alt+1…Alt+9 or a click applies one, and the palette has \"View: name\" for each. Once you change a filter the view reads as modified, and the filter bar offers Update view or Save as new. Right click (or Menu) on a view renames, updates, duplicates, moves or deletes it — each one undoable. A query heap can no longer read, such as a column that was deleted, shows \"?\" on the view instead of an empty count. Views belong to the profile and travel with its export.",
+                text: root.tr2("A saved view is a named set of filters: the search query (status:, priority:, #tag, due:, is:, -, OR), the priority chips, the board sort, Archived, Show done, and the view it opens in. \"Save view…\" in the filter bar or \"Save current view\" in the palette asks for a name (Enter saves, Esc cancels). Views are listed in the sidebar under Saved views, numbered, with how many tasks each one shows; Alt+1…Alt+9 or a click applies one, and the palette has \"View: name\" for each. Once you change a filter the view reads as modified, and the filter bar offers Update view or Save as new. Right click (or Menu) on a view renames, updates, duplicates, moves or deletes it — each one undoable. A query lowkey can no longer read, such as a column that was deleted, shows \"?\" on the view instead of an empty count. Views belong to the profile and travel with its export.",
                               "Сохранённый вид — это набор фильтров с именем: поисковый запрос (status:, priority:, #метка, due:, is:, -, OR), чипы приоритетов, сортировка доски, «Архив», «Выполненные» и вид, в котором он открывается. «Сохранить вид…» в панели фильтров или «Сохранить текущий вид» в палитре спрашивает название (Enter сохраняет, Esc отменяет). Виды перечислены на боковой панели в разделе «Сохранённые виды», пронумерованы и показывают, сколько задач в каждом; Alt+1…Alt+9 или щелчок применяет вид, а в палитре для каждого есть «Вид: название». Если вы измените фильтр, вид отмечается как изменённый, и панель фильтров предлагает «Обновить вид» или «Сохранить как новый». Правый щелчок (или Menu) по виду переименовывает, обновляет, дублирует, перемещает или удаляет его — всё это можно отменить. Если запрос больше не читается, например колонку удалили, на виде вместо числа стоит «?». Виды принадлежат профилю и переносятся вместе с его экспортом.")
             }
 
@@ -682,8 +682,8 @@ Item {
         HelpCard {
             objectName: "help-tweaks"
             H2 {
-                text: root.tr2("Tweaks — appearance",
-                              "Твики — внешний вид")
+                text: root.tr2("Appearance",
+                              "Внешний вид")
             }
             RowLayout {
                 spacing: Theme.spSm
@@ -691,8 +691,8 @@ Item {
                     keys: root.kbd("tweaks.open")
                 }
                 Body {
-                    text: root.tr2("— a floating panel with quick toggles.",
-                                  "— плавающая панель с быстрыми переключателями.")
+                    text: root.tr2("— Settings, on Appearance. What used to be in Tweaks is there now.",
+                                  "— Настройки, раздел «Внешний вид». Всё, что было в «Твиках», теперь там.")
                 }
             }
 
@@ -701,8 +701,8 @@ Item {
                               "Тема")
             }
             Body {
-                text: root.tr2("Dark / Light. Changes instantly, no restart.",
-                              "Тёмная / светлая. Меняется сразу, без перезапуска.")
+                text: root.tr2("As in the system / Dark / Light. Changes instantly, no restart.",
+                              "Как в системе / тёмная / светлая. Меняется сразу, без перезапуска.")
             }
 
             H3 {
@@ -710,8 +710,8 @@ Item {
                               "Плотность")
             }
             Body {
-                text: root.tr2("Compact (tighter, smaller fonts) or Comfy (roomier).",
-                              "Компактная (плотнее, мельче шрифты) или просторная.")
+                text: root.tr2("Compact, Normal or Spacious.",
+                              "Компактно, обычно или свободно.")
             }
 
             H3 {
@@ -719,17 +719,17 @@ Item {
                               "Темы")
             }
             Body {
-                text: root.tr2("Themes come in two groups: high contrast (heap. dark, light and ink, Crimson, Graphite) and low contrast (Ochre, Fjord, Dusk); your own join the group they read as. A click on one puts it in the slot on screen (dark or light); hovering or focusing a dot names it.",
-                              "Темы разбиты на две группы: высокий контраст (heap. dark, light и ink, Crimson, Graphite) и низкий (Ochre, Fjord, Dusk); ваши попадают в ту, которой соответствуют. Клик по теме ставит её в показанный слот (тёмный или светлый); при наведении или фокусе точка называет тему.")
+                text: root.tr2("Themes come in two groups: high contrast (lowkey, lowkey light, Classic dark, Crimson, Graphite) and low contrast (Ochre, Fjord, Dusk); your own join the group they read as. A click on one puts it in the slot on screen (dark or light); hovering or focusing a dot names it.",
+                              "Темы разбиты на две группы: высокий контраст (lowkey, lowkey light, Classic dark, Crimson, Graphite) и низкий (Ochre, Fjord, Dusk); ваши попадают в ту, которой соответствуют. Клик по теме ставит её в показанный слот (тёмный или светлый); при наведении или фокусе точка называет тему.")
             }
 
             H3 {
-                text: root.tr2("Reduced motion",
-                              "Меньше движения")
+                text: root.tr2("Animations",
+                              "Анимации")
             }
             Body {
-                text: root.tr2("Fully disables animations — for weak machines and for accessibility.",
-                              "Полностью отключает анимации — для слабых машин и для доступности.")
+                text: root.tr2("Minimum turns animations off — for weak machines and for accessibility.",
+                              "«Минимум» отключает анимации — для слабых машин и для доступности.")
             }
 
             H3 {
@@ -853,8 +853,8 @@ Item {
                               "Git Watcher — фокус по ветке")
             }
             Body {
-                text: root.tr2("The watcher monitors the list of repositories from Settings → Git Watcher. When you switch a branch in one of them — heap. checks whether there's a task with the same branch. If there is — a focus banner with the task ID, branch name, and PR state appears in the TopBar.",
-                              "Наблюдатель следит за репозиториями из Настройки → Git. Когда вы переключаете ветку в одном из них, heap. проверяет, есть ли задача с такой веткой. Если есть — в верхней панели появляется баннер фокуса с ID задачи, веткой и состоянием PR.")
+                text: root.tr2("The watcher monitors the list of repositories from Settings → Git Watcher. When you switch a branch in one of them — lowkey checks whether there's a task with the same branch. If there is — a focus banner with the task ID, branch name, and PR state appears in the TopBar.",
+                              "Наблюдатель следит за репозиториями из Настройки → Git. Когда вы переключаете ветку в одном из них, lowkey проверяет, есть ли задача с такой веткой. Если есть — в верхней панели появляется баннер фокуса с ID задачи, веткой и состоянием PR.")
             }
 
             H3 {
@@ -902,8 +902,8 @@ Item {
                               "Интеграции — подключение трекера")
             }
             Body {
-                text: root.tr2("Settings → Integrations lists every tracker heap. can pull issues from. Each card is collapsed; click it to expand. Issues arrive as cards in the active profile. Moving one between columns changes only its column in heap: nothing is written to a tracker until you turn on “Change the status in …” on that tracker's card, and then heap checks the issue before every change.",
-                              "Настройки → Интеграции перечисляют все трекеры, из которых heap. умеет забирать задачи. Каждая карточка свёрнута; нажмите, чтобы развернуть. Задачи приходят карточками в активный профиль. Перенос между колонками меняет только колонку в heap.: в трекер ничего не пишется, пока вы не включите «Менять статус в …» в карточке этого трекера, и тогда heap. сверяет задачу перед каждым изменением.")
+                text: root.tr2("Settings → Integrations lists every tracker lowkey can pull issues from. Each card is collapsed; click it to expand. Issues arrive as cards in the active profile. Moving one between columns changes only its column in lowkey: nothing is written to a tracker until you turn on “Change the status in …” on that tracker's card, and then lowkey checks the issue before every change.",
+                              "Настройки → Интеграции перечисляют все трекеры, из которых lowkey умеет забирать задачи. Каждая карточка свёрнута; нажмите, чтобы развернуть. Задачи приходят карточками в активный профиль. Перенос между колонками меняет только колонку в lowkey: в трекер ничего не пишется, пока вы не включите «Менять статус в …» в карточке этого трекера, и тогда lowkey сверяет задачу перед каждым изменением.")
             }
 
             H3 {
@@ -920,12 +920,12 @@ Item {
                               "Нет кнопки «Войти через браузер»?")
             }
             Body {
-                text: root.tr2("The button only appears when this build can run the flow with no help from you. If you built heap. yourself, that is expected for most providers. Paste a token under Advanced and everything works.",
-                              "Кнопка появляется, только когда эта сборка может пройти вход без вашей помощи. Если вы собрали heap. сами, для большинства провайдеров это ожидаемо. Вставьте токен в «Дополнительно» — и всё заработает.")
+                text: root.tr2("The button only appears when this build can run the flow with no help from you. If you built lowkey yourself, that is expected for most providers. Paste a token under Advanced and everything works.",
+                              "Кнопка появляется, только когда эта сборка может пройти вход без вашей помощи. Если вы собрали lowkey сами, для большинства провайдеров это ожидаемо. Вставьте токен в «Дополнительно» — и всё заработает.")
             }
             Body {
-                text: root.tr2("Why it is missing, in order of likelihood:\n1.  You built heap. yourself. Jira, Todoist, ClickUp, Bitbucket and Sentry all refuse an app that has no client secret, and the official builds get theirs from CI. A source build has none, so those buttons stay hidden.\n2.  Your provider is self-hosted — Gitea, Forgejo, a GitLab of your own. There is no single app anyone could ship for every instance, so you register one on your server and paste its client ID under Advanced.\n3.  The provider has no OAuth at all. Redmine is the only one here: its API only takes an API key. That is not a gap in heap. and will not change until Redmine changes.\n4.  GitHub on a Qt older than 6.9 (some Linux packages). The device grant needs that version; the token path is unaffected.",
-                              "Почему её нет, от самого вероятного:\n1.  Вы собрали heap. сами. Jira, Todoist, ClickUp, Bitbucket и Sentry не принимают приложение без client secret, а официальные сборки получают его из CI. В сборке из исходников его нет, поэтому эти кнопки скрыты.\n2.  Ваш провайдер на своём сервере — Gitea, Forgejo, собственный GitLab. Одного приложения на все инсталляции не бывает, поэтому вы регистрируете его на своём сервере и вставляете client ID в «Дополнительно».\n3.  У провайдера вообще нет OAuth. Здесь это только Redmine: его API принимает лишь API-ключ. Это не пробел в heap., и он не закроется, пока не изменится Redmine.\n4.  GitHub на Qt старше 6.9 (некоторые пакеты Linux). Для кода устройства нужна эта версия; вход по токену не затронут.")
+                text: root.tr2("Why it is missing, in order of likelihood:\n1.  You built lowkey yourself. Jira, Todoist, ClickUp, Bitbucket and Sentry all refuse an app that has no client secret, and the official builds get theirs from CI. A source build has none, so those buttons stay hidden.\n2.  Your provider is self-hosted — Gitea, Forgejo, a GitLab of your own. There is no single app anyone could ship for every instance, so you register one on your server and paste its client ID under Advanced.\n3.  The provider has no OAuth at all. Redmine is the only one here: its API only takes an API key. That is not a gap in lowkey and will not change until Redmine changes.\n4.  GitHub on a Qt older than 6.9 (some Linux packages). The device grant needs that version; the token path is unaffected.",
+                              "Почему её нет, от самого вероятного:\n1.  Вы собрали lowkey сами. Jira, Todoist, ClickUp, Bitbucket и Sentry не принимают приложение без client secret, а официальные сборки получают его из CI. В сборке из исходников его нет, поэтому эти кнопки скрыты.\n2.  Ваш провайдер на своём сервере — Gitea, Forgejo, собственный GitLab. Одного приложения на все инсталляции не бывает, поэтому вы регистрируете его на своём сервере и вставляете client ID в «Дополнительно».\n3.  У провайдера вообще нет OAuth. Здесь это только Redmine: его API принимает лишь API-ключ. Это не пробел в lowkey, и он не закроется, пока не изменится Redmine.\n4.  GitHub на Qt старше 6.9 (некоторые пакеты Linux). Для кода устройства нужна эта версия; вход по токену не затронут.")
             }
             Hint {
                 text: root.tr2("Want one-click in your own build? Register an OAuth app with the provider, set the redirect URI to http://127.0.0.1:51789/ and pass HEAP_OAUTH_<PROVIDER>_CLIENT_ID and _CLIENT_SECRET in the environment when you run cmake. docs/INTEGRATIONS.md has the per-provider registration steps.",
@@ -937,8 +937,8 @@ Item {
                               "Где взять токен")
             }
             Body {
-                text: root.tr2("GitHub — Settings → Developer settings → Personal access tokens. A classic token needs the 'repo' scope; a fine-grained one needs read/write on Issues for the repos you care about.\nGitLab — User settings → Access tokens, scope 'api'. Self-hosted: the same page on your instance, and fill in Host.\nJira Cloud — id.atlassian.com → Security → Create and manage API tokens. You also need the Email of the same Atlassian account: Cloud authenticates the pair, not the token alone.\nJira Server / Data Center — your avatar → Profile → Personal Access Tokens. Leave the Email field empty; a PAT authenticates on its own. heap. works out which of the two you have from the server itself, so there is nothing to pick.\nGitea / Forgejo — Settings → Applications → Generate token.\nRedmine — My account → API access key (an admin has to enable the REST API first).\nTodoist — Settings → Integrations → Developer → API token.\nAsana — My settings → Apps → Manage developer apps → Personal access token.\nClickUp — Settings → Apps → API token.\nSentry — Settings → Account → API → Auth tokens, scopes org:read, project:read, event:read.\nBitbucket — Personal settings → App passwords, with the Issues: Read permission.\nTrello — trello.com/power-ups/admin → your Power-Up → API key, then the 'Token' link next to it to generate the token.",
-                              "GitHub — Settings → Developer settings → Personal access tokens. Классическому токену нужен scope «repo»; детализированному — чтение и запись Issues для нужных репозиториев.\nGitLab — User settings → Access tokens, scope «api». Свой сервер: та же страница на вашей инсталляции, и заполните Host.\nJira Cloud — id.atlassian.com → Security → Create and manage API tokens. Нужен ещё Email той же учётной записи Atlassian: Cloud проверяет пару, а не один токен.\nJira Server / Data Center — ваш аватар → Profile → Personal Access Tokens. Поле Email оставьте пустым: PAT работает сам по себе. heap. сам узнаёт у сервера, какой у вас вариант, так что выбирать ничего не нужно.\nGitea / Forgejo — Settings → Applications → Generate token.\nRedmine — My account → API access key (сначала администратор должен включить REST API).\nTodoist — Settings → Integrations → Developer → API token.\nAsana — My settings → Apps → Manage developer apps → Personal access token.\nClickUp — Settings → Apps → API token.\nSentry — Settings → Account → API → Auth tokens, scopes org:read, project:read, event:read.\nBitbucket — Personal settings → App passwords, с правом Issues: Read.\nTrello — trello.com/power-ups/admin → ваш Power-Up → API key, затем ссылка «Token» рядом, чтобы создать токен.")
+                text: root.tr2("GitHub — Settings → Developer settings → Personal access tokens. A classic token needs the 'repo' scope; a fine-grained one needs read/write on Issues for the repos you care about.\nGitLab — User settings → Access tokens, scope 'api'. Self-hosted: the same page on your instance, and fill in Host.\nJira Cloud — id.atlassian.com → Security → Create and manage API tokens. You also need the Email of the same Atlassian account: Cloud authenticates the pair, not the token alone.\nJira Server / Data Center — your avatar → Profile → Personal Access Tokens. Leave the Email field empty; a PAT authenticates on its own. Which of the two you have is read from the server itself, so there is nothing to pick.\nGitea / Forgejo — Settings → Applications → Generate token.\nRedmine — My account → API access key (an admin has to enable the REST API first).\nTodoist — Settings → Integrations → Developer → API token.\nAsana — My settings → Apps → Manage developer apps → Personal access token.\nClickUp — Settings → Apps → API token.\nSentry — Settings → Account → API → Auth tokens, scopes org:read, project:read, event:read.\nBitbucket — Personal settings → App passwords, with the Issues: Read permission.\nTrello — trello.com/power-ups/admin → your Power-Up → API key, then the 'Token' link next to it to generate the token.",
+                              "GitHub — Settings → Developer settings → Personal access tokens. Классическому токену нужен scope «repo»; детализированному — чтение и запись Issues для нужных репозиториев.\nGitLab — User settings → Access tokens, scope «api». Свой сервер: та же страница на вашей инсталляции, и заполните Host.\nJira Cloud — id.atlassian.com → Security → Create and manage API tokens. Нужен ещё Email той же учётной записи Atlassian: Cloud проверяет пару, а не один токен.\nJira Server / Data Center — ваш аватар → Profile → Personal Access Tokens. Поле Email оставьте пустым: PAT работает сам по себе. Какой у вас вариант, lowkey узнаёт у самого сервера, так что выбирать ничего не нужно.\nGitea / Forgejo — Settings → Applications → Generate token.\nRedmine — My account → API access key (сначала администратор должен включить REST API).\nTodoist — Settings → Integrations → Developer → API token.\nAsana — My settings → Apps → Manage developer apps → Personal access token.\nClickUp — Settings → Apps → API token.\nSentry — Settings → Account → API → Auth tokens, scopes org:read, project:read, event:read.\nBitbucket — Personal settings → App passwords, с правом Issues: Read.\nTrello — trello.com/power-ups/admin → ваш Power-Up → API key, затем ссылка «Token» рядом, чтобы создать токен.")
             }
             Hint {
                 text: root.tr2("Tokens go straight into the OS keychain — never into state.json, its backups or a profile export. A build without a keychain keeps them in a private secrets.json instead.",
@@ -954,8 +954,8 @@ Item {
                               "GitHub, GitLab и Jira больше ничего не требуют: оставьте Repo / Project / JQL пустыми — и они заберут задачи, назначенные на вас. Asana, ClickUp, Sentry и Bitbucket так не умеют — у них нет «моих задач», — поэтому им нужны рабочее пространство, список, организация и проект или репозиторий. Карточка называет, чего не хватает, и открывает «Дополнительно» на нужном поле.")
             }
             Hint {
-                text: root.tr2("With “Change the status in …” on, in that 'my issues' mode each issue is written to the repo it came from, and an issue no longer assigned to you is read-only: its card stays where it is and heap. asks before sending anything.",
-                              "Если «Менять статус в …» включено, в режиме «мои задачи» каждая задача пишется в свой репозиторий, а задача, которая больше не назначена на вас, только читается: карточка остаётся на месте, и heap. спрашивает, прежде чем что-то отправить.")
+                text: root.tr2("With “Change the status in …” on, in that 'my issues' mode each issue is written to the repo it came from, and an issue no longer assigned to you is read-only: its card stays where it is and lowkey asks before sending anything.",
+                              "Если «Менять статус в …» включено, в режиме «мои задачи» каждая задача пишется в свой репозиторий, а задача, которая больше не назначена на вас, только читается: карточка остаётся на месте, и lowkey спрашивает, прежде чем что-то отправить.")
             }
 
             H3 {
@@ -963,16 +963,16 @@ Item {
                               "Jira — как написать работающий JQL")
             }
             Body {
-                text: root.tr2("Leave the JQL field empty and heap. uses 'assignee = currentUser() ORDER BY updated DESC'. If you write your own, it has to narrow the search somehow — a bare 'ORDER BY updated DESC' is rejected with 'Unbounded JQL queries are not allowed here', which looks exactly like a sync that found nothing.",
-                              "Оставьте поле JQL пустым — и heap. возьмёт «assignee = currentUser() ORDER BY updated DESC». Если пишете свой, он должен как-то сужать поиск: голый «ORDER BY updated DESC» отклоняется с «Unbounded JQL queries are not allowed here», а это выглядит в точности как синхронизация, которая ничего не нашла.")
+                text: root.tr2("Leave the JQL field empty and lowkey uses 'assignee = currentUser() ORDER BY updated DESC'. If you write your own, it has to narrow the search somehow — a bare 'ORDER BY updated DESC' is rejected with 'Unbounded JQL queries are not allowed here', which looks exactly like a sync that found nothing.",
+                              "Оставьте поле JQL пустым — и lowkey возьмёт «assignee = currentUser() ORDER BY updated DESC». Если пишете свой, он должен как-то сужать поиск: голый «ORDER BY updated DESC» отклоняется с «Unbounded JQL queries are not allowed here», а это выглядит в точности как синхронизация, которая ничего не нашла.")
             }
             Body {
                 text: root.tr2("Useful starting points:\nassignee = currentUser() AND resolution = Unresolved ORDER BY priority DESC\nproject = APP AND status IN (\"In Progress\", \"In Review\") ORDER BY updated DESC\nassignee = currentUser() AND sprint IN openSprints() ORDER BY rank\nreporter = currentUser() AND created >= -14d ORDER BY created DESC\nproject = APP AND labels = backend AND updated >= -7d ORDER BY updated DESC",
                               "С чего можно начать:\nassignee = currentUser() AND resolution = Unresolved ORDER BY priority DESC\nproject = APP AND status IN (\"In Progress\", \"In Review\") ORDER BY updated DESC\nassignee = currentUser() AND sprint IN openSprints() ORDER BY rank\nreporter = currentUser() AND created >= -14d ORDER BY created DESC\nproject = APP AND labels = backend AND updated >= -7d ORDER BY updated DESC")
             }
             Hint {
-                text: root.tr2("Try a query in Jira's own issue search first — heap. sends it verbatim, so anything Jira accepts there works here. Cloud and Server/Data Center are both supported; the unbounded-query rule is Cloud's, so a bare ORDER BY may work on Server and is still worth avoiding.",
-                              "Сначала проверьте запрос в поиске задач самой Jira — heap. отправляет его как есть, так что всё, что Jira принимает там, работает и здесь. Поддерживаются и Cloud, и Server/Data Center; правило про неограниченные запросы — у Cloud, так что голый ORDER BY может сработать на Server, но его всё равно лучше избегать.")
+                text: root.tr2("Try a query in Jira's own issue search first — lowkey sends it verbatim, so anything Jira accepts there works here. Cloud and Server/Data Center are both supported; the unbounded-query rule is Cloud's, so a bare ORDER BY may work on Server and is still worth avoiding.",
+                              "Сначала проверьте запрос в поиске задач самой Jira — lowkey отправляет его как есть, так что всё, что Jira принимает там, работает и здесь. Поддерживаются и Cloud, и Server/Data Center; правило про неограниченные запросы — у Cloud, так что голый ORDER BY может сработать на Server, но его всё равно лучше избегать.")
             }
 
             H3 {
@@ -980,12 +980,12 @@ Item {
                               "Сессии истекают, токены — почти никогда")
             }
             Body {
-                text: root.tr2("A browser sign-in hands out a short-lived token — two hours on GitLab and Bitbucket, one on Jira and Asana — and heap. renews it in the background, so you stay signed in. The card shows when the current session runs out. If the tracker revokes the grant, the card drops back to disconnected and asks you to sign in again rather than failing silently. Being offline is not that: the card says 'offline', keeps you signed in and retries, and moves you make meanwhile are sent after the next sync.",
-                              "Вход через браузер выдаёт короткоживущий токен — два часа у GitLab и Bitbucket, час у Jira и Asana, — и heap. обновляет его в фоне, так что вы остаётесь в системе. Карточка показывает, когда закончится текущая сессия. Если трекер отзывает доступ, карточка возвращается в «не подключено» и просит войти заново, а не молча ломается. Отсутствие сети — другое дело: карточка пишет «офлайн», вход сохраняется, heap. повторяет попытки, а перемещения, сделанные за это время, отправляются после следующей синхронизации.")
+                text: root.tr2("A browser sign-in hands out a short-lived token — two hours on GitLab and Bitbucket, one on Jira and Asana — and lowkey renews it in the background, so you stay signed in. The card shows when the current session runs out. If the tracker revokes the grant, the card drops back to disconnected and asks you to sign in again rather than failing silently. Being offline is not that: the card says 'offline', keeps you signed in and retries, and moves you make meanwhile are sent after the next sync.",
+                              "Вход через браузер выдаёт короткоживущий токен — два часа у GitLab и Bitbucket, час у Jira и Asana, — и lowkey обновляет его в фоне, так что вы остаётесь в системе. Карточка показывает, когда закончится текущая сессия. Если трекер отзывает доступ, карточка возвращается в «не подключено» и просит войти заново, а не молча ломается. Отсутствие сети — другое дело: карточка пишет «офлайн», вход сохраняется, lowkey повторяет попытки, а перемещения, сделанные за это время, отправляются после следующей синхронизации.")
             }
             Body {
-                text: root.tr2("Disconnecting a browser session discards its tokens. A token you pasted yourself is left alone — it is your credential, not one heap. obtained — so reconnecting does not mean finding it again. Pasting a token over a live browser session ends that session.",
-                              "Отключение браузерной сессии удаляет её токены. Токен, который вы вставили сами, остаётся — это ваш ключ, а не полученный heap., — так что при повторном подключении его не придётся искать. Вставка токена поверх живой браузерной сессии завершает эту сессию.")
+                text: root.tr2("Disconnecting a browser session discards its tokens. A token you pasted yourself is left alone — it is your credential, not one lowkey obtained — so reconnecting does not mean finding it again. Pasting a token over a live browser session ends that session.",
+                              "Отключение браузерной сессии удаляет её токены. Токен, который вы вставили сами, остаётся — это ваш ключ, а не полученный через lowkey, — так что при повторном подключении его не придётся искать. Вставка токена поверх живой браузерной сессии завершает эту сессию.")
             }
 
             H3 {

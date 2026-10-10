@@ -112,6 +112,11 @@ class AppController : public QObject {
   Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)
   Q_PROPERTY(bool pseudoLocale READ pseudoLocale CONSTANT)
   Q_PROPERTY(QString currentView READ currentView WRITE setCurrentView NOTIFY currentViewChanged)
+  // The sidebar place the current view belongs to (APP-258).
+  Q_PROPERTY(QString currentSection READ currentSection NOTIFY currentViewChanged)
+  // What changed in the shell for someone coming from 0.7 (APP-258): said
+  // once, then cleared by ackShellNotice(). Empty for a new install.
+  Q_PROPERTY(QString shellNotice READ shellNotice NOTIFY shellNoticeChanged)
   Q_PROPERTY(QString focusedStatus READ focusedStatus NOTIFY focusedStatusChanged)
 
   Q_PROPERTY(int workdayStart READ workdayStart WRITE setWorkdayStart NOTIFY workdayChanged)
@@ -326,6 +331,25 @@ class AppController : public QObject {
 
   // Jump the Board to a specific status column (sidebar Blocked / Code Review).
   Q_INVOKABLE void focusStatusColumn(const QString& statusId);
+  QString currentSection() const;
+  // Opens a section on the view it was last left on.
+  Q_INVOKABLE void openSection(const QString& section);
+  // The view a section would open on now.
+  Q_INVOKABLE QString sectionView(const QString& section) const;
+
+  QString shellNotice() const {
+    return m_shellNotice;
+  }
+
+  Q_INVOKABLE void ackShellNotice();
+  // The shortcut catalog moved to the heap 2 shell (APP-258) and the Vim-based
+  // keymap (APP-272); called for a settings file written before it.
+  void applyKeymapMigration(QVariantMap& overrides, int storedSchema);
+  // Old keys whose first press after the update still owes a word (APP-281 A4).
+  Q_INVOKABLE bool hasKeymapNotice() const;
+  // A key was pressed (KeyRouter's chord): if it is one of those, say once
+  // where its old action went.
+  Q_INVOKABLE void noteKeyPressed(const QString& chord);
 
   int workdayStart() const {
     return m_workdayStart;
@@ -567,6 +591,17 @@ class AppController : public QObject {
   // on-disk state.json + backups — and re-seed the Example profile with the
   // first-run onboarding, so the app is exactly "as new" on this device.
   Q_INVOKABLE void resetToFirstRun();
+  // The example (APP-271): a profile of its own, "Example", with the sample
+  // tasks, people, meetings and notes — never mixed into the person's own
+  // profile. openExample() makes it once and switches to it (a second call
+  // only switches); removeExample() takes it away with its meetings, in one
+  // undoable step. exampleChanges() counts the sample tasks edited or added
+  // since it was made, for the question before removing it.
+  Q_INVOKABLE QString openExample();
+  Q_INVOKABLE void removeExample();
+  Q_INVOKABLE bool hasExample() const;
+  Q_INVOKABLE int exampleChanges() const;
+  static constexpr const char* kExampleProfileId = "lowkey-example";
   // Settings -> Data -> "Reset all settings" (UX-5): preferences go back to a
   // new install's (heap. ink + soft contrast included). Kept: the profile
   // card, tracker connections, watched repositories, your own themes, window
@@ -580,6 +615,14 @@ class AppController : public QObject {
 
   // ---- Task ops ----
   Q_INVOKABLE void moveTask(const QString& id, const QString& newStatus);
+  // "Done" in one action (APP-268): the tasks go to the first column whose
+  // stage is "done"; when every one of them is done already, each goes back
+  // to the column it came from. One undo for all of them, one toast.
+  // Returns {count, reopened, unchecked, localOnly, error}; error
+  // "noDoneColumn" when the profile has no column of that stage.
+  Q_INVOKABLE QVariantMap toggleDone(const QStringList& ids);
+  // The first column, in board order, whose stage is "done"; "" if none.
+  Q_INVOKABLE QString doneColumn() const;
   // Manual order: place `id` in `statusId` immediately above `beforeTaskId`,
   // or at the end of the column when that is empty. This is what a drop
   // between two cards calls; moveTask() is the "somewhere in that column"
@@ -598,7 +641,16 @@ class AppController : public QObject {
   // title, "// description", priority, #labels and the date the text names
   // (cut out of the title, read against `reference`, now when invalid). The
   // popup and `heap add` both save this, so they cannot read text apart.
-  Q_INVOKABLE QVariantMap quickTaskDraft(const QString& raw, const QDateTime& reference = QDateTime()) const;
+  Q_INVOKABLE QVariantMap quickTaskDraft(const QString& raw,
+                                         const QDateTime& reference = QDateTime(),
+                                         const QStringList& rejected = {}) const;
+  // One line of task input read the way quickTaskDraft reads it (APP-245):
+  // {title, when, whenHasTime, due, dueHasTime, estimateMinutes, recurrence,
+  //  spans: [{start, end, kind, text}]} — offsets into `raw` after the meta
+  // (priority, #labels, "// …") is taken out, i.e. into `head`.
+  Q_INVOKABLE QVariantMap captureParse(const QString& raw,
+                                       const QDateTime& reference = QDateTime(),
+                                       const QStringList& rejected = {}) const;
   // Reusable task/checklist templates (HEAP-77). taskTemplates lists the
   // built-ins ({name, title, desc}); createTaskFromTemplate drops a pre-filled
   // task (checklist in the description) onto the board.
@@ -694,6 +746,111 @@ class AppController : public QObject {
 
   // Time tracking (HEAP-78). start/stop the per-task timer (only one runs at a
   // time); elapsedSecondsFor returns the live total incl. the running session.
+  // The task's own notepad (Task.local.notes, APP-237/265): no sync writes
+  // it, so a tracker card's own words live here.
+  Q_INVOKABLE QString taskLocalNotes(const QString& id) const;
+  Q_INVOKABLE void setTaskLocalNotes(const QString& id, const QString& text);
+  // Notes that name the task (its id as a word), newest first:
+  // [{id, title, updated}] — the task document's "Mentioned in" (APP-265).
+  Q_INVOKABLE QVariantList notesMentioningTask(const QString& id) const;
+
+  // ---- The local layer (APP-236…241, 246, 251): AppControllerLocal.cpp ----
+  // Nothing here is ever sent to a tracker, and no sync path writes it.
+  //
+  // My priority / due over the tracker's (APP-238): both sides and whether
+  // the tracker moved its own since I set mine — {isTicket, trackerPriority,
+  // trackerDueAt, trackerDueHasTime, myPriority, myDueAt, myDueHasTime,
+  // priorityChanged, dueChanged}.
+  Q_INVOKABLE QVariantMap trackerValues(const QString& id) const;
+  // Drops my value so the tracker's shows again: field "priority", "due", or
+  // empty for both. One undo step.
+  Q_INVOKABLE void resetToTracker(const QString& id, const QString& field = QString());
+  // Keeps mine and stops showing "changed in the tracker".
+  Q_INVOKABLE void acknowledgeTrackerChange(const QString& id);
+  // The notepad copied into a new note that names the task (APP-237);
+  // returns the note's title ("" when there is nothing to copy).
+  Q_INVOKABLE QString copyTaskNotesToNote(const QString& id);
+
+  // The card's own checklist (APP-236). Items: [{id, text, level, done,
+  // autoDone, cardId, cardExists, hasChildren}].
+  Q_INVOKABLE QVariantList taskChecklist(const QString& id) const;
+  Q_INVOKABLE QString taskChecklistText(const QString& id) const;
+  Q_INVOKABLE void setTaskChecklistText(const QString& id, const QString& text);
+  // Adds the lines of `text` after `afterItemId` (empty = at the end). A line
+  // with no dashes takes `level`. Returns the id of the last item added.
+  Q_INVOKABLE QString addChecklistItems(const QString& id, const QString& afterItemId, const QString& text, int level = 1);
+  Q_INVOKABLE void editChecklistItem(const QString& id, const QString& itemId, const QString& text);
+  Q_INVOKABLE void toggleChecklistItem(const QString& id, const QString& itemId);
+  Q_INVOKABLE void indentChecklistItem(const QString& id, const QString& itemId, int delta);
+  Q_INVOKABLE bool moveChecklistItem(const QString& id, const QString& itemId, int dir);
+  Q_INVOKABLE void removeChecklistItem(const QString& id, const QString& itemId);
+  // The item becomes a local card "part of" this one; its sub-items move
+  // into the new card's checklist and the item ticks with the card's Done.
+  // Returns the new card's id.
+  Q_INVOKABLE QString checklistItemToCard(const QString& id, const QString& itemId);
+  // Back: the card is removed and its checklist returns under the item.
+  // Refused (false) when the card has time on its timer.
+  Q_INVOKABLE bool checklistCardBack(const QString& id, const QString& itemId);
+
+  // My tags (APP-239). The catalogue: [{id, color, count}] over the profile.
+  Q_INVOKABLE QVariantList localTagCatalog() const;
+  // Ids ("#x" or "x") or {id, color}; a tag known elsewhere keeps its colour.
+  Q_INVOKABLE void setTaskLocalTags(const QString& id, const QVariantList& tags);
+  // Renames everywhere; onto an existing tag = merge.
+  Q_INVOKABLE void renameLocalTag(const QString& from, const QString& to);
+  Q_INVOKABLE void deleteLocalTag(const QString& tag);
+  Q_INVOKABLE void setLocalTagColor(const QString& tag, const QString& color);
+
+  // Links drawn by hand (APP-240): related (both ways), blocks / blocked by,
+  // part of. [{kind, linkId, target, url, isTask, exists, title, key,
+  // statusName, done}].
+  Q_INVOKABLE QVariantList taskRelations(const QString& id) const;
+  // A task by id, tracker key or URL, or a bare URL. False when `ref` is
+  // neither.
+  Q_INVOKABLE bool addRelatedLink(const QString& id, const QString& ref);
+  Q_INVOKABLE void removeRelatedLink(const QString& id, const QString& linkId);
+  // Cards whose title, id or key hold every word of `text`, for picking a
+  // link target by search: [{id, key, title, statusName}], open ones first.
+  Q_INVOKABLE QVariantList matchTasks(const QString& text, int limit = 6, const QString& exceptId = QString()) const;
+  // `blocksOther`: id blocks ref; else ref blocks id.
+  Q_INVOKABLE bool addBlockLink(const QString& id, const QString& ref, bool blocksOther);
+  Q_INVOKABLE void removeBlockLink(const QString& blockerId, const QString& blockedId);
+
+  // The comment draft (APP-241). Saved as typed; never sent anywhere.
+  Q_INVOKABLE QString taskCommentDraft(const QString& id) const;
+  Q_INVOKABLE void setTaskCommentDraft(const QString& id, const QString& text);
+  Q_INVOKABLE void clearTaskCommentDraft(const QString& id);
+  // Puts the draft on the clipboard (markdown, plus HTML for rich editors
+  // such as Jira's) and returns the ticket's URL for the caller to open.
+  Q_INVOKABLE QString copyCommentDraft(const QString& id);
+
+  // Estimates (APP-246): {count, minutes, without} over `ids` — the tasks
+  // with no estimate are a count of their own, not zero minutes.
+  Q_INVOKABLE QVariantMap estimateSummary(const QStringList& ids) const;
+
+  // Timer sessions (APP-251): [{id, start, end, seconds, undated}], newest
+  // first. Edits recompute the task's total.
+  Q_INVOKABLE QVariantList taskSessions(const QString& id) const;
+  Q_INVOKABLE bool addTaskSession(const QString& id, const QDateTime& start, const QDateTime& end);
+  Q_INVOKABLE bool updateTaskSession(const QString& id, const QString& sessionId, const QDateTime& start, const QDateTime& end);
+  Q_INVOKABLE void removeTaskSession(const QString& id, const QString& sessionId);
+  // Seconds on the timer on `day` across the profile, a running timer
+  // included up to now.
+  Q_INVOKABLE int trackedSecondsOn(const QDate& day) const;
+
+  // Knowledge (APP-269). The tasks a note names — a [[KEY]] or the bare key —
+  // with their column now, in the order written: [{ id, title, status,
+  // statusName, category, profileName }]; a task of another profile carries
+  // that profile's name, of the active one an empty one.
+  Q_INVOKABLE QVariantList noteTaskRefs(const QString& markdown) const;
+  // How each [[target]] of a note reads in the rendered view: a task key →
+  // { kind: "task", label: "<stage glyph> KEY", tip }, a name nothing answers
+  // to → { kind: "missing", label: "name · no such note" }. Notes and headings
+  // that exist are left out (drawn as links).
+  Q_INVOKABLE QVariantMap wikiTargets(const QString& markdown) const;
+  // Tasks whose description or own notepad links the note by its title,
+  // [[Title]]: [{ id, title }]. Backlinks from notes are backlinksToNote().
+  Q_INVOKABLE QVariantList tasksLinkingToNote(const QString& noteId) const;
   Q_INVOKABLE void startTaskTimer(const QString& id);
   Q_INVOKABLE void stopTaskTimer(const QString& id);
   Q_INVOKABLE int elapsedSecondsFor(const QString& id) const;
@@ -732,8 +889,21 @@ class AppController : public QObject {
   // query, priority chips, the archived toggle. { total, active, blocked,
   // review }. `hideDone` is the timeline's "Show done" off. `rev` is unused;
   // binding it to statusCounts re-evaluates the counts whenever tasks change.
+  // Whether a task shows under the filters on screen now (the selection
+  // filter Main keeps in step): a new task that does not gets a toast that
+  // says so (APP-266).
+  Q_INVOKABLE bool taskInCurrentFilter(const QString& id) const;
   Q_INVOKABLE QVariantMap filteredCounts(
       const QString& search, const QStringList& priorities, bool showArchived, bool hideDone = false, const QVariant& rev = {}) const;
+  // Tasks → List (APP-263): the rows of the list, in drawing order — a
+  // {kind: "group", key, value, count, from, to, groupId, name?, category?}
+  // before its {kind: "task", id, key, title, category, priority, label, when,
+  // whenHasTime, due, dueHasTime, …}. groupBy: date | status | priority |
+  // profile ("profile" lists every profile's tasks through the same query).
+  Q_INVOKABLE QVariantList taskListRows(const QString& query,
+                                        const QStringList& priorities,
+                                        bool showArchived,
+                                        const QString& groupBy) const;
 
   QStringList blockedStuckIds() const {
     return m_blockedStuckIds.values();
@@ -1010,6 +1180,8 @@ class AppController : public QObject {
   // Puts a shown reminder off: it comes back `minutes` after `now`, with the
   // same text, through the usual quiet-hours rules. Kept in snoozes.json.
   void snoozeReminderAt(const QString& notificationId, int minutes, const QDateTime& now);
+  // A button of an in-app reminder toast: the same as the OS one (APP-256).
+  Q_INVOKABLE void reminderAction(const QString& notificationId, const QString& actionId);
 
   // Snoozed reminders waiting (tests).
   QVector<heap::notify::SnoozedReminder> pendingSnoozes() const {
@@ -1036,6 +1208,14 @@ class AppController : public QObject {
   // dates, plus `masterId` and `originalDate` on anything generated, so a click
   // can find the series again.
   Q_INVOKABLE QVariantList eventOccurrences(const QDate& from, const QDate& to) const;
+  // The Today screen's day (APP-260): {date, workday, workStart, workEnd,
+  // fromHour, toHour, allDay[], blocks[], free[], load{meetings, tasks, free,
+  // overWork} (minutes), facts{meetings, planned, dueToday}, inProgress[],
+  // deadlines[], overdue[], people[], undated}. The active profile's tasks
+  // and everyone's meetings; `allProfiles` adds every profile's tasks.
+  Q_INVOKABLE QVariantMap todayData(const QDate& date, bool allProfiles = false) const;
+  // The same day as a pure fact for the calendars (APP-247): load minutes.
+  Q_INVOKABLE QVariantMap dayLoad(const QDate& date) const;
   // The stored event behind an occurrence: the master, or the override that
   // stands in for it. Empty when there is none.
   Q_INVOKABLE QVariantMap eventSeriesMaster(const QString& masterId) const;
@@ -1108,6 +1288,22 @@ class AppController : public QObject {
   Q_INVOKABLE void scheduleTaskAtNextFreeSlot(const QString& taskId, const QDate& date);
   // How long a block for this task is, in minutes.
   Q_INVOKABLE int taskBlockMinutes(const QString& taskId) const;
+  // The nearest free window for the task's block on `date` (APP-253): busy is
+  // meetings and task blocks, the window inside the working hours of a
+  // working day. {found, date, start, hours, nextDate, nextStart, lateStart}
+  // — when today has no room, the next working day's first window and what
+  // is left of this evening (-1 when nothing fits before midnight).
+  Q_INVOKABLE QVariantMap freeWindow(const QString& taskId, const QDate& date) const;
+  QVariantMap freeWindowAt(const QString& taskId, const QDate& date, const QDateTime& now) const;
+  // Plans the task at `start` on `date` (the answer to "no room today").
+  // Only "when" changes; one undo step with its toast.
+  Q_INVOKABLE bool placeTaskAt(const QString& taskId, const QDate& date, double start);
+  // Carrying leftovers on by hand (APP-248). `mode`: "tomorrow" (keeps the
+  // time it had), "window" (the nearest free window from now on), "someday"
+  // or "clear" (no "when"). The deadline is never touched. One undo step and
+  // one toast for the whole selection; returns how many tasks changed.
+  Q_INVOKABLE int carryTasks(const QStringList& ids, const QString& mode);
+  int carryTasksAt(const QStringList& ids, const QString& mode, const QDateTime& now);
   // Drag-to-reschedule in Week, Month and Timeline (APP-249), and the keys
   // that do the same. Sets one date of one task: `field` is "scheduled" (when
   // it is planned) or "due" (its deadline). `hasTime` says whether the clock
@@ -1133,6 +1329,14 @@ class AppController : public QObject {
   // `schedDay` — the day's offset from `from`, or -1. Only candidates have
   // their fields read, which is what keeps a 10k-task profile's week cheap.
   Q_INVOKABLE QVariantList calendarTasks(const QDate& from, const QDate& to, bool includeArchived) const;
+  // The load of each day from `from` on (APP-247): [{date, workday,
+  // meetings, tasks, free, overWork, work}] in minutes, each minute counted
+  // once — the fact the calendar's day headers show.
+  Q_INVOKABLE QVariantList dayLoads(const QDate& from, int days) const;
+  // The calendar's "Without a date" tray (APP-264): what "is:undated" finds,
+  // narrowed by the section's query. [{id, title, status, category,
+  // priority, blockMinutes}].
+  Q_INVOKABLE QVariantList undatedTasks(const QString& search) const;
 
   // ---- People ops ----
   Q_INVOKABLE void cyclePerson(const QString& id);
@@ -1176,6 +1380,13 @@ class AppController : public QObject {
   Q_INVOKABLE void addStatus(const QString& name, const QString& color = QString());
   Q_INVOKABLE void renameStatus(const QString& id, const QString& name);
   Q_INVOKABLE void setStatusColor(const QString& id, const QString& color);
+  // A column's stage (APP-259): backlog / todo / prog / half / blocked /
+  // review / done. It is the shape of the status mark and where Done goes.
+  Q_INVOKABLE QString statusCategory(const QString& id) const;
+  Q_INVOKABLE void setStatusCategory(const QString& id, const QString& category);
+  // Columns whose stage was assigned by the upgrade, not picked: shown once
+  // so the user can check them.
+  Q_INVOKABLE QStringList columnsWithGuessedCategory() const;
   // Advisory limit on how many cards a column should hold. 0 = none.
   Q_INVOKABLE void setStatusWipLimit(const QString& id, int limit);
   // Auto-archive per column (APP-122): a card that has sat in the column for
@@ -1242,6 +1453,11 @@ class AppController : public QObject {
   // tasks of the active profile that satisfy the clauses, and is meaningful
   // only when `isQuery` is true (with no clauses every task would be in it).
   Q_INVOKABLE QVariantMap compileSearch(const QString& text) const;
+  // The command line (APP-267): `text` in the language quick capture speaks
+  // read as clauses ({words, kind, clause, value}) and the words left, and the
+  // tasks of the active profile it finds — `limit` of them, open before
+  // archived, the one whose id was typed first — with how many there are.
+  Q_INVOKABLE QVariantMap commandLine(const QString& text, int limit = 50) const;
 
   // Does this text hold at least one clause? Parsing only — it never walks the
   // task list, so the search field can ask on every keystroke to show whether
@@ -1255,7 +1471,15 @@ class AppController : public QObject {
   // sorted. For the hint under the field.
   Q_INVOKABLE QStringList searchFields() const;
   Q_INVOKABLE QString eventHourLabel(double hour) const;
+  // The Jira sprint in progress when a card is in one (APP-255), else the ISO
+  // week ("wk 41").
   Q_INVOKABLE QString sprintLabel() const;
+  // Jira sprints ending in [from, to] (APP-255), read-only facts from the last
+  // pull: [{name, state, start, end, endDay (days after `from`), tasks}], by
+  // end date. For the sprint marker on the week, the month and the list.
+  Q_INVOKABLE QVariantList sprintMarkers(const QDate& from, const QDate& to) const;
+  // The active sprint ({name, start, end, daysLeft}), empty when none.
+  Q_INVOKABLE QVariantMap currentSprint() const;
   Q_INVOKABLE QString humanDate(const QDate& date) const;
   // Displayed dates in the UI language (APP-188): the pattern of a named
   // style ("dayMonth", "weekdayDay", "longWeekday"… see text/LocaleFormat.h)
@@ -1401,6 +1625,19 @@ class AppController : public QObject {
   Q_INVOKABLE QString defaultShortcutFor(const QString& id) const;
   Q_INVOKABLE QString shortcutDescription(const QString& id) const;
   Q_INVOKABLE QString shortcutLabel(const QString& id) const;
+  // A key as it is written beside its action (keymap.md): "d", "Shift S",
+  // "g b", "Ctrl K", "Enter"; the macOS glyphs on a Mac. One notation for the
+  // menus, the cheat sheet, the hints and the tooltips (APP-279).
+  Q_INVOKABLE QString keyText(const QString& sequence) const;
+  Q_INVOKABLE QString shortcutText(const QString& id) const;
+  // Why a key cannot be bound (the system keeps it, Tab drives dialogs); "".
+  Q_INVOKABLE QString reservedShortcutReason(const QString& sequence) const;
+  // The action whose sequence starts with `sequence`, or that `sequence`
+  // starts with (g and g b): such a key is refused, not swapped; "" when none.
+  Q_INVOKABLE QString prefixShortcutConflict(const QString& id, const QString& sequence) const;
+  // A key press as the keymap reads it (KeyRouter), for recording a binding:
+  // the physical key in any layout. `scanCode` is the event's nativeScanCode.
+  Q_INVOKABLE QString keyChord(int key, int modifiers, const QString& text, quint32 scanCode) const;
   // The catalog action holding `sequence` (or the built-in key that does, as a
   // catalog id or a builtin.* id shortcutLabel() names); empty when free.
   Q_INVOKABLE QString findShortcutConflict(const QString& id, const QString& sequence) const;
@@ -1524,6 +1761,9 @@ class AppController : public QObject {
   void densityChanged();
   void languageChanged();
   void currentViewChanged();
+  void shellNoticeChanged();
+  // "Done" asked for, but no column has the "done" stage (APP-268).
+  void doneColumnMissing();
   void focusedStatusChanged();
   void workdayChanged();
   void crumbProjectChanged();
@@ -1612,6 +1852,14 @@ class AppController : public QObject {
   // the restart.
   void updateReadyToInstall(const QString& version, const QString& sha256);
   void undoableToast(const QString& message, int seconds);
+  // A reminder with buttons shown in the window (the start of a task block,
+  // APP-256); the buttons call reminderAction(notificationId, …).
+  void reminderToast(const QString& notificationId, const QString& message);
+  // "Next free window" found no room on `date` (APP-253): the toast says so
+  // and offers the next working day's window and, when one is left, a time
+  // this evening. Nothing is planned until the person picks.
+  void freeWindowMissing(
+      const QString& taskId, const QString& title, const QDate& date, const QDate& nextDate, double nextStart, double lateStart);
   // A status change did not reach the tracker. The UI offers a retry.
   void trackerPushFailed(const QString& taskId, const QString& message);
   // A conflict on this task was settled, one field or all (APP-163).
@@ -1678,7 +1926,10 @@ class AppController : public QObject {
   QString m_theme = "dark";
   QString m_density = "comfy";
   QString m_language = "en";
-  QString m_currentView = "board";
+  QString m_currentView = "today";  // heap 2: Today is the start screen (APP-260)
+  // section -> the view it was last left on (APP-258).
+  QHash<QString, QString> m_sectionViews;
+  QString m_shellNotice;
   QString m_focusedStatus;
   int m_workdayStart = 9;
   int m_workdayEnd = 19;
@@ -1858,9 +2109,12 @@ class AppController : public QObject {
   void snapshotActiveProfile();
   void applyProfileToModels(const Profile& p);
   Profile makeStartingProfile(const QString& name, const QString& color) const;
-  // Seed the first-run "Example" profile (demo tasks/people/events) + onboarding
-  // flags. Shared by the constructor's fresh-install path and resetToFirstRun().
-  void seedExampleProfile();
+  // A fresh install (APP-271): one empty profile of the person's own and the
+  // first-run look. Shared by the constructor's fresh-install path and
+  // resetToFirstRun(). The sample data lives only in the example profile.
+  void seedStartingWorkspace();
+  // The example profile and its meetings, built from SampleData.
+  Profile buildExampleProfile(QVector<CalEvent>* events) const;
 
   // Shortcuts
   QVariantList m_shortcuts;  // [{id,label,description,defaultSequence,sequence}]
@@ -1952,8 +2206,23 @@ class AppController : public QObject {
   void storeEvent(CalEvent e);
   bool inQuietHours(const QDateTime& when) const;
   static double nextQuarterHour(const QDateTime& when);
+  // What is taken on `date` (APP-253): meetings and task blocks of the
+  // active profile, each as hours on the day; `exceptTaskId`'s own block and
+  // its focus blocks left out, so moving a task does not collide with itself.
+  QVector<QPair<double, double>> busySpans(const QDate& date, const QString& exceptTaskId, const QDateTime& now) const;
   void scheduleFocusBlockFor(const QString& taskId);
   void focusBlockOnStatusChange(const QString& taskId, const QString& from, const QString& to);
+  // The local layer's own bookkeeping (AppControllerLocal.cpp).
+  void noteOpenBlockers_(const QString& taskId);
+  void followCardDone_(const Task* before, const Task& after);
+  // Rewrites a task's checklist through `edit` as one undo step.
+  void editChecklist_(const QString& id, const std::function<void(QVector<LocalCheckItem>&)>& edit);
+  // A task by id, tracker key or URL in the active profile; -1 = none.
+  int resolveTaskRef_(const QString& ref) const;
+  // TaskQuery::compile with this board's statuses and new ids, and the
+  // blocked set when the query asks `is:blocked` (APP-250).
+  heap::query::TaskQuery compileTaskQuery_(const QString& text) const;
+  bool m_followingCards = false;
   // Keeps a task's scheduledAt on the focus block it came from: moved with
   // it, cleared when it is deleted (after == nullptr).
   void followFocusBlock(const CalEvent& before, const CalEvent* after);
@@ -2362,6 +2631,9 @@ class AppController : public QObject {
   // What a pull under the card's current settings is scoped to. See
   // heap::integrations::scopeFingerprint.
   QString scopeFingerprintFor(const QString& providerId) const;
+  // Integration setting "reviewMovable" (APP-242, off by default): merge /
+  // pull request cards may be moved between columns, locally only.
+  bool reviewCardsMovable(const QString& providerId) const;
   // provider + newline + issue key → the statuses the issue's workflow can move
   // to, as of the last pull. Only trackers that report transitions (Jira)
   // fill it; an issue without an entry is not second-guessed.

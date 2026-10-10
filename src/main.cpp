@@ -10,7 +10,10 @@
 #include "notify/NotificationCenter.h"
 #include "notify/NotifyPayload.h"
 #include "platform/AltGrGuard.h"
+#include "platform/Autostart.h"
+#include "platform/Brand.h"
 #include "platform/BundledFonts.h"
+#include "platform/LegacyData.h"
 #include "platform/Paths.h"
 #include "platform/SingleInstance.h"
 #include "platform/Sound.h"
@@ -82,7 +85,7 @@ constexpr int kUsageExit = heap::cli::kExitUsage;
 constexpr int kSmokeSettleMs = 2000;
 
 [[noreturn]] void usageError(const QCommandLineParser& parser, const QString& message) {
-  fputs(qPrintable(QStringLiteral("heap: %1\n\n").arg(message) + parser.helpText()), stderr);
+  fputs(qPrintable(QStringLiteral("lowkey: %1\n\n").arg(message) + parser.helpText()), stderr);
   std::exit(kUsageExit);
 }
 
@@ -95,7 +98,7 @@ CliOptions parseCommandLine(const QStringList& args) {
   QCommandLineParser parser;
   // ASCII only: this is printed straight to a console whose code page is not
   // guaranteed to be UTF-8 (cp866/cp1251 on a stock Windows shell).
-  parser.setApplicationDescription(QStringLiteral("heap - keyboard-first tickets, planning and notes for engineers."));
+  parser.setApplicationDescription(QStringLiteral("lowkey - a developer's workday in one window: tickets, planning and notes."));
   const QCommandLineOption helpOption = parser.addHelpOption();
   const QCommandLineOption versionOption = parser.addVersionOption();
 
@@ -121,13 +124,13 @@ CliOptions parseCommandLine(const QStringList& args) {
   // Bindable from the desktop's own keyboard settings where heap cannot grab
   // a global key itself (Wayland without the shortcuts portal, APP-171).
   const QCommandLineOption captureOption(QStringLiteral("capture"),
-                                         QStringLiteral("Open quick capture - in the heap already running for this data "
+                                         QStringLiteral("Open quick capture - in the lowkey already running for this data "
                                                         "directory, or in a new one."));
   parser.addOption(captureOption);
   const QCommandLineOption minimizedOption(
       QStringLiteral("minimized"),
       QStringLiteral("Start hidden in the tray (minimized where there is no tray), and leave an already "
-                     "running heap where it is. The start-at-login entry passes it."));
+                     "running lowkey where it is. The start-at-login entry passes it."));
   parser.addOption(minimizedOption);
   QCommandLineOption openTaskOption(QString::fromLatin1(heap::cli::kOpenTaskOption), QString(), QStringLiteral("id"));
   openTaskOption.setFlags(QCommandLineOption::HiddenFromHelp);
@@ -232,14 +235,14 @@ int smokeVerdict(const QQmlApplicationEngine& engine, const QList<QQmlError>& qm
   return problems.isEmpty() ? 0 : 1;
 }
 
-// Closes heap.log when it goes out of scope. Declared between the smoke temp
+// Closes lowkey.log when it goes out of scope. Declared between the smoke temp
 // dir and the QML engine, so it runs after the engine (and AppController's
 // final save) and before the temp dir is removed: an open log is what used to
 // keep every --smoke run's %TEMP%\heap-XXXXXX behind (PLAT-16).
 //
 // With --data-dir, the closed log is first copied to <dir>/logs/smoke.log:
 // the temp folder goes, and with it the only record of *why* a packaged build
-// failed its smoke test (PLAT-2). The profile's own heap.log is not touched.
+// failed its smoke test (PLAT-2). The profile's own lowkey.log is not touched.
 struct LogCloser {
   bool enabled = false;
   QString keepAs;  // where the smoke run's log is copied; empty = nowhere
@@ -252,7 +255,7 @@ struct LogCloser {
     if(!keepAs.isEmpty() && QDir().mkpath(QFileInfo(keepAs).absolutePath())) {
       QFile::remove(keepAs);
       if(!QFile::copy(heap::logging::logFilePath(), keepAs)) {
-        static_cast<void>(fprintf(stderr, "heap: could not keep the smoke log as %s\n", qUtf8Printable(keepAs)));
+        static_cast<void>(fprintf(stderr, "lowkey: could not keep the smoke log as %s\n", qUtf8Printable(keepAs)));
       }
     }
   }
@@ -268,12 +271,13 @@ int main(int argc, char* argv[]) {
 
   heap::perf::markProcessStart();
   QApplication app(argc, argv);
-  QApplication::setOrganizationName("heap");
-  QApplication::setOrganizationDomain("heap.local");
-  QApplication::setApplicationName("heap");
-  QApplication::setApplicationDisplayName(QStringLiteral("heap."));
+  // lowkey since 0.8.0 (APP-280); a 0.7.x data folder moves over below.
+  QApplication::setOrganizationName(QLatin1String(heap::brand::kName));
+  QApplication::setOrganizationDomain(QStringLiteral("lowkey.local"));
+  QApplication::setApplicationName(QLatin1String(heap::brand::kName));
+  QApplication::setApplicationDisplayName(QLatin1String(heap::brand::kName));
   QApplication::setApplicationVersion(QStringLiteral(HEAP_VERSION));
-  QApplication::setWindowIcon(QIcon(QStringLiteral(":/brand/icon/heap-icon.svg")));
+  QApplication::setWindowIcon(QIcon(QStringLiteral(":/brand/lowkey/lowkey-icon.svg")));
 
   const CliOptions cli = parseCommandLine(QApplication::arguments());
   if(cli.perfLog) {
@@ -318,12 +322,37 @@ int main(int argc, char* argv[]) {
   }
   heap::paths::setDataDir(dataDir);
 
+  // heap → lowkey (APP-280): the first launch copies a 0.7.x data folder into
+  // the new one. Only for the user's own folder, never a redirected one.
+  heap::platform::legacy::MoveResult legacyMove;
+  if(!heap::paths::dataDirOverridden() && !cli.smoke) {
+    legacyMove =
+        heap::platform::legacy::moveLegacyData(heap::paths::dataDir(), heap::platform::legacy::legacyDirFor(heap::paths::dataDir()));
+    if(legacyMove.kind == heap::platform::legacy::MoveKind::Busy) {
+      QMessageBox::information(nullptr,
+                               QStringLiteral("lowkey"),
+                               QStringLiteral("heap is now lowkey, and its data has to move to a new folder first.\n\n"
+                                              "heap 0.7 is still running. Close it (also from the tray) and start lowkey again."));
+      return 1;
+    }
+    if(legacyMove.kind == heap::platform::legacy::MoveKind::Failed) {
+      // Starting on an empty folder would look like everything was lost, and
+      // the next launch would no longer move anything: stop and say why.
+      QMessageBox::warning(nullptr,
+                           QStringLiteral("lowkey"),
+                           QStringLiteral("Your heap data could not be copied to lowkey's folder:\n%1\n\n"
+                                          "Nothing was changed; the data is still in\n%2")
+                               .arg(legacyMove.error, QDir::toNativeSeparators(legacyMove.from)));
+      return 1;
+    }
+  }
+
   // Say it on the console too: a GUI that cannot save is otherwise only a
   // banner, and nobody scripting heap reads that (PLAT-4).
   {
     QString why;
     if(!heap::storage::probeWritableDir(heap::paths::dataDir(), &why)) {
-      fputs(qPrintable(QStringLiteral("heap: data directory is not writable, nothing will be saved: %1\n").arg(why)), stderr);
+      fputs(qPrintable(QStringLiteral("lowkey: data directory is not writable, nothing will be saved: %1\n").arg(why)), stderr);
     }
   }
 
@@ -345,11 +374,11 @@ int main(int argc, char* argv[]) {
       case heap::platform::SingleInstance::Result::Forwarded:
         return 0;
       case heap::platform::SingleInstance::Result::Busy:
-        fputs("heap: another heap is using this data directory and is not responding\n", stderr);
+        fputs("lowkey: another lowkey is using this data directory and is not responding\n", stderr);
         QMessageBox::warning(nullptr,
-                             QStringLiteral("heap"),
-                             QStringLiteral("heap is already running with this data folder, but it is not responding:\n%1\n\n"
-                                            "Close it (or end it in the task manager) and start heap again.")
+                             QStringLiteral("lowkey"),
+                             QStringLiteral("lowkey is already running with this data folder, but it is not responding:\n%1\n\n"
+                                            "Close it (or end it in the task manager) and start lowkey again.")
                                  .arg(QDir::toNativeSeparators(heap::paths::dataDir())));
         return 1;
     }
@@ -359,13 +388,23 @@ int main(int argc, char* argv[]) {
   // org/app names are set so AppDataLocation resolves to the heap folder).
   heap::logging::installFileLogger();
   LogCloser logCloser{cli.smoke, smokeLogKeep};
-  qInfo("heap %s starting", qUtf8Printable(app.applicationVersion()));
+  qInfo("lowkey %s starting", qUtf8Printable(app.applicationVersion()));
+  if(legacyMove.kind == heap::platform::legacy::MoveKind::Moved) {
+    qInfo("moved %d file(s) of heap 0.7 data from %s to %s",
+          legacyMove.files,
+          qUtf8Printable(legacyMove.from),
+          qUtf8Printable(legacyMove.to));
+  }
+  // A login entry that still starts heap 0.7's binary becomes lowkey's own.
+  if(!cli.smoke && !heap::paths::dataDirOverridden()) {
+    heap::platform::autostart::adoptLegacyEntry();
+  }
   if(heap::paths::dataDirOverridden()) {
     qInfo("data directory overridden: %s", qUtf8Printable(heap::paths::dataDir()));
   }
 
-  // Before any QML asks for "heap Golos Text" / "heap JetBrains Mono" (Theme.qml); after
-  // the file logger, so a face that fails to load is in heap.log.
+  // Before any QML asks for "lowkey Golos Text" / "lowkey JetBrains Mono" (Theme.qml); after
+  // the file logger, so a face that fails to load is in lowkey.log.
   heap::platform::registerBundledFonts();
   heap::platform::useBundledUiFontByDefault();
 
@@ -490,11 +529,11 @@ int main(int argc, char* argv[]) {
     const std::optional<heap::cli::Request> request = heap::cli::decodeRequest(line);
     if(!request) {
       return heap::cli::encodeResponse(
-          {heap::cli::kExitUsage, QString(), QStringLiteral("heap: the window did not understand the request\n")});
+          {heap::cli::kExitUsage, QString(), QStringLiteral("lowkey: the window did not understand the request\n")});
     }
     auto* controller = engine.singletonInstance<AppController*>("TodoCpp", "AppController");
     if(controller == nullptr) {
-      return heap::cli::encodeResponse({heap::cli::kExitData, QString(), QStringLiteral("heap: the window is not ready\n")});
+      return heap::cli::encodeResponse({heap::cli::kExitData, QString(), QStringLiteral("lowkey: the window is not ready\n")});
     }
     return heap::cli::encodeResponse(heap::cli::execute(*controller, *request, QDateTime::currentDateTime()));
   });

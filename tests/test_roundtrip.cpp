@@ -21,6 +21,7 @@
 
 #include <QDate>
 #include <QDateTime>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QTime>
 
@@ -55,6 +56,14 @@ ExternalMeta makeFullMeta() {
   m.labels = {QStringLiteral("bug"), QStringLiteral("ui")};
   m.conflicts = {QStringLiteral("title"), QStringLiteral("priority")};
   m.pushQueued = true;
+  // APP-242 / APP-255: no key named createdAt/updatedAt in here (JsonMerger).
+  m.details =
+      QJsonObject{{QStringLiteral("kind"), QStringLiteral("mr")},
+                  {QStringLiteral("sourceBranch"), QStringLiteral("feature/x")},
+                  {QStringLiteral("conflicts"), true},
+                  {QStringLiteral("closes"), QJsonArray{QStringLiteral("#12")}},
+                  {QStringLiteral("sprint"),
+                   QJsonObject{{QStringLiteral("name"), QStringLiteral("S 14")}, {QStringLiteral("end"), QStringLiteral("2026-10-16")}}}};
   return m;
 }
 
@@ -97,6 +106,27 @@ Task makeFullTask() {
                               5000000123LL,
                               QStringLiteral("image/png")},
                    Attachment{QStringLiteral("fedcba9876543210fedcba9876543210"), QStringLiteral("Makefile"), 42, QString()}};
+  // Schema v12: the local layer (APP-244), every field set.
+  t.local.notes = QStringLiteral("tried a smaller pool:\n```sh\nmake bench\n```");
+  t.local.checklist = {LocalCheckItem{QStringLiteral("c1"), QStringLiteral("repro"), 1, true, false, QString()},
+                       LocalCheckItem{QStringLiteral("c2"), QStringLiteral("fix"), 3, true, true, QStringLiteral("HEAP-107")}};
+  t.local.myPriority = QStringLiteral("P1");
+  t.local.myDueAt = QDateTime(QDate(2026, 7, 12), QTime(10, 0, 0, 500));
+  t.local.myDueHasTime = true;
+  t.local.myPriorityBase = QStringLiteral("P2");
+  t.local.myDueBase = QDateTime(QDate(2026, 7, 15), QTime(0, 0));
+  t.local.tags = {LocalTag{QStringLiteral("after-release"), QStringLiteral("#b1a7f0")}, LocalTag{QStringLiteral("quick"), QString()}};
+  t.local.related = {
+      LocalLink{
+          QStringLiteral("r1"), QStringLiteral("related"), QStringLiteral("https://gitlab.example/a/b/-/merge_requests/17"), QString()},
+      LocalLink{QStringLiteral("r2"), QStringLiteral("related"), QStringLiteral("APP-12"), QStringLiteral("work")}};
+  t.local.commentDraft = QStringLiteral("Reproduced on 0.8.0, see notes.");
+  t.local.doneFrom = QStringLiteral("review");
+  t.local.sessions = {
+      TimerSession{QStringLiteral("before-0.8.0"), QDateTime(), QDateTime(), 3600},
+      TimerSession{
+          QStringLiteral("s1"), QDateTime(QDate(2026, 7, 10), QTime(23, 30, 0, 250)), QDateTime(QDate(2026, 7, 11), QTime(0, 45)), 0}};
+  t.local.extra = QJsonObject{{QStringLiteral("futureLocalField"), true}};
   // A key a newer build wrote: it has to come back out as itself (PLAT-15).
   t.extra = QJsonObject{{QStringLiteral("futureTaskField"), QJsonObject{{QStringLiteral("n"), 1}}}};
   return t;
@@ -234,6 +264,37 @@ class Gen {
                                       pick(0, 1 << 30),
                                       boolean() ? QStringLiteral("application/pdf") : QString()});
     }
+    // The local layer (APP-244): sometimes empty, which state.json omits.
+    if(boolean()) {
+      t.local.notes = text();
+      const int items = pick(0, 3);
+      for(int i = 0; i < items; ++i) {
+        const bool done = boolean();
+        t.local.checklist.append(
+            LocalCheckItem{QStringLiteral("c") + QString::number(i), text(), pick(1, 4), done, done && boolean(), QString()});
+      }
+      if(boolean()) {
+        t.local.myPriority = QStringLiteral("P") + QString::number(pick(0, 3));
+        t.local.myPriorityBase = QStringLiteral("P") + QString::number(pick(0, 3));
+      }
+      if(boolean()) {
+        t.local.myDueAt = QDateTime(QDate(2026, pick(1, 12), pick(1, 28)), QTime(pick(0, 23), pick(0, 59)));
+        t.local.myDueHasTime = boolean();
+      }
+      if(boolean()) {
+        t.local.tags.append(LocalTag{text() + QStringLiteral("x"), boolean() ? QStringLiteral("#123456") : QString()});
+      }
+      if(boolean()) {
+        t.local.related.append(
+            LocalLink{QStringLiteral("r1"), QStringLiteral("related"), QStringLiteral("T-") + QString::number(pick(1, 9)), QString()});
+      }
+      t.local.commentDraft = boolean() ? text() : QString();
+      t.local.doneFrom = boolean() ? QStringLiteral("prog") : QString();
+      if(boolean()) {
+        const QDateTime start(QDate(2026, pick(1, 12), pick(1, 28)), QTime(pick(0, 23), pick(0, 59)));
+        t.local.sessions.append(TimerSession{QStringLiteral("s1"), start, start.addSecs(pick(1, 9000)), 0});
+      }
+    }
     return t;
   }
 
@@ -285,7 +346,9 @@ constexpr int kCases = 1000;
 // Mirrors the static_asserts inside both serializers. If the struct grows and
 // only one serializer is updated, that serializer's own static_assert fires.
 TEST(FieldCountGuard, TaskAndEventArityIsPinned) {
-  EXPECT_EQ(heap::meta::fieldCount<Task>(), 27u);
+  EXPECT_EQ(heap::meta::fieldCount<Task>(), 28u);
+  EXPECT_EQ(heap::meta::fieldCount<TaskLocal>(), 13u);
+  EXPECT_EQ(heap::meta::fieldCount<TimerSession>(), 4u);
   EXPECT_EQ(heap::meta::fieldCount<Attachment>(), 4u);
   EXPECT_EQ(heap::meta::fieldCount<CalEvent>(), 22u);
 }
@@ -293,7 +356,7 @@ TEST(FieldCountGuard, TaskAndEventArityIsPinned) {
 // ExternalMeta is nested inside Task, so Task's own count stays 1 for the whole
 // object — this is what stops a field added in there from being dropped.
 TEST(FieldCountGuard, ExternalMetaArityIsPinned) {
-  EXPECT_EQ(heap::meta::fieldCount<ExternalMeta>(), 21u);
+  EXPECT_EQ(heap::meta::fieldCount<ExternalMeta>(), 22u);
 }
 
 // ── The runtime half: one emitted key per declared field ──
@@ -325,6 +388,31 @@ TEST(FieldCountGuard, SyncSerializerEmitsAKeyForEveryEventField) {
 
 // APP-122: a column's auto-archive days survive a save, 0 included; a
 // column that never had one stays without the key.
+// A column's stage (schema v12, APP-259) survives a save; one from before
+// stages gets its own: a built-in id is its stage, any other column "todo",
+// flagged for the user to check — never guessed from the name.
+TEST(RoundTrip, ColumnStageSurvivesAndOldColumnsGetOne) {
+  QVariantMap picked{{"id", "qa"}, {"name", "QA"}, {"color", "#8a8e98"}, {"category", "review"}, {"categoryGuessed", false}};
+  const QVariantList back = heap::state::statusesFromJson(heap::state::statusesToJson({picked}));
+  ASSERT_EQ(back.size(), 1);
+  EXPECT_EQ(back.at(0).toMap().value("category").toString(), QString("review"));
+  EXPECT_FALSE(back.at(0).toMap().value("categoryGuessed").toBool());
+
+  QJsonArray legacy;
+  legacy.append(QJsonObject{{"id", "prog"}, {"name", "Doing"}, {"color", "#5aa9e6"}});
+  legacy.append(QJsonObject{{"id", "waiting-for-qa"}, {"name", "Done-ish"}, {"color", "#5aa9e6"}});
+  const QVariantList old = heap::state::statusesFromJson(legacy);
+  EXPECT_EQ(old.at(0).toMap().value("category").toString(), QString("prog"));
+  EXPECT_FALSE(old.at(0).toMap().value("categoryGuessed").toBool());
+  EXPECT_EQ(old.at(1).toMap().value("category").toString(), QString("todo")) << "not guessed from a name that says done";
+  EXPECT_TRUE(old.at(1).toMap().value("categoryGuessed").toBool());
+  // and written back with the stage, still flagged until the user picks one
+  const QJsonArray saved = heap::state::statusesToJson(old);
+  EXPECT_EQ(saved.at(1).toObject().value("category").toString(), QString("todo"));
+  EXPECT_TRUE(saved.at(1).toObject().value("categoryGuessed").toBool());
+  EXPECT_FALSE(saved.at(0).toObject().contains("categoryGuessed"));
+}
+
 TEST(RoundTrip, ColumnArchiveDaysSurvive) {
   QVariantMap obsolete{{"id", "obsolete"}, {"name", "Obsolete"}, {"color", "#8a8e98"}, {"archiveDays", 14}};
   QVariantMap never{{"id", "later"}, {"name", "Later"}, {"color", "#8a8e98"}, {"archiveDays", 0}};

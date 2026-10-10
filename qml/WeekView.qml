@@ -14,8 +14,31 @@ Item {
     property string searchText: ""
     property var prioritiesFilter: ({})
     property bool showArchived: false
+    // The calendar lens (APP-264): "week" or "day", one grid at two zooms.
+    // The day is the selected date alone, weekend or not.
+    property string zoom: "week"
+    readonly property bool dayZoom: root.zoom === "day"
+    readonly property int spanDays: root.dayZoom ? 1 : 7
+    // Off inside the calendar lens, where the header carries the range and
+    // the tray the tasks without a date: no toolbar, no rail of its own.
+    property bool chrome: true
+    // A task picked in the "Without a date" tray: a click on an empty slot
+    // plans it there instead of starting a meeting (APP-264).
+    property string armedTaskId: ""
+    signal armedUsed()
 
     signal taskClicked(string id)
+    // The task menu (APP-268), one for the view, refilled per task.
+    TaskMenuHost {
+        id: viewTaskMenu
+        anchorItem: root
+        onOpenRequested: root.taskClicked(viewTaskMenu.taskId)
+    }
+    function openTaskMenu(id) {
+        viewTaskMenu.releaseMenu();
+        viewTaskMenu.taskId = id;
+        viewTaskMenu.popup();
+    }
     // The occurrence, not just its id: a repeating event is stored once, so
     // every occurrence of a series carries the master's id and only the
     // occurrence map says which date was clicked.
@@ -23,6 +46,8 @@ Item {
     signal dayClicked(date d)
     // An empty slot was clicked: the shell opens the event editor there.
     signal createRequested(real hour, date day)
+    // A stretch was dragged on an empty part of a day: a meeting that long.
+    signal createRangeRequested(real startHour, real endHour, date day)
 
     // Shift-click anchor + day for range select. Shift across days falls back
     // to single-toggle since the visible-chip order isn't a single flat list.
@@ -122,7 +147,7 @@ Item {
     // button hides it for good on a window that has room but no need.
     property bool railWanted: true
     Timer { interval: 60000; repeat: true; running: true; onTriggered: root.now = new Date() }
-    readonly property int hourH: 38
+    readonly property int hourH: Theme.px(46)
     // An event block's floor heights (APP-199): one line of small text, or
     // the time on top of a title.
     readonly property int eventOneLineH: Math.ceil(Theme.fsXs * 1.4) + 2 * Theme.sp2xs
@@ -199,7 +224,9 @@ Item {
 
     // Declarative binding: re-evaluates on AppController.selectedDate and
     // Theme.weekStart changes — no manual Connections needed.
-    property var weekStart: startOfWeek(AppController.selectedDate)
+    property var weekStart: root.dayZoom
+        ? new Date(AppController.selectedDate.getFullYear(), AppController.selectedDate.getMonth(), AppController.selectedDate.getDate())
+        : startOfWeek(AppController.selectedDate)
 
     // Every event in the model, in the shape Segments.js reads. Its own
     // binding rather than a local inside buildDays(), because the all-day strip
@@ -210,7 +237,7 @@ Item {
     function step(dir) {
         const w = root.weekStart;
         if (!w || !w.getFullYear) return;
-        AppController.selectedDate = new Date(w.getFullYear(), w.getMonth(), w.getDate() + (7 * dir));
+        AppController.selectedDate = new Date(w.getFullYear(), w.getMonth(), w.getDate() + (root.spanDays * dir));
     }
 
     // The rebuild is one chain, each stage reading only the one before it:
@@ -225,7 +252,7 @@ Item {
         // A day either side of the week: a timed event that crosses midnight
         // reaches in from the Sunday before, and out into the Monday after.
         const from = new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1);
-        const to = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7);
+        const to = new Date(start.getFullYear(), start.getMonth(), start.getDate() + root.spanDays);
         // Copied out into a plain array once. What comes back is a C++ list
         // the engine converts element by element on every index — and
         // buildEventDays() reads each occurrence once per day column, so a
@@ -248,11 +275,12 @@ Item {
         const spans = root.spans;
         const start = spans.weekStart || root.weekStart;
         const days = [];
-        const showWeekends = Theme.showWeekends;
+        const showWeekends = Theme.showWeekends || root.dayZoom;
+        const span = root.dayZoom ? 1 : 7;
         // Column of each day of the week, by its offset from weekStart; -1
         // for a hidden weekend.
         const colOf = [];
-        for (let i = 0; i < 7; i++) {
+        for (let i = 0; i < span; i++) {
             const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
             if (!showWeekends && (d.getDay() === 0 || d.getDay() === 6)) { colOf.push(-1); continue; }
             colOf.push(days.length);
@@ -279,7 +307,7 @@ Item {
             const a = dayOf(e.date);
             const b = (e.endDate && e.endDate.getFullYear) ? Math.max(a, dayOf(e.endDate)) : a;
             const strip = Seg.isStrip(e);   // all-day events live in the strip
-            for (let off = Math.max(0, a); off <= Math.min(6, b); off++) {
+            for (let off = Math.max(0, a); off <= Math.min(span - 1, b); off++) {
                 const k = colOf[off];
                 if (k < 0) continue;
                 if (e.taskId) linked[k][String(e.taskId)] = true;
@@ -319,20 +347,26 @@ Item {
         // A deadline is a chip in the header; so is a date-only schedule. A
         // task scheduled at a clock time is a block on the grid, next to the
         // events, unless a linked event already stands in for it.
-        const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
+        const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + colOf.length - 1);
         const list = AppController.calendarTasks(start, end, root.showArchived);
         for (let i = 0; i < list.length; i++) {
             const t = list[i];
             if (!root.passesFilter(t)) continue;
             const dueCol = t.dueDay >= 0 ? colOf[t.dueDay] : -1;
             const schedCol = t.schedDay >= 0 ? colOf[t.schedDay] : -1;
-            if (dueCol >= 0) days[dueCol].tasks.push(t);
+            // Each thing once (APP-264): a task with a time that day is its
+            // block, not also a flag in the deadline row above it.
+            const timedThere = schedCol >= 0 && schedCol === dueCol && t.schedHour >= 0;
+            if (dueCol >= 0 && !timedThere) days[dueCol].tasks.push(t);
             if (schedCol >= 0) {
                 if (t.schedHour >= 0) {
                     if (!linked[schedCol][t.id]) {
-                        const len = t.estimateMinutes > 0 ? t.estimateMinutes / 60 : 1;
+                        // As long as Today and the day's load count it.
+                        const len = (t.blockMinutes > 0 ? t.blockMinutes
+                                   : t.estimateMinutes > 0 ? t.estimateMinutes : 60) / 60;
                         days[schedCol].blocks.push({
-                            id: t.id, title: t.title, priority: t.priority,
+                            id: t.id, title: t.title, priority: t.priority, status: t.status,
+                            due: dueCol === schedCol,
                             start: t.schedHour, end: Math.min(24, t.schedHour + Math.max(Theme.minEventHours, len)),
                             key: "task:" + t.id + "@" + schedCol
                         });
@@ -347,6 +381,39 @@ Item {
             days[k].tasks.sort((a, b) => (priRank[a.priority] ?? 9) - (priRank[b.priority] ?? 9));
         }
         return days;
+    }
+
+    // The load of each day on screen (APP-247): meetings and task blocks,
+    // each minute once, against the working day. A fact, never advice.
+    // The revisions are read in the expression: an unused local reading them
+    // would be dropped by the compiler, and the load would never refresh.
+    readonly property var loads: (root.taskRev >= 0 && root.eventRev >= 0 && root.weekStart && root.weekStart.getFullYear)
+        ? AppController.dayLoads(root.weekStart, root.spanDays) : []
+    // By its offset from the first day: a QDate crossing into JS is not a
+    // safe key across time zones.
+    function loadOf(d) {
+        if (!d || !d.getFullYear || !root.weekStart || !root.weekStart.getFullYear) return null;
+        const i = root._daysBetween(root.weekStart, d);
+        return i >= 0 && i < root.loads.length ? root.loads[i] : null;
+    }
+    // "3 h of 10" in a week column; the whole sentence on a day.
+    function loadShort(l) {
+        if (!l) return "";
+        const busy = (l.meetings || 0) + (l.tasks || 0);
+        if (!l.workday) return busy > 0 ? I18n.fmtMinutes(busy) : I18n.t("today.dayOff");
+        // An empty working day says nothing; the empty scale under it is the fact.
+        if (busy === 0) return "";
+        return I18n.t("load.ofWork").arg(I18n.fmtMinutes(busy)).arg(I18n.fmtMinutes(l.work));
+    }
+    function loadLong(l) {
+        if (!l) return "";
+        const parts = [];
+        if (l.meetings > 0) parts.push(I18n.t("load.meetings").arg(I18n.fmtMinutes(l.meetings)));
+        if (l.tasks > 0) parts.push(I18n.t("load.tasks").arg(I18n.fmtMinutes(l.tasks)));
+        if (l.workday) parts.push(I18n.t("load.free").arg(I18n.fmtMinutes(l.free || 0)));
+        else parts.push(I18n.t("today.dayOff"));
+        if (l.overWork > 0) parts.push(I18n.t("load.over").arg(I18n.fmtMinutes(l.overWork)));
+        return parts.join(" · ");
     }
 
     // Declarative: buildDays() reads weekStart, taskRev, eventRev, showArchived,
@@ -478,24 +545,229 @@ Item {
     property string hoverTaskId: ""
     property var hoverTaskDay: null
     function _keyTask() {
+        // The keyboard cursor first (APP-276); on a meeting it is the meeting.
+        const it = root._cursorItem();
+        if (it) return it.kind === "task" ? { id: it.id, day: root.days[root.cursorDay].date } : null;
         if (root.keyTaskId) return { id: root.keyTaskId, day: root.keyTaskDay };
         if (root.hoverTaskId) return { id: root.hoverTaskId, day: root.hoverTaskDay };
         return null;
     }
     function moveKeyTaskByDays(days) {
+        const it = root._cursorItem();
+        if (it && it.kind === "event") return root._moveCursorEvent(days * 24);
         const k = root._keyTask();
         if (!k) return false;
         const t = AppController.taskById(k.id);
         if (!t || !t.id) return false;
         const r = Resched.shiftByDays(t.scheduledAt, t.scheduledHasTime, days, k.day, AppController.today);
-        return AppController.rescheduleTask(k.id, "scheduled", r.when, r.timed);
+        const ok = AppController.rescheduleTask(k.id, "scheduled", r.when, r.timed);
+        if (ok && it) root._follow(days);
+        return ok;
     }
     function moveKeyTaskByTime(steps) {
+        const it = root._cursorItem();
+        if (it && it.kind === "event") return root._moveCursorEvent(steps * Theme.snapMinutes / 60);
         const k = root._keyTask();
         if (!k) return false;
         const t = AppController.taskById(k.id);
         const r = t ? Resched.shiftByTime(t.scheduledAt, t.scheduledHasTime, steps, Theme.snapMinutes) : null;
         return r ? AppController.rescheduleTask(k.id, "scheduled", r.when, true) : false;
+    }
+
+    // ── The keyboard cursor (APP-276) ────────────────────────────────
+    // One cursor for tasks and meetings: j / k walk a day top to bottom (its
+    // deadlines, then the grid by time), h / l go to the day beside it and
+    // turn the week over at its edge. It holds on to what it is on by key,
+    // so a move, a sync or a filter leaves it there — or on the neighbour
+    // when the thing is gone. The day it is on is the selected date.
+    property bool cursorVisible: false
+    property string cursorKey: ""
+    property int cursorDay: -1
+    property int _cursorIdx: 0
+    readonly property string cursorTaskId: {
+        const it = root._cursorItem();
+        return it && it.kind === "task" ? it.id : "";
+    }
+    readonly property bool cardMenuOpen: false
+    function _evKey(e) {
+        return "event:" + e.id + (e.masterId ? "@" + Number(e.occurrenceDate || e.date) : "");
+    }
+    function _dayItems(d) {
+        if (d < 0 || d >= root.days.length) return [];
+        const day = root.days[d];
+        const out = [];
+        const chips = day.tasks.slice(0, 4);
+        for (let i = 0; i < chips.length; i++)
+            out.push({ kind: "task", id: chips[i].id, key: "task:" + chips[i].id, start: -1 });
+        const timed = [];
+        for (let i = 0; i < day.events.length; i++) {
+            const e = day.events[i];
+            timed.push({ kind: "event", id: e.id, key: root._evKey(e), start: e.start, end: e.end, ev: e });
+        }
+        for (let i = 0; i < day.blocks.length; i++) {
+            const b = day.blocks[i];
+            timed.push({ kind: "task", id: b.id, key: "task:" + b.id, start: b.start, end: b.end, block: b });
+        }
+        timed.sort((a, b) => a.start - b.start);
+        return out.concat(timed);
+    }
+    function _cursorIndex() {
+        const items = root._dayItems(root.cursorDay);
+        for (let i = 0; i < items.length; i++)
+            if (items[i].key === root.cursorKey) return i;
+        return -1;
+    }
+    function _cursorItem() {
+        if (!root.cursorVisible || root.cursorKey === "") return null;
+        const items = root._dayItems(root.cursorDay);
+        for (let i = 0; i < items.length; i++)
+            if (items[i].key === root.cursorKey) return items[i];
+        return null;
+    }
+    function clearCursor() {
+        root.cursorVisible = false;
+        root.cursorKey = "";
+    }
+    function _place(d, i) {
+        if (root.days.length === 0) return;
+        d = Math.max(0, Math.min(root.days.length - 1, d));
+        const items = root._dayItems(d);
+        root.cursorDay = d;
+        root.cursorVisible = true;
+        const date = root.days[d].date;
+        if (!root.isSameDay(date, AppController.selectedDate)) AppController.selectedDate = date;
+        if (items.length === 0) {
+            root.cursorKey = "";
+            root._cursorIdx = 0;
+            return;
+        }
+        const at = Math.max(0, Math.min(items.length - 1, i));
+        root.cursorKey = items[at].key;
+        root._cursorIdx = at;
+        root._revealItem(items[at]);
+        if (items[at].kind === "task") AppController.markTaskSeen(items[at].id);
+    }
+    function _revealItem(it) {
+        if (!it || it.start < 0) return;
+        const f = hourScroll.contentItem;
+        if (!f || f.height <= 0) return;
+        const top = (it.start - root.hoursStart) * root.hourH;
+        const bottom = (it.end - root.hoursStart) * root.hourH;
+        if (top < f.contentY) f.contentY = Math.max(0, top - root.hourH / 2);
+        else if (bottom > f.contentY + f.height)
+            f.contentY = Math.min(Math.max(0, f.contentHeight - f.height), Math.min(top, bottom - f.height + root.hourH / 2));
+    }
+    function _startDay() {
+        for (let i = 0; i < root.days.length; i++)
+            if (root.isSameDay(root.days[i].date, AppController.selectedDate)) return i;
+        return 0;
+    }
+    function moveCursor(dx, dy) {
+        if (root.days.length === 0) return;
+        if (!root.cursorVisible || root.cursorDay < 0 || root.cursorDay >= root.days.length) {
+            root._place(root._startDay(), 0);
+            return;
+        }
+        const at = Math.max(0, root._cursorIndex());
+        if (dx !== 0) {
+            const nd = root.cursorDay + dx;
+            if (nd < 0 || nd >= root.days.length) {
+                root.step(dx);
+                Qt.callLater(root._place, dx < 0 ? root.spanDays : 0, at);
+                return;
+            }
+            root._place(nd, at);
+            return;
+        }
+        if (root.cursorKey === "") return;
+        root._place(root.cursorDay, at + dy);
+    }
+    // The cursor goes with what it moved, into the next week if need be.
+    function _follow(days) {
+        const d = root.days[root.cursorDay] ? root.days[root.cursorDay].date : AppController.selectedDate;
+        const target = new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
+        AppController.selectedDate = target;
+        for (let i = 0; i < root.days.length; i++) {
+            if (root.isSameDay(root.days[i].date, target)) { root.cursorDay = i; return; }
+        }
+        Qt.callLater(root._reconcile);
+    }
+    function _reconcile() {
+        if (!root.cursorVisible || root.cursorKey === "" || root._cursorIndex() >= 0) return;
+        for (let d = 0; d < root.days.length; d++) {
+            const items = root._dayItems(d);
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].key === root.cursorKey) {
+                    root.cursorDay = d;
+                    root._cursorIdx = i;
+                    return;
+                }
+            }
+        }
+        root._place(root.cursorDay, root._cursorIdx);
+    }
+    onDaysChanged: if (root.cursorVisible) Qt.callLater(root._reconcile)
+    function _actionCardId() {
+        const it = root._cursorItem();
+        if (it) return it.kind === "task" ? it.id : "";
+        if (AppController.selectionCount === 1) return AppController.selectedTaskIds[0];
+        return root.hoverTaskId || "";
+    }
+    function openCursor() {
+        const it = root._cursorItem();
+        if (!it) { if (!root.cursorVisible) root.moveCursor(0, 0); return; }
+        if (it.kind === "task") root.taskClicked(it.id);
+        else root.eventClicked(it.id, it.ev.occ);
+    }
+    function toggleCursorSelection() {
+        const it = root._cursorItem();
+        if (!it) { if (!root.cursorVisible) root.moveCursor(0, 0); return; }
+        if (it.kind === "task") AppController.toggleTaskSelection(it.id);
+    }
+    function openCursorMenu() {
+        const id = root._actionCardId();
+        if (id) root.openTaskMenu(id);
+    }
+    function archiveCursor() {
+        if (AppController.selectionCount > 0) { AppController.setSelectedTasksArchived(true); return; }
+        const id = root._actionCardId();
+        if (id) AppController.setArchived(id, true);
+    }
+    // Shift J / K: a grid step later / earlier; Shift H / L: a day.
+    function moveCursorCard(dx, dy) { if (dy !== 0) root.moveKeyTaskByTime(dy); }
+    function moveSelectionOrCard(dx) {
+        if (AppController.selectionCount > 0 && !root._cursorItem()) {
+            const ids = AppController.selectedTaskIds;
+            for (let i = 0; i < ids.length; i++) {
+                const t = AppController.taskById(ids[i]);
+                if (!t || !t.id) continue;
+                const r = Resched.shiftByDays(t.scheduledAt, t.scheduledHasTime, dx, null, AppController.today);
+                AppController.rescheduleTask(t.id, "scheduled", r.when, r.timed);
+            }
+            return;
+        }
+        root.moveKeyTaskByDays(dx);
+    }
+    function _moveCursorEvent(deltaHours) {
+        const it = root._cursorItem();
+        if (!it || it.kind !== "event" || Math.abs(deltaHours) < 1e-9) return false;
+        root._commitMove(it.ev.occ, deltaHours, null);
+        if (Math.abs(deltaHours) >= 24) root._follow(Math.round(deltaHours / 24));
+        return true;
+    }
+    // Ctrl Shift J / K (APP-278): the block under the cursor a grid step
+    // longer or shorter — what stretching its lower edge does.
+    function resizeCursor(steps) {
+        const it = root._cursorItem();
+        if (!it || it.start < 0) return false;
+        const step = Theme.snapMinutes / 60;
+        const end = Math.min(24, it.end + steps * step);
+        if (end - it.start < step - 1e-9) return false;
+        if (it.kind === "task")
+            return AppController.resizeTaskBlock(it.id, root.days[root.cursorDay].date, it.start, end);
+        if (!it.ev.segFirst || !it.ev.segLast) return false;
+        root._commitResize(it.ev.occ, it.start, end, null);
+        return true;
     }
 
     // All-day events, packed into rows so bars stack instead of overlapping.
@@ -571,6 +843,7 @@ Item {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: Theme.px(50)
+            visible: root.chrome
             color: Theme.panel
             Rectangle {
                 anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
@@ -667,8 +940,8 @@ Item {
             // minDayW. The old test was a fixed 900px, while dayW refused to go
             // under 120 — so at 1400px the week overflowed its own view and the
             // weekend was cut off behind the rail.
-            readonly property bool railFits: (width - gutterW - 240) / dayCount >= minDayW
-            readonly property bool railVisible: root.railWanted && railFits
+            readonly property bool railFits: root.chrome && (width - gutterW - 240) / dayCount >= minDayW
+            readonly property bool railVisible: root.chrome && root.railWanted && railFits
             readonly property int railW: railVisible ? 240 : 0
             // Never wider than the space there is: every day stays on screen.
             readonly property int dayW: Math.max(40, Math.floor((width - gutterW - railW) / dayCount))
@@ -712,6 +985,13 @@ Item {
                         height: headerBand.height
                         readonly property bool isToday: root.isSameDay(modelData.date, AppController.today)
                         readonly property bool isWeekend: root.isWeekendDate(modelData.date)
+                        // The cursor on a day with nothing on it (APP-276).
+                        FocusRing {
+                            objectName: "week-cursor-day"
+                            anchors.margins: 1
+                            haloInside: true
+                            visible: root.cursorVisible && root.cursorKey === "" && root.cursorDay === headCol.index
+                        }
 
                         Rectangle {
                             anchors.fill: parent
@@ -722,9 +1002,20 @@ Item {
                             Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 1; color: Theme.border }
                         }
 
-                        // Day header. Clipped: at a large scale the "today"
-                        // badge ran into the next day's name (APP-183).
+                        // Today: a 2 px accent line on top of its column,
+                        // quiet, like the tint below it (APP-264).
+                        Rectangle {
+                            objectName: "week-today-bar"
+                            visible: headCol.isToday
+                            anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                            height: 2
+                            color: Theme.accent
+                        }
+                        // Day header: "mon 5" on one line, the day's load
+                        // under it (APP-247). Clipped: at a large scale the
+                        // name ran into the next day (APP-183).
                         Item {
+                            id: headInfo
                             anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
                             height: Theme.px(60)
                             clip: true
@@ -733,44 +1024,80 @@ Item {
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: AppController.selectedDate = headCol.modelData.date
                             }
-                            RowLayout {
-                                anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                                anchors.margins: Theme.spLg
-                                spacing: Theme.spSm
+                            Row {
+                                id: headLine
+                                anchors.left: parent.left; anchors.top: parent.top
+                                anchors.leftMargin: Theme.spLg; anchors.topMargin: Theme.spMd
+                                spacing: Theme.spXs
                                 Text {
-                                    text: root.dowLabelsByJsDow[headCol.modelData.date.getDay()]
+                                    anchors.baseline: dayNumber.baseline
+                                    text: root.dayZoom ? I18n.fmtDate(headCol.modelData.date, "longWeekday")
+                                                       : root.dowLabelsByJsDow[headCol.modelData.date.getDay()]
                                     color: headCol.isToday ? Theme.accentStrong : Theme.textDim
-                                    font.pixelSize: Theme.fsMd
-                                    font.weight: Theme.fwTitle
+                                    font.pixelSize: root.dayZoom ? Theme.fsLg : Theme.fsSm
+                                    font.weight: root.dayZoom ? Theme.fwHeading : Theme.fwBody
                                 }
-                                // Today is an accent dot and the word, not a
-                                // filled plate: the brightest thing on the week
-                                // was a label (APP-194, APP-198).
-                                Rectangle {
-                                    visible: headCol.isToday
-                                    Layout.alignment: Qt.AlignVCenter
-                                    implicitWidth: 6; implicitHeight: 6
-                                    radius: Theme.radiusPill
-                                    color: Theme.accent
+                                Text {
+                                    id: dayNumber
+                                    visible: !root.dayZoom
+                                    text: headCol.modelData.date.getDate()
+                                    color: headCol.isToday ? Theme.accentStrong : Theme.text
+                                    font.family: Theme.fontUi
+                                    font.features: Theme.tabularNums
+                                    font.pixelSize: Theme.fsLg
+                                    font.weight: Theme.fwHeading
                                 }
                                 Text {
                                     objectName: "week-today-label"
-                                    visible: headCol.isToday
+                                    visible: headCol.isToday && root.dayZoom
+                                    anchors.baseline: dayNumber.baseline
                                     text: I18n.t("week.todayBadge")
                                     color: Theme.accentStrong
                                     font.pixelSize: Theme.fsSm
-                                    font.weight: Theme.fwBody
                                 }
                             }
+                            // The load: "3 h of 10" with a thin bar of how
+                            // full the working day is — a shape, not only a
+                            // colour; the whole sentence on a day.
+                            readonly property var load: root.loadOf(headCol.modelData.date)
                             Text {
-                                anchors.left: parent.left; anchors.bottom: parent.bottom
-                                anchors.leftMargin: Theme.spLg; anchors.bottomMargin: Theme.spSm
-                                text: headCol.modelData.date.getDate()
-                                color: headCol.isToday ? Theme.accentStrong : Theme.text
+                                id: loadText
+                                objectName: "week-load-" + headCol.index
+                                anchors.left: parent.left; anchors.right: parent.right
+                                anchors.top: headLine.bottom
+                                anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spSm
+                                anchors.topMargin: Theme.sp2xs
+                                text: root.dayZoom ? root.loadLong(headInfo.load) : root.loadShort(headInfo.load)
+                                color: Theme.textDim
                                 font.family: Theme.fontUi
                                 font.features: Theme.tabularNums
-                                font.pixelSize: Theme.fsXl
-                                font.weight: Theme.fwTitle
+                                font.pixelSize: Theme.fsXs
+                                elide: Text.ElideRight
+                                HoverHandler { id: loadHover }
+                                ToolTip.visible: loadHover.hovered && !root.dayZoom
+                                ToolTip.delay: 400
+                                ToolTip.text: root.loadLong(headInfo.load)
+                            }
+                            Rectangle {
+                                id: loadBar
+                                objectName: "week-load-bar-" + headCol.index
+                                readonly property var l: headInfo.load
+                                visible: !!l && l.workday && l.work > 0
+                                anchors.left: parent.left; anchors.right: parent.right
+                                anchors.top: loadText.bottom
+                                anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spLg
+                                anchors.topMargin: Theme.sp2xs
+                                height: 3
+                                radius: 1.5
+                                color: Theme.withAlpha(Theme.textDim, 0.18)
+                                Rectangle {
+                                    height: loadBar.height
+                                    radius: loadBar.radius
+                                    readonly property real frac: loadBar.l && loadBar.l.work > 0
+                                        ? Math.min(1, ((loadBar.l.meetings || 0) + (loadBar.l.tasks || 0)) / loadBar.l.work) : 0
+                                    width: loadBar.width * frac
+                                    color: Theme.textMuted
+                                }
                             }
                         }
 
@@ -795,11 +1122,13 @@ Item {
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: Theme.px(22)
                                         radius: Theme.radiusSm
+                                        // A deadline is a flag in the row, not
+                                        // a box (APP-264): fill only to say it
+                                        // is selected or under the pointer.
                                         color: _selected ? Theme.withAlpha(Theme.accent, 0.18)
-                                            : chipMA.containsMouse ? Theme.panel2 : Theme.panel3
-                                        border.color: _selected ? Theme.accent
-                                            : Theme.withAlpha(Theme.priorityColor(modelData.priority), 0.45)
-                                        border.width: _selected ? 2 : 1
+                                            : chipMA.containsMouse ? Theme.panel2 : "transparent"
+                                        border.color: _selected ? Theme.accent : "transparent"
+                                        border.width: _selected ? 2 : 0
 
                                         RowLayout {
                                             anchors.fill: parent
@@ -812,7 +1141,7 @@ Item {
                                                 // is narrow, so the title keeps
                                                 // some words: at 125 % every chip
                                                 // read "APP-105 …" (SCALE-7).
-                                                visible: dueChip.width - 2 * Theme.spSm - chipKey.implicitWidth
+                                                visible: root.chrome && dueChip.width - 2 * Theme.spSm - chipKey.implicitWidth
                                                          - chipPri.implicitWidth - 2 * Theme.spXs >= Theme.px(64)
                                                 // A mirrored issue reads by its
                                                 // tracker key, not the synthetic
@@ -830,9 +1159,9 @@ Item {
                                                 Layout.fillWidth: true
                                                 // A planned day (no deadline here) reads
                                                 // as planned, not as due.
-                                                text: (modelData.scheduled ? "◷ " : "") + modelData.title
+                                                text: (modelData.scheduled ? "◷ " : "⚑ ") + modelData.title
                                                 textFormat: Text.PlainText
-                                                color: Theme.text
+                                                color: modelData.scheduled ? Theme.textMuted : Theme.signalNow
                                                 font.pixelSize: Theme.fsXs
                                                 elide: Text.ElideRight
                                             }
@@ -844,6 +1173,11 @@ Item {
                                                 color: Theme.priorityColor(modelData.priority)
                                                 font.pixelSize: Theme.fsXs
                                             }
+                                        }
+                                        FocusRing {
+                                            objectName: "week-cursor"
+                                            visible: root.cursorVisible && root.cursorDay === headCol.index
+                                                     && root.cursorKey === "task:" + dueChip.modelData.id
                                         }
                                         // The keyboard's way in (design audit
                                         // DES-19). Under the MouseArea and deaf
@@ -861,6 +1195,11 @@ Item {
                                                 root.keyTaskId = dueChip.modelData.id;
                                                 root.keyTaskDay = headCol.modelData.date;
                                             }
+                                        }
+                                        // The task's menu, the same in every view (APP-268).
+                                        TapHandler {
+                                            acceptedButtons: Qt.RightButton
+                                            onTapped: root.openTaskMenu(dueChip.modelData.id)
                                         }
                                         MouseArea {
                                             id: chipMA
@@ -940,7 +1279,7 @@ Item {
                                     }
                                 }
                                 Text {
-                                    visible: headCol.modelData.tasks.length === 0
+                                    visible: headCol.modelData.tasks.length === 0 && root.chrome
                                     text: "·"
                                     color: Theme.textDim
                                     font.pixelSize: Theme.fsLg
@@ -1156,9 +1495,14 @@ Item {
                                     hoverY = -1;
                                     const src = drop.source;
                                     if (!src || !src.taskId) return;
-                                    AppController.scheduleTask(String(src.taskId),
-                                                               root.clampHour(root.snapHour(root.yToHour(drop.y))),
-                                                               dayCol.modelData.date);
+                                    const h = root.clampHour(root.snapHour(root.yToHour(drop.y)));
+                                    // From the "Without a date" tray: the task
+                                    // is planned for that hour, no extra event.
+                                    if (src.plainSchedule === true)
+                                        AppController.rescheduleTask(String(src.taskId), "scheduled",
+                                                                     Resched.atHour(dayCol.modelData.date, Math.min(h, 24 - Theme.minEventHours)), true);
+                                    else
+                                        AppController.scheduleTask(String(src.taskId), h, dayCol.modelData.date);
                                     drop.accept(Qt.MoveAction);
                                 }
                                 Rectangle {
@@ -1174,13 +1518,64 @@ Item {
                             // Click an empty slot to add something there. It
                             // opens the editor rather than saving an untitled
                             // event, so the user names it before it exists.
+                            //
+                            // A drag on an empty stretch makes a meeting that
+                            // long (as the day panel always could); a task
+                            // picked in the tray is planned at the slot
+                            // instead. Under the task blocks (4) and the
+                            // events (5), like the day grid's z-order.
                             MouseArea {
+                                id: createArea
+                                objectName: "week-create-" + dayCol.index
                                 anchors.fill: parent
-                                z: -1
+                                z: 1
                                 acceptedButtons: Qt.LeftButton
-                                onClicked: (mouse) => {
-                                    const h = root.clampHour(root.snapHour(root.yToHour(mouse.y)));
-                                    root.createRequested(h, dayCol.modelData.date);
+                                preventStealing: true
+                                property real pressY: -1
+                                property real currentY: -1
+                                property bool dragging: false
+                                onPressed: (mouse) => { pressY = mouse.y; currentY = mouse.y; dragging = false; }
+                                onPositionChanged: (mouse) => {
+                                    currentY = mouse.y;
+                                    if (!dragging && !root.armedTaskId && Math.abs(currentY - pressY) >= 5) dragging = true;
+                                }
+                                onReleased: {
+                                    if (pressY < 0) return;
+                                    const h = root.clampHour(root.snapHour(root.yToHour(pressY)));
+                                    const startH = root.snapHour(root.yToHour(Math.min(pressY, currentY)));
+                                    const endH = root.snapHour(root.yToHour(Math.max(pressY, currentY)));
+                                    if (root.armedTaskId) {
+                                        AppController.rescheduleTask(root.armedTaskId, "scheduled",
+                                                                     Resched.atHour(dayCol.modelData.date, Math.min(h, 24 - Theme.minEventHours)), true);
+                                        root.armedUsed();
+                                    } else if (dragging && endH - startH >= Theme.minEventHours) {
+                                        root.createRangeRequested(startH, Math.min(endH, 24), dayCol.modelData.date);
+                                    } else {
+                                        root.createRequested(h, dayCol.modelData.date);
+                                    }
+                                    pressY = -1; currentY = -1; dragging = false;
+                                }
+                                onCanceled: { pressY = -1; currentY = -1; dragging = false; }
+                            }
+                            Rectangle {
+                                objectName: "week-create-ghost"
+                                visible: createArea.dragging
+                                y: Math.min(createArea.pressY, createArea.currentY)
+                                x: 2; width: parent.width - 4
+                                height: Math.abs(createArea.currentY - createArea.pressY)
+                                color: Theme.withAlpha(Theme.accent, 0.18)
+                                border.color: Theme.accent
+                                border.width: 1
+                                radius: Theme.radiusSm
+                                z: 10
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: Theme.fmtHour(root.snapHour(root.yToHour(Math.min(createArea.pressY, createArea.currentY))))
+                                          + " – " + Theme.fmtHour(root.snapHour(root.yToHour(Math.max(createArea.pressY, createArea.currentY))))
+                                    color: Theme.text
+                                    font.family: Theme.fontUi
+                                    font.features: Theme.tabularNums
+                                    font.pixelSize: Theme.fsSm
                                 }
                             }
 
@@ -1319,6 +1714,11 @@ Item {
                             // Opening from the keyboard (design audit DES-19).
                             // Under the drag areas and deaf to the pointer, so
                             // a press still starts a move or a resize.
+                            FocusRing {
+                                objectName: "week-cursor"
+                                visible: root.cursorVisible && root.cursorDay === weEv.modelData.dayIndex
+                                         && root.cursorKey === root._evKey(weEv.modelData)
+                            }
                             ClickArea {
                                 objectName: "week-event-open"
                                 label: weEv.modelData.title
@@ -1482,9 +1882,12 @@ Item {
                             width: wkBlock._lane.w - (wkBlock._cols > 1 ? 2 : 0)
                             height: Math.max(18, (wkBlock.effEnd - wkBlock.effStart) * root.hourH - 2)
                             radius: Theme.radiusSm
-                            color: Theme.withAlpha(Theme.eventColor("focus"), wkBlockMA.hovered || wkMove.containsMouse ? 0.18 : 0.10)
-                            border.color: Theme.withAlpha(Theme.eventColor("focus"), 0.6)
+                            // A task with a time is an outline; a meeting is
+                            // filled (APP-264). The fill only answers the pointer.
+                            color: wkBlockMA.hovered || wkMove.containsMouse ? Theme.panel2 : Theme.bg
+                            border.color: Theme.withAlpha(Theme.text, 0.7)
                             border.width: 1
+                            readonly property bool oneLine: height < Theme.px(36)
                             // Task blocks sit under events (4 < 5), as in the
                             // day grid; a carried one above everything.
                             z: wkBlock.moving ? 7 : 4 + wkBlock._slot.col / Math.max(1, wkBlock._slot.cols)
@@ -1517,17 +1920,51 @@ Item {
                                 }
                             }
 
-                            Text {
+                            Column {
                                 anchors.fill: parent
-                                anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spSm; anchors.topMargin: Theme.sp2xs
-                                text: "▸ " + (wkBlock.modelData.title || "")
-                                color: Theme.text
-                                font.pixelSize: Theme.fsXs
-                                font.weight: Theme.fwTitle
-                                elide: Text.ElideRight
+                                anchors.leftMargin: Theme.spSm; anchors.rightMargin: Theme.spSm; anchors.topMargin: Theme.sp2xs
+                                spacing: 0
+                                clip: true
+                                Text {
+                                    visible: !wkBlock.oneLine
+                                    text: Theme.fmtHour(wkBlock.effStart)
+                                    color: Theme.textMuted
+                                    font.family: Theme.fontUi
+                                    font.features: Theme.tabularNums
+                                    font.pixelSize: Theme.fsXs
+                                }
+                                Row {
+                                    width: parent.width
+                                    spacing: Theme.spXs
+                                    StatusRing {
+                                        id: blkRing
+                                        anchors.verticalCenter: blkTitle.verticalCenter
+                                        category: AppController.statusCategory(wkBlock.modelData.status || "")
+                                        size: Theme.fsXs
+                                    }
+                                    Text {
+                                        id: blkTitle
+                                        width: parent.width - blkRing.width - Theme.spXs
+                                        // One line when short: the time first,
+                                        // never a title cut through the middle.
+                                        text: (wkBlock.oneLine ? Theme.fmtHour(wkBlock.effStart) + " " : "")
+                                              + (wkBlock.modelData.due ? "⚑ " : "") + (wkBlock.modelData.title || "")
+                                        color: Theme.text
+                                        font.pixelSize: Theme.fsXs
+                                        font.weight: Theme.fwTitle
+                                        wrapMode: wkBlock.oneLine ? Text.NoWrap : Text.Wrap
+                                        maximumLineCount: wkBlock.oneLine ? 1 : 3
+                                        elide: Text.ElideRight
+                                    }
+                                }
                             }
                             // Opening from the keyboard; under the drag areas
                             // and deaf to the pointer, like an event's.
+                            FocusRing {
+                                objectName: "week-cursor"
+                                visible: root.cursorVisible && root.cursorDay === wkBlock.modelData.dayIndex
+                                         && root.cursorKey === "task:" + wkBlock.modelData.id
+                            }
                             ClickArea {
                                 id: wkBlockMA
                                 label: wkBlock.modelData.title || ""
@@ -1541,6 +1978,11 @@ Item {
                                 }
                             }
                             // Move — vertical = time, horizontal = day.
+                            // The task's menu, the same in every view (APP-268).
+                            TapHandler {
+                                acceptedButtons: Qt.RightButton
+                                onTapped: root.openTaskMenu(wkBlock.modelData.id)
+                            }
                             MouseArea {
                                 id: wkMove
                                 objectName: "week-taskblock-move"

@@ -1,0 +1,195 @@
+<style>
+:host{margin:0;background:#0c0e11}
+a{color:#e9edf2;text-decoration-color:#4a525d;text-underline-offset:3px}a:hover{color:#ffffff}
+button{font-family:inherit}
+</style>
+<div style="width: 100%; min-height: 900px; display: flex; flex-wrap: wrap; background: #0c0e11; color: #e9edf2; font-family: 'Golos Text', sans-serif; font-size: 13px">
+<nav aria-label="Разделы" style="flex: 0 0 208px; box-sizing: border-box; background: #0e1014; border-right: 1px solid #1a1e24; padding: 16px 12px; display: flex; flex-direction: column; gap: 2px">
+<div style="display: flex; align-items: center; gap: 8px; padding: 0 6px 14px">
+<span style="font-weight: 500; font-size: 18px; letter-spacing: -0.035em"><span style="border-bottom: 0.075em solid #b1a7f0; padding-bottom: 0.06em">low</span>key</span>
+<span style="flex: 1"></span>
+<button style="background: transparent; border: 0; color: #8f99a6; font-size: 12px; padding: 4px 6px">Example</button>
+</div>
+<button style="display: flex; align-items: center; background: transparent; border: 1px solid #1f242b; color: #8f99a6; border-radius: 8px; padding: 8px 10px; margin-bottom: 14px; font-size: 13px; text-align: left">Новая задача…</button>
+<a style="display: flex; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #aeb7c2;">Сегодня</a>
+<a style="display: flex; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; background: linear-gradient(#b1a7f0, #b1a7f0) no-repeat left 8px bottom 2px / 18px 2px; color: #ffffff;">Задачи</a>
+<a style="display: flex; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #aeb7c2;">Знания</a>
+<div style="padding: 16px 8px 6px; font-size: 11px; color: #8f99a6">Мои виды</div>
+<a style="display: flex; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #aeb7c2;">Заблокировано</a>
+<a style="display: flex; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #aeb7c2;">На ревью</a>
+<a style="display: flex; padding: 7px 8px; border-radius: 7px; text-decoration: none; font-size: 13px; color: #aeb7c2;">Эта неделя</a>
+<div style="flex: 1"></div>
+<a style="display: flex; padding: 7px 8px; border-radius: 7px; color: #aeb7c2; text-decoration: none">Настройки</a>
+</nav>
+<main style="flex: 999 1 640px; min-width: 0; padding: 40px 48px 24px; box-sizing: border-box; display: flex; flex-direction: column">
+<header style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 28px; margin-bottom: 10px">
+<h1 style="margin: 0; font-size: 26px; font-weight: 500; letter-spacing: -0.01em">Задачи</h1>
+<nav aria-label="Вид" style="display: flex; gap: 20px">
+<a style="text-decoration: none; font-size: 14px; padding-bottom: 4px; color: #ffffff; box-shadow: inset 0 -2px 0 #b1a7f0;">Доска</a>
+<a style="text-decoration: none; font-size: 14px; padding-bottom: 4px; color: #8f99a6;">Список</a>
+<a style="text-decoration: none; font-size: 14px; padding-bottom: 4px; color: #8f99a6;">Календарь</a>
+</nav>
+</header>
+<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; color: #8f99a6; margin-bottom: 30px">
+<span style="display: inline-flex; gap: 6px; align-items: center; box-sizing: border-box; height: 28px; line-height: 1; background: transparent; border: 1px solid #262c34; border-radius: 8px; padding: 0 10px; font-size: 12px; color: #c4ccd6">не готово</span><span style="display: inline-flex; gap: 6px; align-items: center; box-sizing: border-box; height: 28px; line-height: 1; background: transparent; border: 1px solid #262c34; border-radius: 8px; padding: 0 10px; font-size: 12px; color: #c4ccd6">Example</span>
+<button style="background: transparent; border: 0; color: #7a8390; padding: 0 0 0 6px; font-size: 13px">изменить фильтр</button>
+</div>
+<div style="flex: 1; display: flex; gap: 18px; overflow-x: auto">
+<section style="flex: 1 0 156px; min-width: 156px">
+<div style="display: flex; align-items: center; gap: 8px; padding-bottom: 12px">
+<span style="display: inline-block; width: 12px; height: 12px; border-radius: 6px; box-sizing: border-box; flex-shrink: 0; border: 1.5px dashed #7a8390;"></span>
+<span style="color: #c4ccd6">Бэклог</span>
+<span style="color: #7a8390">3</span>
+</div>
+<div style="border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; background: #111419;">
+<div style="line-height: 1.4">Улучшения внутреннего логирования</div>
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; margin-top: 5px; font-size: 12px; color: #8f99a6">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #7a8390; white-space: nowrap; flex-shrink: 0">APP-113</span>
+<span style="white-space: nowrap; flex-shrink: 0"></span>
+<span style="margin-left: auto; color: #aeb7c2"></span>
+</div>
+</div>
+<div style="border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; background: #111419;">
+<div style="line-height: 1.4">Экспорт: граничный случай пустого отчёта</div>
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; margin-top: 5px; font-size: 12px; color: #8f99a6">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #7a8390; white-space: nowrap; flex-shrink: 0">APP-114</span>
+<span style="white-space: nowrap; flex-shrink: 0"></span>
+<span style="margin-left: auto; color: #aeb7c2"></span>
+</div>
+</div>
+<div style="border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; background: #111419;">
+<div style="line-height: 1.4">Тюнинг порога кэша поиска</div>
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; margin-top: 5px; font-size: 12px; color: #8f99a6">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #7a8390; white-space: nowrap; flex-shrink: 0">APP-115</span>
+<span style="white-space: nowrap; flex-shrink: 0"></span>
+<span style="margin-left: auto; color: #aeb7c2"></span>
+</div>
+</div>
+</section>
+<section style="flex: 1 0 156px; min-width: 156px">
+<div style="display: flex; align-items: center; gap: 8px; padding-bottom: 12px">
+<span style="display: inline-block; width: 12px; height: 12px; border-radius: 6px; box-sizing: border-box; flex-shrink: 0; border: 1.5px solid #aeb7c2;"></span>
+<span style="color: #c4ccd6">К выполнению</span>
+<span style="color: #7a8390">4</span>
+</div>
+<div style="border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; background: #111419; background: linear-gradient(#b1a7f0, #b1a7f0) no-repeat left 12px bottom 5px / 32px 2px, #14181d;">
+<div style="line-height: 1.4">Созвон с Машей</div>
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; margin-top: 5px; font-size: 12px; color: #8f99a6">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #7a8390; white-space: nowrap; flex-shrink: 0">TASK-3</span>
+<span style="white-space: nowrap; flex-shrink: 0">завтра 15:00</span>
+<span style="margin-left: auto; color: #aeb7c2"></span>
+</div>
+</div>
+<div style="border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; background: #111419;">
+<div style="line-height: 1.4">Гонка при обновлении профиля</div>
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; margin-top: 5px; font-size: 12px; color: #8f99a6">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #7a8390; white-space: nowrap; flex-shrink: 0">APP-108</span>
+<span style="white-space: nowrap; flex-shrink: 0">13 окт</span>
+<span style="margin-left: auto; color: #aeb7c2"></span>
+</div>
+</div>
+<div style="border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; background: #111419;">
+<div style="line-height: 1.4">Рефакторинг обработчика вебхуков</div>
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; margin-top: 5px; font-size: 12px; color: #8f99a6">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #7a8390; white-space: nowrap; flex-shrink: 0">APP-109</span>
+<span style="white-space: nowrap; flex-shrink: 0">16 окт</span>
+<span style="margin-left: auto; color: #aeb7c2"></span>
+</div>
+</div>
+<div style="border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; background: #111419;">
+<div style="line-height: 1.4">Настройки уведомлений по каналам</div>
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; margin-top: 5px; font-size: 12px; color: #8f99a6">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #7a8390; white-space: nowrap; flex-shrink: 0">APP-110</span>
+<span style="white-space: nowrap; flex-shrink: 0">17 окт</span>
+<span style="margin-left: auto; color: #aeb7c2"></span>
+</div>
+</div>
+</section>
+<section style="flex: 1 0 156px; min-width: 156px">
+<div style="display: flex; align-items: center; gap: 8px; padding-bottom: 12px">
+<span style="display: inline-block; width: 12px; height: 12px; border-radius: 6px; box-sizing: border-box; flex-shrink: 0; border: 1.5px solid #c4ccd6; background: conic-gradient(#c4ccd6 0 50%, transparent 0);"></span>
+<span style="color: #c4ccd6">В работе</span>
+<span style="color: #7a8390">2</span>
+</div>
+<div style="border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; background: #111419;">
+<div style="line-height: 1.4">Обход ограничения попыток входа</div>
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; margin-top: 5px; font-size: 12px; color: #8f99a6">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #7a8390; white-space: nowrap; flex-shrink: 0">APP-101</span>
+<span style="white-space: nowrap; flex-shrink: 0">завтра</span>
+<span style="margin-left: auto; color: #aeb7c2">P0</span>
+</div>
+</div>
+<div style="border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; background: #111419;">
+<div style="line-height: 1.4">Постраничный API: сдвиг курсора</div>
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; margin-top: 5px; font-size: 12px; color: #8f99a6">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #7a8390; white-space: nowrap; flex-shrink: 0">APP-102</span>
+<span style="white-space: nowrap; flex-shrink: 0">12 окт</span>
+<span style="margin-left: auto; color: #aeb7c2"></span>
+</div>
+</div>
+</section>
+<section style="flex: 1 0 156px; min-width: 156px">
+<div style="display: flex; align-items: center; gap: 8px; padding-bottom: 12px">
+<span style="display: inline-block; width: 12px; height: 12px; border-radius: 6px; box-sizing: border-box; flex-shrink: 0; border: 1.5px solid #c4ccd6; background: conic-gradient(#c4ccd6 0 25%, transparent 0);"></span>
+<span style="color: #c4ccd6">На паузе</span>
+<span style="color: #7a8390">2</span>
+</div>
+<div style="border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; background: #111419;">
+<div style="line-height: 1.4">Дашборд: пустое состояние</div>
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; margin-top: 5px; font-size: 12px; color: #8f99a6">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #7a8390; white-space: nowrap; flex-shrink: 0">APP-103</span>
+<span style="white-space: nowrap; flex-shrink: 0">сб</span>
+<span style="margin-left: auto; color: #aeb7c2"></span>
+</div>
+</div>
+<div style="border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; background: #111419;">
+<div style="line-height: 1.4">Поиск: некорректное пустое состояние</div>
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; margin-top: 5px; font-size: 12px; color: #8f99a6">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #7a8390; white-space: nowrap; flex-shrink: 0">APP-104</span>
+<span style="white-space: nowrap; flex-shrink: 0">14 окт</span>
+<span style="margin-left: auto; color: #aeb7c2"></span>
+</div>
+</div>
+</section>
+<section style="flex: 1 0 156px; min-width: 156px">
+<div style="display: flex; align-items: center; gap: 8px; padding-bottom: 12px">
+<span style="display: inline-block; width: 12px; height: 12px; border-radius: 6px; box-sizing: border-box; flex-shrink: 0; border: 1.5px solid #c4ccd6; background: linear-gradient(#c4ccd6, #c4ccd6) center / 6px 1.5px no-repeat;"></span>
+<span style="color: #c4ccd6">Заблокировано</span>
+<span style="color: #7a8390">1</span>
+</div>
+<div style="border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; background: #111419;">
+<div style="line-height: 1.4">Оформление заказа: таймаут 10 с</div>
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; margin-top: 5px; font-size: 12px; color: #8f99a6">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #7a8390; white-space: nowrap; flex-shrink: 0">APP-105</span>
+<span style="white-space: nowrap; flex-shrink: 0">сегодня</span>
+<span style="margin-left: auto; color: #aeb7c2">P0</span>
+</div>
+</div>
+</section>
+<section style="flex: 1 0 156px; min-width: 156px">
+<div style="display: flex; align-items: center; gap: 8px; padding-bottom: 12px">
+<span style="display: inline-block; width: 12px; height: 12px; border-radius: 6px; box-sizing: border-box; flex-shrink: 0; border: 1.5px solid #c4ccd6; background: conic-gradient(#c4ccd6 0 75%, transparent 0);"></span>
+<span style="color: #c4ccd6">Ревью</span>
+<span style="color: #7a8390">2</span>
+</div>
+<div style="border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; background: #111419;">
+<div style="line-height: 1.4">Превью изображений: кэширование</div>
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; margin-top: 5px; font-size: 12px; color: #8f99a6">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #7a8390; white-space: nowrap; flex-shrink: 0">APP-107</span>
+<span style="white-space: nowrap; flex-shrink: 0">сб</span>
+<span style="margin-left: auto; color: #aeb7c2"></span>
+</div>
+</div>
+<div style="border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; background: #111419;">
+<div style="line-height: 1.4">Экспорт в CSV: постранично</div>
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; margin-top: 5px; font-size: 12px; color: #8f99a6">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #7a8390; white-space: nowrap; flex-shrink: 0">APP-106</span>
+<span style="white-space: nowrap; flex-shrink: 0">вс</span>
+<span style="margin-left: auto; color: #aeb7c2"></span>
+</div>
+</div>
+</section>
+<section style="flex: 0 0 64px; color: #7a8390; padding-top: 1px">Готово · 2</section>
+</div>
+</main>
+</div>

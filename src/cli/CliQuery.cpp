@@ -20,7 +20,7 @@ constexpr int kRequestTimeoutMs = 10000;
 }  // namespace
 
 bool changesData(Verb v) {
-  return v == Verb::Add || v == Verb::Done;
+  return v == Verb::Add || v == Verb::Done || v == Verb::Sched || v == Verb::Due || v == Verb::Est || v == Verb::Someday;
 }
 
 std::optional<Snapshot> readSnapshot(QString* error) {
@@ -36,7 +36,7 @@ std::optional<Snapshot> readSnapshot(QString* error) {
   QJsonParseError parseError{};
   const QJsonDocument doc = QJsonDocument::fromJson(read.bytes, &parseError);
   if(!doc.isObject()) {
-    *error = QStringLiteral("%1 is damaged (%2); open heap to recover it").arg(QDir::toNativeSeparators(path), parseError.errorString());
+    *error = QStringLiteral("%1 is damaged (%2); open lowkey to recover it").arg(QDir::toNativeSeparators(path), parseError.errorString());
     return std::nullopt;
   }
   return snapshotFromState(doc.object(), error);
@@ -58,7 +58,7 @@ QString unusableState() {
   if(doc.isObject() && heap::storage::validateShape(doc.object(), &reason)) {
     return {};
   }
-  return QStringLiteral("%1 is damaged (%2); open heap to recover it").arg(QDir::toNativeSeparators(path), reason);
+  return QStringLiteral("%1 is damaged (%2); open lowkey to recover it").arg(QDir::toNativeSeparators(path), reason);
 }
 
 std::optional<Response> askWindow(const QByteArray& requestLine) {
@@ -72,7 +72,7 @@ std::optional<Response> askWindow(const QByteArray& requestLine) {
   // A heap from before APP-173 answers "ok" to anything and only comes forward.
   Response old;
   old.exitCode = kExitData;
-  old.err = QStringLiteral("heap: the heap window open on this data directory is too old for commands; restart it\n");
+  old.err = QStringLiteral("lowkey: the lowkey window open on this data directory is too old for commands; restart it\n");
   return old;
 }
 
@@ -82,7 +82,7 @@ std::optional<int> runQuery(Request request) {
     return kExitOk;
   }
   if(request.verb == Verb::Version) {
-    write(false, QStringLiteral("heap %1\n").arg(QStringLiteral(HEAP_VERSION)));
+    write(false, QStringLiteral("lowkey %1\n").arg(QStringLiteral(HEAP_VERSION)));
     return kExitOk;
   }
   if(changesData(request.verb) || request.verb == Verb::Open) {
@@ -100,7 +100,7 @@ std::optional<int> runQuery(Request request) {
   QString error;
   const std::optional<Snapshot> s = readSnapshot(&error);
   if(!s) {
-    return report({kExitData, QString(), QStringLiteral("heap: %1\n").arg(error)});
+    return report({kExitData, QString(), QStringLiteral("lowkey: %1\n").arg(error)});
   }
   return report(answer(*s, request, QDateTime::currentDateTime()));
 }

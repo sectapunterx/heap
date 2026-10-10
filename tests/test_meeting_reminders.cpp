@@ -393,6 +393,91 @@ TEST_F(MeetingReminderTest, TwoMeetingsGetTwoReminders) {
   EXPECT_EQ(spy.count(), 2);
 }
 
+// ── The start of a planned task block (APP-256) ──
+
+TEST(TaskBlockWindow, DueFromTheLeadToAFewMinutesAfterTheStart) {
+  const QDateTime at(kDay, QTime(14, 0));
+  EXPECT_FALSE(heap::cal::taskBlockReminder(QStringLiteral("T-1"), at, at.addSecs(-6 * 60), 5).due);
+  const auto early = heap::cal::taskBlockReminder(QStringLiteral("T-1"), at, at.addSecs(-5 * 60), 5);
+  EXPECT_TRUE(early.due);
+  EXPECT_EQ(early.minutesLeft, 5);
+  const auto start = heap::cal::taskBlockReminder(QStringLiteral("T-1"), at, at, 0);
+  EXPECT_TRUE(start.due);
+  EXPECT_EQ(start.minutesLeft, 0);
+  EXPECT_FALSE(heap::cal::taskBlockReminder(QStringLiteral("T-1"), at, at.addSecs(-60), 0).due) << "a zero lead says nothing early";
+  EXPECT_FALSE(heap::cal::taskBlockReminder(QStringLiteral("T-1"), at, at.addSecs(6 * 60), 0).due);
+}
+
+TEST(TaskBlockWindow, AMovedTaskGetsANewKey) {
+  const QDateTime at(kDay, QTime(14, 0));
+  EXPECT_NE(heap::cal::taskBlockReminder(QStringLiteral("T-1"), at, at, 0).key,
+            heap::cal::taskBlockReminder(QStringLiteral("T-1"), at.addSecs(3600), at.addSecs(3600), 0).key);
+}
+
+namespace {
+
+QString blockSettings(bool enabled) {
+  QJsonObject notif;
+  notif["meetingReminders"] = false;
+  notif["deadlineReminders"] = false;
+  notif["standupReminder"] = false;
+  notif["blockedDailyDigest"] = false;
+  notif["quietHours"] = false;
+  notif["taskBlockReminders"] = enabled;
+  notif["taskBlockLead"] = 5;
+  QJsonObject root;
+  root["notifications"] = notif;
+  return QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact));
+}
+
+Task plannedAt(const QString& id, const QDateTime& at) {
+  Task t;
+  t.id = id;
+  t.title = QStringLiteral("Review the cache");
+  t.status = QStringLiteral("todo");
+  t.scheduledAt = at;
+  t.scheduledHasTime = true;
+  return t;
+}
+
+}  // namespace
+
+// Off by default: nothing is said unless it is switched on.
+TEST(TaskBlockReminder, OffByDefault) {
+  AppController app;
+  app.events()->reset({});
+  // A day far from anything the other cases use, so the sent keys never meet.
+  const QDateTime at(QDate(2031, 3, 4), QTime(14, 0));
+  app.tasks()->reset({plannedAt(QStringLiteral("BLK-OFF"), at)});
+  QSignalSpy toasts(&app, &AppController::reminderToast);
+  QSignalSpy plain(&app, &AppController::toast);
+  app.runAutomationAt(at);
+  EXPECT_EQ(toasts.count(), 0);
+  for(const QList<QVariant>& args : plain) {
+    EXPECT_FALSE(args.at(0).toString().contains(QStringLiteral("Review the cache")));
+  }
+}
+
+TEST(TaskBlockReminder, SaidOnceWithItsButtonsAndNoTimer) {
+  AppController app;
+  app.events()->reset({});
+  app.setAppSettingsJson(blockSettings(true));
+  // The sent keys outlive the process (reminders.json in the test profile):
+  // a minute of its own each run, so a second run is not "already said".
+  const QDateTime at = QDateTime(QDate(2031, 3, 5), QTime(0, 0)).addSecs(60LL * (QDateTime::currentSecsSinceEpoch() % (20 * 60)));
+  app.tasks()->reset({plannedAt(QStringLiteral("BLK-ON"), at)});
+  QSignalSpy toasts(&app, &AppController::reminderToast);
+  app.runAutomationAt(at.addSecs(-4 * 60));
+  app.runAutomationAt(at.addSecs(-3 * 60));
+  app.runAutomationAt(at);
+  ASSERT_EQ(toasts.count(), 1) << "once, not once per tick";
+  EXPECT_TRUE(toasts.at(0).at(0).toString().startsWith(QStringLiteral("taskBlock:")));
+  EXPECT_TRUE(toasts.at(0).at(1).toString().contains(QStringLiteral("Review the cache")));
+  const Task t = app.tasks()->items().first();
+  EXPECT_FALSE(t.timerStartedAt.isValid()) << "a reminder starts no timer";
+  EXPECT_EQ(t.status, QStringLiteral("todo")) << "and moves nothing";
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);

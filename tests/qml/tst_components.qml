@@ -29,7 +29,8 @@ TestCase {
         return o;
     }
 
-    function test_siderail()    { load("SideRail"); }
+    function test_sidebar()     { load("Sidebar"); }
+    function test_todayview()   { load("TodayView"); }
     function test_filterbar()   { load("FilterBar"); }
     function test_kanbanboard() { load("KanbanBoard"); }
     function test_timelineview(){ load("TimelineView"); }
@@ -141,14 +142,4 @@ TestCase {
         compare(o.shown, "");
     }
 
-    // SideRail integration: focusStatusColumn drives AppController view state
-    // (the wiring the ⊘/⎇ buttons use). Exercises the live singleton the rail
-    // component binds to.
-    function test_siderail_focus_status_integration() {
-        load("SideRail");
-        AppController.currentView = "notes";
-        AppController.focusStatusColumn("blocked");
-        compare(AppController.currentView, "board");
-        compare(AppController.focusedStatus, "blocked");
-    }
 }

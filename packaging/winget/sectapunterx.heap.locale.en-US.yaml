@@ -5,17 +5,17 @@ PackageLocale: en-US
 Publisher: sectapunterx
 PublisherUrl: https://github.com/sectapunterx
 PublisherSupportUrl: https://github.com/sectapunterx/heap/issues
-PackageName: heap.
+PackageName: lowkey
 PackageUrl: https://github.com/sectapunterx/heap
 License: MIT
 LicenseUrl: https://github.com/sectapunterx/heap/blob/master/LICENSE
 Copyright: Copyright (c) sectapunterx
-ShortDescription: Native desktop kanban, calendar and docs for engineers.
+ShortDescription: A developer's workday in one window.
 Description: |-
-  heap. is a native desktop kanban, calendar, and docs app for engineers.
+  A native desktop app for a developer's workday — tickets, calendar, notes, docs. Formerly heap.
   Built with Qt 6 / QML / C++20, it ships as a single binary with a
   per-profile JSON workspace — tasks, calendar, notes and docs in one place.
-Moniker: heap
+Moniker: lowkey
 Tags:
   - kanban
   - todo

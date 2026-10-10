@@ -103,6 +103,13 @@ QJsonValue lwwOrConflict(const QString& path, const QJsonValue& b, const QJsonVa
   if(!lu.isEmpty() && !ru.isEmpty()) {
     return lu >= ru ? l : r;  // later write wins (tie → local)
   }
+  // No clock to decide by, but both sides are objects that existed in the
+  // base: merge them field by field, so two devices editing different fields
+  // of one task (my notes here, the tracker's title there — APP-244) both
+  // land, and only a field changed on both sides is a conflict.
+  if(b.isObject() && l.isObject() && r.isObject()) {
+    return mergeObject(b.toObject(), l.toObject(), r.toObject(), path, conflicts);
+  }
   recordConflict(conflicts, path, b, l, r);
   return l;
 }

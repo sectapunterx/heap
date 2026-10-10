@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=lowkey
+GenericName=Developer workday planner
+Comment=A developer's workday in one window — tickets, calendar, notes
+Exec=lowkey
+Icon=lowkey
+Terminal=false
+Categories=Office;ProjectManagement;Utility;
+Keywords=tasks;todo;kanban;calendar;notes;planner;tickets;heap;
+StartupWMClass=lowkey

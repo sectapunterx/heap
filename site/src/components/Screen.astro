@@ -1,0 +1,25 @@
+---
+// A heap screen drawn as live HTML (from the heap 2 mockups), not a picture:
+// text stays vector-sharp on any display. main.ts scales the 1440×900 canvas to fit.
+// The screen lives in a declarative shadow root so the site's styles cannot leak into it.
+interface Props {
+  name: string;
+  label: string;
+  lang?: 'ru' | 'en';
+  class?: string;
+  // [x, y, width] of the 1440×900 canvas to frame instead of the whole screen
+  crop?: [number, number, number];
+}
+const { name, label, class: cls, crop, lang = 'ru' } = Astro.props;
+const all = import.meta.glob<string>('../screens/*.html', { query: '?raw', import: 'default', eager: true });
+// English pages use the translated copy made by tools/translate-screens.mjs
+const html = (lang === 'en' && all[`../screens/${name}.en.html`]) || all[`../screens/${name}.html`];
+if (!html) throw new Error(`no screen ${name}`);
+// :host starts from initial values, like the mockup's own <body> did; card meta rows
+// (id · date · priority) wrap between items, never inside an id like TASK-3
+const shadow = `<template shadowrootmode="open"><style>:host{all:initial;display:block}*{scrollbar-width:none}*::-webkit-scrollbar{display:none}div[style*="align-items: baseline"]{flex-wrap:wrap;row-gap:2px}div[style*="align-items: baseline"]>span{white-space:nowrap}</style>${html}</template>`;
+---
+
+<div class:list={['screen', cls]} role="img" aria-label={label} data-crop={crop?.join(' ')}>
+  <div class="screen-canvas" inert set:html={shadow} />
+</div>

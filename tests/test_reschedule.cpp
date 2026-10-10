@@ -7,6 +7,8 @@
 #include "AppController.h"
 #include "Models.h"
 
+#include "local/Effective.h"
+
 #include <QApplication>
 #include <QDir>
 #include <QFile>
@@ -128,8 +130,12 @@ TEST_F(RescheduleTest, ATrackerDeadlineIsChangedLocallyAndSaysSo) {
   QSignalSpy toasts(app_.get(), &AppController::undoableToast);
   ASSERT_TRUE(app_->rescheduleTask(QStringLiteral("GH-7"), QStringLiteral("due"), QDateTime(kDay.addDays(7), QTime(0, 0)), false));
   const Task t = task(QStringLiteral("GH-7"));
-  EXPECT_EQ(t.dueAt.date(), kDay.addDays(7));
-  EXPECT_EQ(t.externalMeta.dueAt, QDateTime(kDay, QTime(0, 0))) << "what the tracker last sent is kept, so sync sees a local edit";
+  // A tracker card's date is mine now (APP-238): it sits in the local layer,
+  // and the tracker's own field keeps what the tracker sent.
+  EXPECT_EQ(heap::local::effectiveDueAt(t).date(), kDay.addDays(7));
+  EXPECT_EQ(t.local.myDueAt.date(), kDay.addDays(7));
+  EXPECT_EQ(t.dueAt, QDateTime(kDay, QTime(0, 0)));
+  EXPECT_EQ(t.externalMeta.dueAt, QDateTime(kDay, QTime(0, 0))) << "what the tracker last sent is kept";
   ASSERT_EQ(toasts.count(), 1);
   EXPECT_NE(toasts.at(0).at(0).toString(), QString()) << "the toast names the change";
   EXPECT_TRUE(toasts.at(0).at(0).toString().contains(QStringLiteral(" · "))) << "and says it stays local";

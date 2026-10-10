@@ -25,6 +25,17 @@ Item {
     // occurrence map says which date was clicked.
     signal eventClicked(string id, var occurrence)
     signal taskClicked(string id)
+    // The task menu (APP-268), one for the view, refilled per task.
+    TaskMenuHost {
+        id: viewTaskMenu
+        anchorItem: root
+        onOpenRequested: root.taskClicked(viewTaskMenu.taskId)
+    }
+    function openTaskMenu(id) {
+        viewTaskMenu.releaseMenu();
+        viewTaskMenu.taskId = id;
+        viewTaskMenu.popup();
+    }
     // An empty slot was clicked or dragged over: the shell opens the event
     // editor on it, as the week view does. Saving an untitled "New event" at
     // once (and at the floored hour, ignoring the snap) was the old behaviour.
@@ -971,6 +982,11 @@ Item {
                                 // reach the create-an-event area underneath either.
                                 // The day's ↑/↓ walk only its events, so the
                                 // block is a Tab stop of its own (DES-19).
+                                // The task's menu, the same in every view (APP-268).
+                                TapHandler {
+                                    acceptedButtons: Qt.RightButton
+                                    onTapped: root.openTaskMenu(taskBlock.id)
+                                }
                                 ClickArea {
                                     id: openArea
                                     objectName: "taskblock-open"

@@ -19,6 +19,17 @@ Item {
         || Object.keys(prioritiesFilter || {}).some(function (k) { return prioritiesFilter[k] === true; })
 
     signal taskClicked(string id)
+    // The task menu (APP-268), one for the view, refilled per task.
+    TaskMenuHost {
+        id: viewTaskMenu
+        anchorItem: root
+        onOpenRequested: root.taskClicked(viewTaskMenu.taskId)
+    }
+    function openTaskMenu(id) {
+        viewTaskMenu.releaseMenu();
+        viewTaskMenu.taskId = id;
+        viewTaskMenu.popup();
+    }
     signal toggleShowDone()
 
     // ── Keyboard (TASKS-30) ──────────────────────────────────────────
@@ -830,6 +841,11 @@ Item {
                         }
                     }
 
+                    // The task's menu, the same in every view (APP-268).
+                    TapHandler {
+                        acceptedButtons: Qt.RightButton
+                        onTapped: root.openTaskMenu(tlRow.t.id)
+                    }
                     MouseArea {
                         id: rowMA
                         anchors.fill: parent

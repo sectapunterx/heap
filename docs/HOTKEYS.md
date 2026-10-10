@@ -1,92 +1,215 @@
 # Keyboard reference
 
-Every shortcut in the tables below (except the notes-editor and task-editor
-keys) is **rebindable** in the floating Hotkeys panel (`Ctrl+/`). Click a
-binding — or Tab to it and press `Enter` / `Space` — press the new
-combination and `Enter` to save; `Esc` cancels, `Backspace` clears. Conflicts
-are resolved VS Code-style: the new binding wins and the previous owner is
-unbound (a toast names what was freed). `↺` restores a single default; `↺ all`
-restores the whole catalog after a second press. **Settings → Shortcuts** lists
-the current bindings read-only and links to the panel.
+lowkey 0.8 has a Vim-based keymap. `?` (or `Ctrl+/`) opens the cheat sheet:
+every key by area, in columns, with a search by action or by key. The cheat
+sheet is read-only; **Change shortcuts…** at its foot (or **Settings →
+Shortcuts**) opens the panel that rebinds. There, `Enter` on a binding starts
+recording, the new key (or two keys in a row, like `g` then `b`) and `Enter`
+save it, `Esc` cancels, `Backspace` clears. A key another action has is
+handed over (a toast names what was freed); a key that is the start of
+another's sequence (`g` while `g b` exists) and keys the system keeps
+(`Alt+F4`, the Windows key, `Tab`) are refused with the reason. `↺` restores a
+single default, `↺ all` the whole catalog after a second press.
 
-The same catalog is in the command palette: every app-wide action below is a
-command there, under the same name.
+The same catalog is in the command line, the menus and the hints: a rebinding
+changes the key everywhere at once.
+
+## How the keys read
+
+- **Single letters act on the task under the cursor**, and only while the
+  focus is in the content — never in a text field, a dialog or a menu. Chords
+  with `Ctrl` work everywhere outside a modal.
+- **Case is Vim's**: `d` and `Shift D` are different keys. A lowercase letter
+  is pressed without Shift; Shift is written as a word.
+- **Prefixes**: `g` (go), `y` (copy), `z` (view), `c` (create) wait a second
+  for their second key; a bar at the bottom shows what can follow, `Esc`
+  cancels, and a prefix with nothing after it does nothing.
+- **Physical keys**: keys are read by their place on the keyboard, so they work
+  the same in the Russian layout (`g b` is `п и`, `Ctrl+K` is `Ctrl+Л`).
+- Not a Vim emulator: no counts, no operators with motions, no registers.
+  Pressing `d` twice within half a second (the `dd` habit) does not take Done
+  back.
 
 ## Who gets a key
 
 Keys go to the innermost thing that holds the keyboard:
 
-- `Esc` closes a menu, dialog, the task editor or the palette first; an
-  selection and the board cursor are let go of last. In the header
-  search `Esc` clears the text, and a second `Esc` (or `Return`) hands the
-  keyboard back to the view.
-- The board and calendar keys (bare letters, arrows, `Return`, `Esc`, `Del`,
-  `Ctrl+A`) stand down while a text field, dialog, popup, menu or inline rename
-  has focus, and while a control outside the view that you reached with `Tab`
-  (a filter chip, the mini week, the day panel, the people list) has it — press
-  `Esc` there to give the keyboard back to the view.
-- The global shortcuts (views, new task, palette, undo…) stand down behind a
-  modal — the task or event editor, the palette, a capture popup, the welcome
-  tour, a confirmation. The Tweaks and Hotkeys popovers are not modal.
+- `Esc` closes a menu, dialog, the task document or the command line first; a
+  selection and the board cursor are let go of last. In the filter line `Esc`
+  clears the text, and a second `Esc` (or `Enter`) hands the keyboard back to
+  the view.
+- The view keys (letters, arrows, `Enter`, `Esc`, `Del`, `Ctrl+A`) stand down
+  while a text field, dialog, popup, menu or inline rename has focus, and while
+  a control outside the view that you reached with `Tab` has it — press `Esc`
+  there to give the keyboard back to the view.
+- The global shortcuts stand down behind a modal — the task or event editor,
+  the command line, a capture popup, the welcome tour, a confirmation.
 
 ## Global
 
 | Action | Default |
 |--------|---------|
-| Open Command Palette | `Ctrl+K` (also the fixed alias `Ctrl+P`) |
+| Command line | `Ctrl+K` or `Ctrl+P` |
+| Command line on its commands | `:` |
+| Section filter | `/`, `Ctrl+F` or `Ctrl+L` |
 | New task | `Ctrl+N` |
-| Quick-capture task | `Ctrl+Shift+Space` |
+| Quick-capture task (from any app) | `Ctrl+Shift+Space` |
 | Quick-capture note | `Ctrl+Shift+N` |
-| Focus the header search (Notes: open the palette) | `Ctrl+F` |
-| Undo the last action | `Ctrl+Z` (not while a dialog is open; in a text field it undoes the typing) |
-| Redo | `Ctrl+Shift+Z` |
+| Undo | `U` or `Ctrl+Z` (not while a dialog is open; in a text field `Ctrl+Z` undoes the typing) |
+| Redo | `Ctrl+R` or `Ctrl+Shift+Z` |
+| Cheat sheet | `?` or `Ctrl+/` |
+| Settings | `Ctrl+,` |
 | Toggle light / dark | `Ctrl+Shift+T` |
 | New contact | `Ctrl+Shift+U` |
+| Event log | `Ctrl+Shift+L` |
 
-The header search also takes `field:value` clauses — `status:` (a column by
-id or by the name the board shows: `status:"Code Review"`, `status:in-progress`),
-`priority:`, `due:`/`deadline:` (`today`, `overdue`, `week`, `<7d`, `friday`,
-`none`), `tag:` or `#label`, `mention:`, `is:open`/`done`/`archived`/`overdue` —
-mixed freely with ordinary search words. `-` in front of a clause or word
-excludes it, `OR` (or `|`) joins alternatives. A clause heap cannot read is
-flagged on the search box instead of silently searching for it. See
-[TUTORIAL.md](TUTORIAL.md#7-the-search-box-is-a-query-box).
+## Go to — g
 
-## Command palette
+| Where | Default |
+|--------|---------|
+| Today | `G, T` or `Ctrl+1` |
+| Tasks, on the last lens | `Ctrl+2` |
+| Tasks · Board | `G, B` |
+| Tasks · List | `G, L` |
+| Tasks · Calendar | `G, C` |
+| Knowledge | `G, N` or `Ctrl+3` |
+| My view 1 … 9 | `G, 1` `G, 2` `G, 3` `G, 4` `G, 5` `G, 6` `G, 7` `G, 8` `G, 9`; also `Ctrl+4` `Ctrl+5` `Ctrl+6` `Ctrl+7` `Ctrl+8` `Ctrl+9` for the first six |
+| Open the task in its tracker | `G, X` |
+| Back / forward through where you have been | `Ctrl+O` / `Ctrl+I` |
 
-An empty query lists what you opened last, then every command. Words match in
-any order and a typo or two is forgiven (`ingress kubernetes`, `kubrenetes`).
-Commands cover every action in this file plus each Settings section
-("Settings: Appearance"), *New event* and *Replay the welcome tour*. Opening a
-task keeps the week, month, timeline or archive view you are on.
+The other views (archive, docs, notes) have no key of their own and can be
+given one.
+
+## Command line
+
+`Ctrl+K` opens it, `Ctrl+K` again closes it. What you type is read in the
+language quick capture speaks: `p0` … `p3` priority, `until fri` / `до пт`
+a deadline, `#label`, a column by the start of a word (`block`, `заблок`),
+`APP-101` a task by ID, `>` commands only. A finished condition becomes a chip
+(`Backspace` on an empty line takes the last one back); `Tab` makes a chip of
+the word still being typed. The syntax card beside the results can be hidden.
+
+Results come in groups: the tasks found (fifty, then "more — show as a list";
+archived ones last), what to do with them (*Mark done*, *Unblock*), what to do
+with this filter (*Save as view*, *Open as board*, *Open as list*), the task the
+cursor was on, the commands, then notes, docs and people. Nothing found offers
+to create the task.
 
 | Action | Key |
 |---|---|
 | Next / previous result | `↓` / `↑` |
-| Open | `Return` |
+| Run | `Enter` |
+| Everything found as a list in Tasks | `Ctrl+Enter` |
+| Save the filter as a view | `Ctrl+S` |
+| Take the hint | `Tab` |
 | Close | `Esc` |
 
-## Views
+## Task under the cursor
+
+Every view has one keyboard cursor (0.8.0): the card on the board, the row
+in the List, the meeting or task on Today and in the calendar, the note in
+Knowledge. Without one the keys act on the selection or the task under the
+pointer.
 
 | Action | Default |
 |--------|---------|
-| Board | `Ctrl+1` |
-| Timeline | `Ctrl+2` |
-| Week | `Ctrl+3` |
-| Month | `Ctrl+4` |
-| Archive | `Ctrl+5` |
-| Docs | `Ctrl+6` |
-| Notes | `Ctrl+7` |
-| Settings | `Ctrl+8` |
+| Done; on a done task, back | `D` |
+| New task below / above (same column) | `O` / `Shift+O` |
+| Rename | `I` |
+| Schedule: a small field that reads "fri 15:00", "tomorrow", "no" (on an empty calendar day: go to a date) | `S` |
+| Deadline, the same way | `Shift+S` |
+| Priority P0 … P3 | `1` `2` `3` `4` |
+| Timer start / pause | `T` |
+| Archive | `E` |
+| Menu | `M` (or the `Menu` key) |
+| Copy ID / branch name / tracker link | `Y, Y` / `Y, B` / `Y, L` |
+| Create a git branch | `C, B` |
+| Delete the selection, or the task under the cursor (undoable) | `Del` |
 
-The numbers follow the side rail, top to bottom.
+## Board cursor
+
+Arrow keys work alongside the letters.
+
+| Action | Default |
+|--------|---------|
+| Next / previous card | `J` / `K` |
+| Previous / next column | `H` / `L` |
+| First / last card of the column | `G, G` / `Shift+G` |
+| Half a screen down / up | `Ctrl+D` / `Ctrl+U` |
+| Open the card | `Return` |
+| Add to the selection | `Space` or `V` |
+| Select a range (then `J` / `K`) | `Shift+V` |
+| Move the card (left / right: the selection, when there is one) | `Shift+J` / `Shift+K` / `Shift+H` / `Shift+L`, or `Ctrl+↓` / `Ctrl+↑` / `Ctrl+←` / `Ctrl+→` |
+| Grow / shrink the selection down / up | `Shift+Down` / `Shift+Up` |
+| Select the whole column, then step left / right | `Shift+Left` / `Shift+Right` |
+| Fold / unfold the cursor's column | `Z, A` |
+
+The List lens of Tasks walks with the same keys (`J` / `K`, `Return`,
+`Space` or `V` to mark, `M`, `E`, `S`, `1`–`4`, `D`); `Z` folds the group the
+cursor is in. `Ctrl+\` shows or hides the day panel beside Board and List.
+
+While a card's menu is open its arrows and letters belong to the menu.
+
+**Type to search.** On the board, start typing a letter that is no key of its
+own: the filter opens with it and the board narrows as you go.
+
+## Calendar
+
+| Action | Default |
+|--------|---------|
+| Back to today | `0` |
+| Previous / next period (a day on Today, a week or month in the calendar) | `[` / `]` |
+| Calendar: day / week / month | `Z, D` / `Z, W` / `Z, M` |
+| Day panel: previous / next day | `Alt+Left` / `Alt+Right` |
+| New event at the next free slot | `Ctrl+Alt+E` |
+| Move the task a day earlier / later | `Ctrl+Left` / `Ctrl+Right` |
+| Move the task a week earlier / later | `Ctrl+Shift+Left` / `Ctrl+Shift+Right` |
+| Move a timed task a grid step earlier / later | `Ctrl+Up` / `Ctrl+Down` |
+| The cursor: next / previous meeting or task of the day | `J` / `K` |
+| The cursor: the day before / after | `H` / `L` |
+| Open what the cursor is on | `Return` |
+| Move it a day / a grid step (a week in Month) | `Shift+H` / `Shift+L`, `Shift+J` / `Shift+K` |
+| Its block a grid step longer / shorter | `Ctrl+Shift+J` / `Ctrl+Shift+K`, or `Ctrl+Shift+Down` / `Ctrl+Shift+Up` |
+
+A meeting that repeats asks "only this one / all" before it moves, as a drag
+does. Today walks with the same keys.
+
+To go to a date, type it in the command line: `:` then the date.
+
+The task moves are the keyboard side of drag-to-reschedule, live in Week,
+Month and Timeline only (on the board `Ctrl`+arrows move cards). Each move is
+one undo step, with an undo toast. While dragging a task the target date is
+shown at the pointer, and `Esc` cancels the drag.
+
+In the date picker: arrows move the day (↑/↓ a week), `PgUp`/`PgDn` a month
+(`Shift` a year), `Home`/`End` the month's ends, `T` today, `Enter` picks,
+`Esc` closes. In the event editor, `Ctrl+Enter` saves; with unsaved changes
+the first `Esc` warns and the second discards.
+
+## Menus and drop-downs
+
+A list opened from a menu row (Priority ›, Column ›) starts with "‹ back";
+`←` or `Esc` goes back to the menu, a second `Esc` closes it. Each row shows
+its key from the catalog; in Priority `1`–`4` pick, in Column the column's
+number. Typing letters finds a row by the start of its name (a pause of a
+second starts over); in a drop-down the letters open the list on the match and
+`Enter` takes it.
+
+## What changed for 0.7 users
+
+| Was | Now |
+|---|---|
+| `Ctrl+1`…`Ctrl+8` (Board, Timeline, Week, Month, Archive, Docs, Notes, Settings) | `Ctrl+1`–`Ctrl+3` sections, `G, B` / `G, L` / `G, C` / `G, N`, `Ctrl+,`; archive is a filter |
+| `O` open in tracker | `G, X` |
+| `Z` fold column | `Z, A` |
+| `T` back to today | `0`; `T` is the timer |
+| `G` go to date | `:` and the date; `Shift+G` is "to the last" |
+
+The first time after the update that you press one of the old keys you
+actually used, a toast says once where its action went. Keys you rebound
+yourself are not touched.
 
 ## Interface scale
-
-The same steps as **Settings → Appearance → Scale** (90, 100, 110, 125,
-150 %); a toast says where you are. They work from anywhere in the window,
-in a text field or over a dialog too, but not in the quick-capture window or
-while the Hotkeys panel records a key.
 
 | Action | Default |
 |--------|---------|
@@ -96,17 +219,9 @@ while the Hotkeys panel records a key.
 
 ## Saved views
 
-A saved view is a named set of filters — the search query, the priority chips,
-the board sort, Archived, Show done — plus the view it opens in. They are
-listed in the sidebar under *Saved views*, numbered; the number is the key.
-
-| Action | Default |
-|--------|---------|
-| Apply saved view 1 … 9 | `Alt+1` `Alt+2` `Alt+3` `Alt+4` `Alt+5` `Alt+6` `Alt+7` `Alt+8` `Alt+9` |
-
-In the palette every view is a command, *View: name*, and *Save current view*
-saves the filters on screen. In the name dialog `Enter` saves and `Esc`
-cancels. In the sidebar list (`Tab` to it):
+A saved view is a named set of filters plus the view it opens in. They are
+listed in the sidebar under *My views*, numbered; `G, 1` … `G, 9` and
+`Ctrl+4` … `Ctrl+9` apply them. In the sidebar list (`Tab` to it):
 
 | Action | Key |
 |---|---|
@@ -115,70 +230,7 @@ cancels. In the sidebar list (`Tab` to it):
 | Move the view up / down | `Ctrl+↑` / `Ctrl+↓` |
 | Rename | `F2` |
 | Delete (Undo in the toast, or `Ctrl+Z`) | `Del` |
-| Menu (apply, update from current filters, rename, duplicate, move, delete) | `Menu` or `Shift+F10`, or right click |
-
-## Board cursor
-
-Bare letters, so a focused text field still types them. Arrow keys work
-alongside each one.
-
-| Action | Default |
-|--------|---------|
-| Next / previous card | `J` / `K` |
-| Previous / next column | `H` / `L` |
-| Open the card | `Return` |
-| Add to the selection | `Space` |
-| Move the card (left / right: the selection, when there is one) | `Shift+J` / `Shift+K` / `Shift+H` / `Shift+L`, or `Ctrl+↓` / `Ctrl+↑` / `Ctrl+←` / `Ctrl+→` |
-| Grow / shrink the selection down / up | `Shift+Down` / `Shift+Up` |
-| Select the whole column, then step left / right | `Shift+Left` / `Shift+Right` |
-| Card menu (status, priority, archive, …) | `M` (or the `Menu` key) |
-| Archive the card (or the selection) | `E` |
-| Fold / unfold the cursor's column | `Z` |
-
-While a card's menu is open its arrows and letters belong to the menu.
-
-**Type to search.** On the board, start typing anywhere: any other letter or
-digit opens the search with it and the board narrows as you go. `Esc` clears
-it, `Return` hands the keyboard back to the cursor on what is left. Starting
-with one of the letters above? Press `Ctrl+F` first.
-
-## Timeline
-
-`J` / `K` (or `↓` / `↑`) walk the rows, `Return` opens one, `Space` adds it to
-the selection, and `O` opens the row's issue in its tracker. `Ctrl+Left` /
-`Ctrl+Right` move the row's date a day (`Shift` a week) — see Calendar below.
-
-## Calendar
-
-Previous / next period is live on the week and month views only; the rest
-works in every view the day panel sits beside (board, timeline, week, month,
-archive). None of them fires while a dialog or a text field has the keys.
-
-| Action | Default |
-|--------|---------|
-| Go to today | `T` |
-| Previous / next period | `←` / `→` |
-| Previous / next day | `Alt+Left` / `Alt+Right` |
-| Go to a date… | `G` |
-| New event at the next free slot | `Ctrl+Alt+E` |
-| Move the task a day earlier / later | `Ctrl+Left` / `Ctrl+Right` |
-| Move the task a week earlier / later | `Ctrl+Shift+Left` / `Ctrl+Shift+Right` |
-| Move a timed task a grid step earlier / later | `Ctrl+Up` / `Ctrl+Down` |
-
-The task moves are the keyboard side of drag-to-reschedule, live in Week,
-Month and Timeline only (on the board `Ctrl`+arrows move cards). They act on
-the task that has the keyboard — the Timeline row under the cursor, a chip or
-block reached with `Tab` — or else the one under the pointer. In Week and
-Month they move when the task is planned; in Timeline they move the date the
-row is grouped by (its deadline, or "when" for a row that only has one). Each
-move is one undo step, with an undo toast. While dragging a task in those
-views the target date is shown at the pointer, and `Esc` cancels the drag.
-
-In the date picker: arrows move the day (↑/↓ a week), `PgUp`/`PgDn` a month
-(`Shift` a year), `Home`/`End` the month's ends, `T` today, `Enter` picks,
-`Esc` closes. In the event editor, `Ctrl+Enter` saves; with unsaved changes
-the first `Esc` warns and the second discards. When a drag or an edit touches
-a repeating event, `Enter` answers "This event".
+| Menu | `Menu` or `Shift+F10`, or right click |
 
 ## Profiles
 
@@ -194,24 +246,19 @@ a repeating event, `Enter` answers "This event".
 
 | Action | Default |
 |--------|---------|
-| Open Tweaks (theme / density / contrast) | `Ctrl+,` |
-| Open Hotkeys panel | `Ctrl+/` |
-| Show / hide the calendar column | `Ctrl+\` |
+| Show / hide the day panel | `Ctrl+\` |
 | Expand / collapse the sidebar | `Ctrl+Shift+B` |
 | Focus mode on / off (once turned on in Settings → Safety net; `Esc` also leaves it) | `Ctrl+Shift+F` |
 
-## Selection (Board / Timeline / Week / Archive)
+## Selection
 
 | Action | Default |
 |--------|---------|
-| Select all visible tickets | `Ctrl+A` |
+| Select all visible tasks | `Ctrl+A` |
 | Clear selection | `Esc` |
 | Delete selection (undoable 5 s) | `Del` |
-| Open ticket in its tracker | `O` |
 
-`O` acts on the one selected card, or — with nothing selected — on the card
-under the cursor. It does nothing for a locally-created task, and it stands
-down entirely while a dialog is open or the cursor is in a text field.
+On a selection `D`, `S`, `1`–`4` and `T` act on every selected task; on the board `E` too.
 
 ## Task editor
 
@@ -235,13 +282,16 @@ A new task's editor opens with the cursor in the title.
 
 | Where | Keys |
 |---|---|
+| Regions: sidebar → content → task panel / right panel → header | `F6` / `Shift+F6` (also out of a text field) |
+| Sidebar | `↑` / `↓` walk the rows, `Enter` opens (the keyboard goes into the content) |
+| Board column header | `Ctrl+Shift+H` / `Ctrl+Shift+L` move the column (as its menu's Move left / right) |
 | Filter bar (P0–P3, Clear, Sort, Archived) | `Tab` to a chip, `Space` / `Enter`; `↓` opens Sort |
 | Profile pill, breadcrumbs | `Tab`, then `Enter` (menu / edit; `F2` edits a crumb) |
 | Mini week | `←` / `→` a day, `PgUp` / `PgDn` a week, `Home` today |
 | Day panel | `←` / `→` a day, `Home` today, `↑` / `↓` walk the events, `Enter` opens one |
 | People list | `↑` / `↓`, `Enter` edits, `Menu` or `Shift+F10` for actions |
 | Settings | `Enter` in the search opens the first match, `↓` into the sections, `↑` / `↓` move between them; switches `Space`, segmented rows `←` / `→`, sliders `←` / `→` |
-| Tweaks, Hotkeys panels | `Tab` through every control; `Esc` closes |
+| Tweaks, Hotkeys panels, cheat sheet | `Tab` through every control; `Esc` closes |
 
 ## Notes view
 
@@ -258,7 +308,7 @@ Rebindable in Settings → Hotkeys; live only while Notes is on screen.
 ## Notes and doc page editor
 
 These work while the cursor is in the notes editor or a Docs page, and only
-there — `Ctrl+K` still opens the command palette everywhere else. With text
+there — `Ctrl+K` still opens the command line everywhere else. With text
 selected, the formatting keys wrap the selection, and `Tab`, `Shift+Tab` and
 the heading key act on every selected line. `Ctrl+Z` with nothing left to undo
 in the text undoes the last app action (a deleted note or page, an import).

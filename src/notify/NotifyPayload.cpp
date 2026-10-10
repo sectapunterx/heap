@@ -32,14 +32,17 @@ QString notifyUri(const QString& notificationId, const QString& actionId, const 
 }
 
 bool isNotifyUri(const QString& arg) {
-  return arg.trimmed().startsWith(QLatin1String(kUriScheme) + QStringLiteral("://notify"), Qt::CaseInsensitive);
+  const QString a = arg.trimmed();
+  return a.startsWith(QLatin1String(kUriScheme) + QStringLiteral("://notify"), Qt::CaseInsensitive) ||
+         a.startsWith(QLatin1String(kLegacyUriScheme) + QStringLiteral("://notify"), Qt::CaseInsensitive);
 }
 
 NotifyUri parseNotifyUri(const QString& uri) {
   NotifyUri out;
   const QUrl url(uri.trimmed(), QUrl::StrictMode);
-  if(!url.isValid() || url.scheme().compare(QLatin1String(kUriScheme), Qt::CaseInsensitive) != 0 ||
-     url.host() != QStringLiteral("notify")) {
+  const bool ours = url.scheme().compare(QLatin1String(kUriScheme), Qt::CaseInsensitive) == 0 ||
+                    url.scheme().compare(QLatin1String(kLegacyUriScheme), Qt::CaseInsensitive) == 0;
+  if(!url.isValid() || !ours || url.host() != QStringLiteral("notify")) {
     return out;
   }
   // The shell may add a slash before the query ("heap://notify/?id=…").

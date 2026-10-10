@@ -10,6 +10,7 @@
 #include "cal/Occurrences.h"
 #include "cal/Reminders.h"
 #include "git/GitWatcher.h"
+#include "local/Effective.h"
 #include "notify/NotificationCenter.h"
 #include "safety/ErrorSignature.h"
 #include "safety/Immersion.h"
@@ -62,7 +63,7 @@ void AppController::safetyNotify(
     n.id = heap::notify::routingId(kind, taskIds.isEmpty() ? QStringLiteral("-") : taskIds.join(QLatin1Char(',')));
     n.title = title;
     n.body = body;
-    n.iconPath = QStringLiteral(":/brand/icon/heap-icon.svg");
+    n.iconPath = QStringLiteral(":/brand/lowkey/lowkey-icon.svg");
     n.category = kind;
     m_notifier->post(n);
   }
@@ -182,7 +183,7 @@ QVector<heap::safety::DayTask> AppController::dayTasks() const {
                 .archived = t.archived || !active,
                 .closedAt = done ? t.statusChangedAt : QDateTime(),
                 .scheduledAt = t.scheduledAt,
-                .dueAt = t.dueAt,
+                .dueAt = heap::local::effectiveDueAt(t),
                 .timerStartedAt = t.timerStartedAt});
   };
   for(const Task& t : m_tasks.items()) {

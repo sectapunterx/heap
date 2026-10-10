@@ -29,7 +29,9 @@ struct Entry {
 inline constexpr char kMinimizedFlag[] = "--minimized";
 
 // Identifier of the macOS launch agent; the bundle's own identifier.
-inline constexpr char kMacLabel[] = "local.heap.app";
+inline constexpr char kMacLabel[] = "local.lowkey.app";
+// heap 0.7's entry, adopted once (adoptLegacyEntry) and removed by write().
+inline constexpr char kLegacyMacLabel[] = "local.heap.app";
 
 // ── Pure helpers ────────────────────────────────────────────────────
 // Windows: the Run value, `"C:\path\heap.exe" --minimized`.
@@ -54,6 +56,11 @@ Entry read();
 // Writes (enabled) or removes (disabled) the entry. True on success.
 bool write(bool enabled, bool minimized);
 
+// heap → lowkey (APP-280): a login entry heap 0.7 made, with none of
+// lowkey's own yet, becomes lowkey's (same minimized flag) and the old one
+// goes. Nothing happens when there is no old entry. True if one was adopted.
+bool adoptLegacyEntry();
+
 // Point read()/write() at `dir` instead of the real login items (tests).
 // Empty restores the default, which in Qt's test mode is a scratch folder too.
 void setRootForTesting(const QString& dir);
@@ -64,6 +71,9 @@ namespace detail {
 // Per-platform halves, in Autostart_{win,mac,linux}.cpp. `root` is testRoot().
 Entry readSystem(const QString& root);
 bool writeSystem(const QString& root, bool enabled, bool minimized);
+// heap 0.7's entry, read and removed by adoptLegacyEntry() (APP-280).
+Entry readLegacySystem(const QString& root);
+void removeLegacySystem(const QString& root);
 }  // namespace detail
 
 }  // namespace heap::platform::autostart

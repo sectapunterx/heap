@@ -58,49 +58,63 @@ TestCase {
     // UX-31: the title ends with the display name, so Windows does not add it
     // a second time.
     function test_window_title_names_the_app_once() {
-        verify(tc.win.title.length > 0);
-        verify(/heap\.$/.test(tc.win.title), tc.win.title);
-        compare(tc.win.title.indexOf("heap."), tc.win.title.length - 5);
+        // lowkey since 0.8.0 (APP-280): the name alone, as the taskbar shows it.
+        compare(tc.win.title, "lowkey");
     }
 
-    // UX-7: long names elide instead of pushing "+ Task" off the window.
-    function test_long_names_keep_the_top_bar_on_screen() {
-        tc.win.width = 1100;
-        tc.win.height = 720;
-        AppController.crumbProject = "a-very-long-project-name-that-goes-on-and-on-forever";
-        AppController.crumbUser = "someone.with.a.really.long.handle.indeed";
-        const pid = AppController.activeProfileId;
-        const oldName = AppController.profileById(pid).name;
-        AppController.renameProfile(pid, "Payments platform · checkout · very long profile name");
-        wait(100);
-        const btn = byName("topbar-new-task");
-        const toggle = byName("topbar-right-panel");
-        const r1 = btn.mapToItem(null, btn.width, 0).x;
-        const r2 = toggle.mapToItem(null, toggle.width, 0).x;
-        AppController.renameProfile(pid, oldName);
-        verify(r1 <= tc.win.width, "+ Task ends at " + r1);
-        verify(r2 <= tc.win.width, "panel toggle ends at " + r2);
+    // heap 2 (APP-258): every place by its key, from the real window.
+    // Ctrl+1/2/3 are Today / Tasks / Knowledge, Ctrl+, Settings; Tasks and
+    // Knowledge come back on the lens they were left on.
+    function test_every_place_by_its_key() {
+        tc.win.width = 1440;
+        tc.win.height = 900;
+        tc.win.requestActivate();
+        AppController.currentView = "board";
+        wait(50);
+        keyClick(Qt.Key_1, Qt.ControlModifier);
+        tryCompare(AppController, "currentView", "today");
+        keyClick(Qt.Key_2, Qt.ControlModifier);
+        tryCompare(AppController, "currentView", "board");
+        tc.win.openLens("calendar");
+        compare(AppController.currentView, "week");
+        keyClick(Qt.Key_3, Qt.ControlModifier);
+        tryCompare(AppController, "currentView", "notes");
+        keyClick(Qt.Key_Comma, Qt.ControlModifier);
+        tryCompare(AppController, "currentView", "settings");
+        keyClick(Qt.Key_2, Qt.ControlModifier);
+        tryCompare(AppController, "currentView", "week", 1000, "Tasks reopens on the calendar lens");
+        // The List lens is its own view now (APP-263), not the timeline.
+        tc.win.openLens("list");
+        compare(AppController.currentView, "list");
+        tc.win.openLens("board");
+        compare(AppController.currentView, "board");
+        tryCompare(AppController, "currentSection", "tasks");
     }
 
-    // APP-198: "+ Task" is a quiet button; a filled one is only a dialog's
-    // confirm, so the brightest spot on the screen is not a shortcut.
-    function test_new_task_is_a_quiet_button() {
-        const btn = byName("topbar-new-task");
-        compare(btn.primary, false);
-        verify(!Qt.colorEqual(btn.background.color, Theme.accent), "no accent fill");
+    // The top bar is gone (APP-258): no "+ Task", no panel toggle up there;
+    // the sidebar's field and the header's lenses instead.
+    function test_the_shell_has_no_top_bar() {
+        compare(byName("topbar-new-task"), null);
+        compare(byName("topbar-right-panel"), null);
+        verify(byName("sidebar-new-task") !== null);
+        AppController.currentView = "board";
+        const header = byName("view-header");
+        verify(header !== null && header.visible);
+        AppController.currentView = "today";
+        verify(!header.visible, "Today carries its own title");
+        compare(byName("right-panel").visible, false, "Today is the day; no second one beside it");
+        AppController.currentView = "board";
     }
 
-    // UX-17: the Tweaks panel fits a 720px window on its first open.
-    function test_tweaks_fits_a_small_window() {
-        tc.win.width = 1100;
-        tc.win.height = 720;
-        const tweaks = popup("TweaksPanel");
-        tc.win.runCommand("tweaks.open");
-        tryCompare(tweaks, "opened", true);
-        wait(100);
-        const bottom = tweaks.contentItem.mapToItem(null, 0, tweaks.height).y;
-        tweaks.close();
-        verify(bottom <= tc.win.height, "Tweaks ends at " + bottom + " in a " + tc.win.height + "px window");
+    // Narrower than ~1100px the sidebar folds to its icons on its own.
+    function test_a_narrow_window_folds_the_sidebar() {
+        tc.win.width = 1440;
+        const rail = byName("sidebar");
+        tryCompare(rail, "expanded", true);
+        tc.win.width = 1000;
+        tryCompare(rail, "expanded", false);
+        tc.win.width = 1440;
+        tryCompare(rail, "expanded", true);
     }
 
     // UX-18: Go to date opens over the middle of the window, not its corner.

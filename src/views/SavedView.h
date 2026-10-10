@@ -84,8 +84,12 @@ QString text(const QString& key, bool ru);
 // ── Definitions ──
 
 inline const QStringList& taskViews() {
-  static const QStringList v = {
-      QStringLiteral("board"), QStringLiteral("timeline"), QStringLiteral("week"), QStringLiteral("month"), QStringLiteral("archive")};
+  static const QStringList v = {QStringLiteral("board"),
+                                QStringLiteral("list"),
+                                QStringLiteral("timeline"),
+                                QStringLiteral("week"),
+                                QStringLiteral("month"),
+                                QStringLiteral("archive")};
   return v;
 }
 
@@ -112,8 +116,13 @@ inline QStringList normalizePriorities(const QStringList& ps) {
 }
 
 inline QString normalizeSort(const QString& s) {
-  static const QStringList kModes = {
-      QStringLiteral("manual"), QStringLiteral("priority"), QStringLiteral("due"), QStringLiteral("updated"), QStringLiteral("title")};
+  static const QStringList kModes = {QStringLiteral("manual"),
+                                     QStringLiteral("priority"),
+                                     QStringLiteral("due"),
+                                     QStringLiteral("when"),
+                                     QStringLiteral("estimate"),
+                                     QStringLiteral("updated"),
+                                     QStringLiteral("title")};
   return kModes.contains(s) ? s : QStringLiteral("manual");
 }
 
@@ -259,10 +268,27 @@ inline QString makeId(const QVector<SavedView>& views) {
   }
 }
 
+// heap 2 (APP-258): the old sidebar's Focus pair, now ordinary views.
+inline SavedView blockedView(bool ru) {
+  SavedView v;
+  v.id = QStringLiteral("view-blocked");
+  v.name = text(QStringLiteral("savedview.starter.blocked"), ru);
+  v.query = QStringLiteral("status:blocked");
+  return v;
+}
+
+inline SavedView reviewView(bool ru) {
+  SavedView v;
+  v.id = QStringLiteral("view-review");
+  v.name = text(QStringLiteral("savedview.starter.review"), ru);
+  v.query = QStringLiteral("status:review");
+  return v;
+}
+
 inline QVector<SavedView> starterViews(bool ru) {
-  // Three that answer a question a board alone does not: what is on fire,
-  // what is due before the weekend, what slipped. "Blocked" is not one of
-  // them — the sidebar's Focus section already jumps to that column.
+  // Blocked and In review (the old Focus pair), then three that answer a
+  // question a board alone does not: what is on fire, what is due before
+  // the weekend, what slipped.
   SavedView urgent;
   urgent.id = QStringLiteral("view-urgent");
   urgent.name = text(QStringLiteral("savedview.starter.urgent"), ru);
@@ -279,7 +305,7 @@ inline QVector<SavedView> starterViews(bool ru) {
   overdue.name = text(QStringLiteral("savedview.starter.overdue"), ru);
   overdue.query = QStringLiteral("is:overdue");
   overdue.sort = QStringLiteral("due");
-  return {urgent, week, overdue};
+  return {blockedView(ru), reviewView(ru), urgent, week, overdue};
 }
 
 inline QString text(const QString& key, bool ru) {
@@ -290,6 +316,8 @@ inline QString text(const QString& key, bool ru) {
 
   static const QHash<QString, Pair> kTable = {
       {QStringLiteral("savedview.defaultName"), {"View %1", "Вид %1"}},
+      {QStringLiteral("savedview.starter.blocked"), {"Blocked", "Заблокировано"}},
+      {QStringLiteral("savedview.starter.review"), {"In review", "На ревью"}},
       {QStringLiteral("savedview.starter.urgent"), {"Urgent", "Срочное"}},
       {QStringLiteral("savedview.starter.dueWeek"), {"Due this week", "Срок на этой неделе"}},
       {QStringLiteral("savedview.starter.overdue"), {"Overdue", "Просрочено"}},

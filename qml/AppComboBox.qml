@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.Basic
 import TodoCpp
+import "KeyRules.js" as KeyRules
 
 // The editors' drop-down field. Basic's own list was a square slab the
 // width of the field with 40px rows, no outline and the current choice only
@@ -16,6 +17,49 @@ ComboBox {
 
     implicitHeight: 30
     font.family: Theme.fontUi
+
+    // Type to find (APP-279): "гот" picks "Готово". The letters open the
+    // list on the first row that starts so (or has a word that does); Enter
+    // takes it, as it takes a row reached with the arrows. A pause of a
+    // second starts the search over.
+    property string _typed: ""
+    property real _typedAt: 0
+    property int typedIndex: -1
+    onHighlightedIndexChanged: box.typedIndex = -1
+    Connections {
+        target: box.popup
+        function onClosed() { box.typedIndex = -1; box._typed = ""; }
+    }
+    function typeAhead(text) {
+        const now = Date.now();
+        const fresh = now - box._typedAt > 1000;
+        box._typed = KeyRules.typeAheadBuffer(box._typed, text, now, box._typedAt, 1000);
+        box._typedAt = now;
+        const labels = [];
+        for (let i = 0; i < box.count; i++) labels.push(box.textAt(i));
+        const cur = box.typedIndex >= 0 ? box.typedIndex : (box.popup.visible ? box.highlightedIndex : box.currentIndex);
+        const from = fresh && box._typed.length === 1 ? cur + 1 : Math.max(0, cur);
+        const hit = KeyRules.typeAheadMatch(labels, box._typed, Math.max(0, from) % Math.max(1, box.count));
+        if (hit < 0) return;
+        if (!box.popup.visible) box.popup.open();
+        box.typedIndex = hit;
+    }
+    Keys.onPressed: (event) => {
+        if (box.editable || (event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))) return;
+        const enter = event.key === Qt.Key_Return || event.key === Qt.Key_Enter;
+        if (enter && box.popup.visible && box.typedIndex >= 0) {
+            const i = box.typedIndex;
+            box.popup.close();
+            box.currentIndex = i;
+            box.activated(i);
+            event.accepted = true;
+            return;
+        }
+        const t = event.text;
+        if (!t || t.length !== 1 || t.charCodeAt(0) <= 32 || t.charCodeAt(0) === 127) return;
+        box.typeAhead(t);
+        event.accepted = true;
+    }
     font.pixelSize: Theme.fsMd
 
     background: FieldFrame { control: box }
@@ -46,7 +90,7 @@ ComboBox {
         objectName: "combo-row"
         width: ListView.view ? ListView.view.width : box.width
         implicitHeight: 28
-        highlighted: box.highlightedIndex === row.index
+        highlighted: (box.typedIndex >= 0 ? box.typedIndex : box.highlightedIndex) === row.index
         leftPadding: Theme.spLg
         rightPadding: Theme.spLg
         readonly property bool current: box.currentIndex === row.index
@@ -105,7 +149,7 @@ ComboBox {
             clip: true
             implicitHeight: contentHeight
             model: box.popup.visible ? box.delegateModel : null
-            currentIndex: box.highlightedIndex
+            currentIndex: box.typedIndex >= 0 ? box.typedIndex : box.highlightedIndex
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ThinScrollBar {}
         }
