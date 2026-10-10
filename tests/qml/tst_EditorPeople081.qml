@@ -114,6 +114,7 @@ TestCase {
 
     // R2-069: no buttons; Esc closes and the draft stays.
     function test_quick_note_esc_keeps_draft() {
+        AppController.setQuickNoteDraft("", "");
         const qn = make('import TodoCpp; QuickCaptureNotesPopup { }');
         qn.open();
         tryVerify(() => qn.opened, 1000);
@@ -128,6 +129,7 @@ TestCase {
         verify(findChild(qn, "quick-note-hint"));
         ed.text = "";
         qn.close();
+        AppController.setQuickNoteDraft("", "");
     }
 
     // DG-002: the linked blocks are hidden when there is nothing to show.

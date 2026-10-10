@@ -8,13 +8,14 @@ import "PopupStack.js" as PopupStack
 
 // Quick-capture popup for Notes — triggered by Ctrl+Shift+N.
 //
-//  • Ctrl+Enter      → submit (append to AppController.notesState)
+//  • Ctrl+Enter      → submit (append to the Inbox note, R4-073)
 //  • Enter, Shift+Enter → newline in the editor (APP-209: the same keys
 //                      as the task capture)
 //  • @<token>        → people autocomplete via MentionAutocomplete
-//  • Esc             → close; the text stays as a draft for the next open
-//                      (R2-069, sheet X-Oth-Capture: "Esc — черновик
-//                      сохранится")
+//  • Esc             → close; the text stays as a draft for the next open,
+//                      kept in settings.quickNoteDraft with its task, so a
+//                      quit or a crash keeps it too (R2-069, sheet
+//                      X-Oth-Capture: "Esc — черновик сохранится")
 //  • "прикрепить к …" → the entry links the task ([[id]]), so the task's
 //                      backlinks list it
 Popup {
@@ -56,11 +57,13 @@ Popup {
             root.close();
             return;
         }
-        // Named before the append: with no note open it lands in Inbox, and
-        // the confirmation should say so, not "Note saved" somewhere unseen.
+        // Named before the append: it lands in the Inbox, and the
+        // confirmation should say so, not "Note saved" somewhere unseen.
         const into = AppController.quickNoteTarget();
         AppController.appendNoteEntry(root.attachId.length ? body.replace(/\s+$/, "") + " [[" + root.attachId + "]]" : body);
         editor.text = "";
+        draftTimer.stop();
+        AppController.setQuickNoteDraft("", "");
         at.dismiss();
         root.close();
         const flat = body.trim().replace(/\s+/g, " ");
@@ -73,13 +76,33 @@ Popup {
         root.close();
     }
 
+    // The draft outlives the app (R2-069): written a moment after typing
+    // stops, so a crash keeps it, and again on close.
+    function _keepDraft() {
+        draftTimer.stop();
+        AppController.setQuickNoteDraft(editor.text, root.attachId);
+    }
+    Timer {
+        id: draftTimer
+        interval: 600
+        onTriggered: root._keepDraft()
+    }
+    onAboutToHide: root._keepDraft()
+    onAttachIdChanged: if (root.opened && root.hasText) draftTimer.restart()
+
     property string _target: ""
     // Opt-in timing (HEAP_PERF_LOG=1 / --perf-log): hotkey or open() to the
     // first frame that shows the popup. Logs only; a no-op otherwise.
     onAboutToShow: AppController.perfMarkShown("capture-notes", contentItem)
     onOpened: {
         root._target = AppController.quickNoteTarget();
-        root.attachId = AppController.focusedTaskId || "";
+        // The stored draft is the one truth (the main window and the
+        // capture window each have a popup): from an earlier open, this run
+        // or one before a quit, with the task it was attached to.
+        const draft = AppController.quickNoteDraft();
+        editor.text = draft.text || "";
+        root.attachId = draft.text ? (draft.attachId || "") : (AppController.focusedTaskId || "");
+        draftTimer.stop();
         at.dismiss();
         editor.cursorPosition = editor.length;
         editor.forceActiveFocus();
@@ -87,7 +110,8 @@ Popup {
 
     background: ModalSurface {}
 
-    padding: Theme.spLg
+    // 16px all round (sheet X-Oth-Capture, R4-075).
+    padding: Theme.sp2xl
     contentItem: ColumnLayout {
         spacing: Theme.spSm
 
@@ -186,7 +210,10 @@ Popup {
                 rightPadding: 0
                 background: Item {}
 
-                onTextChanged: at.refresh()
+                onTextChanged: {
+                    at.refresh();
+                    if (root.opened) draftTimer.restart();
+                }
                 onCursorPositionChanged: at.refresh()
 
                 Keys.onPressed: (e) => {
@@ -248,14 +275,21 @@ Popup {
             }
         }
 
-        // The keys, no buttons (sheet X-Oth-Capture).
-        Text {
+        // The keys, no buttons: two hints side by side (sheet X-Oth-Capture).
+        Row {
             objectName: "quick-note-hint"
             Layout.fillWidth: true
-            text: I18n.t("quickNote.hint")
-            color: Theme.textDim
-            font.family: Theme.fontUi
-            font.pixelSize: Theme.fsXs
+            spacing: Theme.sp2xl
+            Repeater {
+                model: ["quickNote.hint", "quickNote.hintEsc"]
+                delegate: Text {
+                    required property string modelData
+                    text: I18n.t(modelData)
+                    color: Theme.textDim
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsXs
+                }
+            }
         }
     }
 

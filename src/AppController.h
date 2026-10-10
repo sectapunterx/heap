@@ -532,13 +532,21 @@ class AppController : public QObject {
 
   void setNotesState(const QString& v);
 
-  // QuickCapture for Notes: appends `text` to notesState separated by a
-  // timestamped horizontal-rule header. First entry gets the heading only
-  // (no leading HR — there is nothing to separate from yet).
+  // QuickCapture for Notes: appends `text` to the Inbox note (made on first
+  // use) under a timestamped horizontal-rule header, whichever note is open
+  // (sheet N/X-Oth-Capture: "быстрая заметка → «Входящие»", R4-073). First
+  // entry gets the heading only (no leading HR — nothing to separate from).
   Q_INVOKABLE void appendNoteEntry(const QString& text);
   // The title of the note appendNoteEntry() writes into, so the quick-note
   // popup can say where the text will land before it does.
   Q_INVOKABLE QString quickNoteTarget() const;
+  // The Inbox note's id, "" until the first quick note made it.
+  Q_INVOKABLE QString inboxNoteId() const;
+  // The quick note's unsaved draft and the task it is attached to, kept in
+  // settings.quickNoteDraft so it outlives a quit or a crash (R2-069).
+  // {text, attachId}, empty when there is none; an empty text clears it.
+  Q_INVOKABLE QVariantMap quickNoteDraft() const;
+  Q_INVOKABLE void setQuickNoteDraft(const QString& text, const QString& attachId);
 
   // Note wiki-links (HEAP-79). Headings feed [[…]] autocomplete; backlinks list
   // which lines reference each [[target]]; the offset lets the editor jump to a

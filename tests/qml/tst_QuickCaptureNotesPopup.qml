@@ -38,7 +38,7 @@ TestCase {
         compare(qc.modal, true, "notes popup must be modal");
         compare(qc.closePolicy, Popup.NoAutoClose,
                 "must not auto-close on Escape/outside-click");
-        compare(qc.padding, Theme.spLg, "the card's own padding (R2-069)");
+        compare(qc.padding, Theme.sp2xl, "the card's own padding (R4-075)");
         compare(qc.width, 600, "fixed 600px width");
     }
 
@@ -103,5 +103,33 @@ b");
         keyClick(Qt.Key_Return, Qt.ControlModifier);
         tryVerify(function () { return !qc.opened; });
         compare(saved, "qc-note-probe a b");
+    }
+
+    // R2-069: the draft and its task outlive the popup (and the app): Esc
+    // keeps them in settings.quickNoteDraft, a new popup brings them back,
+    // saving clears them.
+    function test_draft_survives_a_new_popup_and_clears_on_save() {
+        AppController.setQuickNoteDraft("", "");
+        const qc = make('import TodoCpp; QuickCaptureNotesPopup { }');
+        qc.open();
+        tryVerify(function () { return qc.opened; });
+        const ed = editorOf(qc);
+        ed.forceActiveFocus();
+        ed.text = "qc-draft-probe";
+        qc.attachId = "APP-DRAFT";
+        keyClick(Qt.Key_Escape);
+        tryVerify(function () { return !qc.opened; });
+        compare(AppController.quickNoteDraft().text, "qc-draft-probe");
+        qc.destroy();
+
+        const again = make('import TodoCpp; QuickCaptureNotesPopup { }');
+        again.open();
+        tryVerify(function () { return again.opened; });
+        compare(editorOf(again).text, "qc-draft-probe");
+        compare(again.attachId, "APP-DRAFT");
+        again.attachId = "";
+        again._submit();
+        tryVerify(function () { return !again.opened; });
+        verify(!AppController.quickNoteDraft().text, "a saved note leaves no draft");
     }
 }
