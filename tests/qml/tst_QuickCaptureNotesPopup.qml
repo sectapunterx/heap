@@ -39,7 +39,7 @@ TestCase {
         compare(qc.closePolicy, Popup.NoAutoClose,
                 "must not auto-close on Escape/outside-click");
         compare(qc.padding, Theme.sp2xl, "the card's own padding (R4-075)");
-        compare(qc.width, 600, "fixed 600px width");
+        compare(qc.width, Theme.px(600), "fixed 600px width");
     }
 
     // _submit() on an empty editor is a silent no-op: it hits the

@@ -87,6 +87,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QScreen>
 #include <QIcon>
 #include <QInputMethod>
 #include <QJsonArray>
@@ -14771,6 +14772,11 @@ QList<double> uiScaleSteps(const QVariantList& steps) {
 
 void AppController::setWindowFrameDark(QObject* window, bool dark) const {
   heap::platform::setWindowFrameDark(qobject_cast<QWindow*>(window), dark);
+}
+
+double AppController::systemPixelRatio() const {
+  const QScreen* screen = QGuiApplication::primaryScreen();
+  return screen != nullptr ? screen->devicePixelRatio() : 1.0;
 }
 
 double AppController::systemUiScale(const QVariantList& steps) const {
