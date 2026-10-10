@@ -187,9 +187,7 @@ TEST(LocalChecklistEdit, IndentMovesTheSubtree) {
 
 TEST(LocalChecklistEdit, IndentGoesAtMostOneLevelBelowTheItemAbove) {
   // IDIOT-TASKS-11.
-  auto xs = cl::parse(QStringLiteral("- a
--- child
-- b"));
+  auto xs = cl::parse(QStringLiteral("- a\n-- child\n- b"));
   for(int k = 0; k < 5; ++k) {
     cl::indent(xs, 2, +1);
   }
