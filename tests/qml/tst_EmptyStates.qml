@@ -43,7 +43,7 @@ TestCase {
         const s = findChild(b, "board-empty-state");
         verify(s !== null);
         verify(s.title.length > 0 && s.line.length > 0, "the whole-board state says what to press");
-        verify(s.line.indexOf(AppController.shortcutFor("task.new")) >= 0 || AppController.tasks.rowCount() > 0);
+        verify(s.line.indexOf(AppController.shortcutText("task.new")) >= 0 || AppController.tasks.rowCount() > 0);
     }
 
     // EYE-4: a board with no cards says so once. Every column used to add
@@ -91,7 +91,7 @@ TestCase {
             compare(s.title, I18n.t("view.empty.noMatchFor").arg(tc.nothing));
             compare(s.line, I18n.t("view.empty.resetFilter"));
             verify(b.nothingFound);
-            verify(!findChild(b, "board-empty").visible, "the filter's empty state sits on a card");
+            verify(!findChild(b, "board-empty"), "no card behind the empty state (R3-131)");
             const spy = createTemporaryQmlObject('import QtTest; SignalSpy { signalName: "resetFilterRequested" }', b);
             spy.target = b;
             s.lineActivated();
@@ -125,7 +125,8 @@ TestCase {
         const s = findChild(v, "week-empty");
         verifyState(s, "week");
         compare(s.title, I18n.t("week.empty.title"));
-        verify(s.line.indexOf(AppController.shortcutFor("task.new")) >= 0, s.line);
+        // "S на задаче — поставить на день" (R3-133).
+        verify(s.line.indexOf(AppController.shortcutText("task.schedule")) >= 0, s.line);
         v.searchText = tc.nothing;
         tryCompare(s, "title", I18n.t("view.empty.noMatch.title"));
     }

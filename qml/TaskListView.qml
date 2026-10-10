@@ -57,6 +57,20 @@ Item {
         try { s = JSON.parse(AppController.appSettingsJson || "{}") || {}; } catch (e) { s = {}; }
         root._folds = (s.listFolds && typeof s.listFolds === "object") ? s.listFolds : ({});
     }
+    // "решить" on a row's tracker mark: the same here-vs-tracker dialog the
+    // card opens (R3-144). Made on first use.
+    Loader {
+        id: conflictLoader
+        active: false
+        sourceComponent: SyncConflictDialog {
+            onClosed: Qt.callLater(() => { conflictLoader.active = false; })
+        }
+    }
+    function openConflict(id) {
+        conflictLoader.active = true;
+        const dlg = conflictLoader.item as SyncConflictDialog;
+        if (dlg) dlg.showFor(AppController.taskById(id));
+    }
     function isFolded(groupId) {
         const v = root._folds[groupId];
         return v === undefined ? groupId === "none:" : !!v;
@@ -254,6 +268,10 @@ Item {
                 required property int index
                 readonly property bool isGroup: row.modelData.kind === "group"
                 readonly property string taskId: row.isGroup ? "" : row.modelData.id
+                // A tracker task's sync facts, for its mark (R3-144); only a
+                // own row (this profile) can be one.
+                readonly property var ticket: !row.isGroup && row.modelData.own !== false
+                    ? (AppController.taskById(row.taskId).ticket || ({})) : ({})
                 width: list.width
                 height: row.isGroup ? groupHead.implicitHeight + (row.index === 0 ? Theme.spLg : Theme.sp2xl) + Theme.spMd
                                     : Theme.px(36)
@@ -313,6 +331,12 @@ Item {
                     radius: Theme.radiusMd
                     color: taskRow.selected || taskRow.cursored ? Theme.surfaceCard
                          : rowHover.hovered ? Theme.surfaceCardHover : "transparent"
+                    // Out of step with the tracker: the edge says so, as on
+                    // the card — amber / red in bold, a plain line in quiet.
+                    border.width: rowMark.conflict || rowMark.pending ? 1 : 0
+                    border.color: rowMark.conflict ? (Style.urgency ? Theme.danger : Theme.borderStrong)
+                                : rowMark.pending ? (Style.urgency ? Theme.warning : Theme.borderStrong)
+                                : "transparent"
                     Rectangle {
                         anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
                         anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spMd
@@ -382,11 +406,23 @@ Item {
                             Layout.fillWidth: true
                             text: row.isGroup ? "" : row.modelData.title
                             textFormat: Text.PlainText
-                            color: Theme.text
+                            color: rowMark.gone ? Theme.textMuted : Theme.text
+                            font.strikeout: rowMark.gone
                             font.family: Theme.fontUi
                             font.pixelSize: Theme.fsMd
                             font.weight: Theme.fwTaskTitle
                             elide: Text.ElideRight
+                        }
+                        TrackerMark {
+                            id: rowMark
+                            objectName: "list-row-mark"
+                            Layout.maximumWidth: Theme.px(320)
+                            elide: Text.ElideRight
+                            taskId: row.taskId
+                            ticket: row.ticket
+                            trackerName: row.ticket.provider ? String((AppController.providerBadges[row.ticket.provider] || {}).name || "") : ""
+                            writeOn: !!row.ticket.provider && AppController.trackerWriteProviders.indexOf(row.ticket.provider) >= 0
+                            onResolveRequested: root.openConflict(row.taskId)
                         }
                         Rectangle {
                             objectName: "list-row-label"
@@ -500,7 +536,7 @@ Item {
             Layout.preferredWidth: Math.min(root.width - 96, 360)
             visible: root.taskCount === 0
             title: root.nothingFound ? I18n.t("view.empty.noMatchFor").arg(root.filterLabel) : I18n.t("list.empty")
-            line: root.nothingFound ? I18n.t("view.empty.resetFilter") : ""
+            line: root.nothingFound ? I18n.t("view.empty.resetFilter") : I18n.t("tasks.empty.line").arg(AppController.shortcutText("task.new"))
             lineLink: root.nothingFound
             onLineActivated: root.resetFilterRequested()
         }

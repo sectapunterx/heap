@@ -398,3 +398,37 @@ progressive disclosure, content priority, state preservation). One entry each.
   meetings whose id the active profile does not have (a missing column comes with its tasks); an id
   already here stays as it is and is named in the toast. The JSON export now carries `appVersion`
   for the preview line; older files show no version.
+
+## r3 — Today, launch, notifications, empty states (0.8.1)
+
+- **R3-002 · Waiting reason = the "ждёт ответа" person link.** The app has no free-text blocker
+  reason; the sheet's "ждёт ответа платёжки" is the APP-158 waiting-on link. Shown as
+  "ждёт ответа: <имя>" (names are not declined), bold Сроки "заблокировано — ждёт ответа: …".
+- **R3-014 · Stacked side columns** get a fixed 220 px each (flex-wrap look of the sheet, titles
+  elide), not equal shares of the width.
+- **R3-015 · Folded sidebar** shows only the sections; saved views stay on Alt 1…9 and in Ctrl K.
+- **R3-017/018 · Splash and the crash card.** Splash = wordmark + version on the theme background,
+  kept for ~0.9 s. Unclean exit is a `session.open` marker in the data folder (written by the window
+  session, removed on a normal exit; none for the CLI or tests). After a crash the splash shows the
+  sheet's card and waits: "Посмотреть отчёт" opens the existing report form (the person sends it
+  themselves — nothing is sent from the app), "Не отправлять"/Esc continues.
+- **R3-025/026 · OS notifications.** Meeting: "<название> через N мин" / "11:00–11:30 · <место>",
+  buttons "Подключиться" (only when the event has a link, opens it) + one short snooze; without a
+  link "Открыть" + snooze. Deadline: "Срок сегодня"/"Срок завтра" (hours phrasing only otherwise),
+  body = title (+ "ждёт ответа: …"), one button "Открыть".
+- **R3-027/103 · Tray menu** stays a native QMenu (a tray menu cannot be QML-styled) with the
+  sheet's items: header lowkey, Новая задача… / Быстрая заметка… with their keys, Остановить таймер
+  (title + time), "Далее: <время> <встреча>" (disabled fact), Открыть lowkey, Не беспокоить 1 ч
+  (session-only, held like quiet hours; picking it again lifts it), Выход. Tooltip
+  "lowkey · <задача> 0:42" while a timer runs; refreshed on open and each minute.
+- **R3-133 · Month empty state** keeps a frameless page-coloured backing so cell borders do not
+  cut the line; the week has no backing.
+- **R3-137 · No Done column** opens a small card; "Выбрать этап у колонки…" opens Настройки →
+  Задачи (where stages are set). D is not re-applied after creating the column.
+- **R3-138 · Orphan column mark — not built.** The app cannot produce a task without a column:
+  deleting a column re-homes its cards (asks first if not empty) and saveTask() normalises an
+  unknown status to the first column. The StatusRing "orphan" look stays for a future import path.
+- **R3-144 · List rows** carry the same tracker mark as cards (shared `TrackerMark`), the card's
+  edge colours and the strike-through for "удалён в трекере"; "решить" opens the conflict dialog.
+
+- Lead (2026-10-10): two groups built the tray menu (R3-103) twice; the C++ one (AppControllerPresence refreshTray/onTrayItem, timer tooltip, UI language) stays, the QML-built copy went; the Windows toast backend now forwards it (it would not have shown there). "Не беспокоить 1 ч" in the tray uses the shared doNotDisturbFor.

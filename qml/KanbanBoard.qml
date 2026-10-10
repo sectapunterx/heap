@@ -1919,27 +1919,15 @@ Item {
         function onRowsInserted() { root._allRows = AppController.tasks.rowCount() }
         function onRowsRemoved()  { root._allRows = AppController.tasks.rowCount() }
     }
-    // On a card of its own: laid straight over the columns, the text crossed
-    // their borders and read as part of whichever column it touched.
-    Rectangle {
-        objectName: "board-empty"
-        anchors.centerIn: parent
-        width: boardEmptyCol.width + 2 * Theme.sp3xl
-        height: boardEmptyCol.implicitHeight + 2 * Theme.sp2xl
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-        visible: root._boardTotal === 0 && !root._nothingFound
-    }
-    // A filter that found nothing: one plain line, no card (X-Err-Empty).
+    // An empty board and a filter that found nothing: one plain centred
+    // line and its key, no card, no picture (N/X-Err-Empty, R3-131). The
+    // columns have no border to cross, so it needs no backing.
     EmptyState {
         id: boardEmptyCol
         objectName: "board-empty-state"
         anchors.centerIn: parent
         width: Math.min(parent.width - 96, 360)
         visible: root._boardTotal === 0 || root._nothingFound
-        icon: root._nothingFound ? "" : root._allRows > 0 ? "heap-05-archive" : "heap-01-board"
         title: root._nothingFound ? I18n.t("view.empty.noMatchFor").arg(root.filterLabel)
              : root._allRows > 0 ? I18n.t("board.empty.archivedTitle") : I18n.t("board.empty.title")
         // The keys as bound now, not as they shipped (design audit DES-15).
@@ -1947,8 +1935,8 @@ Item {
         onLineActivated: root.resetFilterRequested()
         line: root._nothingFound ? I18n.t("view.empty.resetFilter")
             : root._allRows > 0
-              ? I18n.t("board.empty.archivedHint").arg(AppController.shortcutFor("view.archive")).arg(AppController.shortcutFor("task.new"))
-              : I18n.t("board.empty.hint").arg(AppController.shortcutFor("task.new")).arg(AppController.shortcutFor("quick-capture"))
+              ? I18n.t("board.empty.archivedHint").arg(AppController.shortcutText("view.archive")).arg(AppController.shortcutText("task.new"))
+              : I18n.t("tasks.empty.line").arg(AppController.shortcutText("task.new"))
     }
     // ── Column delete: confirm when it is not empty ───────────────────
     // Deleting a column re-homes every card in it. That is undoable, but a

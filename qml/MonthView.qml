@@ -935,9 +935,9 @@ Item {
         }
     }
 
-    // A grid with nothing dated in it (APP-191). On a card of its own, like
-    // the board's: laid straight over the cells, their borders cut the text.
-    // Non-interactive, so a click beside it still selects the day.
+    // A grid with nothing dated in it (APP-191): one line and its key
+    // (R3-133). Backed by the page colour, no frame, so the cell borders do
+    // not cut the text. Non-interactive: a click beside it selects the day.
     Rectangle {
         objectName: "month-empty"
         visible: root.monthEmpty
@@ -945,9 +945,7 @@ Item {
         width: monthEmptyState.width + 2 * Theme.sp3xl
         height: monthEmptyState.implicitHeight + 2 * Theme.sp2xl
         radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
+        color: Theme.bg
         EmptyState {
             id: monthEmptyState
             objectName: "month-empty-state"
@@ -955,10 +953,9 @@ Item {
             readonly property bool searching: root.searchText.replace(/(^|\s)is:open(?=\s|$)/gi, " ").trim().length > 0
             anchors.centerIn: parent
             width: Math.min(root.width - 2 * Theme.sp3xl - 96, 360)
-            icon: searching ? "" : "heap-04-month"
             title: I18n.t(searching ? "view.empty.noMatch.title" : "month.empty.title")
             line: searching ? I18n.t("view.empty.noMatch.hint")
-                            : I18n.t("month.empty.hint").arg(AppController.shortcutFor("task.new"))
+                            : I18n.t("calendar.empty.hint").arg(AppController.shortcutText("task.schedule"))
         }
     }
 

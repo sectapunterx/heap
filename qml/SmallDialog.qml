@@ -22,6 +22,9 @@ Popup {
     anchors.centerIn: Overlay.overlay
     Overlay.modal: ModalScrim {}
 
+    // A dim line above the title naming what happened ("Хранилище ключей
+    // ОС недоступно", X/N-Err-Storage); none by default.
+    property string eyebrow: ""
     property string title: ""
     property string fact: ""
     default property alias fields: fieldCol.data
@@ -33,8 +36,20 @@ Popup {
     contentItem: ColumnLayout {
         spacing: 0
         Text {
-            objectName: "small-dialog-title"
+            objectName: "small-dialog-eyebrow"
+            visible: root.eyebrow.length > 0
             Layout.topMargin: Theme.inset
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+            Layout.fillWidth: true
+            text: root.eyebrow
+            color: Theme.textDim
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsXs
+            wrapMode: Text.Wrap
+        }
+        Text {
+            objectName: "small-dialog-title"
+            Layout.topMargin: root.eyebrow.length > 0 ? Theme.spMd : Theme.inset
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             Layout.fillWidth: true
             text: root.title

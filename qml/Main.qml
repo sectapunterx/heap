@@ -420,46 +420,6 @@ ApplicationWindow {
     // there is no tray icon, so closing quits as usual.
     readonly property bool _minimizeToTray: Qt.platform.os === "windows" || Qt.platform.os === "osx"
 
-    // The tray icon's menu (sheet N/X-Menus-Other, R3-103): the captures
-    // with their global keys, the running timer, the next meeting, open,
-    // do not disturb, quit. Native, so it is built here in the app's
-    // language and pushed again as the timer and the day move on.
-    function trayMenuItems() {
-        const items = [{ header: true, text: "lowkey" },
-                       { id: "task.new", text: I18n.t("traymenu.newTask"), key: AppController.shortcutText("quick-capture") },
-                       { id: "note.quick", text: I18n.t("traymenu.quickNote"), key: AppController.shortcutText("quick-capture-notes") },
-                       { separator: true }];
-        const t = AppController.runningTimer();
-        const next = AppController.nextEventAfter(new Date());
-        if (t && t.id) {
-            const title = String(t.title || t.key || "");
-            const mins = Math.floor((t.seconds || 0) / 60);
-            const elapsed = Math.floor(mins / 60) + ":" + String(mins % 60).padStart(2, "0");
-            items.push({ id: "timer.stop", text: I18n.t("traymenu.stopTimer") + " · "
-                         + (title.length > 18 ? title.substring(0, 17) + "…" : title) + " " + elapsed });
-        }
-        if (next && next.title)
-            items.push({ id: "next", enabled: false,
-                         text: I18n.t("traymenu.next").arg(I18n.fmtTime(next.time) + " " + next.title) });
-        if ((t && t.id) || (next && next.title)) items.push({ separator: true });
-        items.push({ id: "open", text: I18n.t("traymenu.open") },
-                   { id: "dnd", text: I18n.t("traymenu.dnd") },
-                   { separator: true },
-                   { id: "quit", text: I18n.t("traymenu.quit") });
-        return items;
-    }
-    function pushTrayMenu() { AppController.setTrayMenu(win.trayMenuItems()); }
-    Timer {
-        interval: 20000
-        running: win._minimizeToTray
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: win.pushTrayMenu()
-    }
-    Connections {
-        target: I18n
-        function onLangChanged() { win.pushTrayMenu(); }
-    }
     // Whether the X button hides to the tray: settings.system.closeToTray.
     // Unset until the first close asks, because doing it silently left people
     // thinking heap had quit while it kept running.
@@ -882,20 +842,6 @@ ApplicationWindow {
         }
         // Tray click / "Show heap." menu entry — just restore the window.
         function onShowWindowRequested() { win._summon(); }
-        // A row of the tray menu (R3-103); "open" and "quit" never get here.
-        function onTrayCommand(id) {
-            switch (id) {
-            case "task.new":   win._capture("task"); break;
-            case "note.quick": win._capture("note"); break;
-            case "timer.stop": {
-                const t = AppController.runningTimer();
-                if (t && t.id) AppController.stopTaskTimer(t.id);
-                win.pushTrayMenu();
-                break;
-            }
-            case "dnd":        AppController.doNotDisturbFor(60, new Date()); break;
-            }
-        }
         function onToast(msg, kind) { toast.show(msg, kind || "info") }
         // A sync brought new cards (APP-180): the toast names them, and
         // "Show" filters the board to them.
@@ -1003,13 +949,10 @@ ApplicationWindow {
                 AppController.undoEntry(serial)
             }, "success", AppController.shortcutText("undo"));
         }
-        // "Done" with no column of that stage: offer to make one (APP-268).
+        // "Done" with no column of that stage: a card with the two ways out
+        // (APP-268, R3-137).
         function onDoneColumnMissing() {
-            toast.showWithAction(I18n.t("done.noColumn"), I18n.t("done.noColumn.create"), 10, function () {
-                AppController.addStatus(I18n.t("done.columnName"), "");
-                const sts = AppController.statuses;
-                AppController.setStatusCategory(sts[sts.length - 1].id, "done");
-            }, "warning");
+            doneColumnCard.open();
         }
         // A newer release was found. When heap can update this copy itself
         // the action downloads it (APP-125); otherwise it opens the release page.
@@ -2853,6 +2796,10 @@ ApplicationWindow {
     // card, the report form, the sync sources, what's new (R2-037…054).
     DamagedFileDialog { id: damagedFile }
     KeychainDialog { id: keychainCard }
+    DoneColumnDialog {
+        id: doneColumnCard
+        onPickStageRequested: win.runCommand("settings:tasks")
+    }
     ReportIssueDialog {
         id: reportIssue
         onNoticeRequested: (text) => toast.show(text, "success")
@@ -3307,14 +3254,15 @@ ApplicationWindow {
         autoAnimate: !Theme.reducedMotion
         autoDuration: 900
         onFinished: splashFade.start()
+        onReportRequested: reportIssue.showNow()
 
         // Swallow input while the splash is up.
-        MouseArea { anchors.fill: parent }
+        MouseArea { anchors.fill: parent; z: -1 }
 
         // Reduced motion: the internal progress animation is off, so dismiss
         // via a short timer instead.
         Component.onCompleted: if (Theme.reducedMotion) splashReducedDismiss.start()
-        Timer { id: splashReducedDismiss; interval: 250; onTriggered: splash.finished() }
+        Timer { id: splashReducedDismiss; interval: 250; onTriggered: splash.dismiss() }
 
         NumberAnimation {
             id: splashFade

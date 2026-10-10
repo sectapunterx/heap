@@ -145,11 +145,16 @@ class WinToastBackend : public NotificationCenter {
     connect(m_tray.get(), &NotificationCenter::showWindowRequested, this, &NotificationCenter::showWindowRequested);
     connect(m_tray.get(), &NotificationCenter::quitRequested, this, &NotificationCenter::quitRequested);
     connect(m_tray.get(), &NotificationCenter::activated, this, &NotificationCenter::activated);
-    connect(m_tray.get(), &NotificationCenter::trayCommand, this, &NotificationCenter::trayCommand);
+    connect(m_tray.get(), &NotificationCenter::trayMenuAboutToShow, this, &NotificationCenter::trayMenuAboutToShow);
+    connect(m_tray.get(), &NotificationCenter::trayItemTriggered, this, &NotificationCenter::trayItemTriggered);
   }
 
-  void setTrayMenu(const QVariantList& items) override {
-    m_tray->setTrayMenu(items);
+  // The tray's menu and tooltip live on the tray fallback this backend keeps.
+  void setTrayMenu(const QString& header, const QVector<TrayItem>& items) override {
+    m_tray->setTrayMenu(header, items);
+  }
+  void setTrayToolTip(const QString& text) override {
+    m_tray->setTrayToolTip(text);
   }
 
   // False when WinRT toasts are not available here.

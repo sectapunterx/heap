@@ -34,11 +34,30 @@ TestCase {
     function test_default_knobs() {
         const s = make('import TodoCpp; SplashScreen { autoAnimate: false }');
         compare(s.progress, 0.0, "progress starts at 0");
-        compare(s.status, "initializing allocator…");
-        compare(s.channel, "stable · channel");
         compare(s.autoDuration, 1200);
-        // buildInfo is bound to the live AppController version string.
-        compare(s.buildInfo, "v" + AppController.appVersion);
+        // The sheet shows the wordmark and the bare version, nothing else (R3-017).
+        compare(s.version, AppController.appVersion);
+        const v = findChild(s, "splash-version");
+        verify(v && v.visible);
+        compare(v.text, AppController.appVersion);
+    }
+
+    // After an unclean exit the splash says so and waits for an answer
+    // (R3-018): the animation ending does not dismiss it; "Не отправлять" does.
+    function test_crash_card_waits_for_answer() {
+        AppController.simulateUncleanExitForTest(new Date(2026, 9, 9, 15, 58));
+        const s = make('import TodoCpp; SplashScreen { autoDuration: 50 }');
+        let fired = 0;
+        s.finished.connect(function() { fired++; });
+        wait(200);
+        compare(fired, 0, "a crashed launch is not dismissed by the timer");
+        const fact = findChild(s, "splash-crash-fact");
+        verify(fact.visible);
+        verify(fact.text.indexOf("15:58") >= 0, fact.text);
+        verify(!findChild(s, "splash-version").visible);
+        mouseClick(findChild(s, "splash-crash-skip"));
+        compare(fired, 1);
+        verify(!AppController.lastExitUnclean);
     }
 
     // progress is the primary public knob ("bind to your loader's progress"):

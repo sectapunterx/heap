@@ -896,9 +896,47 @@ Popup {
                     id: rowItem
                     required property var modelData
                     readonly property bool selected: !rowItem.modelData.header && rowItem.modelData._idx === root._selectedIdx
+                    // Nothing found: two centred lines, not a row (R3-135).
+                    readonly property bool isCreate: rowItem.modelData.kind === "create"
                     width: ListView.view.width
                     height: rowItem.modelData.header ? headText.implicitHeight + Theme.spLg + Theme.spXs
+                          : rowItem.isCreate ? Theme.px(120) - 2 * Theme.spSm
                           : Math.max(Theme.px(36), rowLabel.implicitHeight + 2 * Theme.spMd)
+                    Column {
+                        objectName: "cmd-nothing"
+                        visible: rowItem.isCreate
+                        anchors.centerIn: parent
+                        width: parent.width - 2 * Theme.sp2xl
+                        spacing: Theme.spXs
+                        Text {
+                            width: parent.width
+                            horizontalAlignment: Text.AlignHCenter
+                            text: rowItem.isCreate ? I18n.t("cmd.nothingFor").arg(rowItem.modelData.text) : ""
+                            textFormat: Text.PlainText
+                            elide: Text.ElideMiddle
+                            color: Theme.textMuted
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsMd
+                        }
+                        Text {
+                            width: parent.width
+                            horizontalAlignment: Text.AlignHCenter
+                            text: rowItem.isCreate ? I18n.t("cmd.createLine").arg(AppController.keyText("Return")).arg(rowItem.modelData.text) : ""
+                            textFormat: Text.PlainText
+                            elide: Text.ElideMiddle
+                            color: createCA.hovered ? Theme.textMuted : Theme.textDim
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsMd
+                            ClickArea {
+                                id: createCA
+                                label: parent.text
+                                onActivated: {
+                                    root._selectedIdx = rowItem.modelData._idx;
+                                    root.activateSelected();
+                                }
+                            }
+                        }
+                    }
 
                     Text {
                         id: headText
@@ -911,7 +949,7 @@ Popup {
                         font.pixelSize: Theme.fsXs
                     }
                     Rectangle {
-                        visible: !rowItem.modelData.header
+                        visible: !rowItem.modelData.header && !rowItem.isCreate
                         anchors.fill: parent
                         anchors.leftMargin: Theme.spSm; anchors.rightMargin: Theme.spSm
                         radius: Theme.radiusMd

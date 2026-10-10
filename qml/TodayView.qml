@@ -108,6 +108,7 @@ FocusScope {
             if (meeting) parts.push(b.eventType === "focus" ? I18n.t("today.q.withSelf") : I18n.t("today.q.meeting"));
             else parts.push(b.id);
             if (kind !== "allday") parts.push(root._len(b.start || 0, b.end || 0));
+            if (!meeting && b.waiting) parts.push(I18n.t("today.waitingOn").arg(b.waiting));
         } else {
             if (meeting) parts.push(b.eventType === "focus" ? I18n.t("today.withSelf") : I18n.t("event.kind.meeting"));
             else parts.push(b.id, I18n.t("today.plannedByYou"));
@@ -472,7 +473,8 @@ FocusScope {
                 boundsBehavior: Flickable.StopAtBounds
                 GridLayout {
                     id: side
-                    width: parent.width
+                    // Stacked, the columns keep their own width (R3-014).
+                    width: root.stacked ? Math.min(implicitWidth, parent.width) : parent.width
                     columns: root.stacked ? 3 : 1
                     rowSpacing: root.plain ? Theme.sp2xl : Theme.sp2xl + Theme.spSm
                     columnSpacing: Theme.sp3xl
@@ -481,8 +483,9 @@ FocusScope {
                     ColumnLayout {
                         objectName: "today-inprogress"
                         Layout.alignment: Qt.AlignTop
-                        Layout.preferredWidth: root.stacked ? Theme.px(100) : -1
-                        Layout.fillWidth: true
+                        // Stacked: packed at natural width, like flex-wrap (R3-014).
+                        Layout.preferredWidth: root.stacked ? Theme.px(220) : -1
+                        Layout.fillWidth: !root.stacked
                         visible: root.inProgress.length > 0
                         spacing: root.cards ? Theme.spMd : Theme.spSm
                         SideHead { text: I18n.t(root.cards ? "today.inProgress" : "today.q.inProgress") }
@@ -586,8 +589,9 @@ FocusScope {
                     ColumnLayout {
                         objectName: "today-deadlines"
                         Layout.alignment: Qt.AlignTop
-                        Layout.preferredWidth: root.stacked ? Theme.px(100) : -1
-                        Layout.fillWidth: true
+                        // Stacked: packed at natural width, like flex-wrap (R3-014).
+                        Layout.preferredWidth: root.stacked ? Theme.px(220) : -1
+                        Layout.fillWidth: !root.stacked
                         visible: root.deadlines.length > 0 || (root.dayData.overdue || []).length > 0
                         spacing: root.cards ? 0 : Theme.spSm
                         SideHead {
@@ -602,7 +606,12 @@ FocusScope {
                                 sub: {
                                     const p = [];
                                     if (root.cards) p.push(modelData.id);
-                                    if (modelData.category === "blocked") p.push(I18n.t("today.blocked"));
+                                    // "заблокировано — ждёт ответа: Олег" (R3-002)
+                                    const w = modelData.waiting ? I18n.t("today.waitingOn").arg(modelData.waiting) : "";
+                                    const blocked = modelData.category === "blocked";
+                                    if (blocked && root.cards) p.push(I18n.t("today.blocked") + (w ? " — " + w : ""));
+                                    else if (w) p.push(w);
+                                    else if (blocked) p.push(I18n.t("today.blocked"));
                                     if (root.cards && String(modelData.priority || "").length > 0) p.push(String(modelData.priority).toUpperCase());
                                     if (modelData.profileName) p.push(modelData.profileName);
                                     return root.stacked ? "" : p.join(" · ");
@@ -631,8 +640,9 @@ FocusScope {
                         id: peopleBox
                         objectName: "today-people"
                         Layout.alignment: Qt.AlignTop
-                        Layout.preferredWidth: root.stacked ? Theme.px(100) : -1
-                        Layout.fillWidth: true
+                        // Stacked: packed at natural width, like flex-wrap (R3-014).
+                        Layout.preferredWidth: root.stacked ? Theme.px(220) : -1
+                        Layout.fillWidth: !root.stacked
                         visible: root.people.length > 0
                         spacing: root.cards ? 0 : Theme.spSm
                         property bool open: Style.todayExtras === "open" && !root.stacked

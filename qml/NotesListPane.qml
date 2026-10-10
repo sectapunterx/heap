@@ -416,12 +416,13 @@ Rectangle {
 
         EmptyState {
             objectName: "notes-empty"
-            visible: root.rows.length === 0
+            // No notes, even with pinned links and snippets listed (R3-134).
+            visible: root.filter.length > 0 ? root.rows.length === 0 : !root.rows.some(r => r.kind === "note")
             Layout.fillWidth: true
             Layout.topMargin: Theme.sp2xl
-            icon: root.filter.length > 0 ? "" : "heap-09-notes"
+            Layout.bottomMargin: root.rows.length > 0 ? Theme.sp2xl : 0
             title: root.filter.length > 0 ? I18n.t("notes.noMatches") : I18n.t("notes.empty")
-            line: root.filter.length > 0 ? I18n.t("notes.noMatches.hint") : ""
+            line: root.filter.length > 0 ? I18n.t("notes.noMatches.hint") : I18n.t("notes.empty.line").arg(AppController.shortcutText("notes.new"))
         }
 
         ListView {

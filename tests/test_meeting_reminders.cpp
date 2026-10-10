@@ -321,7 +321,8 @@ TEST_F(MeetingReminderTest, AMeetingLaterTodayIsAnnounced) {
 
   ASSERT_GE(spy.count(), 1);
   EXPECT_EQ(spy.at(0).at(2).toString(), QStringLiteral("meeting"));
-  EXPECT_TRUE(spy.at(0).at(1).toString().contains(QStringLiteral("standup with the team")));
+  // The title names the meeting, the body says when (R3-025).
+  EXPECT_TRUE(spy.at(0).at(0).toString().contains(QStringLiteral("standup with the team")));
 }
 
 // The tick runs once a minute. Without a sentinel a meeting half an hour out

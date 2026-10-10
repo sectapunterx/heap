@@ -49,19 +49,16 @@ class TrayBackend : public NotificationCenter {
     // Context menu so the app is controllable while running windowless (the
     // window hides to the tray on close). QMenu needs QtWidgets, which the app
     // already links. Parented to no widget — QSystemTrayIcon owns it via
-    // setContextMenu.
+    // setContextMenu. The items come from the app (setTrayMenu), refreshed
+    // each time it opens so the timer and the next meeting are current.
     auto* menu = new QMenu();
-    QAction* showAction = menu->addAction(QStringLiteral("Show lowkey"));
-    connect(showAction, &QAction::triggered, this, [this]() {
-      emit showWindowRequested();
-    });
-    menu->addSeparator();
-    QAction* quitAction = menu->addAction(QStringLiteral("Quit"));
-    connect(quitAction, &QAction::triggered, this, [this]() {
-      emit quitRequested();
-    });
+    connect(menu, &QMenu::aboutToShow, this, &NotificationCenter::trayMenuAboutToShow, Qt::DirectConnection);
     m_tray->setContextMenu(menu);
     m_menu = menu;
+    setTrayMenu(QStringLiteral("lowkey"),
+                {{QStringLiteral("open"), QStringLiteral("Open lowkey"), {}, true},
+                 {},
+                 {QStringLiteral("quit"), QStringLiteral("Quit"), {}, true}});
 
     m_tray->show();
     // A left click / double click on the icon restores the window; a click on a
@@ -82,6 +79,40 @@ class TrayBackend : public NotificationCenter {
     delete m_menu;
   }
 
+  void setTrayMenu(const QString& header, const QVector<TrayItem>& items) override {
+    if(!m_menu) {
+      return;
+    }
+    m_menu->clear();
+    QAction* head = m_menu->addAction(header);
+    head->setEnabled(false);
+    for(const TrayItem& item : items) {
+      if(item.id.isEmpty() && item.text.isEmpty()) {
+        m_menu->addSeparator();
+        continue;
+      }
+      // "text<Tab>hint": QMenu puts the hint in the key column on the right.
+      QAction* a = m_menu->addAction(item.hint.isEmpty() ? item.text : item.text + QLatin1Char('\t') + item.hint);
+      a->setEnabled(item.enabled);
+      const QString id = item.id;
+      connect(a, &QAction::triggered, this, [this, id]() {
+        if(id == QLatin1String("open")) {
+          emit showWindowRequested();
+        } else if(id == QLatin1String("quit")) {
+          emit quitRequested();
+        } else {
+          emit trayItemTriggered(id);
+        }
+      });
+    }
+  }
+
+  void setTrayToolTip(const QString& text) override {
+    if(m_tray) {
+      m_tray->setToolTip(text);
+    }
+  }
+
   void post(const Notification& n) override {
     if(!m_tray) {
       return;
@@ -89,40 +120,6 @@ class TrayBackend : public NotificationCenter {
     m_lastId = n.id;
     const int ms = n.durationSec > 0 ? n.durationSec * 1000 : 5000;
     m_tray->showMessage(n.title, n.body, QSystemTrayIcon::Information, ms);
-  }
-
-  void setTrayMenu(const QVariantList& items) override {
-    if(!m_menu || items.isEmpty()) {
-      return;
-    }
-    m_menu->clear();
-    for(const QVariant& v : items) {
-      const QVariantMap m = v.toMap();
-      if(m.value(QStringLiteral("separator")).toBool()) {
-        m_menu->addSeparator();
-        continue;
-      }
-      QString text = m.value(QStringLiteral("text")).toString();
-      // "&" is a mnemonic marker in a QMenu; a task title may hold one.
-      text.replace(QLatin1Char('&'), QStringLiteral("&&"));
-      const QString key = m.value(QStringLiteral("key")).toString();
-      if(!key.isEmpty()) {
-        text += QLatin1Char('\t') + key;
-      }
-      QAction* action = m_menu->addAction(text);
-      if(m.value(QStringLiteral("header")).toBool()) {
-        action->setEnabled(false);
-        QFont f = action->font();
-        f.setBold(true);
-        action->setFont(f);
-        continue;
-      }
-      action->setEnabled(m.value(QStringLiteral("enabled"), true).toBool());
-      const QString id = m.value(QStringLiteral("id")).toString();
-      connect(action, &QAction::triggered, this, [this, id]() {
-        emit trayCommand(id);
-      });
-    }
   }
 
   void dismiss(const QString& /*id*/) override {
