@@ -267,7 +267,10 @@ Rectangle {
         }
 
         // ── My views ──
+        // Empty, bold shows the head and "Появятся, когда сохраните фильтр";
+        // quiet shows no block at all (H2-First / Q-First, R2-058).
         Item {
+            visible: root._savedViews.length > 0 || !Style.plainRows
             Layout.fillWidth: true
             Layout.topMargin: Theme.spLg
             Layout.preferredHeight: root.expanded ? viewsHead.implicitHeight + Theme.spXs : Theme.spSm
@@ -292,7 +295,7 @@ Rectangle {
         }
         Text {
             objectName: "sidebar-views-empty"
-            visible: root._savedViews.length === 0 && root.expanded
+            visible: root._savedViews.length === 0 && root.expanded && !Style.plainRows
             Layout.fillWidth: true
             Layout.leftMargin: Theme.spMd
             text: I18n.t("sidebar.myViews.empty")

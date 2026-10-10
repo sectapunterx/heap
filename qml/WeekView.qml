@@ -1258,13 +1258,16 @@ Item {
                             MouseArea {
                                 id: headMA
                                 objectName: "week-load-" + headCol.index
-                                // The day's load (APP-247), said on hover.
+                                // The day's load (APP-247), said on hover and
+                                // while the keyboard cursor is in the day
+                                // (DG-041: a hover-only fact fails the keyboard).
                                 readonly property string loadText: root.loadLong(headCol.load)
+                                readonly property bool cursorHere: root.cursorVisible && root.cursorDay === headCol.index
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: AppController.selectedDate = headCol.modelData.date
-                                ToolTip.visible: headMA.containsMouse && headMA.loadText.length > 0
+                                ToolTip.visible: (headMA.containsMouse || headMA.cursorHere) && headMA.loadText.length > 0
                                 ToolTip.delay: 400
                                 ToolTip.text: headMA.loadText
                             }
@@ -2413,7 +2416,8 @@ Item {
         anchors.centerIn: parent
         width: Math.min(parent.width - 2 * Theme.sp3xl, 420)
         visible: root.weekEmpty
-        readonly property bool searching: root.searchText.trim().length > 0
+        // The default "не готово" (is:open) is not a search (DG-020).
+        readonly property bool searching: root.searchText.replace(/(^|\s)is:open(?=\s|$)/gi, " ").trim().length > 0
         icon: searching ? "" : "heap-03-week"
         title: I18n.t(searching ? "view.empty.noMatch.title" : "week.empty.title")
         line: searching ? I18n.t("view.empty.noMatch.hint")

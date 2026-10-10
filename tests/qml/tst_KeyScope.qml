@@ -353,11 +353,16 @@ TestCase {
         dlg.open();
         tryCompare(dlg, "opened", true);
         tryVerify(function () { return tc.win._dimmerShown; }, 1000, "no dimmer seen");
+        keyClick(Qt.Key_3, Qt.ControlModifier);
+        compare(AppController.currentView, "board", "Ctrl+3 switched the view behind the dialog");
+        // Return is the dialog's own main button (X-Dlg-Small): it answers
+        // the dialog (no column named here, so nothing is deleted), never
+        // the card behind it.
+        const before = AppController.statuses.length;
         keyClick(Qt.Key_Return);
         wait(50);
         compare(popup("TaskEditor").opened, false, "Return opened a card behind the dialog");
-        keyClick(Qt.Key_3, Qt.ControlModifier);
-        compare(AppController.currentView, "board", "Ctrl+3 switched the view behind the dialog");
+        compare(AppController.statuses.length, before);
         dlg.close();
         tryCompare(dlg, "opened", false);
         dlg.focus = true;

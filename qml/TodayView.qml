@@ -296,10 +296,10 @@ FocusScope {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spXs
-                // The eyebrow: "Сегодня" in bold; quiet shows it only for
-                // another day or a day off, where it says something.
+                // The eyebrow: "Сегодня" in bold; quiet draws none (R2-003,
+                // H2-Today-Calm): the date alone heads the day.
                 RowLayout {
-                    visible: (!root.plain && !root.stacked) || !root.isToday || root.dayData.workday === false
+                    visible: !Style.plainRows && (!root.stacked || !root.isToday || root.dayData.workday === false)
                     spacing: Theme.spMd
                     Text {
                         objectName: "today-label"
@@ -326,8 +326,8 @@ FocusScope {
                     }
                     color: Theme.text
                     font.family: Theme.fontUi
-                    font.pixelSize: Theme.fs2xl
-                    font.weight: root.plain ? Theme.fwTitle : Theme.fwHeading
+                    font.pixelSize: Theme.fsDayTitle
+                    font.weight: Theme.fwScreenTitle
                     Accessible.role: Accessible.Heading
                     Accessible.name: text
                 }
@@ -404,6 +404,23 @@ FocusScope {
                     titleColor: Theme.textDim
                 }
 
+                // A free day (X-Err-Empty): the facts line already says
+                // "Ничего не запланировано"; here only where the undated
+                // tasks are. Its own line above the rows, so the bold
+                // "Свободно 10 ч" row never runs under it (R2-067).
+                Text {
+                    objectName: "today-empty"
+                    visible: root.dayEmpty && (root.dayData.undated || 0) > 0
+                    Layout.topMargin: root.plain ? 0 : Theme.spMd
+                    Layout.bottomMargin: root.plain ? Theme.spSm : 0
+                    text: I18n.t("today.emptyUndated").arg(root.dayData.undated || 0)
+                    color: Theme.textDim
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsMd
+                    font.underline: emptyUndCA.hovered
+                    ClickArea { id: emptyUndCA; label: parent.text; role: Accessible.Link; onActivated: root.undatedRequested() }
+                }
+
                 ListView {
                     id: dayList
                     objectName: "today-day"
@@ -419,22 +436,6 @@ FocusScope {
                     delegate: DayRow {}
                     // Opened, it shows "now", not 09:00.
                     onCountChanged: Qt.callLater(root._revealNow)
-                    // A free day (X-Err-Empty): the facts line already says
-                    // "Ничего не запланировано"; here only where the undated
-                    // tasks are.
-                    Text {
-                        objectName: "today-empty"
-                        visible: root.dayEmpty && (root.dayData.undated || 0) > 0
-                        anchors.top: parent.top
-                        anchors.topMargin: Theme.spSm
-                        z: -1
-                        text: I18n.t("today.emptyUndated").arg(root.dayData.undated || 0)
-                        color: Theme.textDim
-                        font.family: Theme.fontUi
-                        font.pixelSize: Theme.fsMd
-                        font.underline: emptyUndCA.hovered
-                        ClickArea { id: emptyUndCA; label: parent.text; role: Accessible.Link; onActivated: root.undatedRequested() }
-                    }
                 }
             }
 

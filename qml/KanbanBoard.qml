@@ -4,6 +4,7 @@ import QtQuick.Controls
 import QtQuick.Controls.Basic
 import QtQuick.Controls as QQC
 import TodoCpp
+import "QueryWords.js" as QueryWords
 import "Motion.js" as Motion
 
 Item {
@@ -229,6 +230,29 @@ Item {
     // a filter change, a drag, or the card moving column — all of which
     // renumber the rows underneath it.
     property string cursorTaskId: ""
+    // The column whose header holds the keyboard (Tab onto one of its
+    // buttons); "" when none. Ctrl+Shift+H / L move that column (DG-133,
+    // keymap "на заголовке колонки"); a header marks itself with `headerOf`.
+    function focusedHeaderStatus() {
+        for (let it = root.Window.activeFocusItem; it; it = it.parent)
+            if (typeof it.headerOf === "string" && it.headerOf.length > 0) return it.headerOf;
+        return "";
+    }
+    function moveFocusedColumn(dx) {
+        const sid = root.focusedHeaderStatus();
+        if (!sid) return;
+        const sts = AppController.statuses;
+        const i = sts.findIndex(st => st.id === sid);
+        if (i < 0 || i + dx < 0 || i + dx >= sts.length) return;
+        AppController.moveStatus(sid, i + dx);
+        // The header keeps the keyboard, so the key can be pressed again.
+        Qt.callLater(function () {
+            for (let k = 0; k < colRepeater.count; k++) {
+                const c = colRepeater.itemAt(k);
+                if (c && c["statusId"] === sid) { c["focusHeader"](); return; }
+            }
+        });
+    }
     // The ring is drawn only once the keyboard has moved the cursor. A click
     // still puts the cursor on the card (so J/K carry on from there), but a
     // ring left behind by a mouse click read as the card being stuck
@@ -770,6 +794,8 @@ Item {
                     readonly property bool headerKeyFocus: moveLeftIcon.keyFocused || moveRightIcon.keyFocused
                                                            || deleteIcon.keyFocused || foldIcon.keyFocused
                     readonly property bool headerRevealed: col.headerHovered || col.headerKeyFocus
+                    // After Ctrl+Shift+H / L the header keeps the keyboard (DG-133).
+                    function focusHeader() { foldIcon.focusKey(); }
                     // Briefly emphasised when the sidebar Blocked / Code Review
                     // button jumps focus to this column.
                     readonly property bool focusPulse: root._focusPulseStatus === col.statusId
@@ -956,29 +982,19 @@ Item {
                             Layout.preferredHeight: 38
                             color: "transparent"
                             HoverHandler { onHoveredChanged: col.headerHovered = hovered }
+                            readonly property string headerOf: col.statusId
                             // The header's menu from the keyboard: Menu or
                             // Shift+F10 on any of its buttons, which pass the
                             // key up to here.
                             Keys.onMenuPressed: colHeaderMenu.popup()
-                            // Ctrl Shift H / L on the header (APP-278): the
-                            // column one place left / right, as the menu's
-                            // Move left / right. Taken before the window's
-                            // shortcuts: elsewhere Ctrl Shift L is the log.
-                            function _columnStep(event) {
-                                if (event.modifiers !== (Qt.ControlModifier | Qt.ShiftModifier)) return 0;
-                                // By the physical key on Windows, so a Russian layout works too.
-                                const vk = Qt.platform.os === "windows" ? event.nativeVirtualKey : 0;
-                                return event.key === Qt.Key_H || vk === 0x48 ? -1
-                                     : event.key === Qt.Key_L || vk === 0x4C ? 1 : 0;
-                            }
-                            Keys.onShortcutOverride: (event) => { if (_columnStep(event) !== 0) event.accepted = true; }
+                            // Ctrl Shift H / L on the header (APP-278, DG-133)
+                            // are catalogue keys now (board.columnLeft /
+                            // Right): KeyRouter runs them while a header holds
+                            // the keyboard (moveFocusedColumn), so they are
+                            // rebindable and listed; elsewhere Ctrl Shift L is
+                            // the log.
                             Keys.onPressed: (event) => {
-                                const step = _columnStep(event);
-                                if (step !== 0) {
-                                    if (!(step < 0 && col.isFirst) && !(step > 0 && col.isLast))
-                                        AppController.moveStatus(col.statusId, col.index + step);
-                                    event.accepted = true;
-                                } else if (event.key === Qt.Key_F2) {
+                                if (event.key === Qt.Key_F2) {
                                     col.startRename();
                                     event.accepted = true;
                                 } else if (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier)) {
@@ -1182,7 +1198,7 @@ Item {
                                     HoverIcon {
                                         id: moveLeftIcon
                                         objectName: "column-move-left"
-                                        glyph: "‹"; tip: I18n.t("kanban.moveLeft")
+                                        icon: "chevron-left"; tip: I18n.t("kanban.moveLeft"); shortcutId: "board.columnLeft"
                                         visible: !col.isFirst
                                         revealed: col.headerRevealed
                                         onActivated: AppController.moveStatus(col.statusId, col.index - 1)
@@ -1190,7 +1206,7 @@ Item {
                                     HoverIcon {
                                         id: moveRightIcon
                                         objectName: "column-move-right"
-                                        glyph: "›"; tip: I18n.t("kanban.moveRight")
+                                        icon: "chevron-right"; tip: I18n.t("kanban.moveRight"); shortcutId: "board.columnRight"
                                         visible: !col.isLast
                                         revealed: col.headerRevealed
                                         onActivated: AppController.moveStatus(col.statusId, col.index + 1)
@@ -1198,7 +1214,7 @@ Item {
                                     HoverIcon {
                                         id: deleteIcon
                                         objectName: "column-delete"
-                                        glyph: "×"; tip: I18n.t("kanban.deleteColumn")
+                                        icon: "close"; tip: I18n.t("kanban.deleteColumn")
                                         danger: true
                                         visible: AppController.statuses.length > 1
                                         revealed: col.headerRevealed
@@ -1207,7 +1223,7 @@ Item {
                                     HoverIcon {
                                         id: foldIcon
                                         objectName: "column-fold"
-                                        glyph: "⇤"; tip: I18n.t("kanban.collapse")
+                                        icon: "collapse"; tip: I18n.t("kanban.collapse")
                                         shortcutId: "board.collapseColumn"
                                         revealed: col.headerRevealed
                                         onActivated: root.toggleCollapsed(col.statusId)
@@ -1244,8 +1260,8 @@ Item {
                                 AppMenuItem { objectName: "col-menu-fold"; text: I18n.t("colmenu.fold"); shortcutId: "board.collapseColumn"; onTriggered: root.toggleCollapsed(col.statusId) }
                                 AppMenuItem { objectName: "col-menu-wip"; text: I18n.t("colmenu.wip"); onTriggered: wipPopup.openFor(col.statusId, col.statusName, col.wipLimit, col) }
                                 AppMenuSeparator {}
-                                AppMenuItem { text: I18n.t("kanban.moveLeft");  enabled: !col.isFirst; keyText: AppController.keyText("Ctrl+Shift+H"); onTriggered: AppController.moveStatus(col.statusId, col.index - 1) }
-                                AppMenuItem { text: I18n.t("kanban.moveRight"); enabled: !col.isLast; keyText: AppController.keyText("Ctrl+Shift+L"); onTriggered: AppController.moveStatus(col.statusId, col.index + 1) }
+                                AppMenuItem { text: I18n.t("kanban.moveLeft");  enabled: !col.isFirst; shortcutId: "board.columnLeft"; onTriggered: AppController.moveStatus(col.statusId, col.index - 1) }
+                                AppMenuItem { text: I18n.t("kanban.moveRight"); enabled: !col.isLast; shortcutId: "board.columnRight"; onTriggered: AppController.moveStatus(col.statusId, col.index + 1) }
                                 AppMenuSeparator {}
                                 AppMenuItem { objectName: "col-menu-delete"; danger: true; text: I18n.t("colmenu.delete"); enabled: AppController.statuses.length > 1; onTriggered: root.requestDeleteColumn(col.statusId, col.statusName) }
                             }
@@ -1825,7 +1841,7 @@ Item {
 
     component HoverIcon: Rectangle {
         id: hoverIcon
-        property string glyph: ""
+        property string icon: ""
         property string tip: ""
         property string shortcutId: ""
         property bool danger: false
@@ -1853,12 +1869,12 @@ Item {
                              : "transparent"
         border.color: hoverIcon.hot ? (danger ? Theme.danger : Theme.border) : "transparent"
         border.width: 1
-        Text {
+        function focusKey() { hoverIconMA.forceActiveFocus(Qt.TabFocusReason); }
+        Icon {
             anchors.centerIn: parent
-            text: hoverIcon.glyph
+            name: hoverIcon.icon
+            size: Theme.iconSize
             color: hoverIcon.hot ? (hoverIcon.danger ? Theme.danger : Theme.text) : Theme.textMuted
-            font.pixelSize: Theme.fsMd
-            font.weight: Theme.fwTitle
         }
         ClickArea {
             id: hoverIconMA
@@ -1895,11 +1911,7 @@ Item {
     readonly property bool _nothingFound: root._filtering && root._boardTotal > 0 && boardFilter.count === 0
     readonly property bool nothingFound: root._nothingFound
     // The filter as words for "Ничего под «…»" (DG-160).
-    readonly property string filterLabel: {
-        const parts = root.searchText.trim().split(/\s+/).filter(x => x.length > 0);
-        for (const p of root.activePriorities) parts.push(String(p).toUpperCase());
-        return parts.join(" · ");
-    }
+    readonly property string filterLabel: QueryWords.label(root.searchText, root.activePriorities)
     property int _allRows: AppController.tasks.rowCount()
     Connections {
         target: AppController.tasks
@@ -1959,55 +1971,66 @@ Item {
         confirmDelete.open();
     }
 
-    QQC.Dialog {
+    // X-Dlg-Small (R2-041): the question, one line of fact with the undo
+    // key, "Перенести задачи в [column ▾]", Отмена / Удалить колонку.
+    SmallDialog {
         id: confirmDelete
         objectName: "confirm-delete-column"
-        // Takes the keyboard, so Esc and Tab work in it and the board keys
-        // behind it stand down.
-        focus: true
+        parent: Overlay.overlay
         property string statusId: ""
         property string statusName: ""
         property int cardCount: 0
+        // The other columns, in board order; the first is the default target.
+        readonly property var targets: (AppController.statuses || []).filter(st => st.id !== confirmDelete.statusId)
 
-        modal: true
-        Overlay.modal: ModalScrim {}
-        anchors.centerIn: Overlay.overlay
-        parent: Overlay.overlay
-        padding: Theme.inset
-        // Explicit, because the contentItem is a wrapping Text: without a width
-        // of its own it sizes itself from the dialog, which is sizing itself
-        // from the text. Qt reports that as a binding loop on implicitWidth and
-        // settles on whatever it measured first.
-        width: 420
         title: I18n.t("kanban.confirmDelete.title").arg(confirmDelete.statusName)
-
-        background: ModalSurface {}
-
-        contentItem: Text {
-            text: I18n.t("kanban.confirmDelete.body").arg(confirmDelete.cardCount)
-            color: Theme.textMuted
-            font.pixelSize: Theme.fsMd
-            wrapMode: Text.Wrap
+        fact: I18n.t("kanban.confirmDelete.fact")
+                .arg(I18n.count(confirmDelete.cardCount, "query.n.tasks"))
+                .arg(AppController.shortcutText("undo").replace(/\+/g, " "))
+        // Enter is the main button, as in every small dialog (X-Dlg-Small);
+        // Tab reaches the column field.
+        onOpened: { targetBox.currentIndex = 0; deleteKeys.forceActiveFocus(); }
+        onAccepted: confirmDelete.deleteNow()
+        function deleteNow() {
+            const t = confirmDelete.targets[targetBox.currentIndex];
+            AppController.deleteStatus(confirmDelete.statusId, t ? t.id : "");
+            confirmDelete.close();
         }
 
-        footer: RowLayout {
-            spacing: Theme.spMd
-            Item { Layout.fillWidth: true }
+        ColumnLayout {
+            id: deleteKeys
+            Layout.fillWidth: true
+            spacing: Theme.spXs
+            focus: true
+            Keys.onReturnPressed: confirmDelete.accepted()
+            Keys.onEnterPressed: confirmDelete.accepted()
+            Text {
+                text: I18n.t("kanban.confirmDelete.into")
+                color: Theme.textMuted
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsXs
+            }
+            AppComboBox {
+                id: targetBox
+                objectName: "confirm-delete-target"
+                Accessible.name: I18n.t("kanban.confirmDelete.into")
+                Layout.fillWidth: true
+                model: confirmDelete.targets.map(st => st.name)
+            }
+        }
+
+        buttons: [
             PillButton {
                 text: I18n.t("common.cancel")
                 onClicked: confirmDelete.close()
-            }
+            },
             PillButton {
                 objectName: "confirm-delete-ok"
                 text: I18n.t("kanban.confirmDelete.ok")
                 danger: true
-                onClicked: {
-                    AppController.deleteStatus(confirmDelete.statusId);
-                    confirmDelete.close();
-                }
+                onClicked: confirmDelete.deleteNow()
             }
-            Item { Layout.preferredWidth: 10 }
-        }
+        ]
     }
 
     // ── Work-in-progress limit ────────────────────────────────────────

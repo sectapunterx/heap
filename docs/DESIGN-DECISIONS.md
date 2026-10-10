@@ -247,3 +247,36 @@ progressive disclosure, content priority, state preservation). One entry each.
   listed in the cheat sheet. "в Example ▾" opens the profile list; picking one switches the app to
   it, and the task lands there.
 - **DG-003 · ⤢ / ⤡** in the document are the `expand` / `collapse` line icons.
+
+## Tasks & type (wave 3)
+
+- **R2-001/002 · Two screen-title sizes, from the sheets.** Today's date is 30px/600 in bold
+  (H2-Today) and 26px/500 in quiet (H2-Today-Calm); a section title (Задачи, Настройки) is
+  24px/600 in bold (H2-List/Board/Calendar/Settings) and 26px/500 in quiet. Two Theme tokens
+  (`fsDayTitle`, `fsScreenTitle`, weight `fwScreenTitle`) off the type scale, because the sheets
+  draw them off it. [font-scale, weight-hierarchy.]
+- **R2-005/008 · Task titles 600 in bold only.** `fwTaskTitle`: 600 on bold cards and list rows,
+  where the title must stand above the detail line; quiet keeps 500.
+- **R2-041 · Delete column: Enter deletes, as the sheet's template says.** X-Dlg-Small's rule is
+  "Enter — основная", and the delete is one Ctrl Z away, so Enter runs "Удалить колонку"; the
+  target field ("Перенести задачи в", preset to the first remaining column, as before) is one Tab
+  away. The fact line names the live undo key. [confirmation-dialogs, undo-support.]
+- **R2-058 · The example profile keeps its starter views.** A new profile (first run or "new
+  profile") starts with none; the example profile is sample content and still brings the four;
+  existing profiles keep what they have.
+- **DG-161 (review CHANGE) · "вернуть" on the archive row.** Under `is:archived`, the row under the
+  keyboard cursor or the pointer shows a quiet "вернуть" text action at its end, the same restore as
+  the task menu; no key hint, since none is bound. [primary-action, gesture-alternative.]
+- **DG-133 (review CHANGE) · "On a column header" = the keyboard is inside a header.** The board
+  cursor walks cards, never headers, so the scope is a header button holding focus (Tab onto
+  "+", ‹ › × or fold). There Ctrl+Shift+H / L (catalogue `board.columnLeft/Right`, rebindable)
+  move the column and the header keeps focus; anywhere else Ctrl+Shift+L is the log. Listed in
+  the cheat sheet ("Сдвинуть колонку"), the column menu and the header icons' tooltips.
+- **DG-041/050 (review CHANGE) · A tooltip on the cursor, not a hint line.** The day's load in the
+  week shows as the day name's tooltip while the keyboard cursor is in that day; a meeting's time in
+  the month shows as its tooltip while the cursor is on it. Same place and words as on hover, so
+  nothing new to learn. [tooltip-keyboard, hover-vs-tap.]
+- **Leftovers.** The column header's hover glyphs ‹ › × ⇤ are `Icon` (chevron-left/right, close,
+  collapse). Week and month treat the default `is:open` as no search in their empty state, as the
+  list does (DG-020). Chips and "Ничего под «…»" read clauses as words (`QueryWords.js`):
+  `is:archived` is "статус в архиве".

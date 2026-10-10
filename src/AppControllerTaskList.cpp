@@ -136,6 +136,7 @@ QVariantList AppController::taskListRows(const QString& query,
                     {QStringLiteral("due"), dateOrNull(heap::local::effectiveDueAt(t))},
                     {QStringLiteral("dueHasTime"), heap::local::effectiveDueHasTime(t)},
                     {QStringLiteral("repeats"), !t.recurrence.isEmpty()},
+                    {QStringLiteral("archived"), t.archived},
                     {QStringLiteral("own"), src.at(i).own},
                     {QStringLiteral("profile"), src.at(i).profile}};
       rows.append(r);

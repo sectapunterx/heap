@@ -197,6 +197,23 @@ TEST_F(StatusTest, DeleteStatusReHomesItsTasksToTheFirstRemainingColumn) {
   EXPECT_EQ(taskById(QStringLiteral("T-2"))->status, survivor);
 }
 
+TEST_F(StatusTest, DeleteStatusMovesItsTasksIntoThePickedColumn) {
+  // X-Dlg-Small "Перенести задачи в [К выполнению ▾]" (R2-041).
+  const QStringList ids = statusIds();
+  ASSERT_GE(ids.size(), 3);
+  const QString doomed = ids.at(1);
+  const QString target = ids.at(2);
+  app_->tasks()->reset({makeTask(QStringLiteral("T-1"), doomed)});
+
+  app_->deleteStatus(doomed, target);
+  EXPECT_EQ(taskById(QStringLiteral("T-1"))->status, target);
+
+  // The column being deleted, or one that does not exist, falls back to the first.
+  app_->tasks()->reset({makeTask(QStringLiteral("T-2"), target)});
+  app_->deleteStatus(target, target);
+  EXPECT_EQ(taskById(QStringLiteral("T-2"))->status, ids.at(0));
+}
+
 TEST_F(StatusTest, DeleteStatusRefusesToEmptyTheBoard) {
   while(app_->statuses().size() > 1) {
     app_->deleteStatus(statusIds().last());

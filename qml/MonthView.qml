@@ -872,6 +872,11 @@ Item {
                                     objectName: "month-cursor"
                                     visible: root.cursorVisible && dayCell._sel && root._cursorIdx === dayCell.cell.tasks.length + eventChip.index
                                              && root.cursorKey.indexOf("event:" + dayCell.cell.events[eventChip.index].id) === 0
+                                    // The meeting's time also for the keyboard
+                                    // cursor, not only on hover (DG-050).
+                                    ToolTip.visible: visible && evCA.tip.length > 0
+                                    ToolTip.delay: 300
+                                    ToolTip.text: evCA.tip
                                 }
                                 Layout.fillWidth: true
                                 implicitHeight: Theme.px(18)
@@ -946,7 +951,8 @@ Item {
         EmptyState {
             id: monthEmptyState
             objectName: "month-empty-state"
-            readonly property bool searching: root.searchText.trim().length > 0
+            // The default "не готово" (is:open) is not a search (DG-020).
+            readonly property bool searching: root.searchText.replace(/(^|\s)is:open(?=\s|$)/gi, " ").trim().length > 0
             anchors.centerIn: parent
             width: Math.min(root.width - 2 * Theme.sp3xl - 96, 360)
             icon: searching ? "" : "heap-04-month"

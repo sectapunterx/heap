@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
 import TodoCpp
+import "QueryWords.js" as QueryWords
 import "TaskDates.js" as TaskDates
 
 // Tasks → List (APP-263, sheets H2-List / Q-List): the tasks the query lets
@@ -35,12 +36,10 @@ Item {
     }
 
     // The filter as words for "Ничего под «…»" (DG-160).
-    readonly property string filterLabel: {
-        const parts = root.searchText.trim().split(/\s+/).filter(x => x.length > 0);
-        for (const p of root.activePriorities) parts.push(String(p).toUpperCase());
-        return parts.join(" · ");
-    }
+    readonly property string filterLabel: QueryWords.label(root.searchText, root.activePriorities)
     readonly property bool nothingFound: root.taskCount === 0 && root._searching
+    // The archive (X-Oth-Archive-People): the list under "is:archived".
+    readonly property bool _archive: /(^|\s)is:archived(\s|$)/i.test(root.searchText)
 
     // ── Rows ─────────────────────────────────────────────────────────
     // Built in C++ (AppController.taskListRows, views/TaskListGroups) and
@@ -329,6 +328,8 @@ Item {
                         }
                     }
                     RowLayout {
+                        // Over the row's MouseArea, so "вернуть" takes its own click.
+                        z: 1
                         anchors.fill: parent
                         anchors.leftMargin: Theme.spMd
                         anchors.rightMargin: Theme.spMd
@@ -384,7 +385,7 @@ Item {
                             color: Theme.text
                             font.family: Theme.fontUi
                             font.pixelSize: Theme.fsMd
-                            font.weight: Theme.fwTitle
+                            font.weight: Theme.fwTaskTitle
                             elide: Text.ElideRight
                         }
                         Rectangle {
@@ -437,6 +438,29 @@ Item {
                             font.family: Theme.fontUi
                             font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsSm
+                        }
+                        // The archive's main action on the current row (DG-161,
+                        // X-Oth-Archive-People): "вернуть", the same restore as
+                        // the task menu. No key hint: no key is bound to it.
+                        Text {
+                            objectName: "list-row-restore"
+                            readonly property bool shown: root._archive && !row.isGroup && !!row.modelData.archived
+                                                          && (taskRow.cursored || rowHover.hovered)
+                            Layout.preferredWidth: restoreMetrics.advanceWidth
+                            opacity: shown ? 1 : 0
+                            visible: root._archive
+                            text: I18n.t("list.restore")
+                            color: restoreCA.hovered ? Theme.text : Theme.textMuted
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsSm
+                            font.underline: restoreCA.hovered
+                            TextMetrics { id: restoreMetrics; font.family: Theme.fontUi; font.pixelSize: Theme.fsSm; text: I18n.t("list.restore") }
+                            ClickArea {
+                                id: restoreCA
+                                enabled: parent.shown
+                                label: parent.text
+                                onActivated: AppController.setArchived(row.taskId, false)
+                            }
                         }
                     }
                     MouseArea {
