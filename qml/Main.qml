@@ -1225,6 +1225,7 @@ ApplicationWindow {
                         function onImportRequested() { importVaultDialog.open(); }
                         function onExampleRequested() { win.openExample(); }
                         function onPeopleRequested(id) { peopleDialog.showFor(id); }
+                        function onPersonEditRequested(id) { personEditor.showFor(AppController.personById(id)); }
                     }
 
                     // First visit to one of the kept-alive views builds it.
@@ -1379,6 +1380,8 @@ ApplicationWindow {
         id: peopleDialog
         onEditRequested: (id) => personEditor.showFor(AppController.personById(id))
         onAddRequested: personPicker.open_()
+        onTaskRequested: (id) => win.openTask(id)
+        onMeetingRequested: (id) => eventEditor.showForId(id)
     }
     PersonPicker  {
         id: personPicker
@@ -3105,6 +3108,7 @@ ApplicationWindow {
     }
     VaultImportDialog {
         id: vaultImportConfirm
+        onOtherFolderRequested: importVaultDialog.open()
         onImported: (r) => {
             if (r.error) { win.notice(r.error, "error"); return; }
             const trouble = r.skipped > 0 || r.conflicts > 0;

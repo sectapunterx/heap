@@ -28,6 +28,10 @@ struct MdHtmlPalette {
   QString link;
   QString code;
   QString codeBackground;
+  // Inline code face (R2-020). When set, the view draws the pill under the
+  // span (InlineCodeFrames), so no background is baked into the HTML.
+  QString codeFont;
+  QString codeSize;  // px, with codeFont
   QString highlightBackground;
   QString mention;
   QString ticket;

@@ -243,6 +243,31 @@ ListView {
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsLg
                     onLinkActivated: (link) => view._handleLink(link, rowItem.model.firstLine)
+                    onWidthChanged: codeFrames.refresh()
+                    // Inline code in a pill (R2-020): filled in bold, a
+                    // hairline in quiet. Rich text cannot stroke a span, so
+                    // the pills are drawn under the text.
+                    InlineCodeFrames {
+                        id: codeFrames
+                        target: body.textDocument
+                        family: Theme.fontMono
+                    }
+                    Repeater {
+                        model: codeFrames.rects
+                        delegate: Rectangle {
+                            required property rect modelData
+                            objectName: "mdInlineCode"
+                            z: -1
+                            x: modelData.x - Theme.spXs
+                            y: modelData.y + 1
+                            width: modelData.width + 2 * Theme.spXs
+                            height: modelData.height - 2
+                            radius: Theme.radiusSm
+                            color: Style.chipFill ? Theme.mdCodeBg : "transparent"
+                            border.width: Style.chipFill ? 0 : 1
+                            border.color: Theme.border
+                        }
+                    }
                 }
             }
         }

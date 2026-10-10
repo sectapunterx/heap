@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic as QQC
+import QtQuick.Dialogs
 import TodoCpp
 
 // The list of notes, beside the one being edited.
@@ -24,6 +25,22 @@ Rectangle {
     property int rev: 0
 
     signal noteActivated(string id)
+    // A note's "Экспорт в .md" (R2-062): where to, then one file.
+    function exportNote(id, title) {
+        noteExportDialog.noteId = id;
+        noteExportDialog.currentFile = "file:///" + (title.replace(/[\\/:*?"<>|]/g, " ").trim() || "note") + ".md";
+        noteExportDialog.open();
+    }
+    FileDialog {
+        id: noteExportDialog
+        property string noteId: ""
+        fileMode: FileDialog.SaveFile
+        nameFilters: ["Markdown (*.md)", "All files (*)"]
+        defaultSuffix: "md"
+        title: I18n.t("notes.menu.export")
+        onAccepted: AppController.showToast(AppController.exportNoteToFile(noteExportDialog.noteId, selectedFile)
+                                         ? I18n.t("notes.export.done") : I18n.t("notes.export.fail"))
+    }
     // After "+": the view puts the cursor in the new note.
     signal noteCreated(string id)
     // Knowledge (APP-269): Docs live in the same list — the reference links
@@ -708,26 +725,44 @@ Rectangle {
                         z: 9
                     }
 
+                    // The note's menu (R2-062, sheet X/N-Menus-Other). Merging
+                    // stays on drag and drop: a row dropped on another.
                     AppMenu {
                         id: rowMenu
+                        objectName: "note-row-menu"
+                        AppMenuHeader {
+                            text: I18n.t("notes.menu.header").arg(row.note.title || "")
+                        }
                         AppMenuItem {
+                            objectName: "note-menu-open"
+                            text: I18n.t("notes.menu.open")
+                            keyText: "↵"
+                            onTriggered: root.noteActivated(row.note.id)
+                        }
+                        AppMenuItem {
+                            objectName: "note-menu-pin"
                             text: row.note.pinned ? I18n.t("notes.unpin") : I18n.t("notes.pin")
                             onTriggered: AppController.setNotePinned(row.note.id, !row.note.pinned)
                         }
                         AppMenuItem {
-                            text: I18n.t("notes.rename")
+                            objectName: "note-menu-rename"
+                            text: I18n.t("notes.menu.rename")
+                            shortcutId: "notes.rename"
                             onTriggered: renamePopup.openFor(row.note.id, row.note.title, row.note.folder)
                         }
-                        // The keyboard's way to merge: this note into the one open.
                         AppMenuItem {
-                            objectName: "note-merge-into-open"
-                            visible: !row.current && AppController.activeNoteId.length > 0
-                            height: visible ? implicitHeight : 0
-                            text: I18n.t("notes.mergeIntoOpen")
-                            onTriggered: AppController.mergeNotes(row.note.id, AppController.activeNoteId)
+                            objectName: "note-menu-copy-link"
+                            text: I18n.t("notes.menu.copyLink")
+                            onTriggered: AppController.copyToClipboard("[[" + (row.note.title || "") + "]]")
+                        }
+                        AppMenuItem {
+                            objectName: "note-menu-export"
+                            text: I18n.t("notes.menu.export")
+                            onTriggered: root.exportNote(row.note.id, row.note.title || "")
                         }
                         AppMenuSeparator {}
                         AppMenuItem {
+                            objectName: "note-menu-delete"
                             text: I18n.t("common.delete")
                             danger: true
                             onTriggered: AppController.deleteNote(row.note.id)

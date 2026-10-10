@@ -119,8 +119,9 @@ progressive disclosure, content priority, state preservation). One entry each.
   panel held open from Today (a name in "Кому написать") and from the command line ("Кому
   написать: все", `people.open`) in a dialog shaped like `X-Oth-Archive-People`: the list, one
   person beside it, "Написал / Ответил", edit and "убрать из списка". The sheet's "Связанные
-  задачи" and "Встречи" are left out: lowkey keeps no link between a person and a task or a
-  meeting, and making one up would be the autopilot the product is not.
+  задачи" (tasks waiting on the person, WaitingOn) and "Встречи" (the next two weeks' meetings
+  whose attendees line names them: full name, handle, or the first name alone) are shown under the
+  question, each hidden when empty (review CHANGE; facts lowkey already stores).
 - **DG-161 · The archive's month is the month the status last changed.** A task has no
   "archived at" date. The status change is what sent it to the archive (done, then 14 days), so
   its month is the closest fact. "By month" is offered in the grouping chip only while the query
@@ -196,7 +197,7 @@ progressive disclosure, content priority, state preservation). One entry each.
 - **DG-027 · "Перенести… ›" left the task menu.** Planning another day is "Запланировать… s" (the schedule popup); carrying on stays in End of day and in Ctrl K for a selection. The status and priority lists mark the current row with "сейчас" only, no check.
 - **DG-031 · Dates without the locale's dot.** Russian short months read "9 окт", "сб, 10 окт" everywhere (`I18n.fmtDate`). On the list, tomorrow is "9 окт" in bold; quiet writes a weekday alone while it is this week ("пт", "пт, 15:00"), as Q-List. The example tasks carry the sheet's area labels (payments, auth, ui…).
 - **DG-150 · Saved view menu.** "Обновить по текущим фильтрам" and "Дублировать" are gone from it: the open view's own line ("обновить" / "сохранить как новый") does both. "Изменить запрос…" opens the view's name and query in one dialog. Shift K / J move a view, as the menu says; Ctrl ↑/↓ still work.
-- **DG-151 · Profile switcher.** Always the searchable list. The active profile shows its last good sync ("синк 2 мин назад"); "Ctrl ]" sits on the row it would switch to. Import / export (JSON in Settings → Данные; .ics and the notes folder) and duplicating a profile are Ctrl K commands. Delete stays one undoable click, labelled "Удалить профиль" without an ellipsis because no dialog follows.
+- **DG-151 · Profile switcher.** Always the searchable list. The active profile shows its last good sync ("синк 2 мин назад"); "Ctrl ]" sits on the row it would switch to. Import / export (JSON in Settings → Данные; .ics and the notes folder) and duplicating a profile are Ctrl K commands. Delete is "Удалить профиль…" with a confirmation (see the r3 entry below; review CHANGE).
 - **DG-152 · Text field menu.** "Удалить" is gone (Cut and Backspace cover it). "Вставить без форматирования" pastes plain text, which every field here keeps anyway. "Ссылка на задачу… [[" is offered in the Markdown editors (task description, notes); the description's menu carries the context line "Описание задачи".
 
 ## Document group (wave 2)
@@ -280,3 +281,35 @@ progressive disclosure, content priority, state preservation). One entry each.
   collapse). Week and month treat the default `is:open` as no search in their empty state, as the
   list does (DG-020). Chips and "Ничего под «…»" read clauses as words (`QueryWords.js`):
   `is:archived` is "статус в архиве".
+
+## Editor & people (0.8.1 r3)
+
+- **R2-020 · Inline code pill.** Qt's rich text cannot stroke an inline span, so the paragraph
+  draws the pill under the text (InlineCodeFrames finds the spans set in the bundled mono): a
+  hairline in quiet, a fill in bold (H2-Knowledge fills, Q-Knowledge strokes — the same split as
+  `Style.chipFill`). No-break spaces outside the span give it the sheet's padding.
+- **R2-024 · "/" menu.** The six rows of the sheet. The "/" is typed as it is and a pick replaces
+  it, so Esc leaves a literal "/" (this replaces "Просто /"). Heading and quote are gone from the
+  menu; they are one keystroke in markdown (`## `, `> `). "Справочник (RFC, ссылка)" inserts a
+  titled link `[](https://)` with the caret on the title — the editor has no other reference
+  shape. "Картинка или файл" stores the files under attachments/ and links them where the "/" was.
+- **R2-042 · "+ Добавить «…» как человека".** The row adds the person at once (name = the typed
+  word, capitalised; id derived; state idle, so they do not enter "Кому написать") and mentions
+  them — no dialog mid-sentence. Enter or Tab on an untouched list never takes that row; the
+  arrows or a click do, so typing "@foo" and Enter in a form still submits.
+- **R2-062 · Note menu.** As the sheet. "Слить с открытой" left the menu; merging stays on drag
+  and drop (a row dropped on another). "Экспорт в .md" writes the same file a folder export writes
+  for that note; attachment links stay relative to lowkey's attachments folder.
+- **R2-063 · Person menu.** "Связанные задачи" opens the people dialog on the person (where
+  DG-002 lists them); inside the dialog that row is not shown. "Удалить человека" is undoable.
+- **R2-069 · Quick note.** Esc closes and keeps the text as the next open's draft (for the
+  session), as the footer says; the discard confirmation is gone. "прикрепить к …" defaults to the
+  task the git branch names; the list offers it and the tasks in progress, plus "Не прикреплять".
+  An attached entry ends with `[[task-id]]`, so the task's backlinks list it.
+- **R2-070 · Markdown folder import.** "Пункты «- [ ]» превращать в задачи" (on, as drawn) turns
+  the open items of new notes into tasks in the default column, in the import's one undo step; a
+  re-import makes none again. "Следить за папкой" is not drawn: lowkey has no folder watch, and a
+  checkbox that does nothing would lie. "Другая папка" reopens the picker.
+- **DG-151 · Profile delete.** "Удалить профиль…" opens the X-Dlg-Small confirmation with the
+  sheet's typed-name field; the danger button unlocks only on the exact name. Ctrl Z still restores
+  the profile afterwards, and the snapshot is taken as before.

@@ -262,7 +262,7 @@ QtObject {
     })
     readonly property var mdPalette: ({
         "text": text, "dim": textDim, "link": mdLink, "code": mdCode,
-        "codeBackground": mdCodeBg, "highlightBackground": mdHighlight,
+        "codeBackground": mdCodeBg, "codeFont": fontMono, "codeSize": String(fsMd), "highlightBackground": mdHighlight,
         "mention": mdMention, "ticket": mdTicket, "tag": mdTag, "math": mdMath
     })
 

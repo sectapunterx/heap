@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.Basic as QQC
+import QtQuick.Dialogs
 import TodoCpp
 
 // A markdown document edited where it is drawn (heap 2, APP-265/269): the
@@ -269,7 +270,8 @@ Item {
             }
             QQC.ContextMenu.menu: TextEditMenu { editor: field; context: root.menuTitle; taskLink: true }
             onTextChanged: if (!root._fieldLoading && root.editing) commitTimer.restart()
-            onActiveFocusChanged: if (!activeFocus && !slashMenu.opened) root._leave(true)
+            // Not while the "/" menu or its file picker holds the keyboard.
+            onActiveFocusChanged: if (!activeFocus && !slashMenu.opened && slashMenu.slashAt < 0) root._leave(true)
 
             Keys.priority: Keys.BeforeItem
             Keys.onShortcutOverride: (event) => {
@@ -333,9 +335,16 @@ Item {
                     return;
                 }
                 // "/" at the start of a line: insert a checklist, code, a link.
+                // The "/" is typed as it is (sheet: "/" and the caret over
+                // the menu); a pick replaces it, Esc leaves it.
                 if (event.text === "/" && (field.cursorPosition === 0
                         || field.text.charAt(field.cursorPosition - 1) === "\n")) {
+                    const at = field.cursorPosition;
+                    field.insert(at, "/");
+                    field.cursorPosition = at + 1;
+                    slashMenu.slashAt = at;
                     slashMenu.popup(field, field.cursorRectangle.x, field.cursorRectangle.y + field.cursorRectangle.height);
+                    slashMenu.currentIndex = 0;
                     event.accepted = true;
                     return;
                 }
@@ -359,23 +368,75 @@ Item {
         }
     }
 
-    // What "/" inserts (sheet X-Oth-Knowledge).
+    // What "/" inserts (R2-024, sheet X/N-Oth-Knowledge): the six rows, the
+    // markdown each one types on the right.
     AppMenu {
         id: slashMenu
         objectName: "md-slash-menu"
+        // Where the typed "/" is; a pick replaces it.
+        property int slashAt: -1
+        function _dropSlash() {
+            const at = slashMenu.slashAt;
+            slashMenu.slashAt = -1;
+            if (at >= 0 && field.text.charAt(at) === "/") {
+                field.remove(at, at + 1);
+                field.cursorPosition = at;
+            }
+        }
         function put(s, back) {
+            slashMenu._dropSlash();
             const at = field.cursorPosition;
             field.insert(at, s);
             field.cursorPosition = at + s.length - (back || 0);
             field.forceActiveFocus();
         }
-        AppMenuItem { objectName: "md-slash-check"; text: I18n.t("md.slash.checklist"); onTriggered: slashMenu.put("- [ ] ") }
-        AppMenuItem { objectName: "md-slash-code"; text: I18n.t("md.slash.code"); onTriggered: slashMenu.put("```\n\n```", 4) }
-        AppMenuItem { objectName: "md-slash-task"; text: I18n.t("md.slash.task"); onTriggered: slashMenu.put("[[]]", 2) }
-        AppMenuItem { objectName: "md-slash-heading"; text: I18n.t("md.slash.heading"); onTriggered: slashMenu.put("## ") }
+        // Closed without a pick (Esc): the caret goes back after the "/".
+        onClosed: Qt.callLater(() => {
+            if (fileDialog.visible) return;
+            slashMenu.slashAt = -1;
+            if (root.editing && !field.activeFocus) field.forceActiveFocus();
+        })
+        AppMenuItem { objectName: "md-slash-check"; text: I18n.t("md.slash.checklist"); keyText: "[]"; onTriggered: slashMenu.put("- [ ] ") }
+        AppMenuItem { objectName: "md-slash-code"; text: I18n.t("md.slash.code"); keyText: "```"; onTriggered: slashMenu.put("```\n\n```", 4) }
+        AppMenuItem { objectName: "md-slash-task"; text: I18n.t("md.slash.task"); keyText: "[["; onTriggered: slashMenu.put("[[]]", 2) }
+        AppMenuItem {
+            objectName: "md-slash-file"
+            text: I18n.t("md.slash.file")
+            onTriggered: {
+                fileDialog.line = view.editFirst;
+                fileDialog.at = slashMenu.slashAt;
+                fileDialog.open();
+            }
+        }
         AppMenuItem { objectName: "md-slash-table"; text: I18n.t("md.slash.table"); onTriggered: slashMenu.put("| | |\n|---|---|\n| | |\n", 0) }
-        AppMenuItem { objectName: "md-slash-quote"; text: I18n.t("md.slash.quote"); onTriggered: slashMenu.put("> ") }
-        AppMenuItem { objectName: "md-slash-slash"; text: I18n.t("md.slash.literal"); onTriggered: slashMenu.put("/") }
+        // A reference: a titled link (the knowledge base's "RFC 6585 ·
+        // 429 Too Many Requests ↗"); the caret on the title.
+        AppMenuItem { objectName: "md-slash-ref"; text: I18n.t("md.slash.reference"); onTriggered: slashMenu.put("[](https://)", 11) }
+    }
+
+    // "Картинка или файл": stored under attachments/, linked where the "/" was.
+    FileDialog {
+        id: fileDialog
+        property int line: -1
+        property int at: -1
+        fileMode: FileDialog.OpenFiles
+        title: I18n.t("md.slash.file")
+        onAccepted: {
+            const list = [];
+            for (let i = 0; i < selectedFiles.length; ++i) list.push(selectedFiles[i]);
+            const added = AppController.importAttachments(list, true);
+            if (!root.editing && fileDialog.line >= 0) root.editLine(fileDialog.line, false);
+            slashMenu.slashAt = fileDialog.at;
+            if (added && added.length > 0) {
+                field.cursorPosition = Math.min(Math.max(0, fileDialog.at + 1), field.length);
+                slashMenu.put(added.map(a => a.ref).join("\n\n"));
+            }
+        }
+        onRejected: {
+            slashMenu.slashAt = -1;
+            if (!root.editing && fileDialog.line >= 0) root.editLine(fileDialog.line, false);
+            else field.forceActiveFocus();
+        }
     }
 
     component MdTailHost: Item {

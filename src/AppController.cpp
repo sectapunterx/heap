@@ -44,10 +44,12 @@
 #include "local/Effective.h"
 #include "markdown/MdHtml.h"
 #include "markdown/MdOutline.h"
+#include "notes/ChecklistItems.h"
 #include "notes/MdVault.h"
 #include "notes/NoteGraph.h"
 #include "notes/NoteLinks.h"
 #include "notify/NotificationCenter.h"
+#include "people/AttendeeMatch.h"
 #include "plan/Carry.h"
 #include "plan/DayPlan.h"
 #include "plan/FreeWindow.h"
@@ -5627,11 +5629,21 @@ QVariantMap AppController::planNotesImport(const QUrl& folderUrl, QVector<heap::
   int unchanged = 0;
   int kept = 0;
   int conflicts = 0;
+  int checklists = 0;
+  int checklistItems = 0;
   for(const heap::notes::VaultPlanItem& it : items) {
     switch(it.action) {
-      case heap::notes::VaultAction::Create:
+      case heap::notes::VaultAction::Create: {
         imported++;
+        // What "- [ ] → tasks" would make (R2-070): new notes only, so a
+        // re-import never makes the same tasks twice.
+        const qsizetype open = heap::notes::openChecklistItems(it.note.body).size();
+        if(open > 0) {
+          checklists++;
+          checklistItems += static_cast<int>(open);
+        }
         break;
+      }
       case heap::notes::VaultAction::Update:
         updated++;
         break;
@@ -5655,6 +5667,8 @@ QVariantMap AppController::planNotesImport(const QUrl& folderUrl, QVector<heap::
   out["unchanged"] = unchanged;
   out["kept"] = kept;
   out["conflicts"] = conflicts;
+  out["checklists"] = checklists;
+  out["checklistItems"] = checklistItems;
   out["skipped"] = skipped;
   out["files"] = static_cast<int>(relatives.size());
   out["warnings"] = warnings;
@@ -5670,7 +5684,7 @@ QVariantMap AppController::previewNotesFolder(const QUrl& folderUrl) {
   return planNotesImport(folderUrl, nullptr);
 }
 
-QVariantMap AppController::importNotesFolder(const QUrl& folderUrl) {
+QVariantMap AppController::importNotesFolder(const QUrl& folderUrl, bool checklistTasks) {
   // The editor's debounced keystrokes are part of the note: without this flush
   // an edit made a moment ago looked "untouched since the last import" and the
   // older file overwrote it.
@@ -5700,6 +5714,24 @@ QVariantMap AppController::importNotesFolder(const QUrl& folderUrl) {
         changed = true;
       }
     }
+    // Asked for in the dialog: each open "- [ ]" of a new note becomes a
+    // task in the first column, in the same undo step.
+    int made = 0;
+    if(checklistTasks) {
+      for(const heap::notes::VaultPlanItem& it : plan) {
+        if(it.action != heap::notes::VaultAction::Create) {
+          continue;
+        }
+        for(const QString& title : heap::notes::openChecklistItems(it.note.body)) {
+          QVariantMap draft = newTaskDraft(QString());
+          draft["title"] = title;
+          if(saveTask(draft)) {
+            made++;
+          }
+        }
+      }
+    }
+    out["tasksMade"] = made;
   }
 
   if(changed) {
@@ -5719,6 +5751,28 @@ QVariantMap AppController::importNotesFolder(const QUrl& folderUrl) {
     scheduleSave();
   }
   return out;
+}
+
+bool AppController::exportNoteToFile(const QString& id, const QUrl& fileUrl) {
+  emit aboutToChangeActiveNote();
+  adoptOrphanNotesState();
+  syncActiveNoteBody();
+  const int row = m_notes.indexOfId(id);
+  const QString path = fileUrl.isLocalFile() ? fileUrl.toLocalFile() : fileUrl.toString();
+  if(row < 0 || path.isEmpty()) {
+    return false;
+  }
+  // The same file a folder export writes for this note (title, front matter).
+  const QVector<heap::notes::VaultFile> files = heap::notes::exportVault({m_notes.items().at(row)});
+  if(files.isEmpty()) {
+    return false;
+  }
+  QSaveFile f(path);
+  if(!f.open(QIODevice::WriteOnly)) {
+    return false;
+  }
+  f.write(files.first().contents.toUtf8());
+  return f.commit();
 }
 
 QVariantMap AppController::exportNotesFolder(const QUrl& folderUrl, const QString& subfolder) {
@@ -6830,6 +6884,44 @@ QVariantMap AppController::personById(const QString& id) const {
   m["state"] = m_people.data(mi, PersonModel::StateRole);
   m["color"] = m_people.data(mi, PersonModel::ColorRole);
   return m;
+}
+
+QVariantMap AppController::personLinks(const QString& id) const {
+  const int row = m_people.indexOfId(id);
+  if(row < 0) {
+    return {};
+  }
+  const Person& p = m_people.items().at(row);
+  QVariantList tasks;
+  for(const WaitingOn& w : m_waitingOn) {
+    const int t = w.personId == p.id ? m_tasks.indexOfId(w.taskId) : -1;
+    if(t < 0) {
+      continue;
+    }
+    const Task& task = m_tasks.items().at(t);
+    const QString key = externalKeyOf(task);
+    tasks.append(QVariantMap{{"id", task.id}, {"key", key.isEmpty() ? task.id : key}, {"title", task.title}});
+  }
+  // Upcoming meetings: the next two weeks, today's only if not over yet.
+  QVariantList meetings;
+  const QTime nowTime = QTime::currentTime();
+  const double nowHour = nowTime.hour() + nowTime.minute() / 60.0;
+  for(const QVariant& v : eventOccurrences(m_today, m_today.addDays(14))) {
+    const QVariantMap e = v.toMap();
+    const QDate day = e.value("date").toDate();
+    if(!heap::people::attendeesName(e.value("attendees").toString(), p.name, p.id)) {
+      continue;
+    }
+    if(day == m_today && !e.value("allDay").toBool() && e.value("end").toDouble() <= nowHour) {
+      continue;
+    }
+    meetings.append(QVariantMap{
+        {"id", e.value("id")}, {"date", day}, {"start", e.value("start")}, {"allDay", e.value("allDay")}, {"title", e.value("title")}});
+    if(meetings.size() >= 5) {
+      break;
+    }
+  }
+  return {{"tasks", tasks}, {"meetings", meetings}};
 }
 
 bool AppController::savePerson(const QVariantMap& draft) {
@@ -12496,7 +12588,10 @@ QVariantList AppController::profiles() const {
     m["id"] = p.id;
     m["name"] = p.name;
     m["color"] = p.color;
-    m["tasks"] = p.tasks.size();
+    // The active profile's copy is refreshed on save; its live models are now.
+    const bool live = p.id == m_activeProfileId;
+    m["tasks"] = live ? m_tasks.items().size() : p.tasks.size();
+    m["notes"] = live ? m_notes.items().size() : p.notes.size();
     m["docs"] = p.docsState.size() > 2 ? 1 : 0;
     m["createdAt"] = p.createdAt.isValid() ? p.createdAt.toString(Qt::ISODate) : QString();
     out.append(m);

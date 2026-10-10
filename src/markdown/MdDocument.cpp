@@ -125,6 +125,8 @@ MdHtmlOptions MdDocument::buildOptions() const {
   options.palette.link = colorAt(m_palette, "link");
   options.palette.code = colorAt(m_palette, "code");
   options.palette.codeBackground = colorAt(m_palette, "codeBackground");
+  options.palette.codeFont = colorAt(m_palette, "codeFont");
+  options.palette.codeSize = colorAt(m_palette, "codeSize");
   options.palette.highlightBackground = colorAt(m_palette, "highlightBackground");
   options.palette.mention = colorAt(m_palette, "mention");
   options.palette.ticket = colorAt(m_palette, "ticket");

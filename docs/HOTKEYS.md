@@ -146,7 +146,7 @@ Arrow keys work alongside the letters.
 
 The List lens of Tasks walks with the same keys (`J` / `K`, `Return`,
 `Space` or `V` to mark, `M`, `E`, `S`, `1`–`4`, `D`); `Z` folds the group the
-cursor is in. `Ctrl+\` shows or hides the day panel beside Board and List.
+cursor is in.
 
 While a card's menu is open its arrows and letters belong to the menu.
 
@@ -246,7 +246,6 @@ listed in the sidebar under *My views*, numbered; `G, 1` … `G, 9` and
 
 | Action | Default |
 |--------|---------|
-| Show / hide the day panel | `Ctrl+\` |
 | Expand / collapse the sidebar | `Ctrl+Shift+B` |
 | Focus mode on / off (once turned on in Settings → Safety net; `Esc` also leaves it) | `Ctrl+Shift+F` |
 
