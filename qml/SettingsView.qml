@@ -1330,7 +1330,7 @@ Item {
                     objectName: "settings-ui-scale"
                     label: I18n.t("settings.appearance.scale")
                     // Unset, the scale is the system's text size (APP-183).
-                    hint: Theme._appearance.uiScale === undefined && Theme.systemScale() !== 1
+                    hint: Theme._appearance.uiScale === undefined && Theme.systemScale() > Theme.defaultScale
                           ? I18n.t("settings.appearance.scale.system")
                           : I18n.t("settings.appearance.scale.hint")
                     value: String(Math.round(Theme.scale * 100))

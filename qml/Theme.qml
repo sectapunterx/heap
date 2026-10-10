@@ -325,12 +325,19 @@ QtObject {
     // Until the user picks one, the system's text size picks it (APP-183):
     // Windows "Make text bigger" at 150 % starts heap at 150 %.
     readonly property var scaleSteps: [0.9, 1, 1.1, 1.25, 1.5]
+    // Unset: 110 % where the system does not scale (100 %, e.g. a 2560 px
+    // monitor), so body text is ~14 px — the sheets' 13 px read as small
+    // there (owner, 0.8.3). Where the system already scales (125 % on a
+    // laptop, 150-200 % on 4K) it stays 100 %: on top of that it doubled up
+    // and the board no longer fit.
+    readonly property real systemPixelRatio: AppController.systemPixelRatio()
+    readonly property real defaultScale: systemPixelRatio > 1.05 ? 1 : 1.1
     // A function, not a property: the system is asked only when needed.
     function systemScale() { return AppController.systemUiScale(scaleSteps); }
     readonly property real scale: {
         const raw = _appearance.uiScale;
         const v = Number(raw);
-        if (raw === undefined || raw === null) return systemScale();
+        if (raw === undefined || raw === null) return Math.max(defaultScale, systemScale());
         return isFinite(v) && v >= 0.9 && v <= 1.5 ? v : 1;
     }
     function px(n) { return Math.round(n * scale); }

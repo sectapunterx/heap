@@ -685,6 +685,7 @@ FocusScope {
                 placeholder: I18n.t("taskdoc.bodyPh")
                 menuTitle: I18n.t("textmenu.title.taskBody")
                 paragraphLineHeight: 1.65
+                wholeDocument: true
                 onEdited: if (!root._loading) { root._dirtyBody = true; saveTimer.restart(); }
                 onEscaped: root.close()
                 onInternalLinkActivated: (kind, target) => root.internalLinkActivated(kind, target)
@@ -1056,6 +1057,15 @@ FocusScope {
             color: Theme.textDim
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsLg
+            // The hint is where the text goes on: a click there types at
+            // the end, and "/" opens the insert menu.
+            ClickArea {
+                objectName: "task-doc-slash-hint-click"
+                label: I18n.t("taskdoc.hint.write")
+                showTip: false
+                cursorShape: Qt.IBeamCursor
+                onActivated: body.appendBlock()
+            }
         }
         TaskCommentDraft {
             id: commentDraft

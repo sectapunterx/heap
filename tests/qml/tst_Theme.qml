@@ -417,12 +417,20 @@ TestCase {
     // Every size sits on the 1.125 scale from 13px (APP-181), not on the
     // old 11/12/13/15/20/28 list.
     function test_type_scale_is_modular() {
-        compare(Theme.scale, 1);
-        const steps = { fsSm: -1, fsMd: 0, fsLg: 1, fsXl: 3, fs2xl: 5 };
-        for (const k in steps)
-            compare(Theme[k], Math.round(13 * Math.pow(1.125, steps[k])), k);
-        compare(Theme.fsXs, 11, "the floor");
-        compare([Theme.fsXl, Theme.fs2xl], [19, 23]);
+        const saved = AppController.appSettingsJson;
+        try {
+            const o = JSON.parse(saved || "{}");
+            o.appearance = Object.assign({}, o.appearance || {}, { uiScale: 1 });
+            AppController.appSettingsJson = JSON.stringify(o);
+            compare(Theme.scale, 1);
+            const steps = { fsSm: -1, fsMd: 0, fsLg: 1, fsXl: 3, fs2xl: 5 };
+            for (const k in steps)
+                compare(Theme[k], Math.round(13 * Math.pow(1.125, steps[k])), k);
+            compare(Theme.fsXs, 11, "the floor");
+            compare([Theme.fsXl, Theme.fs2xl], [19, 23]);
+        } finally {
+            AppController.appSettingsJson = saved;
+        }
     }
 
     // Density moves the spacing scale, not just the hour height: compact
@@ -968,8 +976,11 @@ TestCase {
             delete o.appearance.uiScale;
             AppController.appSettingsJson = JSON.stringify(o);
             compare(Theme.systemScale(), AppController.systemUiScale(Theme.scaleSteps));
-            compare(Theme.scale, Theme.systemScale());
+            // Unset, 110 % on an unscaled screen unless the system asks for
+            // more (0.8.3).
+            compare(Theme.scale, Math.max(Theme.defaultScale, Theme.systemScale()));
             compare(Theme.systemScale(), 1, "tests read a 100 % system");
+            compare(Theme.scale, 1.1);
             o.appearance.uiScale = 1.25;
             AppController.appSettingsJson = JSON.stringify(o);
             compare(Theme.scale, 1.25);

@@ -1538,7 +1538,7 @@ Item {
                                         y: Theme.spXl
                                         width: parent.width
                                         compact: true
-                                        icon: "heap-01-board"
+                                        glyph: "columns"
                                         title: col.filtering ? I18n.t("view.empty.noMatch.title") : I18n.t("kanban.empty")
                                         line: col.filtering ? ""
                                             : (AppController.statusCounts[col.statusId] || 0) > 0 ? I18n.t("kanban.empty.noMatch") : I18n.t("kanban.empty.hint")
