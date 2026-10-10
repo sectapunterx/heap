@@ -72,6 +72,21 @@ Item {
         return AppController.savedViewDiffers(root.activeId, root.currentState());
     }
 
+    // The query a view puts in the filter. A view saved on the archive of
+    // 0.8.0 opens on the list (DG-161/162) and keeps its "is:archived".
+    function appliedQuery(v) {
+        return v.view === "archive" && !/(^|\s)is:archived(\s|$)/i.test(v.query)
+            ? (v.query + " is:archived").trim() : v.query;
+    }
+    // While the filter is exactly the active view's query, a `status:` on a
+    // column deleted since matches nothing — on the board, in the list and in
+    // the sidebar count alike (IDIOT-TASKS-11). A typed query stays tolerant.
+    Binding {
+        target: AppController
+        property: "strictQuery"
+        value: root.activeView ? root.appliedQuery(root.activeView) : ""
+    }
+
     function apply(id) {
         const list = AppController.savedViews;
         let v = null;
@@ -80,9 +95,8 @@ Item {
         const chips = {};
         for (let j = 0; j < v.priorities.length; j++) chips[v.priorities[j]] = true;
         // A view saved on the archive or the timeline of 0.8.0 opens on the
-        // list (DG-161/162); the archive keeps its "is:archived".
-        root.host.searchText = v.view === "archive" && !/(^|\s)is:archived(\s|$)/i.test(v.query)
-            ? (v.query + " is:archived").trim() : v.query;
+        // list (DG-161/162).
+        root.host.searchText = root.appliedQuery(v);
         root.host.prioritiesFilter = chips;
         root.host.boardSortMode = v.sort;
         root.host.showArchived = v.archived;

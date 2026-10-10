@@ -948,8 +948,12 @@ QVariantMap AppController::estimateSummary(const QStringList& ids) const {
 
 // ── APP-250: queries that need the other rows ──
 
+bool AppController::isStrictQuery_(const QString& text) const {
+  return !m_strictQuery.isEmpty() && text.simplified() == m_strictQuery.simplified();
+}
+
 heap::query::TaskQuery AppController::compileTaskQuery_(const QString& text) const {
-  heap::query::TaskQuery q = heap::query::TaskQuery::compile(text, m_today, m_statuses, m_syncNewIds);
+  heap::query::TaskQuery q = heap::query::TaskQuery::compile(text, m_today, m_statuses, m_syncNewIds, isStrictQuery_(text));
   if(q.usesBlocked()) {
     q.setBlockedIds(heap::query::openlyBlockedIds(m_tasks.items(), [this](const Task& t) {
       return statusCategory(t.status) == QStringLiteral("done");

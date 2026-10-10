@@ -7,7 +7,9 @@ namespace heap::savedviews {
 
 CompiledView compile(const SavedView& v, const QDate& today, const QVariantList& statuses) {
   CompiledView c;
-  c.query = heap::query::TaskQuery::compile(v.query, today.isValid() ? today : QDate::currentDate(), statuses);
+  // A stored query is strict: a view on a deleted column counts nothing, as
+  // opening it shows (IDIOT-TASKS-11).
+  c.query = heap::query::TaskQuery::compile(v.query, today.isValid() ? today : QDate::currentDate(), statuses, {}, true);
   c.freeText = c.query.freeText();
   c.priorities = v.priorities;
   c.archivedOnly = v.view == QLatin1String("archive");

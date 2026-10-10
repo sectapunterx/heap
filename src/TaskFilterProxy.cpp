@@ -81,7 +81,7 @@ void TaskFilterProxy::setSearchText(const QString& v) {
   m_rawSearch = v;
   // Compiled once per keystroke, not once per row: resolving `deadline:<friday`
   // runs the date parser, which has no business being in a per-row predicate.
-  m_query = heap::query::TaskQuery::compile(v, m_today.isValid() ? m_today : QDate::currentDate(), m_statuses, m_newIds);
+  m_query = recompile_(v);
   m_searchText = m_query.freeText();
   refilter();
   emit filterChanged();
@@ -94,7 +94,7 @@ void TaskFilterProxy::setToday(const QDate& d) {
   }
   m_today = d;
   // Relative clauses ("deadline:today") mean a different day now.
-  m_query = heap::query::TaskQuery::compile(m_rawSearch, m_today.isValid() ? m_today : QDate::currentDate(), m_statuses, m_newIds);
+  m_query = recompile_(m_rawSearch);
   m_searchText = m_query.freeText();
   refilter();
   emit filterChanged();
@@ -110,7 +110,28 @@ void TaskFilterProxy::setStatuses(const QVariantList& v) {
     emit filterChanged();
     return;
   }
-  m_query = heap::query::TaskQuery::compile(m_rawSearch, m_today.isValid() ? m_today : QDate::currentDate(), m_statuses, m_newIds);
+  m_query = recompile_(m_rawSearch);
+  m_searchText = m_query.freeText();
+  refilter();
+  emit filterChanged();
+  emit countChanged();
+}
+
+heap::query::TaskQuery TaskFilterProxy::recompile_(const QString& text) const {
+  const bool strict = !m_strictQuery.isEmpty() && text.simplified() == m_strictQuery.simplified();
+  return heap::query::TaskQuery::compile(text, m_today.isValid() ? m_today : QDate::currentDate(), m_statuses, m_newIds, strict);
+}
+
+void TaskFilterProxy::setStrictQuery(const QString& v) {
+  if(m_strictQuery == v) {
+    return;
+  }
+  m_strictQuery = v;
+  if(m_rawSearch.isEmpty()) {
+    emit filterChanged();
+    return;
+  }
+  m_query = recompile_(m_rawSearch);
   m_searchText = m_query.freeText();
   refilter();
   emit filterChanged();
@@ -127,7 +148,7 @@ void TaskFilterProxy::setNewIds(const QStringList& v) {
     emit filterChanged();
     return;
   }
-  m_query = heap::query::TaskQuery::compile(m_rawSearch, m_today.isValid() ? m_today : QDate::currentDate(), m_statuses, m_newIds);
+  m_query = recompile_(m_rawSearch);
   m_searchText = m_query.freeText();
   refilter();
   emit filterChanged();

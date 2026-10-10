@@ -98,6 +98,10 @@ class AppController : public QObject {
   // view id → how many tasks opening it shows. One pass for all views, cached
   // until a task, a column, the day or the views change.
   Q_PROPERTY(QVariantMap savedViewCounts READ savedViewCounts NOTIFY savedViewCountsChanged)
+  // The applied saved view's stored query, "" when none (SavedViewsHost sets
+  // it). A search that is exactly this compiles strictly: a `status:` on a
+  // deleted column matches nothing, in every view and count (IDIOT-TASKS-11).
+  Q_PROPERTY(QString strictQuery READ strictQuery WRITE setStrictQuery NOTIFY strictQueryChanged)
   // Moves at local midnight, on resume and on a clock or zone change: every
   // "today" in the UI binds to this, so after midnight T goes to the new day.
   Q_PROPERTY(QDate today READ today NOTIFY todayChanged)
@@ -1556,6 +1560,12 @@ class AppController : public QObject {
   // is one undo step with a toast. Names are made unique ("Name (2)").
   QVariantList savedViews() const;
   QVariantMap savedViewCounts() const;
+
+  QString strictQuery() const {
+    return m_strictQuery;
+  }
+
+  void setStrictQuery(const QString& q);
   // Returns the new view's id; "" when there is no profile.
   Q_INVOKABLE QString saveView(const QString& name, const QVariantMap& state);
   Q_INVOKABLE bool renameSavedView(const QString& id, const QString& name);
@@ -1977,6 +1987,7 @@ class AppController : public QObject {
   void taskTitlesChanged();
   void savedViewsChanged();
   void savedViewCountsChanged();
+  void strictQueryChanged();
   // `routeId` ("meeting:<event id>") makes it a reminder with buttons
   // (APP-155); empty for a plain heads-up.
   void notification(const QString& title, const QString& body, const QString& kind, const QString& routeId = QString());
@@ -2423,6 +2434,9 @@ class AppController : public QObject {
   // TaskQuery::compile with this board's statuses and new ids, and the
   // blocked set when the query asks `is:blocked` (APP-250).
   heap::query::TaskQuery compileTaskQuery_(const QString& text) const;
+  // Whether `text` is the applied saved view's own query (strictQuery).
+  bool isStrictQuery_(const QString& text) const;
+  QString m_strictQuery;
   bool m_followingCards = false;
   // Keeps a task's scheduledAt on the focus block it came from: moved with
   // it, cleared when it is deleted (after == nullptr).

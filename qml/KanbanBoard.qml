@@ -12,6 +12,9 @@ Item {
     property string searchText: ""
     readonly property var stages: ["backlog", "todo", "prog", "half", "blocked", "review", "done"]
     readonly property string _searchKeepDone: root.searchText.replace(/(^|\s)is:open(?=\s|$)/gi, " ").trim()
+    // The applied saved view's query, as the folded Done column reads it:
+    // strict there too (IDIOT-TASKS-11).
+    readonly property string _strictKeepDone: AppController.strictQuery.replace(/(^|\s)is:open(?=\s|$)/gi, " ").trim()
     // How every column is ordered. "manual" is the board's own rank, which is
     // what a drag writes; the others are read-only views over the same cards,
     // so switching back to manual restores the order the user arranged rather
@@ -1713,6 +1716,7 @@ Item {
                         // of sight: "не готово" leaves its count and its cards
                         // to it (H2-Board shows "Готово 2").
                         searchText: col.isDone && col.board ? col.board._searchKeepDone : root.searchText
+                        strictQuery: col.isDone && col.board ? col.board._strictKeepDone : AppController.strictQuery
                         priorities: root.activePriorities
                         sortMode: root.sortMode
                         today: AppController.today
@@ -2015,6 +2019,7 @@ Item {
         statuses: AppController.statuses
         showArchived: root.showArchived
         searchText: root.searchText
+        strictQuery: AppController.strictQuery
         priorities: root.activePriorities
         today: AppController.today
     }

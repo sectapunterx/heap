@@ -54,6 +54,16 @@ QVariantList AppController::savedViews() const {
   return out;
 }
 
+void AppController::setStrictQuery(const QString& q) {
+  if(m_strictQuery == q) {
+    return;
+  }
+  m_strictQuery = q;
+  emit strictQueryChanged();
+  // The counts and lists under the filters read it.
+  emit statusCountsChanged();
+}
+
 QStringList AppController::savedViewsUsingStatus(const QString& statusId) const {
   QStringList out;
   for(const SavedView& v : m_savedViews) {

@@ -448,4 +448,38 @@ TestCase {
         tc.win.searchText = "is:open priority:p1 priority:p1";
         compare(tc.host.currentState().query, "is:open priority:p1");
     }
+
+    // IDIOT-TASKS-11 (owner: option a): a view whose column was deleted shows
+    // nothing — on the board, in the counts and in the sidebar badge alike —
+    // while the same clause typed by hand is still dropped as a typo.
+    function test_a_view_on_a_deleted_column_shows_nothing() {
+        AppController.addStatus("SV Gone", "");
+        const gone = AppController.statuses.find(st => st.name === "SV Gone").id;
+        const d = AppController.newTaskDraft(gone);
+        d._isNew = true;
+        d.id = "SVQ-G";
+        d.title = "svprobe gone card";
+        AppController.saveTask(d);
+        tc.seeded.push(d.id);
+        const id = mkView("Gone only", "svprobe status:" + gone);
+        tryVerify(function () { return AppController.savedViewCounts[id] === 1; }, 1000);
+        AppController.deleteStatus(gone, "todo");
+        tc.host.apply(id);
+        AppController.currentView = "board";
+        wait(100);
+        compare(AppController.strictQuery, "svprobe status:" + gone);
+        tryVerify(function () { return AppController.savedViewCounts[id] === 0; }, 1000, "the badge counts every task");
+        compare(AppController.filteredCounts(tc.win.searchText, [], false).total, 0, "the counter shows every task");
+        const b = tc.win.activeViewItem();
+        let shown = 0;
+        const cols = b._visibleByColumn();
+        for (let i = 0; i < cols.length; i++) shown += cols[i].ids.length;
+        compare(shown, 0, "the board shows every svprobe task");
+        // Typed by hand, the unknown column is a typo and is dropped.
+        tc.win.searchText = "svprobe card status:" + gone;
+        wait(50);
+        verify(AppController.filteredCounts(tc.win.searchText, [], false).total > 0, "a typed typo emptied the board");
+        tc.host.leave();
+        compare(AppController.strictQuery, "");
+    }
 }

@@ -71,7 +71,7 @@ QVariantList AppController::undatedTasks(const QString& search) const {
   // for someday), narrowed by the section's query, so the tray, the list and
   // Today count the same tasks.
   const QString text = QStringLiteral("is:undated ") + search;
-  const heap::query::TaskQuery q = heap::query::TaskQuery::compile(text, m_today, m_statuses, m_syncNewIds);
+  const heap::query::TaskQuery q = heap::query::TaskQuery::compile(text, m_today, m_statuses, m_syncNewIds, isStrictQuery_(search));
   QVariantList out;
   for(int row = 0; row < m_tasks.rowCount(); ++row) {
     if(!passesFilter_(row, q, {}, false, true)) {

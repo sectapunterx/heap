@@ -311,6 +311,27 @@ TEST(TaskQuery, NonsenseIsReportedNotSilentlySearched) {
   EXPECT_TRUE(qc(QStringLiteral("https://x/y")).unknownClauses().isEmpty());
 }
 
+// IDIOT-TASKS-11: a saved view's stored query is strict about columns. A
+// typed query drops a status that names no column; a saved one matches
+// nothing for it, and still reports it.
+TEST(TaskQuery, AStrictQueryMatchesNothingForAGoneColumn) {
+  QVariantList cols;
+  cols << QVariantMap{{"id", "todo"}, {"name", "To Do"}} << QVariantMap{{"id", "done"}, {"name", "Done"}};
+  const Task open = mk(QStringLiteral("A"), QStringLiteral("todo"));
+  const TaskQuery typed = TaskQuery::compile(QStringLiteral("status:review"), kToday, cols);
+  EXPECT_TRUE(typed.matches(open)) << "a typed typo narrowed to nothing";
+  EXPECT_TRUE(typed.unknownClauses().contains(QStringLiteral("status:review")));
+  const TaskQuery strict = TaskQuery::compile(QStringLiteral("status:review"), kToday, cols, {}, true);
+  EXPECT_FALSE(strict.matches(open)) << "a view on a deleted column showed every task";
+  EXPECT_TRUE(strict.unknownClauses().contains(QStringLiteral("status:review")));
+  // A column it still names keeps matching; the gone one adds nothing.
+  const TaskQuery partly = TaskQuery::compile(QStringLiteral("status:review,todo"), kToday, cols, {}, true);
+  EXPECT_TRUE(partly.matches(open));
+  EXPECT_FALSE(partly.matches(mk(QStringLiteral("B"), QStringLiteral("done"))));
+  // Negated, a gone column excludes nothing.
+  EXPECT_TRUE(TaskQuery::compile(QStringLiteral("-status:review"), kToday, cols, {}, true).matches(open));
+}
+
 // ─── APP-250: planning clauses ───
 
 TEST(TaskQueryPlanning, ScheduledReadsLikeDue) {
