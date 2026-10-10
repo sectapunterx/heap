@@ -167,7 +167,10 @@ jobs:
   tidy:
     name: clang-tidy
     needs: changes
-    if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
+    # Pushes (master, feature) only warm the build cache below for the PRs.
+    if: >-
+      ${{ (github.event_name == 'pull_request' && needs.changes.outputs.code == 'true')
+          || (github.event_name == 'push' && github.ref_type == 'branch') }}
     runs-on: ubuntu-24.04
     # A release PR (feature -> master) touches hundreds of files; 25 minutes
     # cut it off before it finished.
@@ -178,11 +181,42 @@ jobs:
           fetch-depth: 2
 
       - name: Install toolchain
+        id: toolchain
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             clang-tidy-18 cmake ninja-build \
             qt6-base-dev qt6-declarative-dev qt6-tools-dev qt6-networkauth-dev libgl1-mesa-dev libxcb1-dev
+          # Generated code is only reusable with the moc that wrote it.
+          echo "qt=$(dpkg-query -W -f='${Version}' qt6-base-dev qt6-declarative-dev | sha256sum | cut -c1-12)" >> "$GITHUB_OUTPUT"
+
+      # Generating every target's moc/qmltyperegistrations output took three
+      # of the job's four minutes. The build tree a push left behind is
+      # restored instead, and only what changed since is generated again.
+      # Pushes save it; a PR only restores (see the ccache note in `build`).
+      - name: Restore the build tree
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build
+          key: tidy-build-${{ steps.toolchain.outputs.qt }}-${{ github.sha }}
+          restore-keys: tidy-build-${{ steps.toolchain.outputs.qt }}-
+
+      # A checkout stamps every file with the current time, which would make
+      # ninja take all of the restored tree as out of date. Every tracked file
+      # is dated far back instead, and those that changed since the commit the
+      # tree was built from are dated now, so exactly they are regenerated.
+      # Without that commit to compare with, everything is regenerated.
+      - name: Date the sources for ninja
+        run: |
+          set -uo pipefail
+          from=$(cat build/.source-sha 2>/dev/null || true)
+          [ -n "$from" ] || { echo "no restored build tree"; exit 0; }
+          if ! git fetch --quiet --depth=1 origin "$from"; then
+            echo "commit $from is gone: regenerating everything"; exit 0
+          fi
+          git ls-files -z | xargs -0 touch -h -d '2000-01-01 00:00:00'
+          git diff --name-only -z "$from" HEAD | xargs -0 -r touch -h -c --
+          echo "changed since $from: $(git diff --name-only "$from" HEAD | wc -l) files"
 
       # Tests included, so test sources have compile commands too; every
       # target's moc/autogen output must exist or clang-tidy cannot parse it.
@@ -193,8 +227,17 @@ jobs:
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
           ninja -C build -t targets all | sed -nE 's/^([A-Za-z0-9_]+_(autogen|qmltyperegistrations)):.*/\1/p' \
             | sort -u | xargs ninja -C build
+          git rev-parse HEAD > build/.source-sha
+
+      - name: Save the build tree
+        if: github.event_name == 'push' && github.ref_type == 'branch'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build
+          key: tidy-build-${{ steps.toolchain.outputs.qt }}-${{ github.sha }}
 
       - name: Check the changed lines
+        if: github.event_name == 'pull_request'
         run: |
           set -uo pipefail
           # clang-tidy-diff exits non-zero on its own findings; the verdict is
