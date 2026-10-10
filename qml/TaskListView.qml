@@ -19,6 +19,8 @@ Item {
 
     property string searchText: ""
     property var prioritiesFilter: ({})
+    // H2-List insets rows 8px, Q-List 10px (R3-034).
+    readonly property int _rowInset: Style.fills ? Theme.spMd : Theme.spLg
     property bool showArchived: false
     // date | status | priority | profile
     property string groupBy: "date"
@@ -235,8 +237,9 @@ Item {
             objectName: "task-list"
             Layout.fillWidth: true
             Layout.fillHeight: root.taskCount > 0
-            Layout.leftMargin: Theme.pagePadX - Theme.spMd
-            Layout.rightMargin: Theme.pagePadX - Theme.spMd
+            // Rows and headers sit inset from the query bar's edge (R3-034).
+            Layout.leftMargin: Theme.pagePadX
+            Layout.rightMargin: Theme.pagePadX
             // Quiet rows keep to a reading width (Q-List: 900 px, DG-032).
             Layout.maximumWidth: Style.fills ? -1 : Theme.px(900)
             clip: true
@@ -266,7 +269,7 @@ Item {
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
                     anchors.bottomMargin: Theme.spMd
-                    anchors.leftMargin: Theme.spMd
+                    anchors.leftMargin: root._rowInset
                     implicitHeight: headRow.implicitHeight
                     readonly property bool folded: row.isGroup && root.isFolded(row.modelData.groupId)
                     RowLayout {
@@ -281,6 +284,9 @@ Item {
                         SectionHeader {
                             objectName: "list-group-" + (row.isGroup ? row.modelData.groupId : "")
                             title: row.isGroup ? root.groupTitle(row.modelData) : ""
+                            // H2-List 15/600, Q-List 14/500 (R3-034).
+                            titleSize: Style.fills ? Theme.fsLg : Theme.px(14)
+                            titleWeight: Style.fills ? Theme.fwHeading : Theme.fwTitle
                             // Quiet group titles are plain (Q-List).
                             titleColor: !Style.fills ? Theme.textMuted
                                       : row.isGroup && row.modelData.key === "today" ? Theme.signalNow
@@ -331,8 +337,8 @@ Item {
                         // Over the row's MouseArea, so "вернуть" takes its own click.
                         z: 1
                         anchors.fill: parent
-                        anchors.leftMargin: Theme.spMd
-                        anchors.rightMargin: Theme.spMd
+                        anchors.leftMargin: root._rowInset
+                        anchors.rightMargin: root._rowInset
                         spacing: Theme.spLg
                         Item {
                             Layout.preferredWidth: Theme.statusRingSize
@@ -368,7 +374,7 @@ Item {
                         // Bold: key before the title; quiet: after it (Q-List).
                         Text {
                             objectName: "list-row-key"
-                            visible: Style.chipFill
+                            visible: Style.chipFill && !root._archive
                             Layout.preferredWidth: Theme.px(68)
                             text: row.isGroup ? "" : row.modelData.key
                             textFormat: Text.PlainText
@@ -382,15 +388,16 @@ Item {
                             Layout.fillWidth: true
                             text: row.isGroup ? "" : row.modelData.title
                             textFormat: Text.PlainText
-                            color: Theme.text
+                            // An archive row is a quiet record (X/N-Oth-Archive-People).
+                            color: root._archive ? Theme.textMuted : Theme.text
                             font.family: Theme.fontUi
                             font.pixelSize: Theme.fsMd
-                            font.weight: Theme.fwTaskTitle
+                            font.weight: root._archive ? Theme.fwBody : Theme.fwTaskTitle
                             elide: Text.ElideRight
                         }
                         Rectangle {
                             objectName: "list-row-label"
-                            visible: Style.chipFill && !row.isGroup && String(row.modelData.label || "").length > 0
+                            visible: Style.chipFill && !root._archive && !row.isGroup && String(row.modelData.label || "").length > 0
                             radius: Theme.radiusSm
                             color: Theme.chipBg
                             implicitWidth: Math.min(Theme.px(120), labelT.implicitWidth + 2 * Theme.spSm)
@@ -409,7 +416,7 @@ Item {
                         }
                         Text {
                             objectName: "list-row-key-quiet"
-                            visible: !Style.chipFill
+                            visible: !Style.chipFill && !root._archive
                             text: row.isGroup ? "" : row.modelData.key
                             textFormat: Text.PlainText
                             color: Theme.textDim
@@ -418,6 +425,7 @@ Item {
                         }
                         Text {
                             objectName: "list-row-priority"
+                            visible: !root._archive
                             readonly property string pri: row.isGroup ? "" : String(row.modelData.priority || "")
                             Layout.preferredWidth: Theme.px(24)
                             text: Theme.priorityShown(pri) ? pri : ""
@@ -426,8 +434,21 @@ Item {
                             font.pixelSize: Theme.fsXs
                             font.weight: Theme.fwTitle
                         }
+                        // The archive row's facts: "APP-111 · 6 окт", the key and the
+                        // day it left (R3-055).
+                        Text {
+                            objectName: "list-row-archived"
+                            visible: root._archive
+                            text: row.isGroup ? "" : root.archivedFacts(row.modelData)
+                            textFormat: Text.PlainText
+                            color: Theme.textDim
+                            font.family: Theme.fontUi
+                            font.features: Theme.tabularNums
+                            font.pixelSize: Theme.fsSm
+                        }
                         Text {
                             objectName: "list-row-date"
+                            visible: !root._archive
                             Layout.minimumWidth: Theme.px(110)
                             horizontalAlignment: Text.AlignRight
                             readonly property var d: row.isGroup ? null : root.rowDate(row.modelData)
@@ -560,6 +581,8 @@ Item {
         return I18n.t("list.group." + g.key);
     }
     function groupNote(g) {
+        // "Октябрь 6": an archive month carries its count (R3-056).
+        if (g.key === "month") return String(g.count);
         const from = g.from, to = g.to;
         if (!from || !from.getTime) return "";
         if (g.key === "today" || g.key === "tomorrow") return I18n.fmtDate(from, "weekdayDay");
@@ -569,6 +592,11 @@ Item {
             return (sameMonth ? String(from.getDate()) : I18n.fmtDate(from, "dayMonth")) + " – " + I18n.fmtDate(to, "dayMonth");
         }
         return "";
+    }
+    function archivedFacts(r) {
+        const c = r.changed;
+        const day = c && c.getTime && !isNaN(c.getTime()) ? I18n.fmtDate(c, "dayMonth") : "";
+        return day.length > 0 ? r.key + " · " + day : r.key;
     }
     // The date a row shows: when, else the deadline.
     function rowDate(r) {

@@ -887,6 +887,9 @@ ApplicationWindow {
                 { label: I18n.t("tracker.readOnly.archive"), fn: function () { AppController.setArchived(taskId, true) } }
             ], 10, "warning");
         }
+        function onTrackerWriteAsk(taskId, key, title, tracker, providerId, from, to) {
+            trackerWriteAsk.ask(taskId, key, title, tracker, providerId, from, to);
+        }
         function onTrackerPushNeedsConfirm(taskId, key, title, tracker, remoteStatus, target) {
             trackerPushConfirm.ask(taskId, key, title, tracker, remoteStatus, target);
         }
@@ -948,14 +951,9 @@ ApplicationWindow {
                 AppController.undoEntry(serial)
             }, "success", AppController.shortcutText("undo"));
         }
-        // "Done" with no column of that stage: offer to make one (APP-268).
-        function onDoneColumnMissing() {
-            toast.showWithAction(I18n.t("done.noColumn"), I18n.t("done.noColumn.create"), 10, function () {
-                AppController.addStatus(I18n.t("done.columnName"), "");
-                const sts = AppController.statuses;
-                AppController.setStatusCategory(sts[sts.length - 1].id, "done");
-            }, "warning");
-        }
+        // "Done" with no column of that stage: a card that offers to make
+        // one or to give a column the stage (X/N-Err-Empty, R3-137).
+        function onDoneColumnMissing() { noDoneColumn.open(); }
         // A newer release was found. When heap can update this copy itself
         // the action downloads it (APP-125); otherwise it opens the release page.
         // The sidebar says it in one quiet line (X/N-Ntf-OS, R2-053):
@@ -1340,6 +1338,7 @@ ApplicationWindow {
                             AppController.currentView = "day";
                         }
                         onTaskCaptureRequested: (text) => quickCapture.openWithText(text)
+                        onScheduleRequested: (id) => schedulePopup.openFor([id], "scheduled")
                     }
                 }
                 Component {
@@ -2760,6 +2759,7 @@ ApplicationWindow {
     // "Send the status anyway?" for an issue the check found outside the
     // filter (APP-204). Cancel is the default.
     TrackerPushConfirmDialog { id: trackerPushConfirm }
+    TrackerWriteAskDialog { id: trackerWriteAsk }
     // Errors & sync (0.8.1): the damaged-file card at launch, the keychain
     // card, the report form, the sync sources, what's new (R2-037…054).
     DamagedFileDialog { id: damagedFile }
@@ -2867,6 +2867,41 @@ ApplicationWindow {
     }
 
     // s / Shift S (APP-278): when, or the deadline, in one small field.
+    SmallDialog {
+        id: noDoneColumn
+        objectName: "no-done-column"
+        parent: Overlay.overlay
+        title: I18n.t("done.noColumn.title")
+        fact: I18n.t("done.noColumn.fact")
+        onOpened: noDoneKeys.forceActiveFocus()
+        onAccepted: noDoneColumn.createColumn()
+        function createColumn() {
+            noDoneColumn.close();
+            AppController.addStatus(I18n.t("done.columnName"), "");
+            const sts = AppController.statuses;
+            AppController.setStatusCategory(sts[sts.length - 1].id, "done");
+        }
+        Item {
+            id: noDoneKeys
+            focus: true
+            Keys.onReturnPressed: noDoneColumn.accepted()
+            Keys.onEnterPressed: noDoneColumn.accepted()
+        }
+        buttons: [
+            PillButton {
+                objectName: "no-done-column-pick"
+                text: I18n.t("done.noColumn.pick")
+                onClicked: { noDoneColumn.close(); win.runCommand("settings:tasks"); }
+            },
+            PillButton {
+                objectName: "no-done-column-create"
+                text: I18n.t("done.noColumn.create")
+                solid: Style.fills
+                primary: true
+                onClicked: noDoneColumn.createColumn()
+            }
+        ]
+    }
     SchedulePopup {
         id: schedulePopup
         parent: win.contentItem

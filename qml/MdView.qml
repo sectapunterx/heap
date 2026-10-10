@@ -83,6 +83,9 @@ ListView {
     // The rule under the top two heading levels. Knowledge draws the note
     // as a plain document without them (sheet H2-Knowledge, DG-071).
     property bool headingRules: true
+    // A paragraph's line height as a factor (0 = the font's own); the task
+    // document reads at 1.65 (H2-Task / Q-Task, R3-038).
+    property real paragraphLineHeight: 0
 
     function _handleLink(link, line) {
         if (link.startsWith("heap://")) {
@@ -228,6 +231,9 @@ ListView {
                     Layout.alignment: Qt.AlignTop
                     Layout.topMargin: Theme.sp2xs
                     active: rowItem.model.marker !== "" || rowItem.model.taskState >= 0
+                    // No marker, no column: an empty one still took the
+                    // row's spacing and set prose 8px right of the title (R3-037).
+                    visible: active
                     sourceComponent: rowItem.model.taskState >= 0 ? taskBox : bulletLabel
                 }
                 TextEdit {
@@ -238,7 +244,9 @@ ListView {
                     selectByMouse: true
                     wrapMode: TextEdit.Wrap
                     textFormat: TextEdit.RichText
-                    text: rowItem.model.html
+                    text: view.paragraphLineHeight > 0
+                          ? "<div style=\"line-height:" + Math.round(view.paragraphLineHeight * 100) + "%\">" + rowItem.model.html + "</div>"
+                          : rowItem.model.html
                     color: Theme.text
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsLg

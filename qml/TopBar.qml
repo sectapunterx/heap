@@ -172,10 +172,12 @@ Rectangle {
     RowLayout {
         id: headRow
         Layout.fillWidth: true
-        spacing: Theme.spXl
+        // Q-Board: 28px from the title to the tabs (R3-032).
+        spacing: Style.fills ? Theme.spXl : Theme.px(28)
 
         Text {
             objectName: "view-header-title"
+            Layout.alignment: Style.fills ? Qt.AlignVCenter : Qt.AlignBaseline
             text: root.title
             color: Theme.text
             font.family: Theme.fontUi
@@ -187,6 +189,7 @@ Rectangle {
         LensTabs {
             id: lensTabs
             objectName: "view-header-lenses"
+            Layout.alignment: Style.fills ? Qt.AlignVCenter : Qt.AlignBaseline
             visible: root.lenses.length > 0
             model: root.lenses
             current: root.lens

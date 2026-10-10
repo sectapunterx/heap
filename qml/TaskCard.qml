@@ -145,15 +145,16 @@ Rectangle {
     // heap 2 (APP-262): a card is a surface without a border; the cursor and
     // the selection are told apart by shape (ring, check), not by an outline
     // colour.
-    border.color: dragArea.drag.active ? Theme.accent
+    // Lifted, the card is an opaque surface with no accent edge (R3-052).
+    border.color: dragArea.drag.active ? "transparent"
                 : _isStuck ? Theme.danger
                 // Out of step with the tracker (R2-034): the edge says so —
                 // amber / red in bold, a plain line in quiet.
                 : markT.conflict ? (Style.urgency ? Theme.danger : Theme.borderStrong)
                 : markT.pending ? (Style.urgency ? Theme.warning : Theme.borderStrong)
                 : "transparent"
-    border.width: dragArea.drag.active || _isStuck ? 2 : 1
-    opacity: dragArea.drag.active ? 0.92 : (_isArchived ? 0.7 : 1.0)
+    border.width: _isStuck && !dragArea.drag.active ? 2 : 1
+    opacity: dragArea.drag.active ? 1.0 : (_isArchived ? 0.7 : 1.0)
     scale: dragArea.drag.active ? 1.03 : 1.0
     transformOrigin: Item.Center
     z: dragArea.drag.active ? 1000 : 0
@@ -270,6 +271,31 @@ Rectangle {
     // drop into another column.
     readonly property bool _lifted: dragArea.drag.active && card.dragLayer !== null
     property Item _homeParent: null
+    // Where the lifted card came from keeps a dashed, faded placeholder
+    // (X/N-Oth-Select-Drag, R3-051).
+    property Item _origin: null
+    Component.onDestruction: if (card._origin) card._origin.destroy()
+    Component {
+        id: originComp
+        DashedRect {
+            objectName: "tc-drag-origin"
+            opacity: 0.35
+            radius: Theme.radius
+            Text {
+                anchors.fill: parent
+                anchors.margins: Theme.spLg
+                text: card.task ? card.task.title : ""
+                textFormat: Text.PlainText
+                color: Theme.textMuted
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsMd
+                font.weight: Theme.fwTaskTitle
+                wrapMode: Text.Wrap
+                maximumLineCount: 2
+                elide: Text.ElideRight
+            }
+        }
+    }
     // Where the card was let go, in window coordinates: a card dropped back
     // where it came from glides home from there instead of jumping (APP-167).
     property var _dropAt: null
@@ -296,10 +322,12 @@ Rectangle {
         if (card._lifted) {
             const p = card.mapToItem(card.dragLayer, 0, 0);
             card._homeParent = card.parent;
+            card._origin = originComp.createObject(card.parent, { x: card.x, y: card.y, width: card.width, height: card.height });
             card.parent = card.dragLayer;
             card.x = p.x;
             card.y = p.y;
         } else if (card._homeParent) {
+            if (card._origin) { card._origin.destroy(); card._origin = null; }
             card.parent = card._homeParent;
             card._homeParent = null;
             // Back in the list: the list owns x/y, so put the card where it
@@ -434,6 +462,8 @@ Rectangle {
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
             font.weight: Theme.fwTaskTitle
+            // H2-Board 1.35, Q-Board 1.4 (R3-031).
+            lineHeight: Style.fills ? 1.35 : 1.4
             // Wrap, not WordWrap: a URL or a long identifier has no space to
             // break at and ran off the card (TASKS-27).
             wrapMode: Text.Wrap
@@ -537,14 +567,14 @@ Rectangle {
                 }
             }
             Item { Layout.fillWidth: true }
-            // P0 and P1 only on a compact card (APP-262); the detailed one
-            // (APP-281 A1) shows any priority, P2 and P3 in dim text.
+            // P0 and P1 in bold, P0 only in quiet (R3-030); P2 and P3 are
+            // blank on every card, as H2-Board / Q-Board draw them.
             Text {
                 id: priT
                 objectName: "tc-priority"
                 readonly property string pri: card.task ? String(card.task.priority || "") : ""
                 readonly property bool loud: pri === "P0" || pri === "P1"
-                visible: pri.length > 0 && (loud || Style.detailedCards)
+                visible: Theme.priorityShown(pri)
                 text: pri
                 color: loud ? Theme.priorityInk(pri) : Theme.textDim
                 font.family: Theme.fontUi

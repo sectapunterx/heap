@@ -27,6 +27,7 @@ Item {
     // "New task at this time" on an empty slot (DG-045): the capture, with
     // the time typed in.
     signal taskCaptureRequested(string text)
+    signal scheduleRequested(string id)
 
     // What the shell's keys act on (step, moves): the grid on screen.
     readonly property var calendarView: inner.item
@@ -110,6 +111,7 @@ Item {
             onCreateRequested: (hour, day) => root.createRequested(hour, Math.min(24, hour + 1), day)
             onCreateRangeRequested: (startHour, endHour, day) => root.createRequested(startHour, endHour, day)
             onTaskCaptureRequested: (text) => root.taskCaptureRequested(text)
+            onScheduleRequested: (id) => root.scheduleRequested(id)
             onDayRequested: (day) => root.dayRequested(day)
         }
     }

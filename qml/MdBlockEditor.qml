@@ -25,6 +25,7 @@ Item {
     // How [[targets]] read (APP-269): AppController.wikiTargets(text).
     property var wikiTargets: ({})
     property bool headingRules: true
+    property real paragraphLineHeight: 0
     // Drawn under the last block, inside the scroll (the task document's
     // plan and hint, DG-062): the item gets `width` set to the text column.
     property Component tail: null
@@ -181,6 +182,7 @@ Item {
         objectName: "md-block-view"
         anchors.fill: parent
         headingRules: root.headingRules
+        paragraphLineHeight: root.paragraphLineHeight
         document: doc
         editorDocument: src.textDocument
         clickToEdit: !root.readOnly

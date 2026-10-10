@@ -832,17 +832,63 @@ Item {
                     // No frame and no fill (APP-262): a drop target is marked
                     // by an outline, a shape rather than a colour change.
                     color: Theme.surfaceColumn
-                    border.color: (dragOver || focusPulse) ? Theme.focusRing : "transparent"
-                    border.width: (dragOver || focusPulse) ? 2 : 1
+                    border.color: focusPulse ? Theme.focusRing : "transparent"
+                    border.width: focusPulse ? 2 : 1
                     clip: true
                     Behavior on border.color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
+
+                    // The drop target's frame hugs the column's cards, not
+                    // the window (R3-050): 1.5px blue in bold, a 1px line in
+                    // quiet (R3-049). A folded Done becomes a tall strip.
+                    Rectangle {
+                        id: dropFrame
+                        objectName: "column-drop-frame"
+                        visible: col.dragOver
+                        z: 30
+                        width: parent.width
+                        height: col.folded ? (col.isDone ? Math.min(col.height, Theme.px(200)) : col.height)
+                              : Math.min(col.height, Theme.px(38) + 2 * Theme.spMd + bodyFlick.contentHeight)
+                        radius: col.radius
+                        color: "transparent"
+                        border.color: Style.urgency ? Theme.info : Theme.borderStrong
+                        border.width: Style.urgency ? 1.5 : 1
+                    }
+                    // Folded Done under the pointer: ring, name and
+                    // "отпустите" in the middle of the strip (R3-053).
+                    Column {
+                        objectName: "column-done-drop"
+                        visible: col.folded && col.isDone && col.dragOver
+                        z: 31
+                        anchors.horizontalCenter: dropFrame.horizontalCenter
+                        y: (dropFrame.height - height) / 2
+                        spacing: Theme.spXs
+                        StatusRing {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            category: "done"
+                        }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: col.statusName
+                            color: Theme.text
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsMd
+                            font.weight: Theme.fwTitle
+                        }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: I18n.t("kanban.done.drop")
+                            color: Theme.textMuted
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsSm
+                        }
+                    }
 
                     // Folded: the name runs down the strip, with the count; a
                     // click (or Z on the board) opens it again.
                     Item {
                         objectName: "column-done-folded"
                         anchors.fill: parent
-                        visible: col.folded && col.isDone
+                        visible: col.folded && col.isDone && !col.dragOver
                         Column {
                             anchors.left: parent.left
                             anchors.right: parent.right
@@ -1586,7 +1632,8 @@ Item {
                                 width: parent.width - 20
                                 height: 2
                                 radius: 1
-                                color: Theme.accent
+                                // Orange in bold, a light line in quiet (R3-049).
+                                color: Style.urgency ? Theme.warning : Theme.textMuted
                                 y: bodyFlick.y - bodyFlick.contentY + colDrop.indicatorY - 5
                                 z: 20
                             }

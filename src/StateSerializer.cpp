@@ -657,6 +657,9 @@ QJsonArray peopleToJson(const QVector<Person>& xs) {
     o["question"] = p.question;
     o["state"] = p.state;
     o["color"] = p.color.name();
+    if(p.stateAt.isValid()) {
+      o["stateAt"] = p.stateAt.toString(Qt::ISODateWithMs);
+    }
     a.append(o);
   }
   return a;
@@ -674,12 +677,14 @@ QVector<Person> peopleFromJson(const QJsonArray& a) {
     p.question = o["question"].toString();
     p.state = o["state"].toString();
     p.color = QColor(o["color"].toString());
+    p.stateAt = QDateTime::fromString(o["stateAt"].toString(), Qt::ISODateWithMs);
     static const QStringList kKnown = {QStringLiteral("id"),
                                        QStringLiteral("name"),
                                        QStringLiteral("role"),
                                        QStringLiteral("question"),
                                        QStringLiteral("state"),
-                                       QStringLiteral("color")};
+                                       QStringLiteral("color"),
+                                       QStringLiteral("stateAt")};
     p.extra = unknownKeys(o, kKnown);
     v.append(p);
   }

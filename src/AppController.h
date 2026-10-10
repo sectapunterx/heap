@@ -702,6 +702,11 @@ class AppController : public QObject {
   Q_INVOKABLE void setTrackerWriteEnabled(const QString& providerId, bool enabled);
   // Whether the tracker can be written to at all, i.e. has the switch.
   Q_INVOKABLE bool trackerCanWriteStatus(const QString& providerId) const;
+  // With writes on, a move asks before its status goes out ("Отправить
+  // статус в Jira?", X/N-Dlg-Conflict, R3-147) until the user ticks "don't
+  // ask again for <tracker>". On by default.
+  Q_INVOKABLE bool trackerAskBeforeWrite(const QString& providerId) const;
+  Q_INVOKABLE void setTrackerAskBeforeWrite(const QString& providerId, bool ask);
   QStringList trackerWriteProviders() const;
   // Once per install after the update that made writes opt-in: the sentence
   // naming the connected trackers whose status heap no longer changes, or an
@@ -1966,6 +1971,15 @@ class AppController : public QObject {
   // status was not sent. The UI may offer "send anyway" behind a dialog that
   // names the issue, its status in the tracker now and the target; answering
   // it calls confirmTrackerPush (APP-204).
+  // A move of a card whose tracker is written to, held until the user says
+  // send or keep it here (trackerAskBeforeWrite).
+  void trackerWriteAsk(const QString& taskId,
+                       const QString& key,
+                       const QString& title,
+                       const QString& tracker,
+                       const QString& providerId,
+                       const QString& from,
+                       const QString& to);
   void trackerPushNeedsConfirm(const QString& taskId,
                                const QString& key,
                                const QString& title,

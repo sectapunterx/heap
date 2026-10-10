@@ -257,6 +257,7 @@ struct Person {
   QString question;
   QString state;  // todo/pinged/replied
   QColor color;
+  QDateTime stateAt;  // when `state` last moved; invalid before 0.8.1
   // Keys this build does not read, carried through a save (PLAT-15).
   QJsonObject extra;
 
@@ -703,6 +704,7 @@ class PersonModel : public QAbstractListModel {
     QuestionRole,
     StateRole,
     ColorRole,
+    StateAtRole,
   };
 
   explicit PersonModel(QObject* parent = nullptr) : QAbstractListModel(parent) {

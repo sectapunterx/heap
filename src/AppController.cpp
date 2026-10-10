@@ -2859,6 +2859,19 @@ bool AppController::trackerWriteEnabled(const QString& providerId) const {
                                                              .toBool();
 }
 
+bool AppController::trackerAskBeforeWrite(const QString& providerId) const {
+  const QVariant v =
+      settingsMap().value(QStringLiteral("integrations")).toMap().value(providerId).toMap().value(QStringLiteral("askBeforeWrite"));
+  return !v.isValid() || v.toBool();
+}
+
+void AppController::setTrackerAskBeforeWrite(const QString& providerId, bool ask) {
+  if(trackerAskBeforeWrite(providerId) == ask) {
+    return;
+  }
+  setIntegrationField(providerId, QStringLiteral("askBeforeWrite"), ask);
+}
+
 void AppController::setTrackerWriteEnabled(const QString& providerId, bool enabled) {
   if(!heap::integrations::writesStatus(providerId) || trackerWriteEnabled(providerId) == enabled) {
     return;
@@ -2949,6 +2962,18 @@ void AppController::pushStatusToTracker(const QString& taskId, const QString& st
   // The card's "send" still asks the tracker first, and that check decides.
   if(mode == PushMode::Auto && (t.externalMeta.outOfScope || t.externalMeta.goneUpstream)) {
     markPushHeld(taskId, status, tr_("int.heldOutOfScope"));
+    return;
+  }
+  // Writes on, but the user asked to be asked first (R3-147): held, and the
+  // card waits as "not sent" until they answer send or only here.
+  if(mode == PushMode::Auto && trackerAskBeforeWrite(t.externalProvider)) {
+    const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(t.externalProvider);
+    const QString from = t.externalMeta.column.isEmpty() ? QString() : columnDisplayName(t.externalMeta.column);
+    const QString key = externalKeyOf(t);
+    const QString title = t.title;
+    const QString provider = t.externalProvider;
+    markPushHeld(taskId, status, QString());
+    emit trackerWriteAsk(taskId, key, title, d ? d->displayName : provider, provider, from, columnDisplayName(status));
     return;
   }
   // The write goes to the repo the issue came from, never simply the one in
@@ -6995,7 +7020,12 @@ bool AppController::savePerson(const QVariantMap& draft) {
   }
   // Keys a newer build wrote stay with the person (PLAT-15).
   if(const int prevRow = m_people.indexOfId(draft.value("id").toString()); prevRow >= 0) {
-    p.extra = m_people.items().at(prevRow).extra;
+    const Person& prev = m_people.items().at(prevRow);
+    p.extra = prev.extra;
+    // The state's time moves only with the state (R3-057).
+    p.stateAt = prev.state == p.state ? prev.stateAt : QDateTime::currentDateTime();
+  } else {
+    p.stateAt = QDateTime::currentDateTime();
   }
   const bool isNew = draft.value("_isNew").toBool();
   // upsert() on an id someone else holds replaces that person whole — name,
