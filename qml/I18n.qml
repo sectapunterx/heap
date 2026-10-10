@@ -1940,6 +1940,7 @@ QtObject {
             // ── audit-tasks: begin ──
             "topbar.searchUnknown": "Not understood — searched as text or ignored: %1",
             "quick.hint.onlyDate": "That is only a date — type what to do, too",
+            "quick.hint.empty": "Type what to do first",
             "quick.undo": "Capture undone: %1",
             "quick.done.labels": "Labels: %1",
             "quick.keysHint": "↵ create · Shift+↵ new line · Tab open the task · Ctrl+Shift+↵ create & keep open · Esc close",
@@ -1985,7 +1986,7 @@ QtObject {
             "capture.past": "past",
             "capture.alsoMeeting": "Also a meeting in the calendar",
             "capture.ticketTaken": "%1 is already there — open it?",
-            "capture.lines.ask": "%1 lines: separate tasks, or one task with a description?",
+            "capture.lines.ask": "%1 lines: separate tasks (↵), or one task with a description (Shift ↵)?",
             "capture.lines.many": "%1 tasks",
             "capture.lines.one": "One task",
             "capture.done": "Created %1",
@@ -4480,6 +4481,7 @@ QtObject {
             // ── audit-tasks: begin ──
             "topbar.searchUnknown": "Не распознано — ищется как текст или пропущено: %1",
             "quick.hint.onlyDate": "Это только дата — напишите ещё, что сделать",
+            "quick.hint.empty": "Сначала напишите, что сделать",
             "quick.undo": "Захват отменён: %1",
             "quick.done.labels": "Метки: %1",
             "quick.keysHint": "↵ создать · Shift+↵ строка · Tab открыть задачу · Ctrl+Shift+↵ создать и продолжить · Esc закрыть",
@@ -4525,7 +4527,7 @@ QtObject {
             "capture.past": "прошло",
             "capture.alsoMeeting": "Ещё и встреча в календаре",
             "capture.ticketTaken": "%1 уже есть — открыть?",
-            "capture.lines.ask": "Строк: %1. Отдельные задачи или одна с описанием?",
+            "capture.lines.ask": "Строк: %1. Отдельные задачи (↵) или одна с описанием (Shift ↵)?",
             "capture.lines.many": "Задач: %1",
             "capture.lines.one": "Одна задача",
             "capture.done": "Создано %1",
