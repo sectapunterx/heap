@@ -28,6 +28,7 @@ Item {
     // the time typed in.
     signal taskCaptureRequested(string text)
     signal scheduleRequested(string id)
+    signal resetFilterRequested()
 
     // What the shell's keys act on (step, moves): the grid on screen.
     readonly property var calendarView: inner.item
@@ -113,6 +114,7 @@ Item {
             onTaskCaptureRequested: (text) => root.taskCaptureRequested(text)
             onScheduleRequested: (id) => root.scheduleRequested(id)
             onDayRequested: (day) => root.dayRequested(day)
+            onResetFilterRequested: root.resetFilterRequested()
         }
     }
     Component {
@@ -127,6 +129,7 @@ Item {
             onTaskClicked: (id) => root.taskClicked(id)
             onEventClicked: (id, occurrence) => root.eventClicked(id, occurrence)
             onDayRequested: (day) => root.dayRequested(day)
+            onResetFilterRequested: root.resetFilterRequested()
         }
     }
 }

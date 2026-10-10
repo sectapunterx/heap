@@ -59,6 +59,10 @@ Popup {
         if (diff === 1) return I18n.t("storage.when.yesterday").arg(time);
         return I18n.fmtDateTime(d, "dayMonth");
     }
+    // "18 230" / "18,230": a byte position read as a number.
+    function groupDigits(n) {
+        return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, I18n.lang === "ru" ? String.fromCharCode(160) : ",");
+    }
     // The snapshots first, then what is open now.
     readonly property var options: {
         const out = [];
@@ -124,12 +128,19 @@ Popup {
                 Layout.fillWidth: true
                 Layout.topMargin: Theme.spXs
                 Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
-                text: root.recovered ? I18n.t("storage.damaged.factBackup").arg(root.args[0] || "").arg(root.args[1] || "")
-                                     : I18n.t("storage.damaged.fact").arg(root.args[0] || "")
+                // Where the file stops reading, then what was kept
+                // (N/X-Err-Storage, R4-104); 13 px dim at 1.5 (R4-105).
+                text: (AppController.storageDamagedAt >= 0
+                       ? I18n.t("storage.damaged.at").arg(root.groupDigits(AppController.storageDamagedAt)) + " "
+                       : "")
+                      + (root.recovered ? I18n.t("storage.damaged.factBackup").arg(root.args[0] || "").arg(root.args[1] || "")
+                                        : I18n.t("storage.damaged.fact").arg(root.args[0] || ""))
                 textFormat: Text.PlainText
-                color: Theme.textMuted
+                color: Theme.textDim
                 font.family: Theme.fontUi
-                font.pixelSize: Theme.fsSm
+                font.pixelSize: Theme.fsMd
+                lineHeightMode: Text.FixedHeight
+                lineHeight: Math.round(font.pixelSize * 1.5)
                 wrapMode: Text.Wrap
             }
             ColumnLayout {
@@ -162,16 +173,16 @@ Popup {
                                 textFormat: Text.PlainText
                                 color: Theme.text
                                 font.family: Theme.fontUi
-                                font.pixelSize: Theme.fsSm
+                                font.pixelSize: Theme.fsMd
                                 font.weight: opt.on ? Theme.fwTitle : Theme.fwBody
                                 elide: Text.ElideRight
                             }
                             Text {
                                 text: opt.modelData.note
                                 textFormat: Text.PlainText
-                                color: Theme.textMuted
+                                color: Theme.textDim
                                 font.family: Theme.fontUi
-                                font.pixelSize: Theme.fsXs
+                                font.pixelSize: Theme.fsSm
                             }
                         }
                         ClickArea {

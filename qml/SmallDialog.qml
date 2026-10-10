@@ -27,6 +27,9 @@ Popup {
     property string eyebrow: ""
     property string title: ""
     property string fact: ""
+    // The fact is dim; a fact that names the thing acted on (a ticket's key
+    // and title) is a step brighter (N-Dlg-Conflict).
+    property color factColor: Theme.textDim
     default property alias fields: fieldCol.data
     property alias buttons: btnRow.data
     signal accepted()
@@ -66,9 +69,13 @@ Popup {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             Layout.fillWidth: true
             text: root.fact
-            color: Theme.textMuted
+            // N/X-Dlg-Small, -Err-Storage: the fact in dim body type at 1.5
+            // (R4-105).
+            color: root.factColor
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
+            lineHeightMode: Text.FixedHeight
+            lineHeight: Math.round(font.pixelSize * 1.5)
             wrapMode: Text.Wrap
         }
         ColumnLayout {

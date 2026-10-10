@@ -250,9 +250,9 @@ Popup {
                             verticalAlignment: Text.AlignVCenter
                             text: row.modelData.label
                             textFormat: Text.PlainText
-                            color: Theme.textMuted
+                            color: Theme.textDim
                             font.family: Theme.fontUi
-                            font.pixelSize: Theme.fsSm
+                            font.pixelSize: Theme.fsMd
                             elide: Text.ElideRight
                         }
                         ConflictCell {
@@ -343,9 +343,11 @@ Popup {
             anchors.fill: parent
             anchors.topMargin: 1
             radius: Theme.radiusMd
-            color: cell.picked && Style.fills ? Theme.withAlpha(Theme.text, 0.04) : "transparent"
+            // N/X-Dlg-Conflict: the picked side is an outline on the dialog,
+            // no fill (R4-113).
+            color: "transparent"
             border.width: cell.picked ? 1 : 0
-            border.color: cell.cursor ? Theme.focusRing : Theme.borderStrong
+            border.color: cell.cursor ? Theme.focusRing : Theme.buttonLinePrimary
         }
         RowLayout {
             anchors.fill: parent
@@ -363,10 +365,9 @@ Popup {
                 Layout.alignment: Qt.AlignVCenter
                 text: cell.text
                 textFormat: Text.PlainText
-                color: cell.picked ? Theme.text : Theme.textMuted
+                color: cell.picked ? Theme.text : Theme.textDim
                 font.family: Theme.fontUi
-                font.pixelSize: Theme.fsSm
-                font.weight: cell.picked ? Theme.fwTitle : Theme.fwBody
+                font.pixelSize: Theme.fsMd
                 wrapMode: Text.Wrap
                 maximumLineCount: 2
                 elide: Text.ElideRight

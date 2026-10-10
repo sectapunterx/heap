@@ -12649,7 +12649,10 @@ void AppController::loadStateOnStart() {
   // The bytes are in hand, so from here on a failure is damage, NOT a first
   // run. We must never let the caller silently seed demo data and overwrite
   // it: quarantine the damaged file, then recover the newest valid backup.
-  const QJsonDocument doc = QJsonDocument::fromJson(read.bytes);
+  QJsonParseError parseError;
+  const QJsonDocument doc = QJsonDocument::fromJson(read.bytes, &parseError);
+  // The damaged-file card says where the file stops reading (R4-104).
+  m_storageDamagedAt = doc.isNull() ? parseError.offset : -1;
   QString shapeError;
   const bool ok = !doc.isNull() && doc.isObject() && heap::storage::validateShape(doc.object(), &shapeError);
 

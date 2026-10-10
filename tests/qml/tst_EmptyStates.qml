@@ -128,7 +128,10 @@ TestCase {
         // "S на задаче — поставить на день" (R3-133).
         verify(s.line.indexOf(AppController.shortcutText("task.schedule")) >= 0, s.line);
         v.searchText = tc.nothing;
-        tryCompare(s, "title", I18n.t("view.empty.noMatch.title"));
+        // "Ничего под «…»" + "сбросить фильтр · Esc", as on the board (R4-100).
+        tryCompare(s, "line", I18n.t("view.empty.resetFilter"));
+        verify(s.lineLink);
+        verify(s.title !== I18n.t("week.empty.title"), s.title);
     }
 
     function test_month() {
@@ -141,7 +144,9 @@ TestCase {
         verifyState(state, "month");
         compare(state.title, I18n.t("month.empty.title"));
         v.searchText = tc.nothing;
-        tryCompare(state, "title", I18n.t("view.empty.noMatch.title"));
+        tryCompare(state, "line", I18n.t("view.empty.resetFilter"));
+        verify(state.lineLink);
+        verify(state.title !== I18n.t("month.empty.title"), state.title);
     }
 
     function test_notes_list() {
