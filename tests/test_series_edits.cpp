@@ -285,6 +285,23 @@ TEST_F(SeriesEditTest, MovingAllShiftsTheWholeSeries) {
   EXPECT_EQ(dates(), (QVector<QDate>{kMon.addDays(2), kMon.addDays(9), kMon.addDays(16), kMon.addDays(23)}));
 }
 
+// IDIOT-CAL-12: a moved occurrence goes with its slot when the whole series
+// moves, not a day before it next to a regular one.
+TEST_F(SeriesEditTest, MovingAllTakesAMovedOccurrenceAlongWithItsSlot) {
+  seedWeekly();
+  QVariantMap one = occurrenceOn(kMon.addDays(7));
+  one["start"] = 13.0;
+  one["end"] = 14.0;
+  app_->saveOccurrence(one, QStringLiteral("this"));
+  QVariantMap occ = occurrenceOn(kMon.addDays(14));
+  occ["date"] = kMon.addDays(15);  // a day later
+  app_->saveOccurrence(occ, QStringLiteral("all"));
+
+  EXPECT_EQ(dates(), (QVector<QDate>{kMon.addDays(1), kMon.addDays(8), kMon.addDays(15), kMon.addDays(22)}));
+  const QVariantMap moved = occurrenceOn(kMon.addDays(8));
+  EXPECT_DOUBLE_EQ(moved.value(QStringLiteral("start")).toDouble(), 13.0) << "at its own time";
+}
+
 TEST_F(SeriesEditTest, DeletingAllRemovesTheSeries) {
   const QString id = seedWeekly();
 

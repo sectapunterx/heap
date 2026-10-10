@@ -61,7 +61,10 @@ QDateTime weekdayNotToday(const heap::chrono::ParseResult& r, const QDateTime& n
   }
   static const QRegularExpression kWeekday(
       QStringLiteral(R"((?<!\p{L})(пн|вт|ср|чт|пт|сб|вс|понед\p{L}*|вторн\p{L}*|сред\p{L}*|четв\p{L}*|пятн\p{L}*|субб\p{L}*|воскр\p{L}*|)"
-                     R"(mon\p{L}*|tue\p{L}*|wed\p{L}*|thu\p{L}*|fri\p{L}*|sat\p{L}*|sun\p{L}*)(?!\p{L}))"),
+                     // Whole English words (IDIOT-TASKS-7): "mon\p{L}*" took "month",
+                     // and "end of month" on the 31st went a week ahead.
+                     R"(mon|monday|tue|tues|tuesday|wed|weds|wednesday|thu|thur|thurs|thursday|)"
+                     R"(fri|friday|sat|saturday|sun|sunday)(?!\p{L}))"),
       QRegularExpression::CaseInsensitiveOption | QRegularExpression::UseUnicodePropertiesOption);
   return kWeekday.match(r.consumed).hasMatch() ? r.start.addDays(7) : r.start;
 }
@@ -157,6 +160,10 @@ Parsed parse(const QString& text, const heap::chrono::ChronoParser& chrono, cons
       out.whenPast = isPast(out.when, r.hasTime, now);
       if(r.end.isValid() && r.end > r.start) {
         out.whenEnd = r.end;
+      } else if(r.end.isValid() && r.hasTime && r.end.time() < r.start.time()) {
+        // "22:00-01:00" ends the next morning (IDIOT-CAL-11); the end was
+        // dropped and the meeting got the default length.
+        out.whenEnd = QDateTime(out.when.date().addDays(1), r.end.time());
       }
     }
     if(!r.recurrence.isEmpty() && out.recurrence.isEmpty()) {

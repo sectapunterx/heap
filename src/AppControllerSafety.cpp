@@ -7,6 +7,7 @@
 
 #include "AppController.h"
 
+#include "board/ColumnCategory.h"
 #include "cal/Occurrences.h"
 #include "cal/Reminders.h"
 #include "git/GitWatcher.h"
@@ -173,11 +174,14 @@ void AppController::finishEndOfDay(const QDateTime& now, const RepoDirt& dirt) {
 
 QVector<heap::safety::DayTask> AppController::dayTasks() const {
   QVector<heap::safety::DayTask> out;
-  const auto add = [&out](const Task& t, bool active) {
+  // A "Shipped" column of the Done kind closes work as "Done" does
+  // (IDIOT-CAL-13); End of day offered to carry such a card over.
+  const QSet<QString> doneIds = heap::board::doneColumnIds(m_statuses);
+  const auto add = [&out, &doneIds](const Task& t, bool active) {
     if(!active && !t.timerStartedAt.isValid()) {
       return;  // another workspace only counts for its running timers
     }
-    const bool done = t.status == QLatin1String("done");
+    const bool done = doneIds.contains(t.status);
     out.append({.id = t.id,
                 .done = done && active,
                 .archived = t.archived || !active,
@@ -355,7 +359,11 @@ void AppController::checkWaitingAt(const QDateTime& now) {
   const int days = qMax(1, s.value(QStringLiteral("waitingDays"), 2).toInt());
   // One profile's links against that profile's tasks and people; the active
   // one's live in the models, the others' in m_profiles (PLAT-9).
-  const auto remind = [&](QVector<WaitingOn>& links, const QVector<Task>& tasks, const QVector<Person>& people) {
+  const auto remind = [&](QVector<WaitingOn>& links,
+                          const QVector<Task>& tasks,
+                          const QVector<Person>& people,
+                          const QVariantList& statuses) {
+    const QSet<QString> doneIds = heap::board::doneColumnIds(statuses);
     bool changed = false;
     for(WaitingOn& w : links) {
       if(!heap::safety::waitingReminderDue(w, now, days)) {
@@ -368,7 +376,7 @@ void AppController::checkWaitingAt(const QDateTime& now) {
         return p.id == w.personId;
       });
       // Finished or archived work is not waiting on anyone any more.
-      if(task == tasks.cend() || person == people.cend() || task->archived || task->status == QLatin1String("done")) {
+      if(task == tasks.cend() || person == people.cend() || task->archived || doneIds.contains(task->status)) {
         continue;
       }
       w.remindedAt = now;
@@ -386,13 +394,13 @@ void AppController::checkWaitingAt(const QDateTime& now) {
     }
     return changed;
   };
-  bool changed = remind(m_waitingOn, m_tasks.items(), m_people.items());
+  bool changed = remind(m_waitingOn, m_tasks.items(), m_people.items(), m_statuses);
   if(changed) {
     emit waitingOnChanged();
   }
   for(Profile& p : m_profiles) {
     if(p.id != m_activeProfileId) {
-      changed = remind(p.waitingOn, p.tasks, p.people) || changed;
+      changed = remind(p.waitingOn, p.tasks, p.people, p.statuses) || changed;
     }
   }
   if(changed) {
@@ -508,8 +516,8 @@ QString AppController::standupDraftFor(const QDate& today) {
                     .title = t.title,
                     .status = t.status,
                     .doing = isDoingStatus(t.status),
-                    .blocked = t.status == QLatin1String("blocked"),
-                    .done = t.status == QLatin1String("done"),
+                    .blocked = statusCategory(t.status) == QLatin1String("blocked"),
+                    .done = statusCategory(t.status) == QLatin1String("done"),
                     .archived = t.archived,
                     .scheduledAt = t.scheduledAt,
                     .timerStartedAt = t.timerStartedAt});

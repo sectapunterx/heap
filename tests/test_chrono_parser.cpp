@@ -68,9 +68,10 @@ TEST_F(Chrono, EnFullMonth) {
 }
 
 TEST_F(Chrono, EnShortMonth) {
+  // Already past on kRef: the next Jan 1 (IDIOT-TASKS-6).
   auto r = parserEn.parse("Jan 1", kRef);
   EXPECT_OK(r);
-  EXPECT_DATE(r, 2026, 1, 1);
+  EXPECT_DATE(r, 2027, 1, 1);
 }
 
 TEST_F(Chrono, EnSlashDateMonthFirst) {

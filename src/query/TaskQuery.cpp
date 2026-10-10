@@ -1,3 +1,4 @@
+#include "board/ColumnCategory.h"
 #include "chrono/ChronoParser.h"
 #include "local/Effective.h"
 #include "query/TaskQuery.h"
@@ -234,6 +235,9 @@ TaskQuery TaskQuery::compile(const QString& text, const QDate& today, const QVar
   TaskQuery q;
   q.m_today = today;
   q.m_newIds = QSet<QString>(newIds.cbegin(), newIds.cend());
+  // Done is a kind of column, not the id "done": is:open listed the cards of
+  // a user's "Shipped" column (IDIOT-TASKS-10).
+  q.m_doneIds = heap::board::doneColumnIds(statuses);
   q.m_groups.append(QVector<Clause>());
   // The search words of each OR group, parallel to m_groups. Without an OR
   // they are the one free text the caller substring-matches; with one, each
@@ -369,6 +373,7 @@ TaskQuery TaskQuery::compile(const QString& text, const QDate& today, const QVar
       for(const QString& v : cl.values) {
         ok = ok && kIs.contains(v);
         q.m_usesBlocked = q.m_usesBlocked || v == QLatin1String("blocked");
+        q.m_asksArchived = q.m_asksArchived || (v == QLatin1String("archived") && !cl.negate);
       }
     } else if(cl.field == QLatin1String("has")) {
       static const QSet<QString> kHas = {
@@ -518,7 +523,7 @@ bool TaskQuery::clauseMatches(const Clause& c, const Task& t, const QString& hay
     return false;
   }
   if(c.field == QLatin1String("is")) {
-    const bool done = t.status == QStringLiteral("done");
+    const bool done = m_doneIds.contains(t.status);
     for(const QString& v : c.values) {
       bool hit = false;
       if(v == QLatin1String("open")) {
@@ -562,7 +567,7 @@ bool TaskQuery::clauseMatches(const Clause& c, const Task& t, const QString& hay
       return false;
     }
     if(c.special == QLatin1String("overdue")) {
-      return due < m_today && t.status != QStringLiteral("done");
+      return due < m_today && !m_doneIds.contains(t.status);
     }
     if(c.special == QLatin1String("range")) {
       return due >= c.date && due <= c.dateTo;

@@ -198,6 +198,15 @@ void indent(QVector<LocalCheckItem>& items, int i, int delta) {
   if(delta < 0 && items.at(i).level + delta < 1) {
     return;
   }
+  // At most one level below the item above it, and the first item stays at
+  // the top (IDIOT-TASKS-11): Tab sank an item five levels under nothing.
+  if(delta > 0) {
+    const int ceiling = i == 0 ? 1 : items.at(i - 1).level + 1;
+    delta = std::min(delta, ceiling - items.at(i).level);
+    if(delta <= 0) {
+      return;
+    }
+  }
   const int end = subtreeEnd(items, i);
   for(int j = i; j < end; ++j) {
     items[j].level = std::max(1, items.at(j).level + delta);

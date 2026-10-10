@@ -1407,7 +1407,7 @@ ApplicationWindow {
                         prioritiesFilter: win.prioritiesFilter
                         showArchived: win.tasksShowArchived
                         onTaskClicked: (id) => win.showTask(AppController.taskById(id))
-                        onEventClicked: (id, occurrence) => occurrence ? eventEditor.showForOccurrence(occurrence) : eventEditor.showForId(id)
+                        onEventClicked: (id, occurrence) => win.openEvent(id, occurrence)
                         // An empty slot or a dragged stretch opens the editor on
                         // a draft: the meeting is named before it exists.
                         onCreateRequested: (startHour, endHour, day) => {
@@ -1691,8 +1691,24 @@ ApplicationWindow {
     }
     // The day's hands, for Today and the day panel.
     function openEvent(id, occurrence) {
+        // Today hands the occurrence over as its ISO date (IDIOT-CAL-1): the
+        // series' row opened instead, and a change moved every past day too.
+        if (typeof occurrence === "string") occurrence = win._occurrenceOf(id, occurrence);
         if (occurrence) eventEditor.showForOccurrence(occurrence);
         else eventEditor.showForId(id);
+    }
+    // The occurrence of series `id` (master or override) on ISO day `iso`;
+    // null for a meeting that does not repeat.
+    function _occurrenceOf(id, iso) {
+        const p = String(iso).split("-");
+        if (p.length !== 3) return null;
+        const day = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+        const list = AppController.eventOccurrences(day, day);
+        for (let i = 0; i < list.length; i++) {
+            const o = list[i];
+            if (String(o.masterId || "").length > 0 && (o.id === id || o.masterId === id)) return o;
+        }
+        return null;
     }
     function createEventAt(startHour, endHour, day) {
         eventCapture.openAt({ date: day, start: startHour, end: endHour });
@@ -2054,8 +2070,10 @@ ApplicationWindow {
             return ["today", "week", "month"].indexOf(v) >= 0;
         case "cal.today": case "cal.prevDay": case "cal.nextDay": case "cal.goToDate":
             return win._dayViews.indexOf(v) >= 0;
+        // No view defines setZoom: the catalogue's z d did nothing while the
+        // CalKey under it was shadowed (IDIOT-CAL-3). It switches, as z w does.
         case "cal.zoomDay":
-            return (v === "week" || v === "month") && !!b && typeof b.setZoom === "function";
+            return v === "week" || v === "month";
         case "cal.newEvent":
             return !win._overlayOpen;
         case "cal.taskEarlier": case "cal.taskLater": case "cal.taskEarlierWeek": case "cal.taskLaterWeek":
@@ -2264,8 +2282,9 @@ ApplicationWindow {
         case "task.due": win.openSchedule("due"); return;
         case "task.schedule": win.openSchedule("scheduled"); return;
         case "task.priority0": case "task.priority1": case "task.priority2": case "task.priority3": {
-            const p = "P" + base.slice(13);
-            win._eachKeyTask(function (t) { AppController.setTaskPriority(t.id, p); });
+            // One bulk edit, one undo step (IDIOT-TASKS-3): a step per card
+            // filled the undo stack and froze on a thousand cards.
+            win.priorityKeyTasks("P" + base.slice(13));
             return;
         }
         case "task.timer":
@@ -2310,7 +2329,7 @@ ApplicationWindow {
             return;
         }
         case "cal.goToDate": goToDatePopup.openAt(AppController.selectedDate, win.contentItem); return;
-        case "cal.zoomDay": call("setZoom", "day"); return;
+        case "cal.zoomDay": AppController.currentView = "day"; return;
         case "cal.newEvent": {
             const day = AppController.selectedDate;
             eventCapture.openAt({ date: day });
@@ -3140,8 +3159,10 @@ ApplicationWindow {
             AppController.scheduleTaskAtNextFreeSlot(ids[i], AppController.selectedDate);
     }
     function priorityKeyTasks(p) {
-        if (AppController.selectionCount > 0) { AppController.setSelectedTasksPriority(p); return; }
         const ids = win._keyTaskIds();
+        // The selection only when it is what the key acts on: with the panel
+        // open that is the open task alone.
+        if (!win._panelOpen && AppController.selectionCount > 0) { AppController.setSelectedTasksPriority(p); return; }
         if (ids.length > 0) AppController.setTaskPriority(ids[0], p);
     }
     readonly property bool _taskKeysOn: win._boardKeysOn

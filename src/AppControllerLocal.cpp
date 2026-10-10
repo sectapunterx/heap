@@ -379,10 +379,25 @@ bool AppController::checklistCardBack(const QString& id, const QString& itemId) 
   LocalCheckItem& item = parent.local.checklist[i];
   if(cardRow >= 0) {
     const Task& card = m_tasks.items().at(cardRow);
-    // Time on the card is a history of its own: not thrown away by this.
+    // Time on the card is a history of its own: not thrown away by this. Said
+    // so, not refused in silence (IDIOT-TASKS-4).
     if(card.trackedSeconds > 0 || card.timerStartedAt.isValid() || !card.local.sessions.isEmpty()) {
+      emit toast(tr_("local.cardBackTimed").arg(cardId));
       return false;
     }
+    // Neither is what was written on the card: a list item holds a line of
+    // text and its sub-items, nothing more (IDIOT-TASKS-4). "Back to list"
+    // deleted the description, notes, labels and links without a word.
+    const bool ownLinks = std::ranges::any_of(card.local.related, [](const LocalLink& l) {
+      return l.kind != QStringLiteral("partOf");
+    });
+    if(!card.desc.trimmed().isEmpty() || !card.local.notes.trimmed().isEmpty() || !card.local.commentDraft.trimmed().isEmpty() ||
+       !card.labels.isEmpty() || !card.local.tags.isEmpty() || !card.links.isEmpty() || !card.attachments.isEmpty() || ownLinks) {
+      emit toast(tr_("local.cardBackRefused").arg(cardId));
+      return false;
+    }
+    // The card's title is the item's text now: a rename on the card is kept.
+    item.text = card.title;
     item.done = statusCategory(card.status) == QStringLiteral("done");
     QVector<LocalCheckItem> back = card.local.checklist;
     for(LocalCheckItem& c : back) {
@@ -398,6 +413,9 @@ bool AppController::checklistCardBack(const QString& id, const QString& itemId) 
   cl::settle(parent.local.checklist);
   m_tasks.upsert(parent);
   scheduleSave();
+  if(cardRow >= 0) {
+    emit undoableToast(tr_("local.cardBack").arg(cardId), 5);
+  }
   return true;
 }
 
@@ -822,6 +840,27 @@ bool AppController::addBlockLink(const QString& id, const QString& ref, bool blo
   for(const TaskLink& l : t.links) {
     if(l.type == QStringLiteral("blocks") && l.targetId == blocked) {
       return true;
+    }
+  }
+  // A path back from `blocked` to `blocker` makes a cycle neither side can
+  // ever leave (IDIOT-TASKS-14): refused, with the reason.
+  QSet<QString> seen;
+  QStringList queue{blocked};
+  while(!queue.isEmpty()) {
+    const QString at = queue.takeFirst();
+    if(at == blocker) {
+      emit toast(tr_("local.blockCycle").arg(blocked, blocker), QStringLiteral("warning"));
+      return false;
+    }
+    const int r = m_tasks.indexOfId(at);
+    if(r < 0 || seen.contains(at)) {
+      continue;
+    }
+    seen.insert(at);
+    for(const TaskLink& l : m_tasks.items().at(r).links) {
+      if(l.type == QStringLiteral("blocks")) {
+        queue << l.targetId;
+      }
     }
   }
   const UndoScope scope(this, tr_("task.editUndone").arg(id));

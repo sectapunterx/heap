@@ -779,7 +779,10 @@ Item {
                     // cap would make a drag silently do nothing, which reads
                     // as a bug rather than as a rule.
                     readonly property int wipLimit: col.swip
-                    readonly property bool overWip: col.wipLimit > 0 && col.visibleCount > col.wipLimit
+                    // The column's real load, not what a filter leaves on
+                    // screen (IDIOT-TASKS-12).
+                    readonly property int loadCount: Number(AppController.statusCounts[col.statusId] || 0)
+                    readonly property bool overWip: col.wipLimit > 0 && col.loadCount > col.wipLimit
                     property bool renaming: false
                     readonly property bool isFirst: index === 0
                     readonly property bool isLast:  index === AppController.statuses.length - 1

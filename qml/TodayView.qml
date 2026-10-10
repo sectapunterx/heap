@@ -110,7 +110,7 @@ FocusScope {
             // "встреча · 30 мин · Zoom", "APP-105 · 1 ч"
             if (meeting) parts.push(b.eventType === "focus" ? I18n.t("today.q.withSelf") : I18n.t("today.q.meeting"));
             else parts.push(b.id);
-            if (kind !== "allday") parts.push(root._len(b.start || 0, b.end || 0));
+            if (kind !== "allday" && !b.dayOnly) parts.push(root._len(b.start || 0, b.end || 0));
             if (!meeting && b.waiting) parts.push(I18n.t("today.waitingOn").arg(b.waiting));
         } else {
             if (meeting) parts.push(b.eventType === "focus" ? I18n.t("today.withSelf") : I18n.t("event.kind.meeting"));
@@ -131,6 +131,8 @@ FocusScope {
         const out = [];
         if (!d.blocks) return out;
         for (const b of d.allDay || []) out.push({ kind: "allday", start: -1, block: b });
+        // Planned for the day with no time, under the all-day row (IDIOT-CAL-10).
+        for (const b of d.dayOnly || []) out.push({ kind: "task", start: -0.5, block: b });
         for (const b of d.blocks) out.push({ kind: b.kind, start: b.start, block: b });
         for (const g of d.free || []) out.push({ kind: "free", start: g.start, end: g.end });
         if (root.isToday && root.nowHour >= d.fromHour && root.nowHour <= Math.max(d.toHour, d.workEnd))
@@ -140,7 +142,8 @@ FocusScope {
         out.sort((a, b) => a.start - b.start || order[a.kind] - order[b.kind]);
         return out;
     }
-    readonly property bool dayEmpty: !root.dayData.blocks || (root.dayData.blocks.length === 0 && (root.dayData.allDay || []).length === 0)
+    readonly property bool dayEmpty: !root.dayData.blocks || (root.dayData.blocks.length === 0 && (root.dayData.allDay || []).length === 0
+                                                               && (root.dayData.dayOnly || []).length === 0)
 
     // The one in-progress task the bold card shows (DG-014): the one with
     // the timer, else the one whose branch is checked out, else the first.
@@ -176,7 +179,10 @@ FocusScope {
     readonly property bool cardMenuOpen: menuHost.menuOpen
     function _rowKey(r) {
         if (!r || !r.block) return "";
-        return (r.kind === "task" ? "task:" : "event:") + r.block.id;
+        // One key per row (IDIOT-CAL-7): the two parts of a meeting across
+        // midnight share an id, and j looped back to the first of them.
+        const b = r.block;
+        return (r.kind === "task" ? "task:" : "event:") + b.id + (b.fromPrevDay ? ":prev" : "") + (b.toNextDay ? ":next" : "");
     }
     function _items() {
         const out = [];
@@ -246,7 +252,9 @@ FocusScope {
         const it = root._cursorItem();
         if (!it) { root.moveCursor(0, 0); return; }
         if (it.kind === "task") root.taskClicked(it.id);
-        else root.eventClicked(it.id, null);
+        // The day's occurrence, not the series (IDIOT-CAL-1): Main finds it
+        // by the ISO date the block carries.
+        else root.eventClicked(it.id, it.block.occurrence || null);
     }
     function toggleCursorSelection() {
         const it = root._cursorItem();
@@ -279,7 +287,7 @@ FocusScope {
     }
     function resizeCursor(steps) {
         const it = root._cursorItem();
-        if (!it || it.kind !== "task" || it.block.fromPrevDay || it.block.toNextDay) return false;
+        if (!it || it.kind !== "task" || it.block.dayOnly || it.block.fromPrevDay || it.block.toNextDay) return false;
         const step = Theme.snapMinutes / 60;
         const end = Math.min(24, it.block.end + steps * step);
         if (end - it.block.start < step - 1e-9) return false;
@@ -1028,6 +1036,7 @@ FocusScope {
             anchors.topMargin: dr.item ? (root.stacked ? 0 : root.plain ? Theme.spMd + Theme.spXs / 2 : Theme.spMd + Theme.spXs) : 0
             anchors.verticalCenter: dr.item && !root.stacked ? undefined : parent.verticalCenter
             text: dr.modelData.kind === "allday" ? I18n.t("today.allDay")
+                : dr.b.dayOnly ? I18n.t("today.noTime")
                 : dr.b.fromPrevDay ? I18n.t("today.fromPrev")
                 : root._hm(dr.modelData.start)
             elide: Text.ElideRight
@@ -1096,7 +1105,7 @@ FocusScope {
                 }
                 Text {
                     Layout.alignment: Qt.AlignTop
-                    visible: dr.modelData.kind !== "allday"
+                    visible: dr.modelData.kind !== "allday" && !dr.b.dayOnly
                     text: root._len(dr.b.start || 0, dr.b.end || 0)
                     color: Theme.textDim
                     font.family: Theme.fontUi
@@ -1175,7 +1184,7 @@ FocusScope {
             width: parent.width - x
             height: parent.height
             label: dr.b.title || ""
-            onActivated: dr.meeting ? root.eventClicked(dr.b.id, null) : root.taskClicked(dr.b.id)
+            onActivated: dr.meeting ? root.eventClicked(dr.b.id, dr.b.occurrence || null) : root.taskClicked(dr.b.id)
         }
 
         // Bold: a free window and the end of the day, facts beside a line.

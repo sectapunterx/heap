@@ -335,7 +335,8 @@ Rectangle {
                     objectName: "sidebar-timer-title"
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignVCenter
-                    text: timerLine.timer.title || ""
+                    // A timer running in another profile names it (IDIOT-CAL-6).
+                    text: (timerLine.timer.title || "") + (timerLine.timer.profile ? " · " + timerLine.timer.profile : "")
                     textFormat: Text.PlainText
                     elide: Text.ElideRight
                     color: Theme.text

@@ -481,7 +481,8 @@ Item {
     function yToHour(y)   { return root.hoursStart + y / root.hourH; }
     function clampHour(h) { return Math.max(root.hoursStart, Math.min(root.hoursEnd, h)); }
     function passesFilter(t) {
-        if (t.status === "done") return false;
+        // Any column of the Done kind, not only "done" (IDIOT-CAL-4).
+        if (AppController.statusCategory(t.status) === "done") return false;
         // Clauses filter structurally, leftover words stay a substring test.
         if (!Search.accepts(AppController, root.searchText, root.taskRev + ":" + AppController.today, t)) return false;
         let any = false;
@@ -778,12 +779,18 @@ Item {
     // for, like the editor does; anything else applies at once.
     SeriesScopeDialog { id: scopeAsk }
     readonly property alias scopePrompt: scopeAsk
-    function _commitMove(occ, deltaHours, cancel) {
+    // `done` runs once the move is made, after the scope answer for a series.
+    function _commitMove(occ, deltaHours, cancel, done) {
         if (!occ || Math.abs(deltaHours) < 1e-9) { if (cancel) cancel(); return; }
-        if (String(occ.masterId || "").length > 0)
-            scopeAsk.ask("move", (scope) => AppController.moveOccurrence(occ, deltaHours, scope), cancel);
-        else
+        if (String(occ.masterId || "").length > 0) {
+            scopeAsk.ask("move", (scope) => {
+                AppController.moveOccurrence(occ, deltaHours, scope);
+                if (done) done();
+            }, cancel);
+        } else {
             AppController.moveOccurrence(occ, deltaHours, "this");
+            if (done) done();
+        }
     }
     function _commitResize(occ, start, end, cancel) {
         if (!occ) { if (cancel) cancel(); return; }
@@ -1062,9 +1069,31 @@ Item {
     function _moveCursorEvent(deltaHours) {
         const it = root._cursorItem();
         if (!it || it.kind !== "event" || Math.abs(deltaHours) < 1e-9) return false;
-        root._commitMove(it.ev.occ, deltaHours, null);
-        if (Math.abs(deltaHours) >= 24) root._follow(Math.round(deltaHours / 24));
+        // The cursor follows once the scope is answered, not before
+        // (IDIOT-CAL-14): Esc left it a day off, on the series' next
+        // occurrence, and the next Return opened another meeting.
+        const occ = it.ev.occ;
+        const days = Math.abs(deltaHours) >= 24 ? Math.round(deltaHours / 24) : 0;
+        root._commitMove(occ, deltaHours, null, () => {
+            if (days !== 0) root._follow(days);
+            Qt.callLater(root._findMoved, occ);
+        });
         return true;
+    }
+    // After a move the occurrence may have a new id (an override): the cursor
+    // goes on it in its day by its series and name.
+    function _findMoved(occ) {
+        const items = root._dayItems(root.cursorDay);
+        const series = String(occ.masterId || occ.id);
+        for (let i = 0; i < items.length; i++) {
+            const e = items[i].ev;
+            if (!e || !e.occ) continue;
+            if ((String(e.occ.masterId || e.occ.id) === series || e.occ.id === occ.id) && e.occ.title === occ.title) {
+                root.cursorKey = items[i].key;
+                root._cursorIdx = i;
+                return;
+            }
+        }
     }
     // Ctrl Shift J / K (APP-278): the block under the cursor a grid step
     // longer or shorter — what stretching its lower edge does.

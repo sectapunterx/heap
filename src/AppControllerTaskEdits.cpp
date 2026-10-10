@@ -114,7 +114,7 @@ void AppController::setSelectedTasksLabel(const QString& label, bool present) {
 bool AppController::passesFilter_(
     int row, const heap::query::TaskQuery& q, const QStringList& priorities, bool showArchived, bool hideDone) const {
   const Task& t = m_tasks.items().at(row);
-  if((t.archived && !showArchived) || (hideDone && t.status == QStringLiteral("done"))) {
+  if((t.archived && !showArchived) || (hideDone && q.isDone(t))) {
     return false;
   }
   if(!priorities.isEmpty() && !priorities.contains(heap::local::effectivePriority(t))) {

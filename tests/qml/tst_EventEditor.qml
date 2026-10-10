@@ -229,6 +229,35 @@ TestCase {
         AppController.deleteEvent(made);
     }
 
+    // IDIOT-CAL-11: a meeting past midnight ends on the next day instead of
+    // being cut at 24:00.
+    function test_one_line_input_keeps_an_overnight_end() {
+        const cap = make('import TodoCpp; EventCapture { }');
+        const day = new Date();
+        day.setDate(day.getDate() + 445);
+        day.setHours(0, 0, 0, 0);
+        cap.openAt({ date: day, start: 9, end: 10 });
+        tryVerify(() => cap.opened);
+        const input = findChild(cap.contentItem, "event-capture-input");
+        input.text = "overnight probe 22:00-01:00";
+        compare(cap.parsed.start, 22);
+        compare(cap.parsed.end, 1);
+        verify(!!cap.parsed.endDate, "ends the next day");
+        compare(cap.parsed.endDate.getDate(), new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1).getDate());
+        input.text = "overnight probe 23:00 for 2h";
+        compare(cap.parsed.start, 23);
+        compare(cap.parsed.end, 1);
+        let made = "";
+        cap.created.connect((id) => made = id);
+        cap.submit();
+        tryVerify(() => made.length > 0);
+        const ev = AppController.eventById(made);
+        compare(ev.end, 1);
+        compare(Qt.formatDate(ev.endDate, "yyyy-MM-dd"),
+                Qt.formatDate(new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1), "yyyy-MM-dd"));
+        AppController.deleteEvent(made);
+    }
+
     // Typing in the attendee field offers contacts; Enter takes the highlighted
     // one and leaves the caret ready for the next name. The trailing separator
     // is not saved.
@@ -294,5 +323,51 @@ TestCase {
         verify(findChild(ed, "event-delete").visible);
         compare(findChild(ed, "event-saved").text, I18n.t("event.saved"));
         ed.close();
+    }
+
+    // IDIOT-CAL-2: a generated occurrence carries the master's id, which is
+    // stored, so the editor took it for an override and never asked the
+    // scope; a Repeat change became a one-off and was lost.
+    function _series(title, offset) {
+        const day = new Date();
+        day.setDate(day.getDate() + offset);
+        day.setHours(0, 0, 0, 0);
+        const ev = AppController.newEventDraft(9, day);
+        ev.title = title;
+        ev.end = 10;
+        ev.date = day;
+        ev.rrule = "FREQ=DAILY;COUNT=5";
+        AppController.saveEvent(ev);
+        const third = new Date(day);
+        third.setDate(third.getDate() + 2);
+        const occ = AppController.eventOccurrences(third, third).filter(o => o.title === title);
+        compare(occ.length, 1);
+        return { ev: ev, occ: occ[0] };
+    }
+    function test_a_generated_occurrence_asks_the_scope_for_a_rule_change() {
+        const s = tc._series("scope probe series", 460);
+        const ed = make('import TodoCpp; EventEditor { }');
+        ed.showForOccurrence(s.occ);
+        verify(ed._generated, "an occurrence the series made");
+        ed.setRepeat("weekly");
+        verify(ed.scopePrompt.opened, "the this / following / all question");
+        ed.scopePrompt.answer("all");
+        compare(AppController.eventSeriesMaster(s.ev.id).rrule.indexOf("FREQ=WEEKLY") >= 0, true);
+        ed.close();
+        AppController.deleteEvent(s.ev.id);
+    }
+    // IDIOT-CAL-1: opened on its own day, Delete asks the scope; Esc keeps
+    // the series.
+    function test_delete_on_an_occurrence_asks_the_scope() {
+        const s = tc._series("delete scope probe", 470);
+        const ed = make('import TodoCpp; EventEditor { }');
+        ed.showForOccurrence(s.occ);
+        compare(Qt.formatDate(ed.pickedDate, "yyyy-MM-dd"), Qt.formatDate(s.occ.occurrenceDate, "yyyy-MM-dd"));
+        ed.deleteEvent();
+        verify(ed.scopePrompt.opened);
+        ed.scopePrompt.close();
+        verify(AppController.eventById(s.ev.id).id === s.ev.id, "cancel keeps the series");
+        ed.close();
+        AppController.deleteEvent(s.ev.id);
     }
 }
