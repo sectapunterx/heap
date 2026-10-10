@@ -63,8 +63,25 @@ void AppController::refreshTray() {
   if(!m_notifier) {
     return;
   }
+  QString tip;
+  QVector<heap::notify::NotificationCenter::TrayItem> items;
+  for(const QVariant& v : trayItemsAt(QDateTime::currentDateTime(), &tip)) {
+    const QVariantMap m = v.toMap();
+    items.append({m.value(QStringLiteral("id")).toString(),
+                  m.value(QStringLiteral("text")).toString(),
+                  m.value(QStringLiteral("hint")).toString(),
+                  m.value(QStringLiteral("enabled")).toBool()});
+  }
+  m_notifier->setTrayMenu(QStringLiteral("lowkey"), items);
+  m_notifier->setTrayToolTip(tip);
+}
+
+QVariantList AppController::trayMenuItems() {
+  return trayItemsAt(QDateTime::currentDateTime(), nullptr);
+}
+
+QVariantList AppController::trayItemsAt(const QDateTime& now, QString* tooltip) {
   using Item = heap::notify::NotificationCenter::TrayItem;
-  const QDateTime now = QDateTime::currentDateTime();
   QVector<Item> items;
   items.append({QStringLiteral("capture"), tr_(QStringLiteral("tray.newTask")), shortcutText(QStringLiteral("quick-capture")), true});
   items.append({QStringLiteral("note"), tr_(QStringLiteral("tray.quickNote")), shortcutText(QStringLiteral("quick-capture-notes")), true});
@@ -114,8 +131,17 @@ void AppController::refreshTray() {
                 true});
   items.append(Item{});
   items.append({QStringLiteral("quit"), tr_(QStringLiteral("tray.quit")), {}, true});
-  m_notifier->setTrayMenu(QStringLiteral("lowkey"), items);
-  m_notifier->setTrayToolTip(timer.isEmpty() ? QStringLiteral("lowkey") : QStringLiteral("lowkey · ") + timerText);
+  if(tooltip) {
+    *tooltip = timer.isEmpty() ? QStringLiteral("lowkey") : QStringLiteral("lowkey · ") + timerText;
+  }
+  QVariantList out;
+  for(const Item& it : items) {
+    out.append(QVariantMap{{QStringLiteral("id"), it.id},
+                           {QStringLiteral("text"), it.text},
+                           {QStringLiteral("hint"), it.hint},
+                           {QStringLiteral("enabled"), it.enabled}});
+  }
+  return out;
 }
 
 void AppController::onTrayItem(const QString& id) {

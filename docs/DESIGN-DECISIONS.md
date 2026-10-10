@@ -370,17 +370,19 @@ progressive disclosure, content priority, state preservation). One entry each.
   rows in the app's language: header, Новая задача… / Быстрая заметка… with their global keys, the
   running timer's stop row, the next meeting (inactive), Открыть lowkey, Не беспокоить 1 ч, Выход.
   "Не беспокоить 1 ч" holds notifications as quiet hours do until `notifications.dndUntil`.
-- **R3-095 · Git "working on" line off by default**, as the sheet says; a profile that never
-  touched the switch no longer shows it after the update (one click in Settings → Git).
+- **R3-095 · Git "working on" line off by default**, as the sheet says (X-Oth-Knowledge,
+  X-Set-GitLangAbout) — for a brand-new profile only.
+  - Lead override (2026-10-10), rewritten by Review 2: data from before 0.8.1 keeps the line on.
+    The task of the current branch at the top of the window is promised by the README and the
+    site, and users upgrading from 0.8.0 had it on; turning it off silently would remove a
+    feature. A one-time migration on load (`AppController::migrateGitWorkingLine`, marker
+    `settings.gitLineDefault`) writes an unset switch as on for such data; a fresh install starts
+    off. It stays switchable in Settings → Git.
 - **R3-106 · "→ В работу".** Column names are the user's, so only the default "В работе" is put in
   the accusative; a column the user named is written as named.
 - **R3-085 · Quiet task refs** are underlined text with the ring, external links plain (sheet);
   bold keeps the filled pill and the underlined link.
 
-
-### Lead override (2026-10-10)
-
-- Git "работаю над…" line: on by default (overrides the r4 entry that turned it off). The task of the current branch at the top of the window is promised by the README and the site, and users upgrading from 0.8.0 had it on; turning it off silently would remove a feature. It stays switchable in Settings → Git.
 
 - **R3-067 · "↓ ближайшее окно" applies at once.** On a clash the hint names the nearest free slot
   of the same length on that day (half-hour steps, meetings only, up to the end of the work day);
@@ -407,8 +409,10 @@ progressive disclosure, content priority, state preservation). One entry each.
 - **R3-014 · Stacked side columns** get a fixed 220 px each (flex-wrap look of the sheet, titles
   elide), not equal shares of the width.
 - **R3-015 · Folded sidebar** shows only the sections; saved views stay on Alt 1…9 and in Ctrl K.
-- **R3-017/018 · Splash and the crash card.** Splash = wordmark + version on the theme background,
-  kept for ~0.9 s. Unclean exit is a `session.open` marker in the data folder (written by the window
+- **R3-017/018 · Splash and the crash card.** Splash = wordmark + version on the theme background.
+  Review 2: no fixed hold — it leaves as soon as the window has drawn its first frame; it never
+  takes the keyboard and a press passes through to the app (and ends it). Only the crash card
+  waits. Unclean exit is a `session.open` marker in the data folder (written by the window
   session, removed on a normal exit; none for the CLI or tests). After a crash the splash shows the
   sheet's card and waits: "Посмотреть отчёт" opens the existing report form (the person sends it
   themselves — nothing is sent from the app), "Не отправлять"/Esc continues.
@@ -419,7 +423,7 @@ progressive disclosure, content priority, state preservation). One entry each.
 - **R3-027/103 · Tray menu** stays a native QMenu (a tray menu cannot be QML-styled) with the
   sheet's items: header lowkey, Новая задача… / Быстрая заметка… with their keys, Остановить таймер
   (title + time), "Далее: <время> <встреча>" (disabled fact), Открыть lowkey, Не беспокоить 1 ч
-  (session-only, held like quiet hours; picking it again lifts it), Выход. Tooltip
+  (held until `notifications.dndUntil`; «Не беспокоить до … — выключить» lifts it), Выход. Tooltip
   "lowkey · <задача> 0:42" while a timer runs; refreshed on open and each minute.
 - **R3-133 · Month empty state** keeps a frameless page-coloured backing so cell borders do not
   cut the line; the week has no backing.
@@ -468,3 +472,18 @@ progressive disclosure, content priority, state preservation). One entry each.
   (the Russian key, R3-136, plus p0).
 
 - Lead (2026-10-10, r4 merge): two groups each built the "no Done column" card (R3-137) and the menu column/danger ink; one of each stays (DoneColumnDialog; the tasks group's menu rule). Line height keeps both: notes 1.7 (R3-083), the task document 1.65 (R3-038).
+
+## r5 · Today, notifications, system (0.8.1)
+
+- **R4-006 · First-run sidebar** draws no key hints, no "Ctrl K — всё остальное" footer and no
+  profile dot, only while Today shows the first-run page (H2-First); the page itself teaches the
+  three keys. The rest of the app keeps them. [progressive disclosure; one source of a hint.]
+- **R4-011 · Folded active section** is a 34 px rounded tile in the raised surface (`panel2`)
+  behind the icon; the lavender underline stays for the full sidebar only.
+- **R4-017 · Every sync source says what is wrong and what to do.** 429 is waiting, not an error:
+  the amber pending ring and "просит подождать (429)" (as the tracker strip says it); any other
+  failure shows its reason, or "синхронизация не удалась" when the tracker gave none, plus the
+  clock time. Both carry "повторить" (that tracker's sync now); an expired sign-in keeps "войти".
+  [error-recovery: message + action.]
+- **R4-019 · Update line** wraps inside the sidebar gutters (left and right) instead of setting
+  the column's width; the version text elides only if it alone is wider than the sidebar.
