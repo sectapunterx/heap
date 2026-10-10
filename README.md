@@ -14,6 +14,10 @@
 </p>
 
 <p align="center">
+  <img src="docs/assets/img/readme/today.png" width="100%" alt="Today: the meetings and planned tasks of the day by the hour, with what is in progress and due">
+</p>
+
+<p align="center">
   <a href="https://github.com/sectapunterx/lowkey/releases"><img src="https://img.shields.io/github/v/release/sectapunterx/lowkey?sort=semver" alt="Release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
 </p>
@@ -61,6 +65,21 @@ dates. A sync never overwrites them, and none of it goes back to the tracker.
 
 **Notes link to work.** Write `#APP-112` in a note and it becomes a link carrying the task's title. Bring an
 existing folder of `.md` files in — you see what will come in before anything is copied.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/assets/img/readme/board.png" width="100%" alt="Tasks as a board"><br>Board: your tasks by status, one keypress per move</td>
+    <td width="50%"><img src="docs/assets/img/readme/calendar.png" width="100%" alt="Tasks as a week calendar"><br>Week: meetings and planned tasks side by side</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/assets/img/readme/task.png" width="100%" alt="A task open as a document"><br>A task opens as a document: plan, code, history</td>
+    <td width="50%"><img src="docs/assets/img/readme/knowledge.png" width="100%" alt="Knowledge with a note open"><br>Knowledge: Markdown notes linked to tasks</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/assets/img/readme/command.png" width="100%" alt="The command line over Tasks"><br><code>Ctrl+K</code>: find anything, run any command</td>
+    <td width="50%"><img src="docs/assets/img/readme/quiet.png" width="100%" alt="Today in the Quiet style"><br>The Quiet style: the same day, less on screen</td>
+  </tr>
+</table>
 
 ## What it won't do without asking
 
