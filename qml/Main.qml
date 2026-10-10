@@ -573,6 +573,11 @@ ApplicationWindow {
     // focus still sits where Qt dropped it.
     property Item _focusHome: null
     property bool _focusWasInPopup: false
+    // A popup that closed on Return leaves the rest of that key press — a
+    // hurried second Enter — to the view, where board.open opened the card
+    // under the cursor with the caret in its title (IDIOT-SHELL-1). Return
+    // stands down for a moment after focus leaves any popup.
+    property real _returnGuardUntil: 0
     onActiveFocusItemChanged: {
         const it = win.activeFocusItem;
         if (!it) return;
@@ -590,6 +595,7 @@ ApplicationWindow {
         }
         if (win._focusWasInPopup) {
             win._focusWasInPopup = false;
+            win._returnGuardUntil = Date.now() + 400;
             // Back on an empty header search is not "home" either (PERO-1):
             // returnFocusHome() sends the keyboard on to the view.
             if (it !== win._focusHome || win._isIdleSearch(it)) {
@@ -2012,6 +2018,7 @@ ApplicationWindow {
         if (id === "region.next" || id === "region.prev") return !win._modalOpen;
         const routed = KeyRules.isRouterSequence(AppController.shortcutFor(id));
         const base = KeyRules.baseId(id);
+        if (base === "board.open" && Date.now() < win._returnGuardUntil) return false;
         if (routed && win._panelOpen && win._docTaskKeys.indexOf(base) >= 0)
             return taskDoc.opened && win._focusInPanel && !win._typing && !win._focusInPopup && !win._overlayOpen
                 && !hotkeys.isCapturing;

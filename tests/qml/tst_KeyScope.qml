@@ -140,6 +140,42 @@ TestCase {
         AppController.clearPendingUndo();
     }
 
+    // IDIOT-SHELL-1: a hurried second Enter after the capture saved its task
+    // opened the card under the board cursor with the caret in its title,
+    // and what was typed next went into that task.
+    function test_second_enter_after_capture_stays_put() {
+        const qc = popup("QuickCapturePopup");
+        const doc = byName(tc.win.contentItem, "task-doc");
+        const b = board();
+        b.searchText = tc.probe;
+        b.moveCursor(0, 1);
+        const cursor = b.cursorTaskId;
+        verify(cursor !== "");
+        const title = AppController.taskById(cursor).title;
+        tc.win.focusActiveView();
+        const before = AppController.tasks.rowCount();
+        keyClick(Qt.Key_N, Qt.ControlModifier);
+        tryCompare(qc, "opened", true);
+        keyClick(Qt.Key_X); keyClick(Qt.Key_Y);
+        keyClick(Qt.Key_Return);
+        keyClick(Qt.Key_Return);
+        tryCompare(qc, "opened", false);
+        wait(100);
+        compare(doc.opened, false, "the second Enter opened the card under the cursor");
+        compare(AppController.taskById(cursor).title, title);
+        tryVerify(function () { return AppController.tasks.rowCount() === before + 1; }, 1000, "the capture made no task");
+        // …and Return opens the card again once the moment has passed.
+        wait(450);
+        keyClick(Qt.Key_Return);
+        tryCompare(doc, "opened", true);
+        keyClick(Qt.Key_Escape);
+        tryCompare(doc, "opened", false);
+        const m = AppController.tasks, rid = m.roleOf("id"), rti = m.roleOf("title");
+        for (let i = m.rowCount() - 1; i >= 0; i--)
+            if (m.data(m.index(i, 0), rti) === "xy") AppController.deleteTask(m.data(m.index(i, 0), rid));
+        AppController.clearPendingUndo();
+    }
+
     // UX-9: Tab leaves the description instead of typing a tab, and a list
     // line indents instead.
     function test_tab_leaves_description() {
@@ -309,7 +345,8 @@ TestCase {
         tryCompare(card._priorityMenu, "visible", false, 2000, "a menu the keyboard left stays open");
         keyClick(Qt.Key_Escape);
         tryCompare(go, "opened", false);
-        wait(100);
+        // Past the Return guard a closing popup leaves (IDIOT-SHELL-1).
+        wait(450);
         verify(typeName(tc.win.activeFocusItem).indexOf("AppMenuItem") !== 0,
                "a closed menu's row holds the keyboard: " + typeName(tc.win.activeFocusItem));
 
