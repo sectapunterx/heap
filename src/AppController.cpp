@@ -88,7 +88,6 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
-#include <QScreen>
 #include <QIcon>
 #include <QInputMethod>
 #include <QJsonArray>
@@ -106,6 +105,7 @@
 #include <QSaveFile>
 #include <QScopedValueRollback>
 #include <QScopeGuard>
+#include <QScreen>
 #include <QStandardPaths>
 #include <QStorageInfo>
 #include <QSysInfo>
@@ -705,7 +705,8 @@ const QHash<QString, I18nEntry>& i18nTable() {
         "Вчера / Сегодня / Блокеры из того, что видно в lowkey; поправить и скопировать."}},
       {"shortcut.recap.open.label", {"Weekly recap", "Сводка недели"}},
       {"shortcut.example.open.label", {"Open the example", "Открыть пример"}},
-      {"shortcut.example.open.desc", {"A profile with sample tasks, notes and a day to try things on.", "Профиль с примером задач, заметок и дня, чтобы попробовать."}},
+      {"shortcut.example.open.desc",
+       {"A profile with sample tasks, notes and a day to try things on.", "Профиль с примером задач, заметок и дня, чтобы попробовать."}},
       {"shortcut.recap.open.desc", {"What changed column last week.", "Что сменило колонку на прошлой неделе."}},
       {"shortcut.endOfDay.open.label", {"End of day", "Конец дня"}},
       {"shortcut.endOfDay.open.desc",
@@ -2808,8 +2809,7 @@ void AppController::moveTaskRanked(const QString& id, const QString& newStatus, 
     const QRegularExpression series(QStringLiteral("^%1(-r\\d+)?$").arg(QRegularExpression::escape(stem)));
     for(const Task& other : m_tasks.items()) {
       if(other.id == taskId || other.archived || statusCategory(other.status) == QStringLiteral("done") ||
-         (other.recurrence != recurrence && other.recurrence != seriesRule) ||
-         !series.match(other.id).hasMatch()) {
+         (other.recurrence != recurrence && other.recurrence != seriesRule) || !series.match(other.id).hasMatch()) {
         continue;
       }
       const QDate otherDate = other.dueAt.isValid() ? other.dueAt.date() : other.scheduledAt.date();
@@ -16276,8 +16276,8 @@ void AppController::onGitBranchChanged(const QString& repo, const QString& branc
   const int at = statusIndexOf(task.status);
   const int prog = statusIndexOf(QStringLiteral("prog"));
   const QString cat = statusCategory(task.status);
-  const bool finished = task.archived || cat == QLatin1String("done") || cat == QLatin1String("review") ||
-                        (at >= 0 && at == m_statuses.size() - 1);
+  const bool finished =
+      task.archived || cat == QLatin1String("done") || cat == QLatin1String("review") || (at >= 0 && at == m_statuses.size() - 1);
   if(finished) {
     return;
   }

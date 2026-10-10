@@ -8,7 +8,6 @@
 #include "AppController.h"
 
 #include "board/ColumnCategory.h"
-
 #include "cal/Occurrences.h"
 #include "cal/Reminders.h"
 #include "git/GitWatcher.h"
@@ -360,7 +359,10 @@ void AppController::checkWaitingAt(const QDateTime& now) {
   const int days = qMax(1, s.value(QStringLiteral("waitingDays"), 2).toInt());
   // One profile's links against that profile's tasks and people; the active
   // one's live in the models, the others' in m_profiles (PLAT-9).
-  const auto remind = [&](QVector<WaitingOn>& links, const QVector<Task>& tasks, const QVector<Person>& people, const QVariantList& statuses) {
+  const auto remind = [&](QVector<WaitingOn>& links,
+                          const QVector<Task>& tasks,
+                          const QVector<Person>& people,
+                          const QVariantList& statuses) {
     const QSet<QString> doneIds = heap::board::doneColumnIds(statuses);
     bool changed = false;
     for(WaitingOn& w : links) {

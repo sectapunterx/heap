@@ -3,7 +3,6 @@
 #include "AppController.h"
 
 #include "board/ColumnCategory.h"
-
 #include "cal/EventClamp.h"
 #include "cal/Occurrences.h"
 #include "notify/NotificationCenter.h"

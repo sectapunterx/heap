@@ -427,8 +427,7 @@ TEST_F(StatusTest, ARecurringTaskFinishedInAUserDoneColumnSpawnsTheNextCopy) {
   app_->moveTask(QStringLiteral("R-1"), shipped);
   const QVariantMap copy = app_->taskById(QStringLiteral("R-1-r1"));
   ASSERT_FALSE(copy.isEmpty());
-  EXPECT_EQ(app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("R-1-r1"))).dueAt.date(),
-            QDate::currentDate().addDays(10));
+  EXPECT_EQ(app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("R-1-r1"))).dueAt.date(), QDate::currentDate().addDays(10));
   // Shipped → Done is the same completion: no second copy.
   app_->moveTask(QStringLiteral("R-1"), QStringLiteral("done"));
   EXPECT_LT(app_->tasks()->indexOfId(QStringLiteral("R-1-r2")), 0);
