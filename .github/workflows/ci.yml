@@ -180,15 +180,25 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Install toolchain
-        id: toolchain
+      # Qt from the Actions cache, the version the build job uses: Ubuntu's
+      # Qt 6 dev packages came through apt in 20 s on a good day and in four
+      # and a half minutes on a slow mirror. clang-tidy 18, cmake and ninja
+      # ship with the runner image; apt is the fallback.
+      - name: Install system libs
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            clang-tidy-18 cmake ninja-build \
-            qt6-base-dev qt6-declarative-dev qt6-tools-dev qt6-networkauth-dev libgl1-mesa-dev libxcb1-dev
-          # Generated code is only reusable with the moc that wrote it.
-          echo "qt=$(dpkg-query -W -f='${Version}' qt6-base-dev qt6-declarative-dev | sha256sum | cut -c1-12)" >> "$GITHUB_OUTPUT"
+            libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev libxcb1-dev
+          if ! command -v clang-tidy-18 >/dev/null || ! command -v clang-tidy-diff-18.py >/dev/null || ! command -v ninja >/dev/null; then
+            sudo apt-get install -y --no-install-recommends clang-tidy-18 ninja-build
+          fi
+
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
+        with:
+          version: "6.9.1"
+          cache: true
+          modules: qtnetworkauth
 
       # Generating every target's moc/qmltyperegistrations output took three
       # of the job's four minutes. The build tree a push left behind is
@@ -198,8 +208,8 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: build
-          key: tidy-build-${{ steps.toolchain.outputs.qt }}-${{ github.sha }}
-          restore-keys: tidy-build-${{ steps.toolchain.outputs.qt }}-
+          key: tidy-build-qt6.9.1-${{ github.sha }}
+          restore-keys: tidy-build-qt6.9.1-
 
       # A checkout stamps every file with the current time, which would make
       # ninja take all of the restored tree as out of date. Every tracked file
@@ -234,7 +244,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: build
-          key: tidy-build-${{ steps.toolchain.outputs.qt }}-${{ github.sha }}
+          key: tidy-build-qt6.9.1-${{ github.sha }}
 
       - name: Check the changed lines
         if: github.event_name == 'pull_request'
