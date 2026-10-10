@@ -2312,9 +2312,24 @@ Item {
             }
             // A key heard while recording. Enter with nothing heard keeps the
             // old key; a conflict waits for the box below.
+            readonly property bool pending: keysRoot.conflictId.length > 0 || keysRoot.reserved.length > 0
+            readonly property bool canReplace: keysRoot.reserved.length === 0 && !keysRoot.conflictBuiltin
             function hear(event) {
                 if (event.key === Qt.Key_Escape) { keysRoot.cancel(); return; }
-                if (event.key === Qt.Key_Backspace || event.key === Qt.Key_Delete) {
+                // The box asks "Replace?": Enter answers it, as offered —
+                // it was recorded as the new key instead (IDIOT-SHELL-11).
+                const enter = event.key === Qt.Key_Return || event.key === Qt.Key_Enter;
+                if (keysRoot.pending && enter && !(event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.ShiftModifier))) {
+                    if (keysRoot.canReplace) keysRoot.commit();
+                    return;
+                }
+                // Backspace clears what was heard, as in the Hotkeys panel; only
+                // Delete takes the key off (IDIOT-SHELL-11).
+                if (event.key === Qt.Key_Backspace) {
+                    keysRoot.candidate = ""; keysRoot.conflictId = ""; keysRoot.reserved = "";
+                    return;
+                }
+                if (event.key === Qt.Key_Delete) {
                     const id = keysRoot.capturingId;
                     keysRoot.cancel();
                     AppController.setShortcut(id, "");
@@ -2428,9 +2443,24 @@ Item {
                                         }
                                         return;
                                     }
+                                    // Tab reaches the box's buttons while it asks
+                                    // (IDIOT-SHELL-11).
+                                    if (keysRoot.pending && (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab)) {
+                                        (keysRoot.canReplace ? replaceBtn : otherBtn).forceActiveFocus(Qt.TabFocusReason);
+                                        event.accepted = true;
+                                        return;
+                                    }
                                     keysRoot.hear(event);
                                     event.accepted = true;
                                 }
+                                // Leaving the row stops the recording: it stayed
+                                // armed with every global key dead (IDIOT-SHELL-10).
+                                // The box under the row is part of it.
+                                onActiveFocusChanged: if (!activeFocus && keyRow.rec) Qt.callLater(function () {
+                                    for (let p = capFocus.Window.activeFocusItem; p; p = p.parent)
+                                        if (p === keyItem) return;
+                                    if (keyRow.rec) keysRoot.cancel();
+                                })
                             }
                             MouseArea {
                                 anchors.fill: parent
@@ -2491,6 +2521,7 @@ Item {
                             RowLayout {
                                 spacing: Theme.spMd
                                 PillButton {
+                                    id: replaceBtn
                                     objectName: "settings-keys-replace"
                                     visible: keysRoot.reserved.length === 0 && !keysRoot.conflictBuiltin
                                     text: I18n.t("settings.keys.replace")
@@ -2498,9 +2529,13 @@ Item {
                                     onClicked: keysRoot.commit()
                                 }
                                 PillButton {
+                                    id: otherBtn
                                     objectName: "settings-keys-other"
                                     text: I18n.t("settings.keys.other")
-                                    onClicked: { keysRoot.candidate = ""; keysRoot.conflictId = ""; keysRoot.reserved = ""; }
+                                    onClicked: {
+                                        keysRoot.candidate = ""; keysRoot.conflictId = ""; keysRoot.reserved = "";
+                                        capFocus.forceActiveFocus();  // and listen again
+                                    }
                                 }
                             }
                         }
