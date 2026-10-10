@@ -31,11 +31,11 @@ jobs:
   meta:
     name: Resolve version
     runs-on: ubuntu-24.04
-    # Covers the wait for CI below (up to 90 minutes) plus the checkout.
-    timeout-minutes: 95
+    # The fast CI tier is not waited for: the full tier (full-ci below)
+    # covers all of it and decides whether the release becomes the latest.
+    timeout-minutes: 10
     permissions:
       contents: read
-      checks: read
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
       release: ${{ steps.tag.outputs.release }}
@@ -84,33 +84,6 @@ jobs:
             echo "release=$release"
             echo "prerelease=$prerelease"
           } >> "$GITHUB_OUTPUT"
-
-      # A tag may only ship a commit that passed CI — the fast tier the push
-      # to master ran; the full tier runs below, beside the packaging. Master
-      # accepts admin pushes that bypass the ruleset, so a tag can point at a
-      # commit whose
-      # `ci` check is red, still running, or was never run. The version bump is
-      # usually pushed moments before its tag, so wait for the check to finish
-      # rather than failing on "in progress". A manual test build skips this.
-      - name: Require a green CI run for the tagged commit
-        if: github.ref_type == 'tag'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          sha="${{ github.sha }}"
-          for attempt in $(seq 1 180); do
-            state=$(gh api "repos/${{ github.repository }}/commits/$sha/check-runs?check_name=ci&filter=latest" \
-              --jq '.check_runs | sort_by(.started_at) | last | if . == null then "missing" else "\(.status) \(.conclusion)" end')
-            case "$state" in
-              "completed success") echo "ci passed on $sha"; exit 0 ;;
-              completed*)          echo "::error::ci on $sha finished as '${state#completed }' — fix master and re-tag"; exit 1 ;;
-              *)                   echo "ci on $sha: $state (check $attempt/180)"; sleep 30 ;;
-            esac
-          done
-          echo "::error::no finished ci run for $sha after 50 minutes — was this commit pushed to master?"
-          exit 1
 
   # ──────────────────────────────────────────────────────────────────
   # Windows: portable zip (proven windeployqt bundle) + Inno Setup

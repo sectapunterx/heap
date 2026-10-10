@@ -12,11 +12,20 @@ on:
       full:
         type: boolean
         default: true
+      # What to check out; the triggering ref when empty. Nightly passes
+      # `feature`: a schedule always runs on master, which only changes with
+      # a release, so it would test what has already shipped.
+      ref:
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       full:
         type: boolean
         default: true
+      ref:
+        type: string
+        default: ""
 
 permissions:
   # Read-only: no job pushes to the branch any more (formatting and tidy
@@ -108,6 +117,7 @@ jobs:
       # The PR's merge commit; HEAD^1 is the base it merges into.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.ref }}
           fetch-depth: 2
 
       - name: Install clang-format 18
@@ -138,6 +148,8 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
       - uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
         with:
           files: ".github/workflows/*.yml"
@@ -151,6 +163,8 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
       - name: Check QML against the design tokens
         run: python3 .github/scripts/ui_tokens_check.py qml
       # Displayed dates go through the UI-language formatter (APP-188).
@@ -183,6 +197,7 @@ jobs:
       # wrote, against HEAD^1 (the base of a PR's merge commit).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.ref }}
           fetch-depth: 2
 
       # Ubuntu 24.04's apt ships Qt 6.4.2, which has a static-QML-module
@@ -576,6 +591,8 @@ jobs:
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Install build tools + system libs
         run: |

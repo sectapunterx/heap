@@ -1,7 +1,9 @@
 name: Nightly
 
 # What is too slow, too noisy or too early to gate every PR on, run once a day
-# against master: the next Qt, a deep fuzz under ASan, coverage, the benchmark
+# against `feature`, where new work lands (a schedule always starts on master,
+# which only changes with a release, so the jobs check feature out): the next
+# Qt, a deep fuzz under ASan, coverage, the benchmark
 # trend, and a full release build that publishes nothing. A red
 # nightly is a lead to follow up, not a blocked merge. Running daily also keeps
 # the ccache and Qt caches warm, which GitHub evicts after seven idle days.
@@ -28,6 +30,7 @@ jobs:
     uses: ./.github/workflows/ci.yml
     with:
       full: true
+      ref: feature
     permissions:
       contents: read
       checks: write
@@ -43,6 +46,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: feature
 
       - name: Install build tools + system libs
         run: |
@@ -83,6 +88,8 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: feature
 
       - name: Install build tools + system libs
         run: |
@@ -132,6 +139,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: feature
 
       - name: Install build tools + system libs
         run: |
@@ -196,6 +205,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: feature
 
       - name: Install build tools + system libs
         run: |
@@ -242,8 +253,9 @@ jobs:
           fail-on-alert: true
           summary-always: true
           # A scheduled run has no commit in its payload, which the action
-          # needs for each data point; it reads this one through the API.
-          ref: ${{ github.sha }}
+          # needs for each data point; it reads feature's, measured here,
+          # through the API.
+          ref: feature
           github-token: ${{ github.token }}
 
   # ──────────────────────────────────────────────────────────────────
