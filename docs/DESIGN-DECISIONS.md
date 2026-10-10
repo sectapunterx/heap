@@ -355,3 +355,37 @@ progressive disclosure, content priority, state preservation). One entry each.
   Настройки → Внешний вид (the sheet's "Тихий по умолчанию" predates that decision). Shown once
   when the data last ran with an older release line (`settings.lastRunVersion`, or a pre-v12 file);
   a fresh install never sees it; Settings → О программе → Что нового opens it any time.
+
+## r4 · tasks group (Board, List, Task document, menus, drag, archive & people)
+
+- **R3-057 · "ответили", not "ответила".** lowkey has no gender for a person, so the reply state is
+  the impersonal plural «ответили» / "replied"; «написал» (the user's own act, as the sheet writes
+  it) carries when: «написал вчера», «написал 6 окт». A person keeps `stateAt` (when the state last
+  moved; schema v12 shape, written only when set, so older files read as before). [consistency;
+  clarity over a guessed form.]
+- **R3-137 · "Некуда отметить готовой" uses the small-dialog template.** The sheet card puts its two
+  buttons on the left; every small dialog in the app keeps them on the right with the main button
+  last (X-Dlg-Small). One template beats one card that differs. "Выбрать этап у колонки…" opens
+  Settings → Задачи и процесс, where a column's stage is set. [consistency.]
+- **R3-046 · A tracker task's menu is the sheet's.** Открыть, Открыть в GitHub, Готово / Мой
+  приоритет, Мой срок, Запланировать / Копировать ссылку, Обновить из GitHub / Скрыть из lowkey,
+  disabled Удалить "из трекера не удаляем". Move, timer, copy ID, the branch rows and archive are
+  not on it: the column moves by drag or Shift H / L, the timer by t, the ID by y y, and Ctrl K has
+  all of them. "Обновить из GitHub" runs that tracker's sync now. [progressive disclosure; keyboard
+  alternatives kept.]
+- **R3-044 · Digits still pick a column.** The status list draws no numbers (the sheet has none),
+  but 1–9 still pick while it is open; the Done-stage columns sit last after a separator with "d".
+- **R3-048 · Calendar block menu.** "Перенести…" opens the schedule field (as s does);
+  "Длительность…" is the same short list as a meeting's (15 мин … 2 ч) and resizes the block;
+  "Убрать из календаря" clears the plan date only — the deadline and the task stay.
+- **R3-056 · A hand-archived task gets its month.** Archiving stamps the status-change time when
+  the task never had one, so it lands in its month, not in "Без даты" (DG-161 groups by that time).
+- **R3-147 · Ask before a write, on by default.** Only where writes are on for that tracker: the
+  move is held ("не отправлено" on the card) until "Отправить" or "Только у меня"; "Больше не
+  спрашивать для Jira" stores `integrations.<id>.askBeforeWrite = false`. Esc leaves the card with
+  its own "отправить" link, so nothing is sent unasked. Several moves ask one after another.
+- **R3-045 · Quiet danger rows are softened** (`Theme.dangerInk`: the danger colour mixed toward
+  the text in quiet), bold keeps the full red.
+- **Saved view "Заблокировано" (r3 note) is not a bug.** Applied, it shows its one task (APP-105)
+  and the count agrees; the 0 in the r3 capture came from a typed query "статус:заблокировано p0"
+  (the Russian key, R3-136, plus p0).
