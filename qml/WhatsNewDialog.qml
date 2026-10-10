@@ -53,17 +53,19 @@ Popup {
             text: I18n.t("whatsnew.title").arg(AppController.appVersion)
             color: Theme.text
             font.family: Theme.fontUi
-            font.pixelSize: Theme.fsLg
+            // N/X-Ntf-OS: a 15px/600 heading over 13px body (R4-020).
+            font.pixelSize: Theme.px(15)
             font.weight: Theme.fwHeading
         }
         Text {
             Layout.fillWidth: true
             Layout.topMargin: Theme.spXs
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+            Layout.bottomMargin: Theme.spSm
             text: I18n.t("whatsnew.sub")
-            color: Theme.textMuted
+            color: Theme.textDim
             font.family: Theme.fontUi
-            font.pixelSize: Theme.fsSm
+            font.pixelSize: Theme.fsMd
             wrapMode: Text.Wrap
         }
         Repeater {
@@ -76,7 +78,7 @@ Popup {
                 spacing: Theme.sp2xs
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.topMargin: Theme.spLg
+                    Layout.topMargin: Theme.spMd
                     Layout.bottomMargin: Theme.spMd
                     implicitHeight: 1
                     color: Theme.border
@@ -86,15 +88,15 @@ Popup {
                     text: sec.modelData.title[root.lang]
                     color: Theme.text
                     font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsSm
-                    font.weight: Theme.fwTitle
+                    font.pixelSize: Theme.fsMd
                 }
                 Text {
                     Layout.fillWidth: true
                     text: sec.modelData.body[root.lang]
-                    color: Theme.textMuted
+                    color: Theme.textDim
                     font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsSm
+                    font.pixelSize: Theme.fsMd
+                    lineHeight: 1.2
                     wrapMode: Text.Wrap
                 }
             }
@@ -116,10 +118,10 @@ Popup {
             Layout.topMargin: Theme.spSm
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             text: root.notes && root.notes.moved ? root.notes.moved[root.lang] : ""
-            color: Theme.text
+            color: Theme.textMuted
             font.family: Theme.fontUi
-            font.pixelSize: Theme.fsSm
-            lineHeight: 1.3
+            font.pixelSize: Theme.fsMd
+            lineHeight: 1.4
             wrapMode: Text.Wrap
         }
         RowLayout {

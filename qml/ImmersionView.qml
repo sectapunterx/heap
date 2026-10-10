@@ -132,8 +132,9 @@ FocusScope {
             textFormat: Text.PlainText
             color: root.hasTask ? Theme.text : Theme.textMuted
             font.family: Theme.fontUi
-            font.pixelSize: Theme.fs2xl + Theme.spSm
-            font.weight: Theme.fwHeading
+            // N/X-Ntf-Focus: 30px/500 (R4-014).
+            font.pixelSize: Theme.px(30)
+            font.weight: Theme.fwTitle
             wrapMode: Text.Wrap
         }
         ColumnLayout {
@@ -213,7 +214,7 @@ FocusScope {
                 text: root.elapsedText()
                 color: Style.urgency && !!root.task.isTiming ? Theme.signalNow : Theme.text
                 font.family: Theme.fontMono
-                font.pixelSize: Theme.fsLg
+                font.pixelSize: Theme.px(15)
             }
         }
         // Pause / resume, with its key. The glyph is drawn (two bars or a
@@ -260,7 +261,7 @@ FocusScope {
             text: root.nextMeetingText()
             color: Style.urgency ? Theme.info : Theme.textMuted
             font.family: Theme.fontUi
-            font.pixelSize: Theme.fsSm
+            font.pixelSize: Theme.fsMd
         }
         Item {
             objectName: "immersion-done"
@@ -273,10 +274,16 @@ FocusScope {
                 text: I18n.t("taskmenu.done")
                 color: Theme.text
                 font.family: Theme.fontUi
-                font.pixelSize: Theme.fsSm
+                font.pixelSize: Theme.fsMd
                 font.underline: doneCA.hovered
             }
-            KeyHint { keys: "D"; always: true; color: Theme.text }
+            // "Готово D": the key in the body font, the same size (R4-015).
+            Text {
+                text: "D"
+                color: Theme.textMuted
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsMd
+            }
         }
             ClickArea {
                 id: doneCA
