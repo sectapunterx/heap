@@ -1,6 +1,6 @@
 # Third-party notices
 
-heap. bundles the third-party components listed here. Each is used under its own
+lowkey bundles the third-party components listed here. Each is used under its own
 license, reproduced in full alongside the code it covers.
 
 ## md4c
@@ -12,7 +12,7 @@ license, reproduced in full alongside the code it covers.
 - Vendored at `third_party/md4c/`; provenance and update steps in
   `third_party/md4c/README.heap.md`.
 
-md4c is the CommonMark parser behind heap's notes editor. Its sources are
+md4c is the CommonMark parser behind lowkey's notes editor. Its sources are
 included verbatim and compiled into the application.
 
 ## Golos Text
@@ -23,7 +23,7 @@ included verbatim and compiled into the application.
 - Copyright 2019 The Golos Text Project Authors
 - No Reserved Font Name is declared.
 
-The interface font. heap ships static Regular, Medium and SemiBold faces cut
+The interface font. lowkey ships static Regular, Medium and SemiBold faces cut
 from the upstream variable font by `tools/gen_bundled_fonts.py` (weight
 instancing and name-table changes only, every glyph kept); they are compiled
 into the application.
@@ -41,9 +41,9 @@ cut and shipped the same way as Golos Text.
 
 ## Qt
 
-heap links the Qt 6 libraries under the GNU Lesser General Public License v3.
+lowkey links the Qt 6 libraries under the GNU Lesser General Public License v3.
 Qt is not redistributed as source here; see https://www.qt.io/licensing and the
-license texts shipped with your Qt installation. Binary releases of heap include
+license texts shipped with your Qt installation. Binary releases of lowkey include
 the Qt libraries they load, and the corresponding Qt sources for the exact
 version used are available from https://download.qt.io.
 

@@ -1,129 +1,175 @@
 <p align="center">
-  <img src="design/brand-export/lowkey/lowkey-wordmark-on-dark.svg" width="320" alt="lowkey">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="design/brand-export/lowkey/lowkey-wordmark-on-dark.svg">
+    <img src="design/brand-export/lowkey/lowkey-wordmark-on-light.svg" width="320" alt="lowkey">
+  </picture>
 </p>
 
 <h3 align="center">Quiet by default.</h3>
 
-<p align="center">A developer’s workday in one window — tickets, meetings and notes, from the keyboard.</p>
-
 <p align="center">
   <a href="https://github.com/sectapunterx/lowkey/releases/latest"><b>Download</b></a> ·
-  <a href="https://sectapunterx.github.io/lowkey/">Website — the tour</a> ·
-  <a href="#documentation">Docs</a>
+  <a href="https://sectapunterx.github.io/lowkey/">The tour on the website</a> ·
+  <a href="#docs">Docs</a>
 </p>
 
-<div align="center">
+<p align="center">
+  <a href="https://github.com/sectapunterx/lowkey/releases"><img src="https://img.shields.io/github/v/release/sectapunterx/lowkey?sort=semver" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
+</p>
 
-[![Release](https://img.shields.io/github/v/release/sectapunterx/lowkey?sort=semver)](https://github.com/sectapunterx/lowkey/releases)
-[![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](https://github.com/sectapunterx/lowkey/releases/latest)
-[![License](https://img.shields.io/badge/license-MIT-blue)](#license)
+If your work lives in someone else's tracker, your meetings in a calendar tab and your notes in a third
+place, this is a desk of your own next to all of that. Your assigned issues, today's meetings and your
+notes sit in one native window on Windows, macOS or Linux, and you drive it from the keyboard. It is free,
+MIT-licensed, needs no account, and the website has the full tour:
+<https://sectapunterx.github.io/lowkey/>.
 
-</div>
+This page is the practical side: whether it fits you, what it will and won't touch, and how to get going.
 
-A personal desktop app, lowkey brings your tickets from GitHub, GitLab, Jira and nine more trackers, your meetings, and
-your notes, in one window you drive from the keyboard. It keeps everything in a file on your disk, needs no
-account, and writes nothing to your trackers unless you switch that on. What it looks like and why it exists is on
-the [website](https://sectapunterx.github.io/lowkey/); this page is about getting it running and finding your way
-around.
+## Is it for you?
+
+**Probably yes, if:**
+
+- you take tasks from GitHub, GitLab, Jira, Trello, Gitea, Forgejo, Redmine, Todoist, Asana, ClickUp,
+  Sentry or Bitbucket — one of them or several at once;
+- you'd rather press `j` than reach for the mouse, and you already know what `g g` does;
+- you want your plans in a file on your own disk, readable with any text editor;
+- you keep notes in Markdown, maybe in an Obsidian vault.
+
+**Probably not, if:**
+
+- you need a shared board for your team — it is a personal desk, the team's tracker stays the shared place;
+- you want something to plan your day for you — it shows you the facts and leaves the decisions to you;
+- you need live sync between machines today — moving work between computers is export and import for now;
+- you work from a phone — there is no mobile or web version.
+
+## What changes once it's installed
+
+**Mornings start on one screen.** Today puts the meetings and tasks of the day together, with what is in
+progress and what is due. Calendars come in by link (Outlook, Google, iCloud `.ics`), read-only.
+
+**Thoughts stop getting lost.** `Ctrl+Shift+Space` opens a capture line over whatever app you are in.
+Type `review PR tomorrow 11:00 p1 #api` — date, time, priority and label are read from the words, in
+English or Russian. `Ctrl+Shift+N` does the same for a note.
+
+**Your branch tells it what you're on.** Add a repository in Settings → Git. Check out `APP-112-…` and
+APP-112 shows at the top of the window; the PR state comes from your own `gh` or `glab`. Switching to the
+branch also moves the task to In Progress — one switch in the same settings turns that off.
+
+**Tickets get your private layer.** On any tracker task you can keep your own notes, checklist, tags and
+dates. A sync never overwrites them, and none of it goes back to the tracker.
+
+**Notes link to work.** Write `#APP-112` in a note and it becomes a link carrying the task's title. Bring an
+existing folder of `.md` files in — you see what will come in before anything is copied.
+
+## What it won't do without asking
+
+- **Write to your trackers.** Issues come in read-only. Changing an issue's status when you move its card
+  is a separate switch per tracker (GitHub, GitLab, Gitea, Forgejo, Jira), off until you turn it on — and
+  even then the issue is checked again before anything is sent. Titles, descriptions and comments are
+  never written. Details: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
+- **Phone home.** No analytics, no crash reports. The app checks for a new version on start — you can
+  turn that off in Settings → About — and installs one only when you click to update. The rest of its
+  traffic is what you connected yourself: trackers, calendar links, `gh`/`glab` for added repositories.
+- **Run in the background.** It works while its window or tray icon is open. Starting at login is off
+  until you switch it on.
+- **Lose your work.** A backup of your data is made daily by default (the newest 20 are kept), plus a time
+  machine of snapshots you can step back through.
 
 ## Install
 
-Download from [Releases](https://github.com/sectapunterx/lowkey/releases/latest):
+From [the latest release](https://github.com/sectapunterx/lowkey/releases/latest), where `X.Y.Z` is the
+version:
 
-| System | File | Then |
-| --- | --- | --- |
-| Windows | `lowkey-*-windows-setup.exe` | Run it. Or take `lowkey-*-windows-portable.zip` and start `lowkey.exe` from any folder. |
-| macOS | `lowkey-*-macos.dmg` | Open it and drag lowkey into Applications. |
-| Linux | `lowkey-*-linux-x86_64.AppImage` | `chmod +x lowkey-*.AppImage && ./lowkey-*.AppImage` — nothing else to install. |
-
-Updates: lowkey checks for a new version on start and installs it only when you click **Update**. The check is
-off-switchable in Settings → About.
-
-## The first ten minutes
-
-1. **Write a task.** The app opens on Today with an input line. Type `fix login tomorrow 15:00 p1 #auth` and
-   press Enter. From anywhere else: `Ctrl+Shift+Space`.
-2. **Connect a tracker.** Settings → Trackers → pick yours → sign in through the browser, or paste a token.
-   Issues come in read-only. Moving a card changes the issue upstream only after you tick *Change the status in
-   …* for that tracker.
-3. **Add a repository.** Settings → Git Watcher. From then on the task named in your branch (`APP-112-…`) shows at the top
-   of the window.
-4. **Bring your notes.** Profile menu at the top of the sidebar → *Import notes folder…* — an Obsidian vault or
-   any folder of `.md` files. You see what comes in before anything is copied.
-5. **Look around without risk.** On the very first start, the empty Today offers an example: a filled profile of
-   its own to try things on, kept apart from your data and easy to remove.
-
-More: [First day in lowkey](docs/TUTORIAL.md).
-
-## Keys to learn first
-
-| Key | Does |
+| System | File |
 | --- | --- |
-| `Ctrl+Shift+Space` | New task from any app |
-| `Ctrl+K` | Command line: find, filter, run |
-| `?` | Every key on one screen |
-| `Ctrl+1` `2` `3` | Today, Tasks, Knowledge (`Ctrl+,` Settings) |
-| `g b` `g l` `g c` | Board, List, Calendar |
-| `j` `k` / `h` `l` | Move the cursor |
-| `d` | Done (again: back) |
-| `/` | Filter the section you are in |
+| Windows | `lowkey-vX.Y.Z-windows-setup.exe` — installer, or `lowkey-vX.Y.Z-windows-portable.zip` — unzip anywhere and run `lowkey.exe` |
+| macOS | `lowkey-vX.Y.Z-macos.dmg` — open it and drag the app into Applications |
+| Linux | `lowkey-vX.Y.Z-linux-x86_64.AppImage` — `chmod +x` and run; Qt is inside, nothing else to install |
 
-Single letters never fire while you are typing, and they work in any keyboard layout. Every key can be changed:
-`?` → *Change shortcuts…*. Full list: [docs/HOTKEYS.md](docs/HOTKEYS.md).
-
-## Finding things
-
-The line above Tasks takes plain words and conditions, the same way in Board, List and Calendar. A finished
-condition turns into a chip; save the lot as a view and it stays in the sidebar.
-
-```
-status:blocked          due:week              scheduled:none        is:overdue
-priority:p0,p1          #label                branch:login          estimate:>2h
-has:notes               sprint:current        -status:done          bug OR crash
-```
-
-All of it: [Quick-capture and search syntax](docs/TUTORIAL.md#quick-capture-syntax).
-
-## Your data
-
-| | Windows | macOS | Linux |
-| --- | --- | --- | --- |
-| Data | `%APPDATA%\lowkey\lowkey\` | `~/Library/Application Support/lowkey/lowkey/` | `~/.local/share/lowkey/lowkey/` |
-
-- `state.json` — everything: tasks, meetings, notes, settings.
-- `backups/` — scheduled copies (daily, last 20 kept); `history/` — the time machine’s snapshots.
-- `logs/lowkey.log` — attach it to a bug report.
-- Tracker tokens are not in `state.json`: the Windows build keeps them in the system credential store, macOS and
-  Linux in a `secrets.json` only your user can read.
-
-Two machines: profile menu → *Export to JSON…*, then import it on the other one — importing only adds. Details:
-[docs/DATA.md](docs/DATA.md).
-
-## From the terminal
+With [Scoop](https://scoop.sh) on Windows:
 
 ```sh
-lowkey today            # overdue first, then today
-lowkey add "review PR tomorrow 11:00 #api"
-lowkey now              # the current task — fits a shell prompt
+scoop bucket add lowkey https://github.com/sectapunterx/lowkey
+scoop install lowkey
 ```
 
-On Windows use `lowkey-cli` in cmd and PowerShell. Everything else: [docs/CLI.md](docs/CLI.md).
+Uninstalling leaves your data folder in place.
 
-## Documentation
+## Ten keys to start with
 
-- [First day in lowkey](docs/TUTORIAL.md) — a ten-minute walkthrough, capture and search syntax
-- [Keyboard](docs/HOTKEYS.md) — every key and how to change it
-- [Trackers](docs/INTEGRATIONS.md) — connecting each one, what is read and what may be written
-- [Data & backups](docs/DATA.md) — files, backups, moving between machines
+| Key | What it does |
+| --- | --- |
+| `Ctrl+Shift+Space` | Capture a task from any app |
+| `Ctrl+K` | Command line — find anything, run any command |
+| `?` | Every key on one screen |
+| `Ctrl+1` / `Ctrl+2` / `Ctrl+3` | Today, Tasks, Knowledge |
+| `g b` · `g l` · `g c` | Board, list, calendar |
+| `j` `k` · `h` `l` | Move the cursor |
+| `d` | Done — on a done task, brings it back |
+| `s` | Schedule the task under the cursor |
+| `y y` · `y b` | Copy the task id · its branch name |
+| `/` | Filter the section you are in |
+
+Single letters only act while you aren't typing. Keys are read by their place on the keyboard, so they
+work in any layout, and every one of them can be changed from the `?` screen. The full map is in
+[docs/HOTKEYS.md](docs/HOTKEYS.md).
+
+The filter line takes conditions as well as words — the same in board, list and calendar:
+
+```
+status:blocked   due:week   scheduled:none   is:overdue   priority:p0,p1
+#label   branch:login   estimate:>2h   has:notes   sprint:current   -status:done   bug OR crash
+```
+
+## The terminal is part of it
+
+```sh
+lowkey today                                  # overdue first, then what's on today
+lowkey add "fix login tomorrow 14:00 p1 #backend"
+lowkey now                                    # the current task — fits a shell prompt
+```
+
+With the window open, changes show up there at once. On Windows the command is `lowkey-cli`. The rest,
+including a starship snippet: [docs/CLI.md](docs/CLI.md).
+
+## Where your data lives
+
+| Windows | macOS | Linux |
+| --- | --- | --- |
+| `%APPDATA%\lowkey\lowkey\` | `~/Library/Application Support/lowkey/lowkey/` | `~/.local/share/lowkey/lowkey/` |
+
+- `state.json` — tasks, meetings, notes and settings, in one human-readable file.
+- `backups/` and `history/` — scheduled copies and time-machine snapshots.
+- `logs/lowkey.log` — attach it to a bug report.
+- Tracker tokens are kept out of `state.json`: in the system credential store on Windows, in a
+  `secrets.json` readable only by your user on macOS and Linux.
+
+Two computers: export a profile to JSON and import it on the other one — importing only adds, it never
+overwrites. More in [docs/DATA.md](docs/DATA.md).
+
+## Docs
+
+- [Keyboard](docs/HOTKEYS.md) — every key, and how to rebind them
+- [Trackers](docs/INTEGRATIONS.md) — connecting each one; what is read, what may be written
+- [Data and backups](docs/DATA.md) — files, restores, moving between machines
 - [Command line](docs/CLI.md)
+- [Building from source](docs/BUILDING.md)
 
-## Contributing
+## Building from source
 
-Bug reports and pull requests are welcome — include `logs/lowkey.log` with a bug. Building from source and the
-code map are in [CONTRIBUTING.md](CONTRIBUTING.md).
+You need Qt 6.9 or newer and a C++20 compiler:
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+```
+
+Per-platform setup is in [docs/BUILDING.md](docs/BUILDING.md); the code map and how to contribute are in
+[CONTRIBUTING.md](CONTRIBUTING.md). Bug reports and pull requests are welcome — please include
+`logs/lowkey.log`.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Brand assets under `design/brand-export/` are MIT for use within this codebase. The
-fonts bundled into the app (Golos Text, JetBrains Mono) are SIL OFL 1.1; see
+MIT — see [LICENSE](LICENSE). The bundled fonts (Golos Text, JetBrains Mono) are under the SIL OFL 1.1; see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
