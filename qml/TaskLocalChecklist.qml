@@ -215,6 +215,9 @@ ColumnLayout {
                 editField.text = row.modelData.text;
                 editField.forceActiveFocus();
             } else if (e.key === Qt.Key_Delete) {
+                // Once per press: the next item gets the keyboard, and a held
+                // Del emptied the list (IDIOT-TASKS-3).
+                if (e.isAutoRepeat) { e.accepted = true; return; }
                 const next = root.items[row.index + 1] || root.items[row.index - 1];
                 root._focusId = next ? next.id : "";
                 AppController.removeChecklistItem(root.taskId, row.itemId);

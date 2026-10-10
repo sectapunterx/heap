@@ -74,6 +74,10 @@ Flow {
                     if (!chip.broken) root.open(chip.attId, chip.attName);
                     event.accepted = true;
                 } else if (root.removable && (event.key === Qt.Key_Delete || event.key === Qt.Key_Backspace)) {
+                    // Once per press: the neighbour gets the keyboard, and a
+                    // held key would take it too (IDIOT-TASKS-3).
+                    event.accepted = true;
+                    if (event.isAutoRepeat) return;
                     // The chip is about to go: hand the keyboard to a neighbour.
                     const next = chip.nextItemInFocusChain(true);
                     root.removeRequested(chip.attId, chip.attName);
