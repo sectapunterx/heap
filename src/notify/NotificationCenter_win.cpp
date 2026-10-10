@@ -153,6 +153,7 @@ class WinToastBackend : public NotificationCenter {
   void setTrayMenu(const QString& header, const QVector<TrayItem>& items) override {
     m_tray->setTrayMenu(header, items);
   }
+
   void setTrayToolTip(const QString& text) override {
     m_tray->setTrayToolTip(text);
   }

@@ -122,7 +122,8 @@ QVariantList AppController::trayItemsAt(const QDateTime& now, QString* tooltip) 
   items.append(Item{});
   items.append({QStringLiteral("open"), tr_(QStringLiteral("tray.open")), {}, true});
   // One "do not disturb": notifications.dndUntil, the one Settings writes.
-  const QDateTime dndUntil = QDateTime::fromString(settingsMap().value(QStringLiteral("notifications")).toMap().value(QStringLiteral("dndUntil")).toString(), Qt::ISODate);
+  const QDateTime dndUntil = QDateTime::fromString(
+      settingsMap().value(QStringLiteral("notifications")).toMap().value(QStringLiteral("dndUntil")).toString(), Qt::ISODate);
   const bool muted = dndUntil.isValid() && now < dndUntil;
   items.append({QStringLiteral("dnd"),
                 muted ? tr_(QStringLiteral("tray.dndUntil")).arg(heap::text::formatTime(dndUntil.time(), twelveHourClock()))
@@ -158,7 +159,8 @@ void AppController::onTrayItem(const QString& id) {
     // The same "do not disturb for an hour" Settings and the app use; a
     // second pick lifts it.
     const QDateTime now = QDateTime::currentDateTime();
-    const QDateTime until = QDateTime::fromString(settingsMap().value(QStringLiteral("notifications")).toMap().value(QStringLiteral("dndUntil")).toString(), Qt::ISODate);
+    const QDateTime until = QDateTime::fromString(
+        settingsMap().value(QStringLiteral("notifications")).toMap().value(QStringLiteral("dndUntil")).toString(), Qt::ISODate);
     doNotDisturbFor(until.isValid() && now < until ? 0 : 60, now);
   }
   refreshTray();

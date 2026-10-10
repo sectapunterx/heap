@@ -220,6 +220,7 @@ class FakeHttpServer {
   // disconnected while it deletes them, after m_buffers is already gone.
   struct SocketGuard {
     QTcpServer* server;
+
     ~SocketGuard() {
       for(QTcpSocket* s : server->findChildren<QTcpSocket*>()) {
         QObject::disconnect(s, nullptr, nullptr, nullptr);
