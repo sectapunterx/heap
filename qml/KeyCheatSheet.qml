@@ -67,11 +67,14 @@ Popup {
             { label: "keys.row.timer", ids: ["task.timer"] },
             { label: "keys.row.archive", ids: ["board.archive"] },
             { label: "keys.row.menu", ids: ["board.cardMenu"] },
-            { label: "keys.row.delete", ids: ["selection.deleteSel"] }
+            { label: "keys.row.delete", ids: ["selection.deleteSel"] },
+            // The editor's own key, not a catalogue action (it cannot be
+            // rebound): ticking a checklist item was in no hint (PERSONA-8).
+            { label: "keys.row.toggleItem", ids: [], fixed: "Ctrl+Return" }
         ] },
         { id: "moveTask", col: 3, rows: [
-            { label: "keys.row.moveColumn", ids: ["board.moveLeft", "board.moveRight"] },
-            { label: "keys.row.moveUpDown", ids: ["board.moveDown", "board.moveUp"] },
+            { label: "keys.row.moveColumn", words: "keys.words.moveColumn", ids: ["board.moveLeft", "board.moveRight"] },
+            { label: "keys.row.moveUpDown", words: "keys.words.moveUpDown", ids: ["board.moveDown", "board.moveUp"] },
             { label: "keys.row.blockLength", ids: ["cal.longer", "cal.shorter"] },
             { label: "keys.row.columnMove", ids: ["board.columnLeft", "board.columnRight"] }
         ] },
@@ -141,12 +144,14 @@ Popup {
     }
     function _label(row) {
         if (row.label) return I18n.t(row.label);
+        if (row.ids.length === 0) return "";
         const list = AppController.shortcuts;
         for (let i = 0; i < list.length; i++) if (list[i].id === row.ids[0]) return list[i].label;
         return row.ids[0];
     }
     // The keys of a row as written beside it: each bound id, or a run.
     function keysOf(row) {
+        if (row.fixed) return [AppController.keyText(row.fixed)];
         const keys = [];
         for (const id of row.ids) {
             const seq = root._seq(id);
@@ -166,6 +171,11 @@ Popup {
         const query = String(q || "").trim().toLowerCase();
         if (query.length === 0) return true;
         if (root._label(row).toLowerCase().indexOf(query) >= 0) return true;
+        // The other words people look for it by, and what the catalogue
+        // says the action does: "статус" found nothing (PERSONA-12).
+        if (row.words && I18n.t(row.words).toLowerCase().indexOf(query) >= 0) return true;
+        for (const id of row.ids)
+            if (String(AppController.shortcutDescription(id)).toLowerCase().indexOf(query) >= 0) return true;
         const keys = root.keysOf(row).join("  ").toLowerCase();
         const variants = [query, KeyRules.latinOf(query), KeyRules.translit(query)];
         for (const v of variants)
@@ -183,6 +193,19 @@ Popup {
 
     onAboutToShow: search.text = ""
     onOpened: search.forceActiveFocus()
+    // Nothing on the sheet answers the search: a blank panel said nothing
+    // (PERSONA-12).
+    readonly property bool nothingFound: search.text.trim().length > 0
+        && !root._shownGroups.some(g => root._filtered(g.rows, search.text).length > 0)
+
+    // The key that opens the sheet closes it, as Ctrl+K does the palette;
+    // the global keys stand down behind it (IDIOT-SHELL-15).
+    Shortcut {
+        sequence: AppController.shortcuts.length >= 0 ? AppController.shortcutFor("hotkeys.open") : ""
+        context: Qt.WindowShortcut
+        enabled: root.opened && String(sequence).length > 0
+        onActivated: root.close()
+    }
 
     contentItem: ColumnLayout {
         spacing: Theme.spLg
@@ -244,6 +267,16 @@ Popup {
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ThinScrollBar {}
 
+            Text {
+                objectName: "key-sheet-nothing"
+                visible: root.nothingFound
+                text: I18n.t("keys.sheet.nothing").arg(search.text.trim())
+                textFormat: Text.PlainText
+                color: Theme.textMuted
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsSm
+            }
+
             // A grid of four columns read row by row (N/X-Keys, R3-112):
             // Движение | Перейти | Задача | Переместить, then Скопировать |
             // Выделение | Вид | Поиск, then "Изменилось". Fewer columns on a
@@ -280,7 +313,7 @@ Popup {
                                         id: row
                                         required property var modelData
                                         readonly property var keys: AppController.shortcuts.length >= 0 ? root.keysOf(row.modelData) : []
-                                        objectName: "key-sheet-row-" + row.modelData.ids[0]
+                                        objectName: "key-sheet-row-" + (row.modelData.ids[0] || row.modelData.label)
                                         Layout.fillWidth: true
                                         implicitHeight: Math.max(rowLabel.implicitHeight, keyRow.implicitHeight) + 2 * Theme.spXs
                                         Text {
@@ -343,6 +376,15 @@ Popup {
                                 }
                             }
                         }
+            }
+            // A row cut by the footer read as the end of the sheet: a soft
+            // edge says there is more below (EYES-8).
+            ScrollFade {
+                objectName: "key-sheet-fade"
+                parent: flick
+                anchors.fill: parent
+                flick: flick
+                color: Theme.modalFill
             }
         }
 

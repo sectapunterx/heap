@@ -3319,7 +3319,9 @@ ApplicationWindow {
     }
     KeyCheatSheet {
         id: cheatSheet
-        onEditRequested: Qt.callLater(function () { rail.openHotkeys(rail.hotkeysAnchor); })
+        // "Change a key — Settings > Keys" lands there, as it says
+        // (IDIOT-SHELL-15); it opened the sidebar popover.
+        onEditRequested: Qt.callLater(function () { win.runCommand("settings:shortcuts"); })
     }
 
     // "g …": the first key of a sequence waits for its second (keymap rule 3).
