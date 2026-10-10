@@ -66,20 +66,38 @@ dates. A sync never overwrites them, and none of it goes back to the tracker.
 **Notes link to work.** Write `#APP-112` in a note and it becomes a link carrying the task's title. Bring an
 existing folder of `.md` files in — you see what will come in before anything is copied.
 
-<table>
-  <tr>
-    <td width="50%"><img src="docs/assets/img/readme/board.png" width="100%" alt="Tasks as a board"><br>Board: your tasks by status, one keypress per move</td>
-    <td width="50%"><img src="docs/assets/img/readme/calendar.png" width="100%" alt="Tasks as a week calendar"><br>Week: meetings and planned tasks side by side</td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/assets/img/readme/task.png" width="100%" alt="A task open as a document"><br>A task opens as a document: plan, code, history</td>
-    <td width="50%"><img src="docs/assets/img/readme/knowledge.png" width="100%" alt="Knowledge with a note open"><br>Knowledge: Markdown notes linked to tasks</td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/assets/img/readme/command.png" width="100%" alt="The command line over Tasks"><br><code>Ctrl+K</code>: find anything, run any command</td>
-    <td width="50%"><img src="docs/assets/img/readme/quiet.png" width="100%" alt="Today in the Quiet style"><br>The Quiet style: the same day, less on screen</td>
-  </tr>
-</table>
+<sub>Click a line to see the screen.</sub>
+
+<details>
+<summary><b>Board — your tasks by status, one keypress per move</b></summary>
+<br>
+<img src="docs/assets/img/readme/board.png" width="100%" alt="Tasks as a board">
+</details>
+<details>
+<summary><b>Week — meetings and planned tasks side by side</b></summary>
+<br>
+<img src="docs/assets/img/readme/calendar.png" width="100%" alt="Tasks as a week calendar">
+</details>
+<details>
+<summary><b>A task opens as a document — plan, code, history</b></summary>
+<br>
+<img src="docs/assets/img/readme/task.png" width="100%" alt="A task open as a document">
+</details>
+<details>
+<summary><b>Knowledge — Markdown notes linked to tasks</b></summary>
+<br>
+<img src="docs/assets/img/readme/knowledge.png" width="100%" alt="Knowledge with a note open">
+</details>
+<details>
+<summary><b><code>Ctrl+K</code> — find anything, run any command</b></summary>
+<br>
+<img src="docs/assets/img/readme/command.png" width="100%" alt="The command line over Tasks">
+</details>
+<details>
+<summary><b>The Quiet style — the same day, less on screen</b></summary>
+<br>
+<img src="docs/assets/img/readme/quiet.png" width="100%" alt="Today in the Quiet style">
+</details>
 
 ## What it won't do without asking
 
