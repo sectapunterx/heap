@@ -3355,6 +3355,10 @@ ApplicationWindow {
         onFinished: {
             if (Theme.reducedMotion) splash.visible = false;
             else splashFade.start();
+            // The view takes the keyboard at launch — on the first run that
+            // is the one input on screen, which looked ready and was not
+            // (IDIOT-SHELL-9). A key or a dialog that got there first keeps it.
+            if (!win._focusInPopup && !win._typing) win.focusActiveView();
         }
         onReportRequested: reportIssue.showNow()
         // The first frame is on screen: the scene is ready.
