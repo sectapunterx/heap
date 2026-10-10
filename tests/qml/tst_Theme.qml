@@ -976,10 +976,11 @@ TestCase {
             delete o.appearance.uiScale;
             AppController.appSettingsJson = JSON.stringify(o);
             compare(Theme.systemScale(), AppController.systemUiScale(Theme.scaleSteps));
-            // Unset, 115 % unless the system asks for more (0.8.2).
+            // Unset, 110 % on an unscaled screen unless the system asks for
+            // more (0.8.3).
             compare(Theme.scale, Math.max(Theme.defaultScale, Theme.systemScale()));
             compare(Theme.systemScale(), 1, "tests read a 100 % system");
-            compare(Theme.scale, 1.15);
+            compare(Theme.scale, 1.1);
             o.appearance.uiScale = 1.25;
             AppController.appSettingsJson = JSON.stringify(o);
             compare(Theme.scale, 1.25);
