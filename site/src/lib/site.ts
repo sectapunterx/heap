@@ -1,13 +1,13 @@
-// The one place the GitHub repository is named. The repository is still sectapunterx/heap until
-// the owner renames it (APP-280); change REPO here and every download link, the releases API and
-// the source links follow. The Pages base (/heap/) lives in astro.config.mjs.
-export const REPO = 'sectapunterx/heap';
+// The GitHub repository, from repo.mjs (GITHUB_REPOSITORY on Actions): every download link, the
+// releases API and the source links follow it, and so does the Pages base in astro.config.mjs.
+import { REPO as REPO_FULL } from '../../repo.mjs';
+export const REPO: string = REPO_FULL;
 export const GITHUB_URL = `https://github.com/${REPO}`;
 export const RELEASES_URL = `${GITHUB_URL}/releases`;
 export const LATEST_URL = `${RELEASES_URL}/latest`;
 export const LICENSE_URL = `${GITHUB_URL}/blob/master/LICENSE`;
 
-/** Prefix a site-relative path with the deploy base (`/heap/`), keeping the trailing slash policy. */
+/** Prefix a site-relative path with the deploy base (`/<repository>/`), keeping the trailing slash policy. */
 export function url(path = ''): string {
   const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
   const clean = path.replace(/^\/+/, '');

@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { BASE, REPO } from '../../repo.mjs';
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 
@@ -74,7 +75,7 @@ test('internal links all resolve', async ({ page, request }) => {
 });
 
 test('links to pages of the old site still lead somewhere', async ({ request }) => {
-  for (const [path, to] of [['demo/', '/heap/#try'], ['privacy/', '/heap/#trust'], ['docs/hotkeys/', 'github.com/sectapunterx/heap/tree/master/docs'], ['changelog/', 'github.com/sectapunterx/heap/releases']]) {
+  for (const [path, to] of [['demo/', `${BASE}/#try`], ['privacy/', `${BASE}/#trust`], ['docs/hotkeys/', `github.com/${REPO}/tree/master/docs`], ['changelog/', `github.com/${REPO}/releases`]]) {
     const res = await request.get(path);
     expect(res.status(), path).toBe(200);
     expect(await res.text(), path).toContain(`url=${to.startsWith('/') ? to : 'https://' + to}`);
@@ -84,10 +85,10 @@ test('links to pages of the old site still lead somewhere', async ({ request }) 
 test('the language switch leads to the same page in the other language', async ({ page }) => {
   await page.goto('download/');
   await page.locator('header .lang-switch').click();
-  await expect(page).toHaveURL(/\/heap\/ru\/download\/$/);
+  await expect(page).toHaveURL(new RegExp(`${BASE}/ru/download/$`));
   await expect(page.locator('html')).toHaveAttribute('lang', 'ru');
   await page.locator('header .lang-switch').click();
-  await expect(page).toHaveURL(/\/heap\/download\/$/);
+  await expect(page).toHaveURL(new RegExp(`${BASE}/download/$`));
 });
 
 test.describe('tracker writes are described as off by default', () => {
