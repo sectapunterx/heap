@@ -90,8 +90,11 @@ jobs:
       # `ci` check is red, still running, or was never run. The version bump is
       # usually pushed moments before its tag, so wait for the check to finish
       # rather than failing on "in progress". A manual test build skips this.
+      # The owner can waive it for one release (the change already passed CI
+      # on its PR) with the repository variable RELEASE_SKIP_CI_GATE=true;
+      # unset it right after.
       - name: Require a green CI run for the tagged commit
-        if: github.ref_type == 'tag'
+        if: github.ref_type == 'tag' && vars.RELEASE_SKIP_CI_GATE != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
