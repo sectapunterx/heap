@@ -83,8 +83,21 @@ Rectangle {
 
     function _tokens(t) { return String(t || "").match(/"[^"]*"|\S+/g) || []; }
     function _isClause(tok) { return /^-?[a-z]+:\S+$/i.test(tok); }
+    // The placeholder's shorthands as the clauses they mean, so "p1 " becomes
+    // a chip like "priority:p1 " does (PERSONA-14). Search reads them too.
+    readonly property var _whenWords: ({ "week": "week", "неделя": "week", "неделе": "week", "today": "today",
+                                         "сегодня": "today", "tomorrow": "1d", "завтра": "1d" })
+    function _canon(tok) {
+        const neg = tok.charAt(0) === "-" && tok.length > 1 ? "-" : "";
+        const t = neg ? tok.substring(1) : tok;
+        if (/^p[0-3]$/i.test(t)) return neg + "priority:" + t.toLowerCase();
+        if (t.charAt(0) === "@" && root._whenWords[t.substring(1).toLowerCase()] !== undefined)
+            return neg + "scheduled:" + root._whenWords[t.substring(1).toLowerCase()];
+        if (/^#(?!\d+$)\S+$/.test(t)) return neg + "tag:" + t.substring(1);
+        return tok;
+    }
     function _split(t) {
-        const toks = root._tokens(t);
+        const toks = root._tokens(t).map(root._canon);
         // An OR query stays as typed: its parts belong together.
         const chips = toks.indexOf("OR") >= 0 ? [] : toks.filter(root._isClause);
         const rest = toks.indexOf("OR") >= 0 ? toks : toks.filter(x => !root._isClause(x));
@@ -101,10 +114,11 @@ Rectangle {
     // A finished "key:value " moves out of the field into a chip.
     function _onTyped() {
         if (root._sync) return;
-        const m = /^(.*?)(-?[a-z]+:\S+)\s$/i.exec(searchField.text);
-        if (m && searchField.text.indexOf(" OR ") < 0) {
+        const m = /^(.*?)(\S+)\s$/.exec(searchField.text);
+        const clause = m ? root._canon(m[2]) : "";
+        if (m && root._isClause(clause) && searchField.text.indexOf(" OR ") < 0) {
             root._sync = true;
-            root._committed = [root._committed, m[2]].filter(x => x.length > 0).join(" ");
+            root._committed = [root._committed, clause].filter(x => x.length > 0).join(" ");
             searchField.text = m[1].trim();
             root._sync = false;
         }

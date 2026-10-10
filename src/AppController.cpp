@@ -697,6 +697,8 @@ const QHash<QString, I18nEntry>& i18nTable() {
        {"Yesterday / Today / Blockers from what lowkey saw; to edit and copy.",
         "Вчера / Сегодня / Блокеры из того, что видно в lowkey; поправить и скопировать."}},
       {"shortcut.recap.open.label", {"Weekly recap", "Сводка недели"}},
+      {"shortcut.example.open.label", {"Open the example", "Открыть пример"}},
+      {"shortcut.example.open.desc", {"A profile with sample tasks, notes and a day to try things on.", "Профиль с примером задач, заметок и дня, чтобы попробовать."}},
       {"shortcut.recap.open.desc", {"What changed column last week.", "Что сменило колонку на прошлой неделе."}},
       {"shortcut.endOfDay.open.label", {"End of day", "Конец дня"}},
       {"shortcut.endOfDay.open.desc",
@@ -14501,6 +14503,9 @@ void AppController::seedShortcutCatalog() {
   add("recap.open", "");
   add("endOfDay.open", "");
   add("welcome.replay", "");
+  // The example profile from anywhere (PERSONA-1): the first-run link was the
+  // only way, and it is gone once any task exists.
+  add("example.open", "");
   // My views in sidebar order (APP-281 A4): Ctrl+4…9 after the three
   // sections, and g 1…g 9.
   add("savedView.1", "Ctrl+4");

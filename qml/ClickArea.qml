@@ -88,7 +88,9 @@ Item {
     }
     // The keyboard opens it too (APP-184): Tab onto an icon and its name
     // and key show, as they do under the pointer.
-    ToolTip.visible: ca.showTip && (ma.containsMouse || ca.activeFocus) && ca._tipText.length > 0
+    // Not once the area is hidden: the example link's tip floated over Today
+    // after a click took the hero away (PERSONA-4).
+    ToolTip.visible: ca.showTip && ca.visible && (ma.containsMouse || ca.activeFocus) && ca._tipText.length > 0
     ToolTip.delay: 500
     ToolTip.text: ca._tipText
 

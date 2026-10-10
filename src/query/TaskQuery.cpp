@@ -3,6 +3,7 @@
 #include "query/TaskQuery.h"
 
 #include <QDateTime>
+#include <QHash>
 #include <QJsonObject>
 #include <QRegularExpression>
 #include <QSet>
@@ -114,6 +115,20 @@ Op takeOp(QString& spec) {
 // Resolve a `deadline:` value to a date. Accepts what the app's own date
 // parser accepts ("friday", "tomorrow", "in 2 days", "2026-09-24") plus the
 // bare "3d" shorthand a query language is expected to have.
+// "@week", "@today", "@tomorrow" and their Russian words: the plan they name,
+// as a scheduled: value; empty for any other token.
+QString shorthandWhen(const QString& token) {
+  if(token.size() < 2 || !token.startsWith(QLatin1Char('@'))) {
+    return {};
+  }
+  static const QHash<QString, QString> kWhen = {
+      {QStringLiteral("week"), QStringLiteral("week")},     {QStringLiteral("неделя"), QStringLiteral("week")},
+      {QStringLiteral("неделе"), QStringLiteral("week")},   {QStringLiteral("today"), QStringLiteral("today")},
+      {QStringLiteral("сегодня"), QStringLiteral("today")}, {QStringLiteral("tomorrow"), QStringLiteral("1d")},
+      {QStringLiteral("завтра"), QStringLiteral("1d")}};
+  return kWhen.value(token.mid(1).toLower());
+}
+
 QDate resolveDate(const QString& raw, const QDate& today, bool& ok) {
   ok = false;
   const QString v = raw.trimmed();
@@ -245,9 +260,19 @@ TaskQuery TaskQuery::compile(const QString& text, const QDate& today, const QVar
     }
     QString field;
     QString spec;
+    // The shorthands the filter's placeholder offers, as quick capture reads
+    // them (PERSONA-14): "p1" is a priority, "@week" / "@неделя" a plan.
+    static const QRegularExpression kPriority(QStringLiteral("^[pP][0-3]$"));
+    const QString when = shorthandWhen(token);
     // "#infra" is a label; "#42" is an issue number, searched for as text.
     static const QRegularExpression kIssueNo(QStringLiteral("^#\\d+$"));
-    if(token.size() > 1 && token.startsWith(QLatin1Char('#')) && !kIssueNo.match(token).hasMatch()) {
+    if(kPriority.match(token).hasMatch()) {
+      field = QStringLiteral("priority");
+      spec = token.toLower();
+    } else if(!when.isEmpty()) {
+      field = QStringLiteral("scheduled");
+      spec = when;
+    } else if(token.size() > 1 && token.startsWith(QLatin1Char('#')) && !kIssueNo.match(token).hasMatch()) {
       field = QStringLiteral("tag");
       spec = token.mid(1);
     } else if(!looksLikeFieldToken(token, &field, &spec)) {

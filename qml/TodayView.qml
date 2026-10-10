@@ -47,6 +47,9 @@ FocusScope {
         if (root.firstRun) firstRunHero.focusInput();
         else root.forceActiveFocus();
     }
+    // Main hands the keyboard to a view through takeFocus(): on the first
+    // run that is the input, which looked focused and was not (PERSONA-2).
+    function takeFocus() { root.focusView(); }
 
     readonly property date day: AppController.selectedDate
     readonly property bool isToday: root._sameDay(root.day, AppController.today)
@@ -150,6 +153,9 @@ FocusScope {
     }
     readonly property var lead: root._leadIdx >= 0 ? root.inProgress[root._leadIdx] : null
     readonly property var otherInProgress: root.inProgress.filter((t, i) => i !== root._leadIdx)
+    readonly property var _ipLines: root.cards ? root.otherInProgress : root.inProgress
+    readonly property int _ipCap: 5
+    property bool _ipAll: false
     // Quiet keeps only today's deadlines (H2-Today-Calm "Срок сегодня").
     readonly property var deadlines: (root.dayData.deadlines || []).filter(t => root.cards || !t.tomorrow)
     readonly property var people: Style.todayExtras === "hidden" ? [] : (root.dayData.people || [])
@@ -566,7 +572,7 @@ FocusScope {
                         // The others in progress, as lines; quiet draws all
                         // of them this way.
                         Repeater {
-                            model: root.cards ? root.otherInProgress : root.inProgress
+                            model: root._ipAll ? root._ipLines : root._ipLines.slice(0, root._ipCap)
                             delegate: RowLayout {
                                 id: ipRow
                                 required property var modelData
@@ -588,6 +594,17 @@ FocusScope {
                                 }
                                 TimerMark { visible: !!ipRow.modelData.isTiming; taskId: ipRow.modelData.id }
                             }
+                        }
+                        // The rest on request: eighty lines pushed the deadlines
+                        // off the screen (EYES-3).
+                        Text {
+                            objectName: "today-inprogress-more"
+                            visible: !root._ipAll && root._ipLines.length > root._ipCap
+                            text: I18n.t("week.more").arg(root._ipLines.length - root._ipCap)
+                            color: Theme.textMuted
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsSm
+                            ClickArea { label: parent.text; onActivated: root._ipAll = true }
                         }
                     }
 
@@ -984,7 +1001,8 @@ FocusScope {
             return Theme.px(30);
         }
         visible: implicitHeight > 0
-        opacity: dr.b.past ? 0.55 : 1
+        // Past: the title steps down to muted; the time and the line under it
+        // stay at textDim, which holds AA (a 0.55 opacity read 2.2:1, EYES-6).
 
         Text {
             id: timeT
@@ -1046,7 +1064,7 @@ FocusScope {
                         Layout.fillWidth: true
                         text: dr.b.title || ""
                         elide: Text.ElideRight
-                        color: Theme.text
+                        color: dr.b.past ? Theme.textMuted : Theme.text
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsMd
                         // The sheets set day rows at 500 (R4-003).
@@ -1100,7 +1118,7 @@ FocusScope {
                     Layout.fillWidth: true
                     text: dr.b.title || ""
                     elide: Text.ElideRight
-                    color: Theme.text
+                    color: dr.b.past ? Theme.textMuted : Theme.text
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsLg
                 }

@@ -41,7 +41,7 @@ Popup {
         root.open();
         return true;
     }
-    onOpened: okBtn.forceActiveFocus()
+    onOpened: okBtn.forceActiveFocus(Qt.TabFocusReason)
 
     contentItem: ColumnLayout {
         spacing: 0

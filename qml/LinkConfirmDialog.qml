@@ -27,7 +27,7 @@ QQC.Dialog {
         }
         root.link = url;
         root.open();
-        openBtn.forceActiveFocus();
+        openBtn.forceActiveFocus(Qt.TabFocusReason);
     }
     function go() {
         root.close();

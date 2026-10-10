@@ -115,6 +115,11 @@ FocusScope {
         if (root._isDraft) titleField.selectAll();
         else titleField.cursorPosition = titleField.length;
     }
+    // Main's way back into the panel after a menu or a popup closes: the
+    // title, where Esc closes the panel (IDIOT-DOC-7).
+    function takeFocus() {
+        titleField.forceActiveFocus();
+    }
     function _switchTo() { if (root.opened) root.flush(); }
 
     // An old caller's draft: shown, and made on the first save.

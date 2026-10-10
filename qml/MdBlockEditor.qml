@@ -57,6 +57,17 @@ Item {
     }
     Component.onCompleted: { root._loading = true; src.text = root.text; root._loading = false; }
 
+    // Another text in: a document switched under the editor. Assigning
+    // `text` changed nothing when the new text equalled the old *loaded*
+    // one, so the edits of the last document stayed in the editor and were
+    // saved into the next (IDIOT-DOC-1).
+    function load(t) {
+        root._leave(false);
+        root._loading = true;
+        src.text = t;
+        root._loading = false;
+        root.text = t;
+    }
     // Take what is in the open block now (before a save, a switch).
     function flush() { root._commit(); }
     // The caret into the document: the first block, or a new one if empty.
@@ -159,6 +170,16 @@ Item {
         if (y < view.contentY) view.contentY = Math.max(0, y - Theme.spLg);
         else if (y + field.height > view.contentY + view.height)
             view.contentY = y + field.height - view.height + Theme.spLg;
+    }
+    // The "/" typed at the caret and the insert menu over it.
+    function openSlashMenu() {
+        if (root.readOnly || !root.editing) return;
+        const at = field.cursorPosition;
+        field.insert(at, "/");
+        field.cursorPosition = at + 1;
+        slashMenu.slashAt = at;
+        slashMenu.popup(field, field.cursorRectangle.x, field.cursorRectangle.y + field.cursorRectangle.height);
+        slashMenu.currentIndex = 0;
     }
     // A new block after the last one (a click below the text).
     function appendBlock() {
@@ -368,12 +389,7 @@ Item {
                 // the menu); a pick replaces it, Esc leaves it.
                 if (event.text === "/" && (field.cursorPosition === 0
                         || field.text.charAt(field.cursorPosition - 1) === "\n")) {
-                    const at = field.cursorPosition;
-                    field.insert(at, "/");
-                    field.cursorPosition = at + 1;
-                    slashMenu.slashAt = at;
-                    slashMenu.popup(field, field.cursorRectangle.x, field.cursorRectangle.y + field.cursorRectangle.height);
-                    slashMenu.currentIndex = 0;
+                    root.openSlashMenu();
                     event.accepted = true;
                     return;
                 }

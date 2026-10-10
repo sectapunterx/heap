@@ -152,7 +152,9 @@ Rectangle {
                 // amber / red in bold, a plain line in quiet.
                 : markT.conflict ? (Style.urgency ? Theme.danger : Theme.borderStrong)
                 : markT.pending ? (Style.urgency ? Theme.warning : Theme.borderStrong)
-                : "transparent"
+                // A white card on the light ground had no edge at all (1.06:1,
+                // EYES-4): the light themes keep a hairline, dark ones none.
+                : Theme.cardBorder
     border.width: _isStuck && !dragArea.drag.active ? 2 : 1
     opacity: dragArea.drag.active ? 1.0 : (_isArchived ? 0.7 : 1.0)
     scale: dragArea.drag.active ? 1.03 : 1.0
@@ -534,6 +536,11 @@ Rectangle {
                 readonly property bool near: dlText.length > 0 && (days === 0 || days === 1)
                 visible: dlText.length > 0
                 text: dlText
+                // Never under the card edge: the Russian overdue text ran past
+                // it with the number cut off (EYES-2).
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                elide: Text.ElideRight
                 color: overdue ? Theme.signalUrgent : near ? Theme.signalNow : Theme.textDim
                 font.family: Theme.fontUi
                 font.features: Theme.tabularNums

@@ -1979,6 +1979,10 @@ Item {
                             // calendar glyph; the type is not a colour.
                             radius: root.blockRadius
                             color: Theme.meetingFill
+                            // Quiet fills a meeting with the card colour: on the
+                            // light ground it needs the edge to show its length (EYES-4).
+                            border.width: Style.chipFill ? 0 : 1
+                            border.color: Theme.cardBorder
                             // A later lane is drawn over an earlier one where
                             // they cascade; a dragged event above them all.
                             z: (weEv.dragDx !== 0 || weEv.dragDy !== 0) ? 7 : 5 + weEv._col / Math.max(1, weEv._cols)

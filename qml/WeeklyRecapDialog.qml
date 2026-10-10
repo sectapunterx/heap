@@ -342,5 +342,5 @@ Popup {
             Item { Layout.fillWidth: true }
         }
     }
-    onOpened: copyBtn.forceActiveFocus()
+    onOpened: copyBtn.forceActiveFocus(Qt.TabFocusReason)
 }

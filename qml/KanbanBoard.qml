@@ -646,7 +646,8 @@ Item {
         let n = 0;
         for (let c = 0; c < colRepeater.count; c++) {
             const it = colRepeater.itemAt(c);
-            if (it && it.x + it.width / 2 > edge) n++;
+            // Any part past the edge: a column cut at a third had no chip (EYES-1).
+            if (it && it.x + it.width > edge + 1) n++;
         }
         return n;
     }
@@ -1841,11 +1842,12 @@ Item {
         visible: root.hiddenColumnsRight > 0
         anchors.right: parent.right
         anchors.rightMargin: Theme.sp2xl
-        anchors.top: parent.top
-        anchors.topMargin: Theme.spXl
+        // From the header row down: the cut column's ring and name showed
+        // above the fade beside the chip (EYES-1).
+        anchors.top: hscroll.top
         anchors.bottom: parent.bottom
         anchors.bottomMargin: Theme.sp2xl
-        width: Theme.sp3xl * 2
+        width: Math.max(Theme.sp3xl * 2, hiddenCols.width + Theme.spXl * 2)
         z: 899
         gradient: Gradient {
             orientation: Gradient.Horizontal
@@ -1859,9 +1861,10 @@ Item {
         visible: root.hiddenColumnsRight > 0
         anchors.right: parent.right
         anchors.rightMargin: Theme.sp2xl
-        // On the line of the column headers.
-        anchors.top: parent.top
-        anchors.topMargin: Theme.spXl + (Theme.px(38) - height) / 2
+        // On the line of the column headers: a column starts at the top of
+        // the scroll area with its 38 px header (EYES-1: it sat 12 px low).
+        anchors.top: hscroll.top
+        anchors.topMargin: (38 - height) / 2
         z: 900
         radius: Theme.radiusMd
         color: hiddenColsMA.hovered || hiddenColsMA.keyboardFocused ? Theme.panel3 : Theme.bg

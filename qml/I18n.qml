@@ -2882,7 +2882,7 @@ QtObject {
             "kanban.tip.rename": "Двойной клик — переименовать",
             "task.chip.stuck": "завис",
             "task.chip.arch": "архив",
-            "task.due.overdue": "просрочено на %1 д",
+            "task.due.overdue": "%1 д просрочки",
             "task.due.today": "сегодня",
             "task.due.tomorrow": "завтра",
             "task.due.inDays": "через %1 д",
