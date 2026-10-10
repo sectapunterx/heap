@@ -610,6 +610,11 @@ TEST_F(StorageSafety, ADebouncedSaveOfTenThousandTasksDoesNotBlockTheEventLoop) 
   if(fullMs < 40) {
     GTEST_SKIP() << "this machine saves too fast to tell the difference";
   }
+#if defined(__SANITIZE_ADDRESS__)
+  // ASan slows the snapshot on the UI thread several times over, so the
+  // ratio measures the sanitizer, not the save; the plain builds check it.
+  GTEST_SKIP() << "timing is not meaningful under AddressSanitizer";
+#endif
   EXPECT_LT(worst, fullMs / 2) << "the save still runs on the UI thread";
   EXPECT_TRUE(savedInTheWindow) << "the debounced save did not run while the loop was watched";
 }
