@@ -1951,6 +1951,10 @@ ApplicationWindow {
         const base = KeyRules.baseId(id);
         const v = AppController.currentView;
         const b = win.activeViewItem();
+        // Column move: only on a column header that holds the keyboard
+        // (DG-133); anywhere else Ctrl+Shift+L stays the log.
+        if (base === "board.columnLeft" || base === "board.columnRight")
+            return !!b && typeof b.focusedHeaderStatus === "function" && b.focusedHeaderStatus().length > 0;
         // One cursor in every view that has one (APP-276): the board, the
         // list, Today, the calendar, the notes.
         if (base.indexOf("board.") === 0)
@@ -2104,6 +2108,8 @@ ApplicationWindow {
             else win._eachKeyTask(function (t) { AppController.setArchived(t.id, true); });
             return;
         case "board.collapseColumn": call("toggleCursorColumn"); return;
+        case "board.columnLeft": call("moveFocusedColumn", -1); return;
+        case "board.columnRight": call("moveFocusedColumn", 1); return;
         case "cal.longer": call("resizeCursor", 1); return;
         case "cal.shorter": call("resizeCursor", -1); return;
         case "region.next": win.focusRegion(1); return;

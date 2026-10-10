@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import QtQuick.Controls.Basic
 import QtQuick.Controls as QQC
 import TodoCpp
+import "QueryWords.js" as QueryWords
 
 // The header of the content column (heap 2, APP-258): the section's title,
 // its lenses (Tasks: Board / List / Calendar; Knowledge: Notes / Links), the
@@ -123,30 +124,9 @@ Rectangle {
     readonly property var conditions: root._tokens(root._committed).map(root._chip)
     // A clause as a chip: a word for the field, a word for the value.
     function _chip(raw) {
-        const neg = raw.startsWith("-");
-        const body = neg ? raw.slice(1) : raw;
-        const at = body.indexOf(":");
-        const k = body.slice(0, at).toLowerCase();
-        const v = body.slice(at + 1);
-        const keys = { status: "status", priority: "priority", tag: "label", due: "due", deadline: "due",
-                       is: "is", mention: "mention" };
-        // "is:open" is the default "статус не готово" of the sheets (DG-020).
-        const notDone = !neg && k === "is" && v.toLowerCase() === "open";
-        const key = I18n.t("query.key." + (notDone ? "status" : (keys[k] || "other")));
-        let value = v;
-        if (notDone) value = I18n.t("query.notDone");
-        else if (k === "is") value = I18n.t("query.is." + v.toLowerCase());
-        else if (k === "priority") value = v.toUpperCase().split(",").join(", ");
-        else if (k === "status") {
-            const sts = AppController.statuses;
-            value = v.split(",").map(id => { const st = sts.find(x => x.id === id.toLowerCase()); return st ? st.name : id; }).join(", ");
-        } else if (k === "due" || k === "deadline") {
-            const words = ["today", "tomorrow", "week", "overdue", "none"];
-            value = words.indexOf(v.toLowerCase()) >= 0 ? I18n.t("query.due." + v.toLowerCase()) : v;
-        }
-        if (value.indexOf("query.") === 0) value = v;
+        const c = QueryWords.clause(raw) || { key: I18n.t("query.key.other"), value: raw };
         const bad = root.searchProblems.indexOf(raw) >= 0;
-        return { key: (neg ? I18n.t("query.not") + " " : "") + key, value: value + (bad ? " · " + I18n.t("query.unknown") : ""), raw: raw, bad: bad };
+        return { key: c.key, value: c.value + (bad ? " · " + I18n.t("query.unknown") : ""), raw: raw, bad: bad };
     }
     // The "seen this before" hint under the search was clicked (APP-159).
     signal seenBeforeActivated(var hit)
@@ -199,8 +179,8 @@ Rectangle {
             text: root.title
             color: Theme.text
             font.family: Theme.fontUi
-            font.pixelSize: Theme.fsXl
-            font.weight: Theme.fwHeading
+            font.pixelSize: Theme.fsScreenTitle
+            font.weight: Theme.fwScreenTitle
             Accessible.role: Accessible.Heading
             Accessible.name: root.title
         }

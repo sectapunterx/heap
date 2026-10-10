@@ -476,6 +476,13 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.board.moveUp.desc",
        {"On the board, swap the card with the one above; in the calendar, a grid step earlier. Also Ctrl+Up.",
         "На доске поменять карточку местами с верхней; в календаре — на шаг сетки раньше. Также Ctrl+↑."}},
+      {"shortcut.board.columnLeft.label", {"Move the column left", "Сдвинуть колонку влево"}},
+      {"shortcut.board.columnLeft.desc",
+       {"On a column header: move the column one place left.", "На заголовке колонки: сдвинуть колонку на место левее."}},
+      {"shortcut.board.columnRight.label", {"Move the column right", "Сдвинуть колонку вправо"}},
+      {"shortcut.board.columnRight.desc",
+       {"On a column header: move the column one place right. Elsewhere this key opens the log.",
+        "На заголовке колонки: сдвинуть колонку на место правее. В остальных местах эта клавиша открывает журнал."}},
       {"shortcut.board.moveLeft.label", {"Move left / a day earlier", "Левее / на день раньше"}},
       {"shortcut.board.moveLeft.desc",
        {"Move the selection, or the item under the cursor, to the previous column; in the calendar and on Today, a day earlier. Also "
@@ -7424,7 +7431,7 @@ void AppController::moveStatus(const QString& id, int newIndex) {
   scheduleSave();
 }
 
-void AppController::deleteStatus(const QString& id) {
+void AppController::deleteStatus(const QString& id, const QString& into) {
   const int i = statusIndexOf(id);
   if(i < 0 || m_statuses.size() <= 1) {
     return;  // never let the board run out of columns
@@ -7432,9 +7439,10 @@ void AppController::deleteStatus(const QString& id) {
   const QString statusName = m_statuses[i].toMap().value("name").toString();
   const UndoScope scope(this, tr_("status.restored").arg(statusName));
 
-  // re-home any tasks with this status to the first remaining one
-  QString fallback;
-  for(int k = 0; k < m_statuses.size(); ++k) {
+  // re-home any tasks with this status to the column picked, else to the
+  // first remaining one
+  QString fallback = (into != id && statusIndexOf(into) >= 0) ? into : QString();
+  for(int k = 0; fallback.isEmpty() && k < m_statuses.size(); ++k) {
     if(k == i) {
       continue;
     }
@@ -8186,7 +8194,7 @@ void AppController::seedStartingWorkspace() {
   }
   Profile p = makeStartingProfile(tr_("profile.personal"), QString());
   p.id = QStringLiteral("default");
-  // The starter views stay (APP-258: Blocked / In review are views now).
+  // No starter views (R2-058): "Мои виды" fills as filters are saved.
   // The reference catalogue is sample content: explicitly empty, not
   // absent, so it is not seeded into this profile on the first visit.
   p.docsState = QStringLiteral(R"({"sections":[],"snippets":[],"contacts":[]})");
@@ -11575,9 +11583,9 @@ Profile AppController::makeStartingProfile(const QString& name, const QString& c
       p.statuses.append(m);
     }
   }
-  // tasks / events / people / docs — empty; a few starter saved views, which
-  // are seeded only here, when the profile is made.
-  p.savedViews = heap::savedviews::starterViews(m_language == QStringLiteral("ru"));
+  // tasks / events / people / docs / saved views — empty. "Мои виды" fills
+  // as the user saves a filter (H2-First / Q-First, R2-058); the example
+  // profile still brings the starter views as sample content.
   return p;
 }
 
@@ -13629,6 +13637,9 @@ void AppController::seedShortcutCatalog() {
   add("board.archive", "E");
   // Fold, as Vim's za.
   add("board.collapseColumn", "Z, A");
+  // On a column header only (keymap.md, DG-133): Ctrl+Shift+L elsewhere is the log.
+  add("board.columnLeft", "Ctrl+Shift+H");
+  add("board.columnRight", "Ctrl+Shift+L");
   // Selecting from the keyboard (APP-128): Shift+Up/Down grows the selection
   // a card at a time, Shift+Left/Right takes the whole column and steps on.
   // Moving cards went from Shift+arrows to Ctrl+arrows (Main.qml) to make room.
@@ -14090,6 +14101,16 @@ QString AppController::builtinShortcutOwner(const QString& id, const QString& no
   return QString();
 }
 
+namespace {
+// Keys live only on a column header that holds the keyboard (keymap.md: "на
+// заголовке колонки"). The board's router takes them there and leaves them
+// alone everywhere else, so they meet only the board's own keys: Ctrl+Shift+L
+// is the column move on a header and the log anywhere else (DG-133).
+bool isHeaderKey(const QString& id) {
+  return id == QLatin1String("board.columnLeft") || id == QLatin1String("board.columnRight");
+}
+}  // namespace
+
 QString AppController::findShortcutConflict(const QString& id, const QString& sequence) const {
   const QString want = normalizeSequence(sequence);
   if(want.isEmpty()) {
@@ -14097,7 +14118,11 @@ QString AppController::findShortcutConflict(const QString& id, const QString& se
   }
   for(const auto& m_shortcut : m_shortcuts) {
     const QVariantMap m = m_shortcut.toMap();
-    if(m.value("id").toString() == id) {
+    const QString other = m.value("id").toString();
+    if(other == id) {
+      continue;
+    }
+    if(isHeaderKey(id) != isHeaderKey(other) && !(isHeaderKey(id) ? other : id).startsWith(QLatin1String("board."))) {
       continue;
     }
     const QString seq = m.value("sequence").toString();

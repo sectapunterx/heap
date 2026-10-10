@@ -1396,7 +1396,9 @@ class AppController : public QObject {
   Q_INVOKABLE int statusArchiveDays(const QString& id) const;
   Q_INVOKABLE void setStatusArchiveDays(const QString& id, int days);
   Q_INVOKABLE void moveStatus(const QString& id, int newIndex);
-  Q_INVOKABLE void deleteStatus(const QString& id);
+  // `into`: the column its tasks move to (X-Dlg-Small "Перенести задачи в",
+  // R2-041); empty or unknown = the first remaining column.
+  Q_INVOKABLE void deleteStatus(const QString& id, const QString& into = QString());
 
   // ---- Status counts ----
   // Every status' task count, built in one pass and cached until the model

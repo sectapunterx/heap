@@ -177,6 +177,11 @@ TEST_F(ViewFocusTest, NoTwoShortcutsShareASequence) {
     if(seq.isEmpty()) {
       continue;
     }
+    // A column-header key shares its chord with an app key on purpose: it is
+    // live only on a header (DG-133), and findShortcutConflict says so.
+    if(seen.contains(seq) && app_->findShortcutConflict(id, seq).isEmpty() && app_->findShortcutConflict(seen.value(seq), seq).isEmpty()) {
+      continue;
+    }
     EXPECT_FALSE(seen.contains(seq)) << "both " << seen.value(seq).toStdString() << " and " << id.toStdString() << " are bound to "
                                      << seq.toStdString();
     seen.insert(seq, id);
