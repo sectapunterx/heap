@@ -2283,6 +2283,9 @@ Item {
                     const a = list[i];
                     const name = String(a.label || a.id);
                     if (seen[name]) continue;
+                    // The old Docs / Notes ids open Knowledge like its own
+                    // key does (R4-077): listed only while they hold a key.
+                    if ((a.id === "view.docs" || a.id === "view.notes") && !String(a.sequence || "").length) continue;
                     seen[name] = true;
                     if (q.length > 0 && !Idx.textMatches(q, name, a.description)
                             && String(AppController.keyText(a.sequence)).toLowerCase().indexOf(q) < 0) continue;

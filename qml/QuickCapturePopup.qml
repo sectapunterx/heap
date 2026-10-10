@@ -725,6 +725,7 @@ Popup {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             spacing: Theme.spSm
             PropertyChip {
+                outlined: true
                 objectName: "qc-when"
                 removeOnHover: true
                 visible: !!(root._preview && root._preview.start)
@@ -737,6 +738,7 @@ Popup {
                 onRemoved: root.rejectSpan("when")
             }
             PropertyChip {
+                outlined: true
                 objectName: "qc-due"
                 removeOnHover: true
                 visible: !!(root._preview && root._preview.due)
@@ -749,6 +751,7 @@ Popup {
                 onRemoved: root.rejectSpan("due")
             }
             PropertyChip {
+                outlined: true
                 objectName: "qc-estimate"
                 removeOnHover: true
                 visible: !!(root._preview && root._preview.estimate > 0)
@@ -759,6 +762,7 @@ Popup {
                 onRemoved: root.rejectSpan("estimate")
             }
             PropertyChip {
+                outlined: true
                 objectName: "qc-priority"
                 visible: !!(root._parsed && root._parsed.priority)
                 small: false
@@ -771,6 +775,7 @@ Popup {
                 model: (root._parsed && root._parsed.labels) || []
                 delegate: PropertyChip {
                     required property var modelData
+                    outlined: true
                     small: false
                     key: I18n.t("capture.label")
                     value: "#" + modelData
@@ -780,6 +785,7 @@ Popup {
             // that says "нет" until clicked (DG-130; the sheet has no switch).
             PropertyChip {
                 id: meetingBox
+                outlined: true
                 objectName: "qc-meeting"
                 property bool checked: false
                 visible: !!(root._preview && root._preview.start && root._preview.hasTime)
@@ -791,6 +797,7 @@ Popup {
             }
             PropertyChip {
                 id: columnChip
+                outlined: true
                 objectName: "qc-column"
                 small: false
                 key: I18n.t("capture.column")
