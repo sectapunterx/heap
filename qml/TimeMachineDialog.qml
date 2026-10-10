@@ -140,13 +140,19 @@ Popup {
         if ((t.notesChanged || 0) > 0) parts.push(I18n.count(t.notesChanged, "tm.diff.notesChanged"));
         return parts.length > 0 ? parts.join(", ") : I18n.t("tm.diff.same");
     }
-    readonly property var diffRows: [
+    // Profiles made since then go with the restore (IDIOT-SHELL-5).
+    function profilesGoneText() {
+        return (root.preview.removedProfiles || []).map(p => I18n.t("tm.diff.profileGone").arg(p.name)
+                                                            .arg(I18n.count(p.tasks, "tm.diff.profileTasks"))).join(", ");
+    }
+    readonly property var diffRows: ((root.preview.removedProfiles || []).length > 0
+            ? [{ k: I18n.t("tm.diff.k.profiles"), v: root.profilesGoneText(), links: false }] : []).concat([
         { k: I18n.t("tm.diff.k.tasks"), v: root.tasksText(), links: true },
         { k: I18n.t("tm.diff.k.changes"), v: root.changesText(), links: false },
         { k: I18n.t("tm.diff.k.notes"), v: root.notesText(), links: false },
         { k: I18n.t("tm.diff.k.events"), v: I18n.t("tm.diff.events"), links: false },
         { k: I18n.t("tm.diff.k.settings"), v: I18n.t("tm.diff.settings"), links: false }
-    ]
+    ])
     // One deleted task back, from its id in the diff.
     function restoreTask(id) {
         if (!root.current) return;
