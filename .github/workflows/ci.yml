@@ -343,19 +343,19 @@ jobs:
           key: ${{ runner.os }}-ccache-${{ github.run_id }}
           restore-keys: ${{ runner.os }}-ccache-
 
-      # Same Qt package set as release.yml's package-windows, so CI tests the
-      # Qt that ships. qt6-svg and qtkeychain were missing here; a release
-      # without Qt6Svg (v0.4.3) went unnoticed partly because of it. The full
-      # tier (nightly, release tags) updates MSYS2 first as the release does;
-      # the fast one takes the cached packages as they are, which saves a
-      # minute and a half (a Qt update reaches PRs a night later).
+      # Same update policy and Qt package set as release.yml's package-windows,
+      # so CI tests the Qt that ships. qt6-svg and qtkeychain were missing here;
+      # a release without Qt6Svg (v0.4.3) went unnoticed partly because of it.
+      # Not `update: false` on PRs to save its ~1.5 min: without it the
+      # packages come from setup-msys2's own MSYS2 snapshot, an older Qt and
+      # GCC than ship, and every ccache entry missed (a 16-minute build).
       - name: Setup MSYS2 (windows)
         id: msys2
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
         with:
           msystem: UCRT64
-          update: ${{ needs.changes.outputs.full == 'true' }}
+          update: true
           install: >-
             mingw-w64-ucrt-x86_64-qt6-base
             mingw-w64-ucrt-x86_64-qt6-declarative
