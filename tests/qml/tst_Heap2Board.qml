@@ -1,7 +1,7 @@
 // The board in the heap 2 style (APP-262, APP-281 A1/A3): columns share the
 // width so six and a folded Done fit a 1440 px window, Done starts folded
 // into a narrow column with "Show", the card shows P2/P3 only when it is
-// detailed, and the card of the branch checked out carries the branch.
+// detailed, and no card carries a branch (Review 3 reverted APP-281 A3).
 import QtQuick
 import QtTest
 import TodoCpp
@@ -104,11 +104,18 @@ TestCase {
         Style.apply("bold");
     }
 
-    function test_the_checked_out_branch_marks_its_card_only() {
+    function test_no_card_shows_a_branch() {
         add({ id: "H2B-2", title: "branch card", status: "todo", branch: "feat/h2b-branch" });
         const board = makeBoard();
         tryVerify(() => allByName(board, "tc-title", []).some(t => t.text === "branch card"), 2000);
-        // No branch is checked out in the test: no card shows one by name.
-        compare(allByName(board, "tc-branch", []).length, 0);
+        // The sheet's card meta is id, date and priority: never the branch.
+        const texts = (item, out) => {
+            if (!item) return out;
+            if (item.visible && typeof item.text === "string" && item.text.indexOf("h2b-branch") >= 0) out.push(item);
+            const kids = item.children || [];
+            for (let i = 0; i < kids.length; i++) texts(kids[i], out);
+            return out;
+        };
+        compare(texts(board, []).length, 0, "no card shows the task's branch");
     }
 }

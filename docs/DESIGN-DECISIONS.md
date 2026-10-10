@@ -480,6 +480,9 @@ progressive disclosure, content priority, state preservation). One entry each.
   "←", read as "back"). The glyph is now added to all five bundled TTFs, built from each font's
   own arrowleft plus a stem rising to cap height, so it matches the stroke weight of the hint
   text it sits in. One fix for every hint, menu key and button key, no per-string workaround.
+  The glyph is built by `tools/fonts/add_return_glyph.py`; re-run it whenever the bundled fonts
+  are updated, or the new files silently drop the glyph (the modification is noted in
+  `resources/fonts/`).
 - **R4-055 · Series question keeps "Только эту встречу" preselected.** The sheet's own data
   (X/N-Dlg-Event script: `scope[0].on = true`) preselects it, and it is the answer that changes
   least, so Return stays safe. Not a gap.
@@ -487,8 +490,9 @@ progressive disclosure, content priority, state preservation). One entry each.
   lineHeight; a small C++ helper sets a fixed pixel line height on the field's document blocks
   (standup draft: 13px × 1.7 = 22px). Fixed pixels, not proportional: Qt's proportional height
   scales the font's own leading, not the em (same cause as R4-021).
-- **R4-062/063 · Small-dialog spacing follows X-Dlg-Small.** Fact 13px at 1.45 leading (fixed
-  px), 12px to the fields, 10px between fields, buttons 16px under the last field or the fact;
+- **R4-062/063 · Small-dialog spacing follows X-Dlg-Small.** Fact 13px at 1.5 leading (fixed
+  px; r5 lead note — the sheet's template draws 1.45, its in-context cards 1.5), 12px to the
+  fields, 10px between fields, buttons 16px under the last field or the fact;
   the link dialog and "Убрать пример?" now use the same width (428) and spacing as SmallDialog.
 - **R4-065 · Event-log error mark is the line icon "warning"** after the source (danger ink:
   red in bold, softened in quiet), never the "⚠" text glyph.
@@ -531,13 +535,12 @@ progressive disclosure, content priority, state preservation). One entry each.
 
 ## r5 · tasks, settings, errors group (DESIGN-GAPS-0.8.1-r4)
 
-- **APP-281 A3 · the checked-out branch's card keeps its mark.** r4 read DG-023 ("no branch on
-  cards") as having removed it; it had not: `TaskCard` still draws, on that one card only, a muted
-  row `Icon "branch"` + the branch name (mono, elided in the middle) when
-  `AppController.focusedTaskId` is the card's task — in both styles. Re-verified with a real
-  `.git/HEAD` (`APP-108-…`) in a scratch repo. Kept as a text + icon row, not an accent border:
-  the meaning must not ride on colour alone, and H2-Board's card meta allows "Icon branch + name".
-  Every other card stays branch-free (DG-023).
+- **APP-281 A3 · no branch on any card** (reverted per Review 3). r5 had kept a muted
+  `Icon "branch"` + branch-name row on the checked-out branch's card; the sheet has no such row
+  (H2-Board's card meta is id · when · priority only), DG-023 says no branch on cards, and the
+  owner's direction is that cards show no people and no branch. The row, its `_branchMatched`
+  property and its test are gone. The current branch shows in the git "работаю над…" line at the
+  top of the window (X-Oth-Knowledge).
 - **R4-113 · picked conflict cell = outline + bright text, no fill.** The cue is form (the 1 px
   `buttonLinePrimary` outline, ≈ the sheet's #4a525d) plus the white-vs-dim text, so it never
   depends on a fill colour; the keyboard cursor keeps the focus ring.
@@ -553,3 +556,4 @@ progressive disclosure, content priority, state preservation). One entry each.
   fill and its highlighted row in every built-in theme (`ensureContrast`; tst_Theme checks).
 
 - Lead (2026-10-10, r5 merge): two groups set the small-dialog fact leading (1.45 from R4-062, 1.5 from R4-105); the sheet draws every small-dialog fact (keychain, tracker push, no Done column, storage) at 1.5, so 1.5 stays. The ↵ glyph R4-080 needed is the R4-056 font fix.
+- Lead (2026-10-10, review 3): the R3-095 git "работаю над…" default was a lead decision, not an owner one (the header of `docs/DESIGN-GAPS-0.8.1-r4.md` lists it among owner decisions by mistake); Review 2's split — on for data from before 0.8.1, off for a new profile — stands.

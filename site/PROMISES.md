@@ -37,7 +37,7 @@ Copy lives in `src/data/i18n.ts`; section names below follow the page.
 |---|---|---|---|---|
 | 12 | Repositories are added in Settings → Git; the branch is read from `.git/HEAD` | `GitWatcher.cpp` ("Watched repositories") | built | ☐ |
 | 13 | A branch name with a task id (APP-112) puts that task at the top of the window | `TopBar.qml` "Working on %1" | built | ☐ |
-| 14 | Heading: "the right task is already highlighted" | the top bar names the task, and that one board card carries a branch icon + the branch name (`TaskCard.qml` `tc-branch`, APP-281 A3; re-verified 0.8.1 r5) | built | ☐ |
+| 14 | Heading: "the right task is already highlighted" | the top bar names the task (git "работаю над…" line, `TopBar.qml`); the board card itself is **not** highlighted — the APP-281 A3 branch row was reverted in 0.8.1 review 3 (the sheet's cards show no branch), and `focusedTaskId` is used nowhere on the board | **gap** — highlight the card, or reword to what the top bar does; owner decides | ☐ |
 | 15 | PR state from your own `gh` / `glab`, about once a minute; on the card under the cursor | `GitWatcher.cpp:517`, `TaskCard.qml:761`; "Pull PR state (gh / glab)" | built | ☐ |
 | 16 | On a branch switch the task moves to In Progress; off in Settings → Git | "Move task to In Progress", on by default | built | ☐ |
 | 17 | No bindings, no plugins | matching by id in the branch name; no IDE plugin | built | ☐ |

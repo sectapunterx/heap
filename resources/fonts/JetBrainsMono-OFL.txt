@@ -4,6 +4,12 @@ This Font Software is licensed under the SIL Open Font License, Version 1.1.
 
 This license is copied below, and is also available with a FAQ at: https://scripts.sil.org/OFL
 
+Modified Version (lowkey): the files in this folder are static instances cut
+from the upstream variable font, renamed "lowkey JetBrains Mono", with a larger
+unitsPerEm (tools/gen_bundled_fonts.py), and with an added U+21B5 return-arrow
+glyph built from the font's own arrowleft (tools/fonts/add_return_glyph.py).
+No Reserved Font Name is declared above.
+
 
 -----------------------------------------------------------
 SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
