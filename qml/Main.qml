@@ -983,6 +983,10 @@ ApplicationWindow {
             Layout.row: 0; Layout.column: 0
             Layout.fillHeight: true
             expanded: win.sideRailExpanded
+            firstRun: {
+                const t = viewLoader.item as TodayView;
+                return !!t && t.firstRun;
+            }
             onToggleRequested: win.toggleSideRail()
             onNewTaskRequested: quickCapture.open()
             // Every source and how it is doing (R2-048).
@@ -3248,25 +3252,28 @@ ApplicationWindow {
         z: 100
     }
 
-    // Launch splash — covers the window until the scene is ready, then fades.
-    // Honours reduced motion (no bar animation, no fade, dismissed promptly).
+    // Launch splash (R3-017, Review 2): leaves as soon as the window has
+    // drawn its first frame; a press or a key in the meantime goes to the
+    // app. Only the crash card (R3-018) waits for an answer.
     SplashScreen {
         id: splash
         objectName: "splash"
         anchors.fill: parent
         z: 9999
-        autoAnimate: !Theme.reducedMotion
-        autoDuration: 900
-        onFinished: splashFade.start()
+        onFinished: {
+            if (Theme.reducedMotion) splash.visible = false;
+            else splashFade.start();
+        }
         onReportRequested: reportIssue.showNow()
-
-        // Swallow input while the splash is up.
-        MouseArea { anchors.fill: parent; z: -1 }
-
-        // Reduced motion: the internal progress animation is off, so dismiss
-        // via a short timer instead.
-        Component.onCompleted: if (Theme.reducedMotion) splashReducedDismiss.start()
-        Timer { id: splashReducedDismiss; interval: 250; onTriggered: splash.dismiss() }
+        // The first frame is on screen: the scene is ready.
+        Connections {
+            target: win
+            enabled: !splash.ready
+            function onFrameSwapped() { splash.ready = true; }
+        }
+        // A window that is never exposed (offscreen, minimised start) still
+        // gets past the splash.
+        Timer { interval: 250; running: !splash.ready; onTriggered: splash.ready = true }
 
         NumberAnimation {
             id: splashFade
