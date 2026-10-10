@@ -376,3 +376,8 @@ progressive disclosure, content priority, state preservation). One entry each.
   the accusative; a column the user named is written as named.
 - **R3-085 · Quiet task refs** are underlined text with the ring, external links plain (sheet);
   bold keeps the filled pill and the underlined link.
+
+
+### Lead override (2026-10-10)
+
+- Git "работаю над…" line: on by default (overrides the r4 entry that turned it off). The task of the current branch at the top of the window is promised by the README and the site, and users upgrading from 0.8.0 had it on; turning it off silently would remove a feature. It stays switchable in Settings → Git.

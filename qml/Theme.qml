@@ -33,7 +33,9 @@ QtObject {
         || (timeFormat === "system" && /a/i.test(Qt.locale().timeFormat(Locale.ShortFormat)))
     // Settings → Git "working on …" line over the view (DG-099); off by default
     // (sheet N/X-Oth-Knowledge "выключена по умолчанию", R3-095).
-    readonly property bool gitWorkingLine: !!(_settings && _settings.git && _settings.git.workingOnLine === true)
+    // On unless turned off: the task of the branch at the top is a promise the
+    // README and the site make (owner, 2026-10-10).
+    readonly property bool gitWorkingLine: !(_settings && _settings.git && _settings.git.workingOnLine === false)
     // An explicit undefined check, not `??`: qmlcachegen 6.9.1 (what CI
     // builds with) segfaults AOT-compiling Main.qml when a singleton
     // property it resolves uses the nullish operator. Same shape as
