@@ -286,6 +286,13 @@ TestCase {
         return find(b, function (it) { return typeof it.startRename === "function" && it.statusId === sid; });
     }
     function search() { return byName(tc.win.contentItem, "topbar-search"); }
+    // The top card of VIM-0's column, so j has somewhere to go.
+    function topOfColumn(b) {
+        const cols = b._visibleByColumn();
+        for (let c = 0; c < cols.length; c++)
+            if (cols[c].ids.indexOf("VIM-0") >= 0) return cols[c].ids[0];
+        return "VIM-0";
+    }
 
     // IDIOT-TASKS-2: a held e archives the card under the cursor, not the
     // whole column one repeat at a time.
@@ -300,10 +307,11 @@ TestCase {
         const b = boardWithCursor();
         AppController.setArchived("VIM-0", false);
         wait(30);
-        b.cursorTaskId = "VIM-0";
+        const top = topOfColumn(b);
+        b.cursorTaskId = top;
         KeyTest.press(tc.win, Qt.Key_J, 0, "j", false);
         KeyTest.press(tc.win, Qt.Key_J, 0, "j", true);
-        verify(b.cursorTaskId !== "VIM-0", "j did not walk");
+        verify(b.cursorTaskId !== top, "j did not walk");
     }
 
     // IDIOT-TASKS-4: a catalogue key with nothing to act on is not typed
@@ -372,9 +380,10 @@ TestCase {
         wait(30);
         verify(!col.renaming);
         compare(AppController.statuses.find(st => st.id === "todo").name, old);
-        b.cursorTaskId = "VIM-0";
+        const top = topOfColumn(b);
+        b.cursorTaskId = top;
         keyClick(Qt.Key_J);
-        verify(b.cursorTaskId !== "VIM-0", "j went into the hidden field");
+        verify(b.cursorTaskId !== top, "j went into the hidden field");
     }
 
     // IDIOT-TASKS-13/14: z a folds and unfolds; Ctrl+A skips a folded column.
