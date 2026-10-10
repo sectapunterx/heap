@@ -2044,7 +2044,9 @@ ApplicationWindow {
         if (base === "task.schedule" && win._keyTaskIds().length === 0)
             return ["day", "week", "month"].indexOf(v) >= 0 && !!b && b.cursorVisible === true;
         if (base.indexOf("notes.") === 0) return v === "notes";
-        if (base.indexOf("savedView.") === 0) return Number(base.slice(10)) <= AppController.savedViews.length;
+        if (base.indexOf("savedView.") === 0)
+            return Number(base.slice(10)) <= AppController.savedViews.length && !win._typing;  // IDIOT-SHELL-7
+        if (base === "profile.next" || base === "profile.prev") return !win._typing;
         if (base.indexOf("task.") === 0 && base !== "task.new")
             return win._keyTaskIds().length > 0;
         switch (base) {
@@ -2462,17 +2464,27 @@ ApplicationWindow {
         enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: profileEditor.showCreate()
     }
+    // Ctrl+[ is Esc to a Vim hand, and the keymap is Vim-based: while a field
+    // takes typed text it leaves the field, and neither profile key switches
+    // the workspace under the caret (IDIOT-SHELL-7).
     Shortcut {
         sequence: _kbd("profile.next")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && win._globalKeysOn
+        enabled: sequence.length > 0 && win._globalKeysOn && !win._typing
         onActivated: win._cycleProfile(1)
     }
     Shortcut {
         sequence: _kbd("profile.prev")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && win._globalKeysOn
+        enabled: sequence.length > 0 && win._globalKeysOn && !win._typing
         onActivated: win._cycleProfile(-1)
+    }
+    Shortcut {
+        objectName: "vim-escape"
+        sequence: "Ctrl+["
+        context: Qt.ApplicationShortcut
+        enabled: win._typing && !win._focusInPopup && !win._modalOpen && !hotkeys.isCapturing
+        onActivated: win.focusActiveView()
     }
     Shortcut {
         sequence: _kbd("profile.exportMd")

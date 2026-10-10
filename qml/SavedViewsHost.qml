@@ -177,8 +177,10 @@ Item {
         property var owner: null
         sequence: vk.owner && vk.owner.host ? vk.owner.host._kbd("savedView." + vk.n) : ""
         context: Qt.ApplicationShortcut
+        // Not while a field takes typed text: a saved view replaced the
+        // filter being typed in the header (IDIOT-SHELL-7).
         enabled: String(vk.sequence).length > 0 && !!vk.owner && !!vk.owner.host && vk.owner.host._globalKeysOn
-                 && vk.n <= AppController.savedViews.length
+                 && !vk.owner.host._typing && vk.n <= AppController.savedViews.length
         onActivated: vk.owner.applyAt(vk.n)
     }
     ViewKey { n: 1; owner: root }

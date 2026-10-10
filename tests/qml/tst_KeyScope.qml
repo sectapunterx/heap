@@ -176,6 +176,29 @@ TestCase {
         AppController.clearPendingUndo();
     }
 
+    // IDIOT-SHELL-7: Ctrl+[ is Vim's Esc — in a field it leaves the field and
+    // does not switch the profile under the caret.
+    function test_ctrl_bracket_in_a_field_leaves_it() {
+        const home = AppController.activeProfileId;
+        const other = AppController.createProfile("scope-bracket-probe");
+        AppController.activeProfileId = home;
+        wait(50);
+        const search = byName(tc.win.contentItem, "topbar-search");
+        verify(search !== null);
+        search.forceActiveFocus();
+        keyClick(Qt.Key_A); keyClick(Qt.Key_B);
+        verify(search.activeFocus);
+        keyClick(Qt.Key_BracketLeft, Qt.ControlModifier);
+        compare(AppController.activeProfileId, home, "Ctrl+[ switched the profile while typing");
+        verify(!search.activeFocus, "Ctrl+[ did not leave the field");
+        keyClick(Qt.Key_BracketRight, Qt.ControlModifier);  // out of the field: the profile key works
+        compare(AppController.activeProfileId === home, false, "Ctrl+] out of a field did nothing");
+        AppController.activeProfileId = home;
+        AppController.deleteProfile(other);
+        AppController.clearPendingUndo();
+        tc.win.searchText = "";
+    }
+
     // UX-9: Tab leaves the description instead of typing a tab, and a list
     // line indents instead.
     function test_tab_leaves_description() {
