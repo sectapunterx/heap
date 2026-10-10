@@ -73,7 +73,7 @@ TestCase {
         verify(Qt.colorEqual(Theme.priorityInk("P0"), Theme.textMuted), "no red in the quiet style");
         verify(Qt.colorEqual(Theme.signalNow, Theme.textMuted));
         verify(Qt.colorEqual(Theme.chipBg, "transparent"), "quiet chips are an outline");
-        verify(Theme.priorityShown("P0") && Theme.priorityShown("P1"));
+        verify(Theme.priorityShown("P0") && !Theme.priorityShown("P1"), "quiet marks P0 only (R3-030)");
         verify(!Theme.priorityShown("P2") && !Theme.priorityShown("P3"));
     }
 

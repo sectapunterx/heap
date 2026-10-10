@@ -113,7 +113,8 @@ class TrackerWrites : public ::testing::Test {
   // can only mean heap chose not to make it.
   void connectTracker(const Tracker& tr, FakeHttpServer& server, bool writes, bool selfScope = false) {
     app_->setIntegrationSecret(tr.id, QStringLiteral("token"), QStringLiteral("tok"));
-    QJsonObject cfg{{QStringLiteral("connected"), true}, {QStringLiteral("writeStatus"), writes}};
+    QJsonObject cfg{
+        {QStringLiteral("connected"), true}, {QStringLiteral("writeStatus"), writes}, {QStringLiteral("askBeforeWrite"), false}};
     if(tr.id == QStringLiteral("jira")) {
       cfg.insert(QStringLiteral("baseUrl"), server.base());
       cfg.insert(QStringLiteral("email"), QStringLiteral("me@example.com"));
@@ -268,6 +269,36 @@ TEST_F(TrackerWrites, On_MoveSendsTheTransitionAfterTheCheck_ForEveryWritableTra
   }
 }
 
+// R3-147: with writes on and the default "ask before a write", a move is held
+// and asked about; nothing goes out until the user says send.
+TEST_F(TrackerWrites, On_AskBeforeWrite_HoldsTheMoveUntilSend) {
+  app_->tasks()->reset({});
+  FakeHttpServer server;
+  const Tracker tr = trackerFor(QString::fromLatin1(kWriteCapable[0]));
+  connectTracker(tr, server, /*writes=*/true);
+  QJsonObject settings = QJsonDocument::fromJson(app_->appSettingsJson().toUtf8()).object();
+  QJsonObject integrations = settings.value(QStringLiteral("integrations")).toObject();
+  QJsonObject cfg = integrations.value(tr.id).toObject();
+  cfg.remove(QStringLiteral("askBeforeWrite"));
+  writeConfig(tr.id, cfg);
+  EXPECT_TRUE(app_->trackerAskBeforeWrite(tr.id));
+  add(card(tr));
+  QSignalSpy asked(app_.get(), &::AppController::trackerWriteAsk);
+
+  app_->moveTask(tr.cardId, QStringLiteral("done"));
+  ASSERT_EQ(asked.count(), 1) << "the move was not asked about";
+  EXPECT_EQ(count(server, tr.writeKey), 0) << "sent before the user answered";
+  EXPECT_EQ(task(tr.cardId)->externalMeta.unsyncedStatus, QStringLiteral("done"));
+
+  app_->retryTrackerPush(tr.cardId);
+  EXPECT_TRUE(heap::testing::waitUntil([&]() {
+    return count(server, tr.writeKey) == 1;
+  })) << "send did not send";
+
+  app_->setTrackerAskBeforeWrite(tr.id, false);
+  EXPECT_FALSE(app_->trackerAskBeforeWrite(tr.id));
+}
+
 TEST_F(TrackerWrites, SwitchingBackAndForth) {
   FakeHttpServer server;
   const Tracker tr = trackerFor(QStringLiteral("gitea"));
@@ -350,7 +381,8 @@ TEST_F(TrackerWrites, GitHub_OffAttemptsNothing_OnAsksTheTracker) {
   writeConfig(QStringLiteral("github"),
               QJsonObject{{QStringLiteral("connected"), true},
                           {QStringLiteral("repo"), QStringLiteral("acme/web")},
-                          {QStringLiteral("writeStatus"), true}});
+                          {QStringLiteral("writeStatus"), true},
+                          {QStringLiteral("askBeforeWrite"), false}});
   app_->moveTask(QStringLiteral("github-5"), QStringLiteral("prog"));
   const bool asked = heap::testing::waitUntil([&proxy]() {
     return proxy.seen().contains("CONNECT api.github.com:443");

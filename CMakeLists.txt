@@ -344,6 +344,7 @@ qt_add_qml_module(heap_core
         # heap 2 design system (APP-259) and the two styles (APP-275)
         qml/Style.qml
         qml/StatusRing.qml
+        qml/DashedRect.qml
         qml/PropertyChip.qml
         qml/KeyHint.qml
         qml/CursorBar.qml
@@ -429,6 +430,7 @@ qt_add_qml_module(heap_core
         qml/FilterBar.qml
         qml/KanbanBoard.qml
         qml/TaskCard.qml
+        qml/TrackerWriteAskDialog.qml
         qml/TaskListView.qml
         qml/SelectionBar.qml
         qml/WeekView.qml

@@ -37,8 +37,23 @@ MenuItem {
     property string keyText: ""
     // The digit that runs this row while its menu is open (1–4 in Priority).
     property int number: 0
-    // The "‹ Priority" row on top of a list opened from another menu.
+    // The "‹ Priority" row on top of a list opened from another menu. It
+    // reads as the menu's small grey header line (X-Menus-Task, R3-042),
+    // and still goes back on a click or Enter.
     property bool isBack: false
+    // A label colour of the row's own (the priority list's P0 / P1 in bold,
+    // N-Menus-Task, R3-043); transparent = the usual colour.
+    property color labelColor: "transparent"
+    property int labelWeight: Theme.fwBody
+    // The check / glyph column is drawn only when a row of the menu has a
+    // glyph, a ring or a check; otherwise labels start on the header's left
+    // edge (R3-041).
+    readonly property bool _ownCol: item.ring.length > 0 || item.glyph.length > 0 || item.checkable || item.marked
+    readonly property bool _col: {
+        const m = item.menu as AppMenu;
+        return m ? m.glyphColumn : item._ownCol;
+    }
+    readonly property real _colW: item._col ? Theme.fsMd + Theme.spMd : 0
     // Written the way every key is (keymap.md, APP-279): "s", "Shift S",
     // "y y", "Enter", from the one catalogue, so a rebinding shows here too.
     readonly property string hint: item.shortcutId.length > 0
@@ -47,14 +62,6 @@ MenuItem {
     onTriggered: if (item.shortcutId.length > 0 && item.hint.length > 0 && item.hovered) AppController.noteMouseAction(item.shortcutId)
     readonly property bool _check: item.marked || (item.checkable && item.checked)
     readonly property bool _arrow: item.subMenu !== null || item.opensList
-    // Width of the check / glyph column with its gap; none when no row of
-    // the menu has a mark (R3-101).
-    readonly property real _glyphW: {
-        const m = item.menu as AppMenu;
-        const own = item.glyph.length > 0 || item.ring.length > 0 || item.marked || item.checkable;
-        return (m ? m.glyphColumn : own) ? Theme.fsMd + Theme.spMd : 0;
-    }
-    readonly property color _dangerInk: Style.fills ? Theme.danger : Theme.dangerMuted
     // The width the row wants for its whole label, hint and arrow. AppMenu
     // sizes itself from this; it does not depend on the row's own width, so
     // the menu and its rows do not chase each other (VISP-5).
@@ -63,7 +70,7 @@ MenuItem {
     readonly property real _hintW: (item.hint.length > 0 ? Theme.sp2xl + hintText.implicitWidth : 0)
                                    + (item.note.length > 0 ? Theme.sp2xl + noteText.implicitWidth : 0)
     readonly property real naturalWidth: labelRow && item.contentItem === labelRow
-        ? item.leftPadding + item._glyphW + labelText.implicitWidth + item._hintW + item._arrowW + item.rightPadding
+        ? item.leftPadding + item._colW + labelText.implicitWidth + item._hintW + item._arrowW + item.rightPadding
         : item.implicitWidth
 
     implicitWidth: Math.max(implicitBackgroundWidth + leftInset + rightInset,
@@ -71,12 +78,12 @@ MenuItem {
     implicitHeight: Math.max(implicitBackgroundHeight + topInset + bottomInset,
                              implicitContentHeight + topPadding + bottomPadding)
     topPadding: Theme.spSm
-    bottomPadding: Theme.spSm
+    bottomPadding: item.isBack ? Theme.spXs : Theme.spSm
     leftPadding: Theme.spLg
     rightPadding: Theme.spLg
     font.family: Theme.fontUi
-    font.pixelSize: Theme.fsMd
-
+    font.pixelSize: item.isBack ? Theme.fsXs : Theme.fsMd
+    font.weight: item.labelWeight
     // Right opens a row's list, as it opens a cascading submenu; Left in a
     // list that came from a row goes back to the menu it came from.
     Keys.onRightPressed: (event) => {
@@ -113,12 +120,12 @@ MenuItem {
 
     contentItem: Row {
         id: labelRow
-        spacing: item._glyphW > 0 ? Theme.spMd : 0
+        spacing: item._col ? Theme.spMd : 0
         // The check column is there whenever a row of the menu uses it, so
         // checked and unchecked rows start their labels in the same place.
         Item {
-            visible: item._glyphW > 0
-            width: visible ? Theme.fsMd : 0
+            visible: item._col
+            width: Theme.fsMd
             height: Math.max(glyphText.implicitHeight, Theme.statusRingSize)
             anchors.verticalCenter: parent.verticalCenter
             Text {
@@ -126,7 +133,7 @@ MenuItem {
                 anchors.fill: parent
                 visible: item.ring.length === 0
                 text: item._check ? "✓" : item.glyph
-                color: item._check ? Theme.accentStrong : item.danger ? item._dangerInk : Theme.textDim
+                color: item._check ? Theme.accentStrong : item.danger ? Theme.dangerInk : Theme.textDim
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsMd
                 horizontalAlignment: Text.AlignHCenter
@@ -143,13 +150,15 @@ MenuItem {
             // Never wider than the row leaves it: a row in a menu at its
             // widest elides instead of running under the panel's edge.
             width: Math.max(0, Math.min(implicitWidth,
-                item.availableWidth - item._glyphW - item._hintW - item._arrowW))
+                item.availableWidth - item._colW - item._hintW - item._arrowW))
             anchors.verticalCenter: parent.verticalCenter
             text: item.text
             textFormat: Text.PlainText
             color: !item.enabled ? Theme.textDim
-                 : item.danger ? item._dangerInk
+                 : item.isBack ? Theme.textDim
+                 : item.danger ? Theme.dangerInk
                  : item._check ? Theme.accentStrong
+                 : item.labelColor.a > 0 ? item.labelColor
                  : Theme.text
             font: item.font
             elide: Text.ElideRight

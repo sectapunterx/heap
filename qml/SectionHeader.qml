@@ -14,6 +14,8 @@ RowLayout {
     property int count: -1
     // A signal title ("Today" in amber, bold style only).
     property color titleColor: Theme.text
+    property int titleSize: Theme.fsMd
+    property int titleWeight: Theme.fwHeading
 
     spacing: Theme.spMd
 
@@ -21,8 +23,8 @@ RowLayout {
         text: root.title
         color: root.titleColor
         font.family: Theme.fontUi
-        font.pixelSize: Theme.fsMd
-        font.weight: Theme.fwHeading
+        font.pixelSize: root.titleSize
+        font.weight: root.titleWeight
         Accessible.role: Accessible.Heading
         Accessible.name: root.title
     }

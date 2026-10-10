@@ -202,6 +202,10 @@ QtObject {
     // The quiet style's destructive menu row (R3-102): the danger hue
     // pulled toward the text colour, a muted salmon rather than a red.
     readonly property color dangerMuted: Qt.tint(_c.danger, withAlpha(_c.text, 0.35))
+    // A destructive menu row's label: the danger colour in bold; quiet
+    // softens it toward the text (X-Menus-*: #d8a09c beside #ef6b63, R3-045).
+    readonly property color dangerInk: Style.urgency ? danger
+        : Qt.rgba((danger.r + text.r) * 0.46, (danger.g + text.g) * 0.46, (danger.b + text.b) * 0.46, 1)
     readonly property color warning:     _c.warning
     readonly property color success:     _c.success
     readonly property color info:        _c.info
@@ -591,7 +595,8 @@ QtObject {
     }
     // heap 2 (APP-259): only P0 and P1 say anything; P2 and P3 are not shown.
     // In the quiet style the priority is a word in the text colour.
-    function priorityShown(p) { return p === "P0" || p === "P1"; }
+    // H2-Board / H2-List mark P0 and P1; Q-Board / Q-List only P0 (R3-030).
+    function priorityShown(p) { return p === "P0" || (p === "P1" && !Style.quiet); }
     function priorityInk(p) {
         if (!Style.urgency) return textMuted;
         return p === "P0" ? danger : (p === "P1" ? warning : textMuted);

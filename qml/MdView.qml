@@ -89,6 +89,9 @@ ListView {
     // compact scale.
     property bool noteType: false
     readonly property real _bodyLineHeight: view.noteType ? 1.7 : 1.0
+    // A paragraph's line height as a factor (0 = the font's own); the task
+    // document reads at 1.65 (H2-Task / Q-Task, R3-038).
+    property real paragraphLineHeight: 0
 
     function _handleLink(link, line) {
         if (link.startsWith("heap://")) {
@@ -267,6 +270,8 @@ ListView {
                     textFormat: TextEdit.RichText
                     text: view.noteType
                           ? "<p style=\"line-height:" + Math.round(view._bodyLineHeight * 100) + "%\">" + rowItem.model.html + "</p>"
+                          : view.paragraphLineHeight > 0
+                          ? "<div style=\"line-height:" + Math.round(view.paragraphLineHeight * 100) + "%\">" + rowItem.model.html + "</div>"
                           : rowItem.model.html
                     color: Theme.text
                     font.family: Theme.fontUi

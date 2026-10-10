@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import TodoCpp
+import "TaskDates.js" as TaskDates
 
 // "Кому написать" in full (DG-002, sheet X/N-Oth-Archive-People): the people
 // something is pending on, one of them open beside the list. It replaces the
@@ -58,8 +59,20 @@ Dialog {
         function onModelReset() { root._rev++; }
     }
 
-    function _stateText(s) {
-        return s && s !== "idle" ? I18n.t("people.state." + s + ".tag").toLowerCase() : "";
+    // The row's state in the sheet's words (X-Oth-Archive-People, R3-057):
+    // "• ждёт", "написал вчера", "ответили".
+    function _stateText(s, at) {
+        if (s === "todo") return I18n.t("people.row.todo");
+        if (s === "replied") return I18n.t("people.row.replied");
+        if (s !== "pinged") return "";
+        const word = I18n.t("people.row.pinged");
+        const dt = at ? new Date(at) : null;
+        if (!dt || isNaN(dt.getTime())) return word;
+        const days = TaskDates.daysFrom(dt, AppController.today);
+        const when = days === 0 ? I18n.t("people.row.today")
+                   : days === -1 ? I18n.t("people.row.yesterday")
+                   : I18n.fmtDate(dt, "dayMonth");
+        return word + " " + when;
     }
 
     header: DialogHeader { text: I18n.t("today.people") }
@@ -156,7 +169,7 @@ Dialog {
                                     font.pixelSize: Theme.fsXs
                                 }
                                 Text {
-                                    text: root._stateText(row.model.state)
+                                    text: root._stateText(row.model.state, row.model.stateAt)
                                     color: Theme.textMuted
                                     font.pixelSize: Theme.fsXs
                                 }

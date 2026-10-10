@@ -2239,6 +2239,7 @@ TEST_F(AppControllerTest, MovingACrossProjectTicketPushesToItsOwnRepo) {
                              {QStringLiteral("host"), gitea.base()},
                              {QStringLiteral("repo"), QStringLiteral("acme/web")},
                              {QStringLiteral("writeStatus"), true},
+                             {QStringLiteral("askBeforeWrite"), false},
                          });
 
   // A ticket that came from another repo entirely.
@@ -2294,6 +2295,7 @@ TEST_F(AppControllerTest, MyIssuesModeWritesBackThroughTheIssuesOwnRepo) {
                              {QStringLiteral("connected"), true},
                              {QStringLiteral("host"), gitea.base()},
                              {QStringLiteral("writeStatus"), true},
+                             {QStringLiteral("askBeforeWrite"), false},
                          });
 
   Task mine;
@@ -2335,6 +2337,7 @@ TEST_F(AppControllerTest, AFailedCrossProjectPushFlagsOnlyTheMovedCard) {
                              {QStringLiteral("connected"), true},
                              {QStringLiteral("host"), gitea.base()},
                              {QStringLiteral("writeStatus"), true},
+                             {QStringLiteral("askBeforeWrite"), false},
                          });
 
   Task mine;

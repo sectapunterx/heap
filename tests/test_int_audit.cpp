@@ -68,6 +68,7 @@ class IntAudit : public ::testing::Test {
     QJsonObject withWrites = cfg;
     if(!withWrites.contains(QStringLiteral("writeStatus"))) {
       withWrites.insert(QStringLiteral("writeStatus"), true);
+      withWrites.insert(QStringLiteral("askBeforeWrite"), false);
     }
     integrations.insert(providerId, withWrites);
     settings.insert(QStringLiteral("integrations"), integrations);

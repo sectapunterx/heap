@@ -888,6 +888,9 @@ ApplicationWindow {
                 { label: I18n.t("tracker.readOnly.archive"), fn: function () { AppController.setArchived(taskId, true) } }
             ], 10, "warning");
         }
+        function onTrackerWriteAsk(taskId, key, title, tracker, providerId, from, to) {
+            trackerWriteAsk.ask(taskId, key, title, tracker, providerId, from, to);
+        }
         function onTrackerPushNeedsConfirm(taskId, key, title, tracker, remoteStatus, target) {
             trackerPushConfirm.ask(taskId, key, title, tracker, remoteStatus, target);
         }
@@ -1338,6 +1341,7 @@ ApplicationWindow {
                             AppController.currentView = "day";
                         }
                         onTaskCaptureRequested: (text) => quickCapture.openWithText(text)
+                        onScheduleRequested: (id) => schedulePopup.openFor([id], "scheduled")
                     }
                 }
                 Component {
@@ -2792,6 +2796,7 @@ ApplicationWindow {
     // "Send the status anyway?" for an issue the check found outside the
     // filter (APP-204). Cancel is the default.
     TrackerPushConfirmDialog { id: trackerPushConfirm }
+    TrackerWriteAskDialog { id: trackerWriteAsk }
     // Errors & sync (0.8.1): the damaged-file card at launch, the keychain
     // card, the report form, the sync sources, what's new (R2-037…054).
     DamagedFileDialog { id: damagedFile }
@@ -2902,7 +2907,6 @@ ApplicationWindow {
         onActivated: win.focusRegion(-1)
     }
 
-    // s / Shift S (APP-278): when, or the deadline, in one small field.
     SchedulePopup {
         id: schedulePopup
         parent: win.contentItem

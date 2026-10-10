@@ -85,19 +85,23 @@ TestCase {
         verify(again.isFolded(doneId));
     }
 
-    function test_priority_on_the_card_follows_the_density() {
+    function test_priority_on_the_card_follows_the_style() {
+        // R3-030: bold marks P0/P1, quiet P0 only; P2/P3 never.
         add({ id: "H2B-1", title: "low priority card", priority: "P3", status: "todo" });
+        add({ id: "H2B-1b", title: "high priority card", priority: "P1", status: "todo" });
         Style.apply("bold");
         const board = makeBoard();
-        let pri = null;
+        let p1 = null;
         tryVerify(() => {
             const all = allByName(board, "tc-priority", []);
-            pri = all.find(t => t.text === "P3") || null;
-            return pri !== null;
-        }, 2000, "the detailed card shows P3");
+            p1 = all.find(t => t.text === "P1") || null;
+            return p1 !== null && p1.visible;
+        }, 2000, "the bold card shows P1");
+        const p3 = allByName(board, "tc-priority", []).find(t => t.text === "P3");
+        verify(!p3 || !p3.visible, "P3 is blank in bold");
         Style.apply("quiet");
-        compare(Style.cardDensity, "compact");
-        verify(!pri.visible, "the compact card hides P3");
+        verify(!p1.visible, "the quiet card hides P1");
+        Style.apply("bold");
     }
 
     function test_the_checked_out_branch_marks_its_card_only() {

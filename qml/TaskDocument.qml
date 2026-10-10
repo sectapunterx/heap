@@ -443,6 +443,10 @@ FocusScope {
                 font.pixelSize: Theme.typeStep(root._quiet ? 7 : 8)
                 font.weight: root._quiet ? Theme.fwTitle : Theme.fwHeading
                 padding: 0
+                // Basic binds its own side padding; the title shares the
+                // chips' left edge (R3-037).
+                leftPadding: 0
+                rightPadding: 0
                 background: Item {}
                 placeholderText: I18n.t("taskdoc.titlePh")
                 placeholderTextColor: Theme.textDim
@@ -680,6 +684,7 @@ FocusScope {
                 Layout.rightMargin: -Theme.px(24)
                 placeholder: I18n.t("taskdoc.bodyPh")
                 menuTitle: I18n.t("textmenu.title.taskBody")
+                paragraphLineHeight: 1.65
                 onEdited: if (!root._loading) { root._dirtyBody = true; saveTimer.restart(); }
                 onEscaped: root.close()
                 onInternalLinkActivated: (kind, target) => root.internalLinkActivated(kind, target)
@@ -1029,7 +1034,7 @@ FocusScope {
         readonly property alias plan: checklist
         readonly property alias draft: commentDraft
         // In line with the body's blocks.
-        x: Theme.spMd
+        x: 0
         spacing: Theme.spLg
         TaskLocalChecklist {
             id: checklist
@@ -1048,7 +1053,7 @@ FocusScope {
                   + I18n.t("taskdoc.hint.slash")
             textFormat: Text.StyledText
             wrapMode: Text.WordWrap
-            color: Theme.textMuted
+            color: Theme.textDim
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsLg
         }

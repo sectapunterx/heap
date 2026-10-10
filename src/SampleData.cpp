@@ -298,6 +298,10 @@ QVector<Person> people(Lang lang) {
     p.question = QString::fromUtf8(q);
     p.state = st;
     p.color = c;
+    // "написал вчера" on the sheet (X-Oth-Archive-People).
+    if(p.state != QLatin1String("todo")) {
+      p.stateAt = QDateTime::currentDateTime().addDays(-1);
+    }
     return p;
   };
   if(lang == Lang::Ru) {

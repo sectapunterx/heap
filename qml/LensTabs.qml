@@ -15,6 +15,15 @@ Item {
     signal selected(string id)
 
     implicitHeight: Theme.chipH + (Style.chipFill ? Theme.spXs : 0)
+    // Q-Board: the tabs sit on the title's baseline (R3-032).
+    baselineOffset: height / 2 + (lensFm.ascent - lensFm.descent) / 2
+    // Q-Board: 14px tabs, inactive in the dim ink; bold keeps the panel.
+    readonly property int _fs: Style.chipFill ? Theme.fsMd : Theme.px(14)
+    FontMetrics {
+        id: lensFm
+        font.family: Theme.fontUi
+        font.pixelSize: root._fs
+    }
     implicitWidth: row.implicitWidth + (Style.chipFill ? 2 * Theme.spXs : 0)
 
     Rectangle {
@@ -27,7 +36,7 @@ Item {
     Row {
         id: row
         anchors.centerIn: parent
-        spacing: Style.chipFill ? Theme.sp2xs : Theme.spXl
+        spacing: Style.chipFill ? Theme.sp2xs : Theme.px(20)
         Repeater {
             model: root.model
             delegate: Item {
@@ -52,9 +61,9 @@ Item {
                         id: label
                         anchors.verticalCenter: parent.verticalCenter
                         text: tab.modelData.label
-                        color: tab.on ? Theme.text : Theme.textMuted
+                        color: tab.on ? Theme.text : (Style.chipFill ? Theme.textMuted : Theme.textDim)
                         font.family: Theme.fontUi
-                        font.pixelSize: Theme.fsMd
+                        font.pixelSize: root._fs
                         font.weight: tab.on ? Theme.fwTitle : Theme.fwBody
                     }
                     KeyHint {

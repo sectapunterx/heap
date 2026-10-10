@@ -290,7 +290,7 @@ inline ::DocPage mergeDocPageEdit(const ::DocPage& current, const ::DocPage& fro
 // Mattermost without undo steps, so undoing an edit made in the editor puts
 // back only the fields that edit changed.
 inline ::Person mergePersonEdit(const ::Person& current, const ::Person& from, const ::Person& to, bool* ok) {
-  static_assert(heap::meta::fieldCount<::Person>() == 7, "Person gained or lost a field: teach mergePersonEdit about it.");
+  static_assert(heap::meta::fieldCount<::Person>() == 8, "Person gained or lost a field: teach mergePersonEdit about it.");
   ::Person out = current;
   bool clean = true;
   const auto field = [&](auto member) {
@@ -305,6 +305,10 @@ inline ::Person mergePersonEdit(const ::Person& current, const ::Person& from, c
   field(&::Person::state);
   field(&::Person::color);
   field(&::Person::extra);
+  // The state's time travels with the state; it never makes an edit dirty.
+  if(!(from.state == to.state)) {
+    out.stateAt = to.stateAt;
+  }
   if(ok != nullptr) {
     *ok = clean;
   }

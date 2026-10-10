@@ -27,6 +27,7 @@ Item {
     property bool headingRules: true
     // The Knowledge document type (MdView.noteType).
     property bool noteType: false
+    property real paragraphLineHeight: 0
     // Drawn under the last block, inside the scroll (the task document's
     // plan and hint, DG-062): the item gets `width` set to the text column.
     property Component tail: null
@@ -193,6 +194,7 @@ Item {
         anchors.fill: parent
         headingRules: root.headingRules
         noteType: root.noteType
+        paragraphLineHeight: root.paragraphLineHeight
         document: doc
         editorDocument: src.textDocument
         clickToEdit: !root.readOnly

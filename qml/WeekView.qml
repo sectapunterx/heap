@@ -40,6 +40,75 @@ Item {
         viewTaskMenu.taskId = id;
         viewTaskMenu.popup();
     }
+    // "Перенести…" on a block: the schedule field, as s does (DG-027).
+    signal scheduleRequested(string id)
+
+    // ── The short menu on a task block (N/X-Menus-Column, R3-048) ──
+    // { id, title, start, end, date } of the block it was opened on.
+    property var menuBlock: null
+    function openBlockMenu(b, day) {
+        root.menuBlock = { id: b.id, title: b.title || "", start: b.start, end: b.end, date: day };
+        blockMenu.popup();
+    }
+    function setBlockLength(hours) {
+        const b = root.menuBlock;
+        if (!b) return;
+        AppController.resizeTaskBlock(b.id, b.date, b.start, Math.min(24, b.start + hours));
+    }
+    AppMenu {
+        id: blockMenu
+        objectName: "week-block-menu"
+        AppMenuHeader {
+            text: root.menuBlock ? root.menuBlock.title + " · " + Theme.fmtHour(root.menuBlock.start) + "–" + Theme.fmtHour(root.menuBlock.end) : ""
+        }
+        AppMenuItem {
+            objectName: "week-block-menu-open"
+            text: I18n.t("calmenu.open")
+            keyText: "↵"
+            onTriggered: if (root.menuBlock) root.taskClicked(root.menuBlock.id)
+        }
+        AppMenuItem {
+            objectName: "week-block-menu-done"
+            text: I18n.t("taskmenu.done")
+            shortcutId: "task.done"
+            onTriggered: if (root.menuBlock) { const id = root.menuBlock.id; Qt.callLater(() => AppController.toggleDone([id])); }
+        }
+        AppMenuItem {
+            objectName: "week-block-menu-move"
+            text: I18n.t("calmenu.move")
+            shortcutId: "task.schedule"
+            onTriggered: if (root.menuBlock) { const id = root.menuBlock.id; Qt.callLater(() => root.scheduleRequested(id)); }
+        }
+        AppMenuItem {
+            objectName: "week-block-menu-length"
+            text: I18n.t("calmenu.length")
+            keyText: "Ctrl Shift J / K"
+            opensList: true
+            onTriggered: Qt.callLater(() => blockLengthMenu.popup())
+        }
+        AppMenuSeparator {}
+        AppMenuItem {
+            objectName: "week-block-menu-unplan"
+            text: I18n.t("calmenu.unplan")
+            note: I18n.t("calmenu.unplan.note")
+            onTriggered: if (root.menuBlock) AppController.clearTaskDate(root.menuBlock.id, "scheduled")
+        }
+    }
+    AppMenu {
+        id: blockLengthMenu
+        objectName: "week-block-menu-lengths"
+        Instantiator {
+            model: [0.25, 0.5, 0.75, 1, 1.5, 2]
+            delegate: AppMenuItem {
+                required property real modelData
+                text: I18n.fmtMinutes(modelData * 60)
+                note: !!root.menuBlock && Math.abs(root.menuBlock.end - root.menuBlock.start - modelData) < 1e-6 ? I18n.t("taskmenu.now") : ""
+                onTriggered: root.setBlockLength(modelData)
+            }
+            onObjectAdded: (index, object) => blockLengthMenu.insertItem(index, object)
+            onObjectRemoved: (index, object) => blockLengthMenu.removeItem(object)
+        }
+    }
     // The occurrence, not just its id: a repeating event is stored once, so
     // every occurrence of a series carries the master's id and only the
     // occurrence map says which date was clicked.
@@ -1692,6 +1761,21 @@ Item {
                                 objectName: "week-drop-" + dayCol.index
                                 anchors.fill: parent
                                 property real hoverY: -1
+                                // The dragged task's block as it would land:
+                                // the snapped hour and the estimate's length
+                                // (X/N-Oth-Select-Drag, R3-054).
+                                property string dragTitle: ""
+                                property int dragMinutes: 0
+                                readonly property real ghostStart: hoverY < 0 ? 0
+                                    : Math.min(root.clampHour(root.snapHour(root.yToHour(hoverY))), 24 - Theme.minEventHours)
+                                readonly property real ghostLen: (dragMinutes > 0 ? dragMinutes : 60) / 60
+                                onEntered: (drag) => {
+                                    const src = drag.source;
+                                    const t = src && src.taskId ? AppController.taskById(String(src.taskId)) : null;
+                                    dragTitle = t ? String(t.title || "") : "";
+                                    dragMinutes = t ? Number(t.estimateMinutes || 0) : 0;
+                                    hoverY = drag.y;
+                                }
                                 onPositionChanged: (drag) => hoverY = drag.y
                                 onExited: hoverY = -1
                                 onDropped: (drop) => {
@@ -1708,13 +1792,44 @@ Item {
                                         AppController.scheduleTask(String(src.taskId), h, dayCol.modelData.date);
                                     drop.accept(Qt.MoveAction);
                                 }
-                                Rectangle {
+                                DashedRect {
+                                    id: dropGhost
+                                    objectName: "week-drop-ghost"
                                     visible: parent.hoverY >= 0
+                                    z: 6
                                     x: 2; width: parent.width - 4
-                                    y: parent.hoverY - 1
-                                    height: 2
-                                    radius: 1
-                                    color: Theme.accent
+                                    y: (parent.ghostStart - root.hoursStart) * root.hourH
+                                    height: Math.max(Theme.px(22), parent.ghostLen * root.hourH - 2)
+                                    radius: Theme.radiusSm
+                                    strokeColor: Style.urgency ? Theme.info : Theme.borderStrong
+                                    fillColor: Theme.withAlpha(Theme.surfaceCard, 0.6)
+                                    Column {
+                                        anchors.fill: parent
+                                        anchors.margins: Theme.spSm
+                                        spacing: Theme.sp2xs
+                                        clip: true
+                                        Text {
+                                            width: parent.width
+                                            text: dropGhost.parent.dragTitle
+                                            textFormat: Text.PlainText
+                                            color: Theme.text
+                                            font.family: Theme.fontUi
+                                            font.pixelSize: Theme.fsSm
+                                            font.weight: Theme.fwTitle
+                                            elide: Text.ElideRight
+                                        }
+                                        Text {
+                                            width: parent.width
+                                            readonly property var dz: dropGhost.parent
+                                            text: Theme.fmtHour(dz.ghostStart) + "–" + Theme.fmtHour(Math.min(24, dz.ghostStart + dz.ghostLen))
+                                                  + (dz.dragMinutes > 0 ? " · " + I18n.t("week.drop.byEstimate").arg(I18n.fmtMinutes(dz.dragMinutes)) : "")
+                                            color: Theme.textMuted
+                                            font.family: Theme.fontUi
+                                            font.features: Theme.tabularNums
+                                            font.pixelSize: Theme.fsXs
+                                            elide: Text.ElideRight
+                                        }
+                                    }
                                 }
                             }
 
@@ -2273,7 +2388,7 @@ Item {
                             MouseArea {
                                 anchors.fill: parent
                                 acceptedButtons: Qt.RightButton
-                                onPressed: (mouse) => { mouse.accepted = true; root.openTaskMenu(wkBlock.modelData.id); }
+                                onPressed: (mouse) => { mouse.accepted = true; root.openBlockMenu(wkBlock.modelData, root.days[wkBlock.modelData.dayIndex].date); }
                             }
                             MouseArea {
                                 id: wkMove
