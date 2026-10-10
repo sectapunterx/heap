@@ -1,0 +1,92 @@
+---
+// The download page, one per language: every file of the latest release with its size (from the
+// GitHub Releases API at build time, src/data/releases.fallback.json when it is unreachable),
+// Scoop, the AppImage, building from source, and what happens to data from heap 0.7.
+import Page from '../layouts/Page.astro';
+import { copy, type Lang } from '../data/i18n';
+import { getLatestRelease } from '../lib/github';
+import { assetsByOS, formatDate, megabytes, primaryAssets, versionOf } from '../lib/releases';
+import { OS_LABEL } from '../lib/os';
+import { GITHUB_URL, RELEASES_URL, REPO } from '../lib/site';
+import { scoopVersion } from '../lib/scoop';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = copy[lang];
+const d = t.dl;
+
+const latest = await getLatestRelease();
+const byOS = assetsByOS(latest);
+const order = ['windows', 'macos', 'linux'] as const;
+const image = byOS.linux[0]?.name ?? 'lowkey-*-linux-x86_64.AppImage';
+const checkout = REPO.split('/')[1];
+// Scoop only while the bucket installs this very release (src/lib/scoop.ts)
+const ways = [
+  ...(scoopVersion() === versionOf(latest.tag) ? [{ h: d.scoopH, p: d.scoopP, code: `scoop bucket add heap ${GITHUB_URL}\nscoop install heap` }] : []),
+  { h: d.appimageH, p: d.appimageP, code: `chmod +x ${image}\n./${image}` },
+  { h: d.sourceH, p: d.sourceP, code: `git clone ${GITHUB_URL}.git\ncmake -S ${checkout} -B build -DCMAKE_BUILD_TYPE=Release\ncmake --build build -j` },
+];
+---
+
+<Page
+  lang={lang}
+  path="download/"
+  title={d.title}
+  description={d.description.replace('{v}', versionOf(latest.tag))}
+  downloadHref={RELEASES_URL + '/latest'}
+  primary={JSON.stringify(primaryAssets(latest))}
+>
+  <section class="dlp" data-name={t.download}>
+    <p class="kicker">{d.kicker.replace('{v}', versionOf(latest.tag)).replace('{date}', formatDate(latest.date, lang))}</p>
+    <h1 class="h2">{d.h}</h1>
+    <p class="lede">{d.p}</p>
+    <p class="mobile-note muted" data-mobile-note hidden>{d.mobile}</p>
+
+    <div class="os-cols">
+      {
+        order.map((os) => (
+          <div class="os-col" data-os={os}>
+            <h2>{OS_LABEL[os]}</h2>
+            <ul class="files" data-files>
+              {byOS[os].map((a) => (
+                <li>
+                  <a href={a.url} title={a.name}>
+                    <span class="f-kind">{t.kinds[a.kind]}</span>
+                    <span class="mono f-name">{a.name}</span>
+                    <span class="mono f-mb">{megabytes(a.size)} {t.get.mb}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+            <p class="muted os-note">{d.notes[os]}</p>
+          </div>
+        ))
+      }
+    </div>
+
+    <div class="ways" data-ways>
+      {
+        ways.map((w) => (
+          <div class="way">
+            <div class="scoop">
+              <div class="scoop-bar mono">
+                <span>{w.h}</span>
+                <button type="button" class="copy" data-copy={w.code} data-done={t.get.copied}>{t.get.copy}</button>
+              </div>
+              <pre class="mono">{w.code}</pre>
+            </div>
+            <p class="muted">{w.p}</p>
+          </div>
+        ))
+      }
+    </div>
+
+    <div class="trio">
+      {d.facts.map(([h, p]) => <div class="tcard"><h3>{h}</h3><p>{p}</p></div>)}
+    </div>
+
+    <p class="files-note"><a href={RELEASES_URL}>{d.all}</a></p>
+  </section>
+</Page>

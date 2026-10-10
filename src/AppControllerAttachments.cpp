@@ -43,9 +43,9 @@ const QHash<QString, AttText>& attTable() {
       {"missing", {"%1 is no longer in the attachments folder", "«%1» больше нет в папке вложений"}},
       {"pasted", {"pasted-%1.png", "вставка-%1.png"}},
       {"export.omitted",
-       {"Exported without attachments: %1 files (%2) are over the %3 export limit. Copy the attachments folder from heap's data "
+       {"Exported without attachments: %1 files (%2) are over the %3 export limit. Copy the attachments folder from lowkey's data "
         "folder next to the file, or export the notes as a folder.",
-        "Экспорт без вложений: %1 файлов (%2) больше предела %3. Скопируйте папку attachments из папки данных heap рядом с "
+        "Экспорт без вложений: %1 файлов (%2) больше предела %3. Скопируйте папку attachments из папки данных lowkey рядом с "
         "файлом или экспортируйте заметки папкой."}},
       {"import.problems", {"Some attachments were not imported: %1", "Часть вложений не импортирована: %1"}},
       {"cleanup.done", {"Deleted %1 unused attachments (%2)", "Удалено неиспользуемых вложений: %1 (%2)"}},

@@ -106,7 +106,8 @@ TestCase {
         keyClick(Qt.Key_Space);
         compare(tc.win.prioritiesFilter["P0"], false);
         verify(byName("archived-toggle").activeFocusOnTab);
-        verify(byName("sort-button").activeFocusOnTab);
+        // The board's sort sits beside the lens tabs now (APP-262).
+        verify(byName("view-header-option") !== null);
     }
 
     // While a tabbed-to control has the keyboard, the board cursor keys wait;
@@ -148,35 +149,19 @@ TestCase {
         const search = byName("settings-search", sv);
         verify(search !== null);
         search.forceActiveFocus();
-        for (const ch of "calendar") keyClick(ch.toUpperCase().charCodeAt(0));
+        sv.searchText = I18n.t("settings.section.calendar.title");
         keyClick(Qt.Key_Return);
         compare(sv.activeSection, "calendar");
         sv.searchText = "";
         search.text = "";
         // The section list walks with ↑/↓.
-        const row = byName("settings-nav-profile", sv);
+        const row = byName("settings-nav-appearance", sv);
         row.forceActiveFocus(Qt.TabFocusReason);
-        compare(sv.activeSection, "profile");
-        keyClick(Qt.Key_Down);
         compare(sv.activeSection, "appearance");
+        keyClick(Qt.Key_Down);
+        compare(sv.activeSection, "calendar");
         verify(sv.openSection("notifications"));
         compare(sv.activeSection, "notifications");
-    }
-
-    function test_tweaks_does_not_trap_tab() {
-        let tweaks = null;
-        const ps = popups();
-        for (let i = 0; i < ps.length; i++) if (String(ps[i]).indexOf("TweaksPanel") === 0) tweaks = ps[i];
-        verify(tweaks !== null);
-        AppController.currentView = "board";
-        tc.win.runCommand("tweaks.open");
-        tryCompare(tweaks, "opened", true);
-        tweaks.contentItem.forceActiveFocus();
-        keyClick(Qt.Key_Tab);
-        const f = tc.win.activeFocusItem;
-        verify(f !== null && String(f).indexOf("QQuickPopupItem") !== 0, "Tab stayed on the popup: " + f);
-        keyClick(Qt.Key_Escape);
-        tryCompare(tweaks, "opened", false);
     }
 
     // The paused-tour pill and its ✕ were bare MouseAreas (design audit

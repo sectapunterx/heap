@@ -16,6 +16,9 @@ var GROUPS = ["surfaces", "lines", "text", "accent", "alerts", "overlay",
               "priority", "status", "events", "syntax",
               "editor", "markdown"];
 
+// heap 2 surfaces (APP-259) that only the built-ins name; not in the editor.
+var EXTRA_KEYS = ["card", "cardHover", "nav", "meetingBg"];
+
 var TOKENS = [
     { key: "bg",           group: "surfaces" },
     { key: "bg2",          group: "surfaces" },
@@ -106,7 +109,7 @@ var TOKENS = [
 // - textMuted sits between text and textDim; it used to be within a few
 //   points of textDim, so the app had two text levels, not three.
 var HEAP_DARK = {
-    id: "heap-dark", name: "heap. dark", base: "dark", contrast: "high", builtin: true,
+    id: "heap-dark", name: "Classic dark", base: "dark", contrast: "high", builtin: true,
     colors: {
         bg: "#0b0e13", bg2: "#11151c", panel: "#14181f", panel2: "#1a1f29", panel3: "#1f2530",
         border: "#262d39", borderStrong: "#313a4a",
@@ -130,26 +133,29 @@ var HEAP_DARK = {
 };
 
 var HEAP_LIGHT = {
-    id: "heap-light", name: "heap. light", base: "light", contrast: "high", builtin: true,
+    id: "heap-light", name: "lowkey light", base: "light", contrast: "high", builtin: true,
+    // heap 2 on light (APP-259, sheet X-Oth-Light): the same roles, the
+    // brand's darker lavender, signals darkened to read at AA on white.
     colors: {
-        bg: "#f3f5f8", bg2: "#eaecee", panel: "#ffffff", panel2: "#f8f8f8", panel3: "#f1f1f1",
-        border: "#dde3ec", borderStrong: "#b8bdc5",
-        text: "#11151c", textMuted: "#4b5463", textDim: "#656e7d",
-        textOnAccent: "#06121a", textOnDanger: "#ffffff", textOnBadge: "#ffffff",
-        accent: "#178ea0", accentStrong: "#137888", accentSoft: "#1f178ea0", knob: "#ffffff",
-        danger: "#b54432", warning: "#945c26", success: "#357650", info: "#1f6fb0",
-        toastBg: "#f1f1f1", toastBorder: "#b8bdc5", toastText: "#11151c",
-        scrim: "#8c000000",
-        p0: "#b54432", p1: "#945c26", p2: "#5f6878", p3: "#646974",
-        stBacklog: "#8a909a", stTodo: "#6b7382", stProg: "#1f6fb0", stHalf: "#1f6fb0",
-        stBlocked: "#c34a36", stReview: "#4b5463", stDone: "#3e8a5d",
-        mStandup: "#1f6fb0", mOneone: "#7a3e91", mSync: "#317e74", mFocus: "#3e8a5d", nowLine: "#c34a36",
-        codeBg: "#eaecee", code: "#7a672c", synKeyword: "#137382", synString: "#7a672c",
-        synNumber: "#35754f", synComment: "#616a78", synType: "#2d746b", synBuiltin: "#7a3e91",
-        mention: "#1f6fb0", ticket: "#806c2e", tag: "#7a3e91", math: "#7a3e91",
-        heading: "#9050c3", highlightBg: "#1f178ea0",
-        mdLink: "#147989", mdCode: "#11151c", mdCodeBg: "#f8f8f8", mdMention: "#1f6fb0",
-        mdTicket: "#147989", mdTag: "#7a3e91", mdMath: "#806c2e", mdHighlight: "#1f178ea0"
+        bg: "#f7f8fa", bg2: "#eff1f4", panel: "#ffffff", panel2: "#f2f4f7", panel3: "#e9ecf0",
+        border: "#e2e5ea", borderStrong: "#d5d9df",
+        text: "#14181d", textMuted: "#2e343c", textDim: "#5b6470",
+        textOnAccent: "#ffffff", textOnDanger: "#ffffff", textOnBadge: "#ffffff",
+        accent: "#5a4fb3", accentStrong: "#4a40a0", accentSoft: "#1f5a4fb3", knob: "#ffffff",
+        danger: "#b23a33", warning: "#8f520f", success: "#286b44", info: "#2f5fb3",
+        toastBg: "#ffffff", toastBorder: "#d5d9df", toastText: "#14181d",
+        scrim: "#66000000",
+        p0: "#b23a33", p1: "#8f520f", p2: "#5b6470", p3: "#5b6470",
+        stBacklog: "#8a919c", stTodo: "#5b6470", stProg: "#2e343c", stHalf: "#2e343c",
+        stBlocked: "#b23a33", stReview: "#2e343c", stDone: "#286b44",
+        mStandup: "#2f5fb3", mOneone: "#2f5fb3", mSync: "#2f5fb3", mFocus: "#2f5fb3", nowLine: "#8f520f",
+        synKeyword: "#2f5fb3", synString: "#286b44", synNumber: "#8f520f", synComment: "#5b6470",
+        synType: "#2e343c", synBuiltin: "#14181d", codeBg: "#f2f4f7", code: "#2e343c",
+        mention: "#2f5fb3", ticket: "#2e343c", tag: "#a3446f", math: "#8f520f", heading: "#2e343c",
+        highlightBg: "#33f2a65a",
+        mdLink: "#14181d", mdCode: "#14181d", mdCodeBg: "#f2f4f7", mdMention: "#2f5fb3",
+        mdTicket: "#14181d", mdTag: "#a3446f", mdMath: "#8f520f", mdHighlight: "#33f2a65a",
+        card: "#ffffff", cardHover: "#f9fafb", nav: "#eff1f4", meetingBg: "#e8eefb"
     }
 };
 
@@ -289,30 +295,35 @@ var MINIMAL_DARK = {
     }
 };
 
-// heap. ink: the Minimal recipe (neutral surfaces, translucent hairlines, a
-// monochrome accent) in the brand's own colours. Navy-black
-// surfaces and the mark's ink greys from design/brand-export, a monochrome
-// accent like the logo, hairlines tinted with the ink, and the brand cyan
-// kept for links, mentions and keywords.
+// lowkey (heap. ink until 0.8.0; the id stays, saved settings name it) — the
+// heap 2 palette (APP-259, mockups in "New heap design"): near-black ground,
+// one lavender accent for cursor, focus and selection, hierarchy from type
+// and spacing rather than boxes. Status is shape (StatusRing), so the st*
+// greys stay quiet; colour is a signal: amber "now", red P0 / blocked /
+// errors, blue meetings, green done. `card`, `nav` and `meetingBg` are heap 2
+// surfaces the theme editor does not list; a theme without them derives them.
 var HEAP_INK = {
-    id: "heap-ink", name: "heap. ink", base: "dark", contrast: "high", builtin: true,
+    id: "heap-ink", name: "lowkey", base: "dark", contrast: "high", builtin: true,
     colors: {
-        bg: "#0b0e13", bg2: "#080a0e", panel: "#0f1218", panel2: "#141820",
-        panel3: "#1a1f29", border: "#14c6d0dc", borderStrong: "#26c6d0dc", text: "#e5ecf3",
-        textMuted: "#a6b0bd", textDim: "#8a94a3", textOnAccent: "#0b0e13", textOnDanger: "#0b0e13",
-        textOnBadge: "#0b0e13", accent: "#e8eef4", accentStrong: "#ffffff", accentSoft: "#1ac6d0dc",
-        knob: "#a6b0bd", danger: "#e6624c", warning: "#fe9c3a", success: "#78be7a",
-        info: "#32b2e7", toastBg: "#141820", toastBorder: "#1ac6d0dc", toastText: "#e5ecf3",
-        scrim: "#99000000", p0: "#e6624c", p1: "#fe9c3a", p2: "#a6b0bd",
-        p3: "#8a94a3", stBacklog: "#6f7888", stTodo: "#86a0bd", stProg: "#32b2e7",
-        stHalf: "#d8c277", stBlocked: "#e6624c", stReview: "#bf94ec", stDone: "#78be7a",
-        mStandup: "#32b2e7", mOneone: "#bf94ec", mSync: "#3bccdd", mFocus: "#78be7a",
-        nowLine: "#e6624c", synKeyword: "#3bccdd", synString: "#78be7a", synNumber: "#d8c277",
-        synComment: "#7d8797", synType: "#86a0bd", synBuiltin: "#e5ecf3", codeBg: "#080a0e",
-        code: "#c6d0dc", mention: "#3bccdd", ticket: "#a6b0bd", tag: "#bf94ec",
-        math: "#d8c277", heading: "#a6b0bd", highlightBg: "#4dd8c277", mdLink: "#3bccdd",
-        mdCode: "#e5ecf3", mdCodeBg: "#141820", mdMention: "#3bccdd", mdTicket: "#e5ecf3",
-        mdTag: "#bf94ec", mdMath: "#d8c277", mdHighlight: "#4dd8c277"
+        bg: "#0c0e11", bg2: "#0f1216", panel: "#14181d", panel2: "#1a1f26", panel3: "#1f252d",
+        border: "#1f252d", borderStrong: "#2a313b",
+        text: "#e9edf2", textMuted: "#c4ccd6", textDim: "#8f99a6",
+        textOnAccent: "#0c0e11", textOnDanger: "#0c0e11", textOnBadge: "#0c0e11",
+        accent: "#b1a7f0", accentStrong: "#c4bcf5", accentSoft: "#26b1a7f0", knob: "#e9edf2",
+        danger: "#ef6b63", warning: "#f2a65a", success: "#6fcf97", info: "#7aa7ff",
+        toastBg: "#1a1f26", toastBorder: "#2a313b", toastText: "#e9edf2",
+        scrim: "#99000000",
+        p0: "#ef6b63", p1: "#f2a65a", p2: "#8f99a6", p3: "#858e9b",
+        stBacklog: "#7a8390", stTodo: "#aeb7c2", stProg: "#c4ccd6", stHalf: "#c4ccd6",
+        stBlocked: "#ef6b63", stReview: "#c4ccd6", stDone: "#6fcf97",
+        mStandup: "#7aa7ff", mOneone: "#7aa7ff", mSync: "#7aa7ff", mFocus: "#7aa7ff", nowLine: "#f2a65a",
+        synKeyword: "#7aa7ff", synString: "#6fcf97", synNumber: "#f2a65a", synComment: "#7a8390",
+        synType: "#aeb7c2", synBuiltin: "#e9edf2", codeBg: "#14181d", code: "#c4ccd6",
+        mention: "#7aa7ff", ticket: "#c4ccd6", tag: "#de8fbd", math: "#f2a65a", heading: "#c4ccd6",
+        highlightBg: "#4df2a65a",
+        mdLink: "#e9edf2", mdCode: "#e9edf2", mdCodeBg: "#14181d", mdMention: "#7aa7ff",
+        mdTicket: "#e9edf2", mdTag: "#de8fbd", mdMath: "#f2a65a", mdHighlight: "#4df2a65a",
+        card: "#13161b", cardHover: "#181c22", nav: "#0f1216", meetingBg: "#172131"
     }
 };
 
@@ -511,7 +522,7 @@ var RETIRED_PALETTES = {
     }
 };
 
-var DEFAULT_DARK = "heap-dark";
+var DEFAULT_DARK = "heap-ink";
 var DEFAULT_LIGHT = "heap-light";
 
 var _HEX = /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
@@ -591,6 +602,12 @@ function resolve(id, customThemes, slot) {
         var k = TOKENS[i].key;
         var v = t.colors ? t.colors[k] : undefined;
         colors[k] = isHex(v) ? v : base.colors[k];
+    }
+    // heap 2 surfaces a built-in names (APP-259) ride along; a theme without
+    // them leaves them undefined and Theme derives them.
+    for (var j = 0; j < EXTRA_KEYS.length; j++) {
+        var x = t.colors ? t.colors[EXTRA_KEYS[j]] : undefined;
+        if (isHex(x)) colors[EXTRA_KEYS[j]] = x;
     }
     return { id: t.id, name: t.name || t.id, base: base.base, builtin: !!t.builtin, colors: colors };
 }

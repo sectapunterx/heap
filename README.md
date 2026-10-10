@@ -1,14 +1,15 @@
 <p align="center">
-  <img src="design/brand-export/surfaces/heap-og-card-outlined.svg" width="100%" alt="heap. — Work, in one place.">
+  <img src="design/brand-export/lowkey/lowkey-wordmark-on-dark.svg" width="320" alt="lowkey">
 </p>
 
-<h3 align="center">Tickets, calendar and notes for engineers — one native, keyboard-first window.</h3>
+<h3 align="center">Quiet by default.</h3>
+
+<p align="center">A developer’s workday in one window — tickets, meetings and notes, from the keyboard.</p>
 
 <p align="center">
-  <a href="https://sectapunterx.github.io/heap/"><b>Website</b></a> ·
-  <a href="https://sectapunterx.github.io/heap/demo/">Try it in the browser</a> ·
   <a href="https://github.com/sectapunterx/heap/releases/latest"><b>Download</b></a> ·
-  <a href="https://sectapunterx.github.io/heap/docs/">Docs</a>
+  <a href="https://sectapunterx.github.io/heap/">Website — the tour</a> ·
+  <a href="#documentation">Docs</a>
 </p>
 
 <div align="center">
@@ -19,172 +20,110 @@
 
 </div>
 
-<p align="center">
-  <img src="docs/assets/img/screens/board-kanban.png" width="100%" alt="heap. board: kanban columns, today's calendar, people to ping">
-</p>
+lowkey is a personal desktop app: your tickets from GitHub, GitLab, Jira and nine more trackers, your meetings, and
+your notes, in one window you drive from the keyboard. It keeps everything in a file on your disk, needs no
+account, and writes nothing to your trackers unless you switch that on. What it looks like and why it exists is on
+the [website](https://sectapunterx.github.io/heap/); this page is about getting it running and finding your way
+around.
 
-Your tickets from GitHub, Jira, GitLab and nine more trackers, your meetings and focus time, your notes — side by side
-in one fast desktop app. Capture anything with a hotkey, drive everything from the keyboard, and keep it all in a file
-on your own disk.
+## Install
 
-## Highlights
+Download from [Releases](https://github.com/sectapunterx/heap/releases/latest):
 
-### Type it the way you'd say it
+| System | File | Then |
+| --- | --- | --- |
+| Windows | `lowkey-*-windows-setup.exe` | Run it. Or take `lowkey-*-windows-portable.zip` and start `lowkey.exe` from any folder. |
+| macOS | `lowkey-*-macos.dmg` | Open it and drag lowkey into Applications. |
+| Linux | `lowkey-*-linux-x86_64.AppImage` | `chmod +x lowkey-*.AppImage && ./lowkey-*.AppImage` — nothing else to install. |
 
-Press `Ctrl+Shift+Space` from anywhere and write one line. heap. works out what it is and where it belongs — in
-English or Russian.
+Updates: lowkey checks for a new version on start and installs it only when you click **Update**. The check is
+off-switchable in Settings → About.
 
-<p align="center">
-  <img src="docs/assets/img/readme/quick-capture.png" width="70%" alt="Quick-capture parsing a ticket id, priority, date, label and mention out of one line">
-</p>
+## The first ten minutes
 
-| You type | You get |
-| --- | --- |
-| `APP-231 fix login race with @Masha !! tomorrow 15:00 #auth` | task `APP-231`, priority P1, due tomorrow at 15:00, labelled `auth`, linked to Masha |
-| `1:1 with @anna thursday 12:00` | a 1:1 on Thursday's calendar with Anna as an attendee |
-| `focus refactor parser 10:00` | a focus block on today's calendar |
-| `review PRs every weekday 10:00` | a task that repeats every weekday at 10:00 |
-| `ping @viktor about the release` | a reminder in your People to ping list |
+1. **Write a task.** The app opens on Today with an input line. Type `fix login tomorrow 15:00 p1 #auth` and
+   press Enter. From anywhere else: `Ctrl+Shift+Space`.
+2. **Connect a tracker.** Settings → Trackers → pick yours → sign in through the browser, or paste a token.
+   Issues come in read-only. Moving a card changes the issue upstream only after you tick *Change the status in
+   …* for that tracker.
+3. **Add a repository.** Settings → Git Watcher. From then on the task named in your branch (`APP-112-…`) shows at the top
+   of the window.
+4. **Bring your notes.** Profile menu at the top of the sidebar → *Import notes folder…* — an Obsidian vault or
+   any folder of `.md` files. You see what comes in before anything is copied.
+5. **Look around without risk.** On the very first start, the empty Today offers an example: a filled profile of
+   its own to try things on, kept apart from your data and easy to remove.
 
-Full syntax: [First day in heap.](docs/TUTORIAL.md#quick-capture-syntax)
+More: [First day in lowkey](docs/TUTORIAL.md).
 
-### A board that knows your branch
-
-heap. watches your working copy. Check out a branch with the ticket in its name — `feature/app-101-login-rate-limit`
-— and the top bar says you're working on `APP-101`, with its pull request and CI checks one click away. The card
-carries the PR state too. Need a branch? Create one from the task's menu. No manual linking.
-
-### Every tracker, one board
-
-Sign in through the browser or paste a token, and issues from **GitHub, GitLab, Jira, Trello, Gitea, Forgejo,
-Redmine, Todoist, Asana, ClickUp, Sentry and Bitbucket** land as cards, with their statuses mapped onto your columns.
-Move a card to Done and the issue is closed upstream (GitHub, GitLab, Gitea, Forgejo). Tokens live in the OS
-keychain. Mattermost brings in the people you work with. [More →](docs/INTEGRATIONS.md)
-
-<p align="center">
-  <img src="docs/assets/img/readme/integrations.png" width="80%" alt="Tracker integrations in Settings">
-</p>
-
-### Plan your day, not just your backlog
-
-Tasks and calendar share one window. Drag a task onto the day to book a focus block; the week view keeps a rail of
-what still needs a slot. Repeating events with this-and-following edits, all-day and past-midnight events, meeting
-reminders, `.ics` import and export.
-
-<p align="center">
-  <img src="docs/assets/img/screens/board-week.png" width="100%" alt="Week view with events, deadlines and the Needs a slot rail">
-</p>
-
-### Notes that link to your work
-
-Markdown notes with folders, a daily note, task lists, tables and highlighted code. `[[Wiki-links]]` with backlinks,
-`#APP-101` points at the ticket, `@masha` at the person. Import and export as a folder of `.md` files — Obsidian
-works with the same files. Long-form docs, snippets and contact cards live next door.
-
-<p align="center">
-  <img src="docs/assets/img/readme/notes.png" width="100%" alt="Notes in split view: markdown on the left, rendered on the right">
-</p>
-
-### Never reach for the mouse
-
-`Ctrl+K` searches tasks, notes, docs and snippets at once. `J` `K` `H` `L` walk the board, `Shift` with the same keys
-moves the card, `Ctrl+1`…`8` switch views. Every shortcut is rebindable from one panel (`Ctrl+/`).
-
-## Also in the box
-
-- **Timeline, month and archive** views of the same tasks
-- **Recurring tasks** and **automation**: auto-archive, stuck-task warnings, deadline and standup reminders, quiet hours
-- **Undo and redo** for every change
-- **Profiles** — separate workspaces per project or job, with JSON import / export
-- **Themes** — heap. ink in the brand's colours by default, more dark and light presets, your own themes, contrast modes, density
-- **Weekly report**, one keystroke away (`Ctrl+Shift+W`)
-- A sample board and a replayable **guided tour** on first run
-
-## Yours, and only yours
-
-**Local-first** — one JSON file on your disk, backed up daily ([where](docs/DATA.md)) ·
-**No account** · **No telemetry** · **Works offline** · **Native** — a single Qt binary, not a browser in disguise ·
-**Open source** under MIT.
-
-## Get it
-
-Grab the latest build from [**Releases**](https://github.com/sectapunterx/heap/releases/latest):
-
-- **Windows** — installer or portable zip. Or with [Scoop](https://scoop.sh):
-  `scoop bucket add heap https://github.com/sectapunterx/heap` then `scoop install heap`
-- **macOS** — `.dmg`
-- **Linux** — AppImage, runs on any distro: `chmod +x heap-*.AppImage && ./heap-*.AppImage`
-
-Prefer to build it yourself? See [docs/BUILDING.md](docs/BUILDING.md).
-
-## Five keys to start with
+## Keys to learn first
 
 | Key | Does |
 | --- | --- |
-| `Ctrl+Shift+Space` | Quick-capture from anywhere |
-| `Ctrl+K` | Command palette and search |
-| `Ctrl+1` … `8` | Board, Timeline, Week, Month, Archive, Docs, Notes, Settings |
-| `J` / `K` / `H` / `L` | Move around the board |
-| `Ctrl+/` | Every shortcut, rebindable |
+| `Ctrl+Shift+Space` | New task from any app |
+| `Ctrl+K` | Command line: find, filter, run |
+| `?` | Every key on one screen |
+| `Ctrl+1` `2` `3` | Today, Tasks, Knowledge (`Ctrl+,` Settings) |
+| `g b` `g l` `g c` | Board, List, Calendar |
+| `j` `k` / `h` `l` | Move the cursor |
+| `d` | Done (again: back) |
+| `/` | Filter the section you are in |
 
-## Command line
+Single letters never fire while you are typing, and they work in any keyboard layout. Every key can be changed:
+`?` → *Change shortcuts…*. Full list: [docs/HOTKEYS.md](docs/HOTKEYS.md).
 
-Note a task or check the current one without leaving the terminal. With heap open on the same data
-directory, commands go to the window — a change shows up there at once and can be undone there; with it
-closed, heap reads and saves `state.json` itself. Nothing here talks to the network.
+## Finding things
+
+The line above Tasks takes plain words and conditions, the same way in Board, List and Calendar. A finished
+condition turns into a chip; save the lot as a view and it stays in the sidebar.
+
+```
+status:blocked          due:week              scheduled:none        is:overdue
+priority:p0,p1          #label                branch:login          estimate:>2h
+has:notes               sprint:current        -status:done          bug OR crash
+```
+
+All of it: [Quick-capture and search syntax](docs/TUTORIAL.md#quick-capture-syntax).
+
+## Your data
+
+| | Windows | macOS | Linux |
+| --- | --- | --- | --- |
+| Data | `%APPDATA%\lowkey\lowkey\` | `~/Library/Application Support/lowkey/lowkey/` | `~/.local/share/lowkey/lowkey/` |
+
+- `state.json` — everything: tasks, meetings, notes, settings.
+- `backups/` — scheduled copies (daily, last 20 kept); `history/` — the time machine’s snapshots.
+- `logs/lowkey.log` — attach it to a bug report.
+- Tracker tokens are not in `state.json`: the Windows build keeps them in the system credential store, macOS and
+  Linux in a `secrets.json` only your user can read.
+
+Two machines: profile menu → *Export to JSON…*, then import it on the other one — importing only adds. Details:
+[docs/DATA.md](docs/DATA.md).
+
+## From the terminal
 
 ```sh
-heap add "fix login tomorrow 14:00 p1 #backend // check the refresh token"   # read like quick capture
-heap now                      # the task with a running timer, else the one your git branch names
-heap list --status prog       # also --profile <name>, --json
-heap today                    # in progress, or scheduled or due today
-heap done APP-12
-heap open APP-12              # show it in the window (starts heap if it is closed)
-heap help
+lowkey today            # overdue first, then today
+lowkey add "review PR tomorrow 11:00 #api"
+lowkey now              # the current task — fits a shell prompt
 ```
 
-`heap now` prints nothing and exits 0 when there is no current task, so it fits a shell prompt.
-`--format` takes `{id} {title} {status} {priority} {profile} {source} {elapsed}`:
-
-```toml
-# starship.toml
-[custom.heap]
-command = "heap now --format '{id} {title}'"
-when = true
-format = "[$output]($style) "
-```
-
-```sh
-# bash / zsh
-PS1='$(heap now --format "[{id}] ")'"$PS1"
-```
-
-Exit codes: `0` ok, `1` usage, `2` no such task, profile or column, `3` data error. `--data-dir` and
-`HEAP_DATA_DIR` work as for the app.
-
-**Windows:** in cmd and PowerShell use `heap-cli` (it sits next to `heap.exe`): heap.exe is a windowed
-program, so those shells neither wait for it nor see its output. `heap-cli` answers `now`, `list` and
-`today` itself, fast enough for a prompt, and passes the rest to heap.exe. Add the install folder to
-`PATH`, and `Set-Alias heap heap-cli` in your PowerShell profile if you like the short name. In git-bash
-plain `heap` works too.
+On Windows use `lowkey-cli` in cmd and PowerShell. Everything else: [docs/CLI.md](docs/CLI.md).
 
 ## Documentation
 
-- [**First day in heap.**](docs/TUTORIAL.md) — a ten-minute walkthrough
-- [**Keyboard reference**](docs/HOTKEYS.md) — every shortcut
-- [**Tracker integrations**](docs/INTEGRATIONS.md) — connecting GitHub, Jira and the rest
-- [**Data & backups**](docs/DATA.md) — where your data lives, moving between machines
-
-Also on the website, with search: [sectapunterx.github.io/heap/docs](https://sectapunterx.github.io/heap/docs/).
+- [First day in lowkey](docs/TUTORIAL.md) — a ten-minute walkthrough, capture and search syntax
+- [Keyboard](docs/HOTKEYS.md) — every key and how to change it
+- [Trackers](docs/INTEGRATIONS.md) — connecting each one, what is read and what may be written
+- [Data & backups](docs/DATA.md) — files, backups, moving between machines
+- [Command line](docs/CLI.md)
 
 ## Contributing
 
-Issues and pull requests are welcome. Building, tests, CI and the code map are in
-[CONTRIBUTING.md](CONTRIBUTING.md).
+Bug reports and pull requests are welcome — include `logs/lowkey.log` with a bug. Building from source and the
+code map are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
 MIT — see [LICENSE](LICENSE). Brand assets under `design/brand-export/` are MIT for use within this codebase. The
-referenced fonts (IBM Plex Sans, JetBrains Mono) ship under the SIL Open Font License; see their upstream repositories.
-The fonts bundled into the app (Golos Text, JetBrains Mono — `resources/fonts/`) are SIL OFL 1.1 too; see
+fonts bundled into the app (Golos Text, JetBrains Mono) are SIL OFL 1.1; see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

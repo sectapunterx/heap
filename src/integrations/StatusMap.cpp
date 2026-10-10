@@ -19,6 +19,8 @@ QString StatusMap::defaultColumn(const QString& providerStatus) {
       {QStringLiteral("todo"), QStringLiteral("todo")},
       {QStringLiteral("open"), QStringLiteral("todo")},
       {QStringLiteral("reopened"), QStringLiteral("todo")},
+      // GitLab names an open issue "opened"; it fell through to the fallback.
+      {QStringLiteral("opened"), QStringLiteral("todo")},
       {QStringLiteral("selected for development"), QStringLiteral("todo")},
       // in progress
       {QStringLiteral("in progress"), QStringLiteral("prog")},
@@ -41,6 +43,16 @@ QString StatusMap::defaultColumn(const QString& providerStatus) {
       {QStringLiteral("complete"), QStringLiteral("done")},
       {QStringLiteral("completed"), QStringLiteral("done")},
       {QStringLiteral("merged"), QStringLiteral("done")},
+      // Merge and pull requests (APP-242) have statuses of their own, so the
+      // mapping can put them apart from issues: open = waiting for review.
+      {QStringLiteral("mr open"), QStringLiteral("review")},
+      {QStringLiteral("mr draft"), QStringLiteral("prog")},
+      {QStringLiteral("mr merged"), QStringLiteral("done")},
+      {QStringLiteral("mr closed"), QStringLiteral("done")},
+      {QStringLiteral("pr open"), QStringLiteral("review")},
+      {QStringLiteral("pr draft"), QStringLiteral("prog")},
+      {QStringLiteral("pr merged"), QStringLiteral("done")},
+      {QStringLiteral("pr closed"), QStringLiteral("done")},
   };
   return kTable.value(norm(providerStatus));
 }

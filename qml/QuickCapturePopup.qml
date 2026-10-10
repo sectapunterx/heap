@@ -28,8 +28,30 @@ Popup {
     signal captured(string title, string body, string taskId)
     // The "seen this before" hint under the field was clicked (APP-159).
     signal seenBeforeActivated(var hit)
+    // Tab: the task document with what was typed (APP-266). Only in the app;
+    // the standalone capture keeps Tab for moving on.
+    signal openFullRequested(var draft)
+    // "APP-101 is already there — open it?"
+    signal openTaskRequested(string id)
 
     property var _preview: ({ok: false})
+    // The parse of the current text (AppController.captureParse).
+    property var _parsed: ({})
+    // Recognised phrases taken back with a chip's ×: words again, for this
+    // input only.
+    property var _rejected: []
+    // The column the task goes to (APP-266 chip "Column").
+    property string _status: "todo"
+    property string _openStatus: ""
+    // "+" on a column: the input, already pointed at that column.
+    function openIn(statusId) {
+        root._openStatus = statusId || "";
+        root.open();
+    }
+    // Several lines came in one paste: asked once, "N tasks or one?".
+    property bool _pastedLines: false
+    property bool _askLines: false
+    property int _prevNewlines: 0
     property var _meta: ({title: "", desc: "", handles: [], ticketKey: "", priority: "", labels: []})
     property string _title: ""
     // Ctrl+Enter adds and stays open for the next item; this is what the
@@ -85,15 +107,21 @@ Popup {
         const raw = inputField.text;
         const meta = _extractMeta(raw);
         _meta = meta;
-        const r = AppController.parseDateTime(meta.title, new Date());
-        _preview = r || {ok: false};
-        if (_preview.ok && _preview.consumed && _preview.consumed.length > 0) {
-            const left  = meta.title.substr(0, _preview.startOffset).trim();
-            const right = meta.title.substr(_preview.endOffset).trim();
-            _title = (left + " " + right).replace(/\s+/g, " ").trim();
-        } else {
-            _title = meta.title.trim();
-        }
+        // When and the deadline apart (APP-245): "в пн, до пт" is two dates.
+        const p = AppController.captureParse(raw, new Date(), root._rejected);
+        root._parsed = p;
+        const when = p.when && p.when.getTime && !isNaN(p.when.getTime()) ? p.when : null;
+        const due = p.due && p.due.getTime && !isNaN(p.due.getTime()) ? p.due : null;
+        _preview = {
+            ok: when !== null || due !== null,
+            // The meeting / focus block goes at "when"; a deadline alone books nothing.
+            start: when, hasTime: when !== null && p.whenHasTime,
+            end: p.whenEnd,
+            due: due, dueHasTime: due !== null && p.dueHasTime,
+            whenPast: !!p.whenPast, duePast: !!p.duePast,
+            estimate: p.estimateMinutes
+        };
+        _title = p.title;
     }
 
     // Detect intent from free-text. Returns "focus" | "sync" | "ticket" | "none".
@@ -183,17 +211,21 @@ Popup {
     //   ev    the booked event, for a meeting
     function _summary(kind, draft, ev) {
         const lines = [I18n.t("quick.quote").arg(draft.title)];
+        const plan = Object.assign({}, draft);  // when: plan.scheduledAt
         let title;
         if (kind === "meeting") {
             title = I18n.t("quick.done.meeting." + ev.type);
-            lines.push(root._cap(root._when(draft.dueAt, false)) + ", "
+            lines.push(root._cap(root._when(plan.scheduledAt, false)) + ", "
                        + AppController.eventHourLabel(ev.start) + "–" + AppController.eventHourLabel(ev.end));
             if (ev.attendees) lines.push(I18n.t("quick.done.with").arg(ev.attendees));
         } else if (kind === "focus") {
             title = I18n.t("quick.done.focus");
-            lines.push(root._cap(root._when(draft.dueAt, true)));
+            lines.push(root._cap(root._when(plan.scheduledAt, true)));
         } else {
             title = I18n.t("quick.done.task").arg(root._statusName(draft.status));
+            // When and the deadline, each named (APP-245).
+            if (plan.scheduledAt && plan.scheduledAt.getTime && !isNaN(plan.scheduledAt.getTime()))
+                lines.push(I18n.t("quick.done.when").arg(root._when(plan.scheduledAt, plan.scheduledHasTime)));
             if (draft.dueAt && draft.dueAt.getTime && !isNaN(draft.dueAt.getTime()))
                 lines.push(I18n.t("quick.done.due").arg(root._when(draft.dueAt, draft.dueHasTime)));
             if (kind === "untimedMeeting") lines.push(I18n.t("quick.done.noTime"));
@@ -240,6 +272,12 @@ Popup {
         // time/handles can lag a keystroke behind. Refreshing here makes submit a
         // pure function of what is on screen.
         _refreshPreview();
+        // Several pasted lines: one question, then the answer decides.
+        if (root._pastedLines && root._lineCount() > 1) {
+            root._askLines = true;
+            return;
+        }
+        if (inputField.text.trim().length === 0) return;
         if (_title.length === 0) {
             // Say why nothing happened: a date alone is not a task.
             root._hint = (_preview && _preview.ok) ? I18n.t("quick.hint.onlyDate") : "";
@@ -291,7 +329,8 @@ Popup {
         // Title, "// description", priority, #labels, the parsed date (clock
         // time included, HEAP-115) and recurrence (HEAP-77): built in C++, the
         // same draft `heap add` saves from the command line (APP-173).
-        const draft = AppController.quickTaskDraft(inputField.text, new Date());
+        const draft = AppController.quickTaskDraft(inputField.text, new Date(), root._rejected);
+        draft.status = root._status;
         // A meeting is a task and its calendar event: one undo step for both.
         AppController.beginUndoGroup(I18n.t("quick.undo").arg(draft.id));
         try {
@@ -304,30 +343,19 @@ Popup {
     function _submitTask(draft, kindEarly) {
         AppController.saveTask(draft);
 
-        // Calendar entry rules. A parsed time is already stored on the task and
-        // shows up on the Day view, so only a meeting still needs an event:
-        //  - "ticket"/"задача" → never schedule (pure todo item)
-        //  - "focus"           → the task's own scheduled time is the block
-        //  - "sync"/"созвон"   → meeting on calendar (right column with созвоны)
-        //  - none of the above → no calendar entry even if a time was parsed
-        const noTime = !(_preview && _preview.ok && _preview.hasTime && _preview.start);
-        // Reuse the kind we already computed for the contact-ping check.
+        // A calendar meeting only when asked for, with the box "Also a
+        // meeting" (APP-266): the time is already on the task itself and
+        // shows on the day; the words "созвон"/"sync" no longer book one.
+        const noTime = !(_preview && _preview.start && _preview.hasTime);
         const kind = kindEarly;
-        if (noTime) {
-            root._finish(root._summary(kind === "sync" ? "untimedMeeting" : "task", draft, null));
+        if (noTime || !meetingBox.checked) {
+            root._finish(root._summary("task", draft, null));
             return;
         }
-        if (kind === "ticket") { root._finish(root._summary("task", draft, null)); return; }
 
         const d         = _preview.start;
         const startHour = d.getHours() + d.getMinutes() / 60.0;
-
-        if (kind === "focus") {
-            AppController.selectedDate = d;
-            root._finish(root._summary("focus", draft, null));
-            return;
-        }
-        if (kind === "sync") {
+        {
             // Honour parsed range "12:00-13:00", else default 30 min.
             let endHour = startHour + 0.5;
             const pe = _preview.end;
@@ -354,24 +382,94 @@ Popup {
             AppController.saveEvent(ev);
             AppController.selectedDate = d;
             root._finish(root._summary("meeting", draft, ev));
-            return;
         }
-        // kind === "none" → task with deadline only, no calendar entry.
+    }
 
-        root._finish(root._summary("task", draft, null));
+    // ── several lines ──
+    function _lineCount() {
+        return inputField.text.split("\n").filter(l => l.trim().length > 0).length;
+    }
+    // "N tasks": each line its own task, read the same way.
+    function _submitEachLine() {
+        const lines = inputField.text.split("\n").filter(l => l.trim().length > 0);
+        AppController.beginUndoGroup(I18n.t("capture.undo.many").arg(lines.length));
+        let last = "";
+        try {
+            for (const line of lines) {
+                const d = AppController.quickTaskDraft(line, new Date());
+                if (String(d.title).length === 0) continue;
+                d.status = root._status;
+                AppController.saveTask(d);
+                last = d.id;
+            }
+        } finally {
+            AppController.endUndoGroup();
+        }
+        root._pastedLines = false;
+        root._askLines = false;
+        root._finish({ title: I18n.t("capture.done.many").arg(lines.length), body: "", taskId: last });
+    }
+    // "One with a description": the first line is the task, the rest its text.
+    function _submitAsOne() {
+        root._pastedLines = false;
+        root._askLines = false;
+        root._submit();
+    }
+
+    // One line for the toast (APP-266): "Created APP-12 · tomorrow 15:00 · To Do".
+    function headline(taskId) {
+        const t = AppController.taskById(taskId);
+        if (!t || !t.id) return "";
+        const parts = [t.id];
+        const sch = t.scheduledAt, due = t.dueAt;
+        if (sch && sch.getTime && !isNaN(sch.getTime())) parts.push(root._when(sch, t.scheduledHasTime));
+        else if (due && due.getTime && !isNaN(due.getTime())) parts.push(I18n.t("capture.due") + " " + root._when(due, t.dueHasTime));
+        parts.push(root._statusName(t.status));
+        return I18n.t("capture.done").arg(parts.join(" · "));
+    }
+    // A chip's ×: its words go back into the title, for this input only.
+    function rejectSpan(kind) {
+        const spans = (root._parsed && root._parsed.spans) || [];
+        for (let i = 0; i < spans.length; i++) {
+            if (spans[i].kind !== kind) continue;
+            root._rejected = root._rejected.concat([spans[i].text]);
+            break;
+        }
+        root._refreshPreview();
+        inputField.forceActiveFocus();
     }
 
     // Opt-in timing (HEAP_PERF_LOG=1 / --perf-log): hotkey or open() to the
     // first frame that shows the popup. Logs only; a no-op otherwise.
     onAboutToShow: AppController.perfMarkShown("capture", contentItem)
+    // The command line's "nothing found · create «…»" (APP-267): the input
+    // opens with those words in it.
+    property string _openText: ""
+    function openWithText(text) {
+        root._openText = text || "";
+        root.open();
+    }
     onOpened: {
         inputField.text = "";
         _preview = {ok: false};
+        _parsed = ({});
+        _rejected = [];
+        _status = _openStatus.length > 0 ? _openStatus : "todo";
+        _openStatus = "";
+        _pastedLines = false;
+        _askLines = false;
+        _prevNewlines = 0;
+        meetingBox.checked = false;
         _title = "";
         _hint = "";
         _lastAdded = "";
         keepOpen = false;
         at.dismiss();
+        if (_openText.length > 0) {
+            inputField.text = _openText;
+            inputField.cursorPosition = inputField.length;
+        }
+        _openText = "";
         inputField.forceActiveFocus();
     }
 
@@ -383,12 +481,27 @@ Popup {
             Layout.preferredHeight: 6
         }
 
-        Text {
-            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
-            text: I18n.t("quick.title")
-            color: Theme.textDim
-            font.pixelSize: Theme.fsSm
-            font.weight: Theme.fwTitle
+        // "lowkey · new task", the profile it goes to on the right.
+        RowLayout {
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
+            spacing: Theme.spMd
+            Text {
+                text: I18n.t("capture.title")
+                color: Theme.textDim
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsSm
+                font.weight: Theme.fwTitle
+            }
+            Item { Layout.fillWidth: true }
+            Text {
+                objectName: "qc-profile"
+                text: I18n.t("capture.inProfile").arg(AppController.profileById(AppController.activeProfileId).name || "")
+                color: Theme.textDim
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsSm
+                elide: Text.ElideRight
+                Layout.maximumWidth: Theme.px(200)
+            }
         }
 
         // A few lines tall at most; a longer text scrolls.
@@ -409,12 +522,32 @@ Popup {
                 color: Theme.text
                 placeholderTextColor: Theme.textDim
                 selectByMouse: true
-                onTextChanged: { previewTimer.restart(); at.refresh(); root._hint = ""; }
+                onTextChanged: {
+                    // A paste that brought line breaks with it (typed ones come
+                    // one at a time, with Shift+Enter).
+                    const n = (inputField.text.match(/\n/g) || []).length;
+                    if (n > root._prevNewlines + 0 && n - root._prevNewlines >= 1 && !inputField._typedNewLine)
+                        root._pastedLines = true;
+                    if (n === 0) root._pastedLines = false;
+                    root._prevNewlines = n;
+                    inputField._typedNewLine = false;
+                    root._askLines = false;
+                    previewTimer.restart(); at.refresh(); root._hint = "";
+                }
+                property bool _typedNewLine: false
+                // The recognised parts in colour, right in the line (APP-266).
+                SpanHighlighter {
+                    target: inputField.textDocument
+                    spans: (root._parsed && root._parsed.marks) || []
+                    colors: ({ when: Theme.info, due: Theme.warning, estimate: Theme.info,
+                               priority: Theme.priorityInk("P1"), label: Theme.textMuted })
+                }
                 onCursorPositionChanged: at.refresh()
 
                 // Enter and Shift+Enter both write a plain "\n" (Shift+Enter
                 // in a text area is otherwise a Unicode line separator).
                 function newLine() {
+                    inputField._typedNewLine = true;
                     if (inputField.selectedText.length > 0)
                         inputField.remove(inputField.selectionStart, inputField.selectionEnd);
                     inputField.insert(inputField.cursorPosition, "\n");
@@ -453,18 +586,31 @@ Popup {
                             return;
                         }
                     }
+                    // Enter creates, Shift+Enter starts a new line (APP-266);
+                    // Ctrl+Shift+Enter creates and stays open for the next.
                     if (enter) {
                         e.accepted = true;
-                        if (e.modifiers & Qt.ControlModifier) {
-                            // Ctrl+Enter saves; with Shift it stays open for the next.
-                            at.dismiss();
-                            root._submitFromKey((e.modifiers & Qt.ShiftModifier) !== 0);
-                        } else {
+                        const ctrl = (e.modifiers & Qt.ControlModifier) !== 0;
+                        const shift = (e.modifiers & Qt.ShiftModifier) !== 0;
+                        if (shift && !ctrl) {
                             inputField.newLine();
+                            return;
                         }
+                        at.dismiss();
+                        root._submitFromKey(ctrl && shift);
                         return;
                     }
-                    // Tab leaves the field, as it did from a one-line one.
+                    // Tab: the task document with what was typed; outside the
+                    // app it leaves the field, as from a one-line one.
+                    if (e.key === Qt.Key_Tab && !root.standalone && inputField.text.trim().length > 0) {
+                        e.accepted = true;
+                        root._refreshPreview();
+                        const draft = AppController.quickTaskDraft(inputField.text, new Date(), root._rejected);
+                        draft.status = root._status;
+                        root.close();
+                        root.openFullRequested(draft);
+                        return;
+                    }
                     if (e.key === Qt.Key_Tab || e.key === Qt.Key_Backtab) {
                         const next = inputField.nextItemInFocusChain(e.key === Qt.Key_Tab);
                         if (next) next.forceActiveFocus(e.key === Qt.Key_Tab ? Qt.TabFocusReason : Qt.BacktabFocusReason);
@@ -488,38 +634,139 @@ Popup {
             onTriggered: root._refreshPreview()
         }
 
-        RowLayout {
+        // What was read, as chips (APP-266): when / due / estimate take
+        // their words back with ×; priority and labels say what they set;
+        // the column is picked here.
+        Flow {
+            objectName: "qc-chips"
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
-            spacing: Theme.spMd
-            Text {
-                visible: root._title.length > 0
-                text: "" + root._title
-                color: Theme.text
-                font.pixelSize: Theme.fsMd
-                Layout.fillWidth: true
-                elide: Text.ElideRight
+            spacing: Theme.spSm
+            PropertyChip {
+                objectName: "qc-when"
+                visible: !!(root._preview && root._preview.start)
+                small: true
+                removable: true
+                key: I18n.t("capture.when")
+                value: visible ? root._when(root._preview.start, root._preview.hasTime)
+                                 + (root._preview.whenPast ? " · " + I18n.t("capture.past") : "") : ""
+                valueColor: visible && root._preview.whenPast ? Theme.textDim : Theme.text
+                onRemoved: root.rejectSpan("when")
             }
-            Rectangle {
-                visible: root._preview && root._preview.ok
-                radius: Theme.radiusLg
-                color: Theme.panel2
-                border.color: Theme.accent
-                border.width: 1
-                implicitHeight: previewChip.implicitHeight + 6
-                implicitWidth: previewChip.implicitWidth + 16
-                Text {
-                    id: previewChip
-                    anchors.centerIn: parent
-                    color: Theme.text
-                    font.pixelSize: Theme.fsSm
-                    text: {
-                        if (!root._preview || !root._preview.ok) return "";
-                        const d = root._preview.start;
-                        if (!d) return "";
-                        return root._preview.hasTime ? I18n.fmtDateTime(d, "weekdayDayYear")
-                                                     : I18n.fmtDate(d, "weekdayDayYear");
+            PropertyChip {
+                objectName: "qc-due"
+                visible: !!(root._preview && root._preview.due)
+                small: true
+                removable: true
+                key: I18n.t("capture.due")
+                value: visible ? root._when(root._preview.due, root._preview.dueHasTime)
+                                 + (root._preview.duePast ? " · " + I18n.t("capture.past") : "") : ""
+                valueColor: visible && root._preview.duePast ? Theme.textDim : Theme.text
+                onRemoved: root.rejectSpan("due")
+            }
+            PropertyChip {
+                objectName: "qc-estimate"
+                visible: !!(root._preview && root._preview.estimate > 0)
+                small: true
+                removable: true
+                key: I18n.t("capture.estimate")
+                value: visible ? I18n.fmtMinutes(root._preview.estimate) : ""
+                onRemoved: root.rejectSpan("estimate")
+            }
+            PropertyChip {
+                objectName: "qc-priority"
+                visible: !!(root._parsed && root._parsed.priority)
+                small: true
+                key: I18n.t("capture.priority")
+                value: visible ? root._parsed.priority : ""
+                valueColor: visible ? Theme.priorityInk(root._parsed.priority) : Theme.text
+            }
+            Repeater {
+                model: (root._parsed && root._parsed.labels) || []
+                delegate: PropertyChip {
+                    required property var modelData
+                    small: true
+                    key: I18n.t("capture.label")
+                    value: "#" + modelData
+                }
+            }
+            PropertyChip {
+                id: columnChip
+                objectName: "qc-column"
+                small: true
+                key: I18n.t("capture.column")
+                value: root._statusName(root._status)
+                onClicked: columnMenu.popup(columnChip, 0, columnChip.height + Theme.spXs)
+                AppMenu {
+                    id: columnMenu
+                    Instantiator {
+                        model: AppController.statuses
+                        delegate: AppMenuItem {
+                            id: colRow
+                            required property var modelData
+                            text: colRow.modelData.name
+                            marked: colRow.modelData.id === root._status
+                            onTriggered: root._status = colRow.modelData.id
+                        }
+                        onObjectAdded: (idx, obj) => columnMenu.insertItem(idx, obj)
+                        onObjectRemoved: (idx, obj) => columnMenu.removeItem(obj)
                     }
                 }
+            }
+        }
+
+        // A meeting in the calendar only on purpose (APP-266).
+        AppSwitch {
+            id: meetingBox
+            objectName: "qc-meeting"
+            Layout.leftMargin: Theme.inset
+            visible: !!(root._preview && root._preview.start && root._preview.hasTime)
+            text: I18n.t("capture.alsoMeeting")
+        }
+
+        // A key another task holds stays in the title; offer that task.
+        Text {
+            objectName: "qc-ticket-taken"
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
+            visible: !!(root._parsed && root._parsed.ticketTaken)
+            text: visible ? I18n.t("capture.ticketTaken").arg(root._parsed.ticketKey) : ""
+            color: Theme.textMuted
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsSm
+            font.underline: ticketCA.hovered
+            ClickArea {
+                id: ticketCA
+                label: parent.text
+                onActivated: {
+                    const id = root._parsed.ticketKey;
+                    root.close();
+                    root.openTaskRequested(id);
+                }
+            }
+        }
+
+        // Several lines pasted: one question.
+        RowLayout {
+            objectName: "qc-lines-ask"
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
+            visible: root._askLines
+            spacing: Theme.spMd
+            Text {
+                Layout.fillWidth: true
+                text: I18n.t("capture.lines.ask").arg(root._lineCount())
+                color: Theme.text
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsSm
+                wrapMode: Text.WordWrap
+            }
+            PillButton {
+                objectName: "qc-lines-many"
+                text: I18n.t("capture.lines.many").arg(root._lineCount())
+                onClicked: root._submitEachLine()
+            }
+            PillButton {
+                objectName: "qc-lines-one"
+                text: I18n.t("capture.lines.one")
+                onClicked: root._submitAsOne()
             }
         }
 

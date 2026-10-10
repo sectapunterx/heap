@@ -176,6 +176,14 @@ labels, assignee, project and milestone. Typing `field:value` filters instead:
 | `mention:@ada` | the assignee, or an `@name` in the title or description |
 | `is:open`, `is:done`, `is:archived`, `is:overdue`, `is:recurring` | the task's state |
 | `is:new` | the cards the latest tracker sync brought in |
+| `scheduled:today`, `scheduled:none`, `scheduled:<friday` | when you plan to do it — read like `due:` |
+| `is:someday`, `is:unscheduled` | parked for "someday"; open with no "when" (and not parked) |
+| `is:blocked` | an open card blocks it (links you drew in the task) |
+| `estimate:none`, `estimate:<30m`, `estimate:>2h` | by estimate — `m`/`h` (`м`/`ч`), a bare number is minutes |
+| `branch:login`, `branch:none` | part of the branch name |
+| `has:notes`, `has:draft`, `has:checklist`, `has:links`, `has:tags` | your own layer on the card |
+| `#after-release` | your own tags match `#tag` as well as the tracker's labels |
+| `sort:when`, `sort:estimate` | in a saved view: by "when" or by estimate |
 | `-status:done`, `-#infra`, `-draft` | anything, negated |
 | `priority:P0 OR status:blocked` | either side (`\|` works too) |
 

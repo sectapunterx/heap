@@ -1,6 +1,8 @@
 #include "FieldCount.h"
 #include "StateSerializer.h"
 
+#include "board/ColumnCategory.h"
+
 #include <QColor>
 #include <QHash>
 #include <QJsonDocument>
@@ -26,11 +28,11 @@ static_assert(heap::meta::fieldCount<Attachment>() == 4,
               "Attachment gained or lost a field. Update attachmentsToJson/attachmentsFromJson here AND in "
               "src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<Task>() == 27,
+static_assert(heap::meta::fieldCount<Task>() == 28,
               "Task gained or lost a field. Update taskToJson/taskFromJson here AND in "
               "src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<ExternalMeta>() == 21,
+static_assert(heap::meta::fieldCount<ExternalMeta>() == 22,
               "ExternalMeta gained or lost a field. Update externalMetaToJson/FromJson here AND "
               "in src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -207,6 +209,9 @@ QJsonObject externalMetaToJson(const ExternalMeta& m) {
   if(m.pushQueued) {
     o["pushQueued"] = true;
   }
+  if(!m.details.isEmpty()) {
+    o["remoteDetails"] = m.details;
+  }
   return o;
 }
 
@@ -243,6 +248,7 @@ ExternalMeta externalMetaFromJson(const QJsonObject& o) {
   m.labels = stringsFromJson(o["remoteLabels"]);
   m.conflicts = stringsFromJson(o["conflicts"]);
   m.pushQueued = o["pushQueued"].toBool(false);
+  m.details = o["remoteDetails"].toObject();
   return m;
 }
 
@@ -324,6 +330,10 @@ QJsonObject taskToJson(const Task& t) {
   if(!t.attachments.isEmpty()) {
     o["attachments"] = attachmentsToJson(t.attachments);
   }
+  // The local layer (schema v12, APP-244) — omitted while empty.
+  if(!heap::local::isEmpty(t.local)) {
+    o["local"] = heap::local::toJson(t.local, /*compact=*/true);
+  }
   return o;
 }
 
@@ -375,6 +385,7 @@ Task taskFromJson(const QJsonObject& o) {
   t.rank = o["rank"].toDouble(0.0);
   t.links = linksFromJson(o["links"].toArray());
   t.attachments = attachmentsFromJson(o["attachments"].toArray());
+  t.local = heap::local::fromJson(o["local"].toObject());
   static const QStringList kKnown = {QStringLiteral("id"),
                                      QStringLiteral("title"),
                                      QStringLiteral("desc"),
@@ -401,6 +412,7 @@ Task taskFromJson(const QJsonObject& o) {
                                      QStringLiteral("rank"),
                                      QStringLiteral("links"),
                                      QStringLiteral("attachments"),
+                                     QStringLiteral("local"),
                                      // Read, never written: schema ≤ 3 and ≤ 9.
                                      QStringLiteral("deadline"),
                                      QStringLiteral("hasTime")};
@@ -696,6 +708,13 @@ QJsonArray statusesToJson(const QVariantList& xs) {
     if(m.contains(QStringLiteral("archiveDays"))) {
       o["archiveDays"] = qMax(0, m.value("archiveDays").toInt());
     }
+    // The column's stage (schema v12, APP-259), always written; and, until the
+    // user confirms it, that it was assigned rather than picked.
+    const QString category = m.value(QStringLiteral("category")).toString();
+    o["category"] = heap::board::isColumnCategory(category) ? category : heap::board::defaultCategoryFor(o["id"].toString());
+    if(m.value(QStringLiteral("categoryGuessed")).toBool()) {
+      o["categoryGuessed"] = true;
+    }
     a.append(o);
   }
   return a;
@@ -713,8 +732,25 @@ QVariantList statusesFromJson(const QJsonArray& a) {
     if(o.contains("archiveDays")) {
       m["archiveDays"] = qMax(0, o["archiveDays"].toInt(0));
     }
-    static const QStringList kKnown = {
-        QStringLiteral("id"), QStringLiteral("name"), QStringLiteral("color"), QStringLiteral("wip"), QStringLiteral("archiveDays")};
+    // A column from before stages (schema ≤ 11, or an old export) gets its
+    // stage here: a built-in id is its own, anything else "todo", flagged so
+    // the user is asked once to check (APP-259). Never guessed from the name.
+    const QString category = o["category"].toString();
+    if(heap::board::isColumnCategory(category)) {
+      m["category"] = category;
+      m["categoryGuessed"] = o["categoryGuessed"].toBool(false);
+    } else {
+      const QString id = m["id"].toString();
+      m["category"] = heap::board::defaultCategoryFor(id);
+      m["categoryGuessed"] = !heap::board::isColumnCategory(id);
+    }
+    static const QStringList kKnown = {QStringLiteral("id"),
+                                       QStringLiteral("name"),
+                                       QStringLiteral("color"),
+                                       QStringLiteral("wip"),
+                                       QStringLiteral("archiveDays"),
+                                       QStringLiteral("category"),
+                                       QStringLiteral("categoryGuessed")};
     const QJsonObject extra = unknownKeys(o, kKnown);
     if(!extra.isEmpty()) {
       m[QLatin1String(kStatusExtraKey)] = extra.toVariantMap();
@@ -1063,6 +1099,169 @@ void migrateNotesV7ToV8(QJsonObject& root) {
   }
 }
 
+// v11→v12 (APP-244, owner's call 2026-10-08): a tracker card's local edits
+// used to live in the tracker fields, where the next pull could take them.
+// Each one moves into `local`, and the tracker field gets the tracker's value
+// back. An empty tracker value (a card older than three-way merge) is not a
+// divergence: nothing moves. `ru` picks the language of the notes headers.
+void migrateTaskV11ToV12(QJsonObject& task, bool ru) {
+  if(task.value(QStringLiteral("externalId")).toString().isEmpty() || !task.value(QStringLiteral("externalMeta")).isObject()) {
+    return;
+  }
+  QJsonObject meta = task.value(QStringLiteral("externalMeta")).toObject();
+  QJsonObject local = task.value(QStringLiteral("local")).toObject();
+  QStringList conflicts;
+  for(const auto& v : meta.value(QStringLiteral("conflicts")).toArray()) {
+    conflicts.append(v.toString());
+  }
+  QStringList notes;
+  if(!local.value(QStringLiteral("notes")).toString().isEmpty()) {
+    notes.append(local.value(QStringLiteral("notes")).toString());
+  }
+
+  const QString remotePriority = meta.value(QStringLiteral("remotePriority")).toString();
+  const QString priority = task.value(QStringLiteral("priority")).toString();
+  if(!remotePriority.isEmpty() && !priority.isEmpty() && priority != remotePriority) {
+    local["myPriority"] = priority;
+    local["myPriorityBase"] = remotePriority;
+    task["priority"] = remotePriority;
+    conflicts.removeAll(QStringLiteral("priority"));
+  }
+
+  const QDateTime remoteDue = dtFromStr(meta.value(QStringLiteral("remoteDueAt")).toString());
+  const QDateTime due = dtFromStr(task.value(QStringLiteral("dueAt")).toString());
+  if(remoteDue.isValid() && due.isValid() && due != remoteDue) {
+    local["myDueAt"] = dtToStr(due);
+    if(task.value(QStringLiteral("dueHasTime")).toBool(false)) {
+      local["myDueHasTime"] = true;
+    }
+    local["myDueBase"] = dtToStr(remoteDue);
+    task["dueAt"] = dtToStr(remoteDue);
+    // The pull sets the clock flag from the tracker; a tracker due date sent
+    // at exactly midnight is a bare date.
+    if(remoteDue.time() == QTime(0, 0)) {
+      task.remove("dueHasTime");
+    } else {
+      task["dueHasTime"] = true;
+    }
+  }
+
+  const QJsonArray remoteLabels = meta.value(QStringLiteral("remoteLabels")).toArray();
+  if(!remoteLabels.isEmpty() && task.value(QStringLiteral("labels")).isArray()) {
+    QStringList remote;
+    for(const auto& v : remoteLabels) {
+      remote.append(v.toString());
+    }
+    QJsonArray keep;
+    QJsonArray tags = local.value(QStringLiteral("tags")).toArray();
+    for(const auto& v : task.value(QStringLiteral("labels")).toArray()) {
+      const QJsonObject label = v.toObject();
+      if(remote.contains(label.value(QStringLiteral("id")).toString())) {
+        keep.append(label);
+      } else {
+        tags.append(label);  // same {id, color} shape as a local tag
+      }
+    }
+    if(keep.isEmpty()) {
+      task.remove("labels");
+    } else {
+      task["labels"] = keep;
+    }
+    if(!tags.isEmpty()) {
+      local["tags"] = tags;
+    }
+  }
+
+  const QString remoteTitle = meta.value(QStringLiteral("remoteTitle")).toString();
+  const QString title = task.value(QStringLiteral("title")).toString();
+  if(!remoteTitle.isEmpty() && title != remoteTitle) {
+    notes.append((ru ? QStringLiteral("Мой заголовок (до 0.8.0): ") : QStringLiteral("My title (before 0.8.0): ")) + title);
+    task["title"] = remoteTitle;
+    conflicts.removeAll(QStringLiteral("title"));
+  }
+  const QString remoteBody = meta.value(QStringLiteral("remoteBody")).toString();
+  const QString desc = task.value(QStringLiteral("desc")).toString();
+  if(!remoteBody.isEmpty() && desc != remoteBody) {
+    if(!desc.trimmed().isEmpty()) {
+      notes.append((ru ? QStringLiteral("## Моя версия описания (до 0.8.0)\n\n")
+                       : QStringLiteral("## My version of the description (before 0.8.0)\n\n")) +
+                   desc);
+    }
+    task["desc"] = remoteBody;
+    conflicts.removeAll(QStringLiteral("body"));
+  }
+
+  if(!notes.isEmpty()) {
+    local["notes"] = notes.join(QStringLiteral("\n\n"));
+  }
+  if(conflicts.isEmpty()) {
+    meta.remove("conflicts");
+  } else {
+    meta["conflicts"] = QJsonArray::fromStringList(conflicts);
+  }
+  task["externalMeta"] = meta;
+  if(!local.isEmpty()) {
+    task["local"] = local;
+  }
+}
+
+// v11→v12 (APP-251): the timer kept one total; it becomes one session with no
+// date ("before 0.8.0"), so the sum stays what it was and new sessions add to
+// it. trackedSeconds itself is kept: it is the sum the views read.
+void migrateTimerToSessionsV11ToV12(QJsonObject& task) {
+  const int tracked = task.value(QStringLiteral("trackedSeconds")).toInt(0);
+  if(tracked <= 0) {
+    return;
+  }
+  QJsonObject local = task.value(QStringLiteral("local")).toObject();
+  if(local.contains(QStringLiteral("sessions"))) {
+    return;
+  }
+  local["sessions"] = QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("before-0.8.0")},
+                                             {QStringLiteral("start"), QString()},
+                                             {QStringLiteral("end"), QString()},
+                                             {QStringLiteral("seconds"), tracked}}};
+  task["local"] = local;
+}
+
+// heap 2 (APP-258): the old sidebar's Focus pair (Blocked, In review) jumped
+// to a board column; it is now two ordinary saved views at the top of "My
+// views", for every profile that has those columns and lacks such a view.
+void migrateFocusToSavedViewsV11ToV12(QJsonObject& root, bool ru) {
+  QJsonArray profiles = root.value(QStringLiteral("profiles")).toArray();
+  for(qsizetype i = 0; i < profiles.size(); ++i) {
+    QJsonObject p = profiles[i].toObject();
+    QStringList columns;
+    for(const auto& st : p.value(QStringLiteral("statuses")).toArray()) {
+      columns << st.toObject().value(QStringLiteral("id")).toString();
+    }
+    QJsonArray views = p.value(QStringLiteral("savedViews")).toArray();
+    QStringList queries;
+    QStringList ids;
+    for(const auto& v : views) {
+      queries << heap::savedviews::normalizeQuery(v.toObject().value(QStringLiteral("query")).toString()).toLower();
+      ids << v.toObject().value(QStringLiteral("id")).toString();
+    }
+    QJsonArray front;
+    for(const heap::savedviews::SavedView& v : {heap::savedviews::blockedView(ru), heap::savedviews::reviewView(ru)}) {
+      const QString column = v.query.section(QLatin1Char(':'), 1);
+      if(!columns.contains(column) || queries.contains(v.query) || ids.contains(v.id)) {
+        continue;
+      }
+      front.append(heap::savedviews::toJson(v));
+    }
+    if(front.isEmpty()) {
+      continue;
+    }
+    for(const auto& v : views) {
+      front.append(v);
+    }
+    p[QStringLiteral("savedViews")] = front;
+    profiles[i] = p;
+  }
+  root[QStringLiteral("profiles")] = profiles;
+}
+
 }  // namespace
 
 bool migrateState(QJsonObject& root, int fromVersion) {
@@ -1108,6 +1307,25 @@ bool migrateState(QJsonObject& root, int fromVersion) {
   // keys mean when absent. The bump exists for the other direction — 0.5.3
   // reads v10, does not know `attachments`, and saved every task without it
   // (PLAT-15); v11 sends it into its newer-schema read-only mode instead.
+  //
+  // v11 -> v12 added Task.local and moves a tracker card's local divergence
+  // into it, so the next pull can no longer take it (APP-244).
+  if(fromVersion < 12) {
+    const bool ru = root.value(QStringLiteral("settings")).toObject().value(QStringLiteral("language")).toString() == QStringLiteral("ru");
+    forEachTaskArray(root, [ru](const QJsonArray& tasks) {
+      QJsonArray out;
+      for(const auto& v : tasks) {
+        QJsonObject t = v.toObject();
+        migrateTaskV11ToV12(t, ru);
+        migrateTimerToSessionsV11ToV12(t);
+        out.append(t);
+      }
+      return out;
+    });
+    if(root.value(QStringLiteral("profiles")).isArray()) {
+      migrateFocusToSavedViewsV11ToV12(root, ru);
+    }
+  }
 
   root["schemaVersion"] = kSchemaVersion;
   return true;

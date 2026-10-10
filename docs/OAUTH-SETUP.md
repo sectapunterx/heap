@@ -332,7 +332,8 @@ What this scheme does buy:
   log prints only provider names.
 
 Treat them as *app identity*, not as a secret that protects user data. The
-user's own token is what protects that, and it lives in their OS keychain.
+user's own token is what protects that, and it never goes into `state.json` (see
+[where secrets live](INTEGRATIONS.md#where-secrets-live)).
 
 **Sentry no longer applies:** it is registered as a public client, so there is
 no Sentry secret in the binary to find, and its committed client ID is exactly

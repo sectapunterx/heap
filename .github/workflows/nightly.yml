@@ -56,7 +56,7 @@ jobs:
       - name: Smoke-test the app
         env:
           QT_QPA_PLATFORM: offscreen
-        run: build/heap --smoke --data-dir "$RUNNER_TEMP/smoke"
+        run: build/lowkey --smoke --data-dir "$RUNNER_TEMP/smoke"
 
   # ──────────────────────────────────────────────────────────────────
   # The markdown fuzzer, 30x deeper than per PR and on new seeds every night.

@@ -62,13 +62,14 @@ TestCase {
     }
 
     // The binding the app actually ships, read back through the catalog.
+    // 0.8.0 (keymap.md): g x, as Vim's gx.
     function test_default_binding_is_o_and_is_rebindable() {
-        compare(AppController.defaultShortcutFor("task.openExternal"), "O");
+        compare(AppController.defaultShortcutFor("task.openExternal"), "G, X");
         verify(AppController.shortcutLabel("task.openExternal").length > 0,
                "the shortcut has no translated label for the Settings list");
         verify(AppController.setShortcut("task.openExternal", "Ctrl+Shift+O"));
         compare(AppController.shortcutFor("task.openExternal"), "Ctrl+Shift+O");
         AppController.resetShortcut("task.openExternal");
-        compare(AppController.shortcutFor("task.openExternal"), "O");
+        compare(AppController.shortcutFor("task.openExternal"), "G, X");
     }
 }

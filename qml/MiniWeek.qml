@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
@@ -57,6 +58,22 @@ Rectangle {
     }
     property int _eventsRev: 0
     function _bumpRev() { _eventsRev++ }
+    Connections {
+        target: AppController.tasks
+        function onRowsInserted() { root._bumpRev() }
+        function onRowsRemoved()  { root._bumpRev() }
+        function onDataChanged()  { root._bumpRev() }
+        function onModelReset()   { root._bumpRev() }
+    }
+    // How full each working day is (APP-247): a thin scale under the day,
+    // its length the share of the working hours taken — a shape, not a colour.
+    readonly property var _loads: root._eventsRev >= 0 && root._days.length > 0
+        ? AppController.dayLoads(root._days[0], root._days.length) : []
+    function loadFraction(i) {
+        const l = root._loads[i];
+        if (!l || !l.workday || !(l.work > 0)) return 0;
+        return Math.min(1, ((l.meetings || 0) + (l.tasks || 0)) / l.work);
+    }
 
     ColumnLayout {
         id: col
@@ -132,6 +149,7 @@ Rectangle {
             Repeater {
                 model: root._days
                 Rectangle {
+                    id: miniDay
                     required property date modelData
                     required property int index
                     readonly property bool isToday: root.isSameDay(modelData, AppController.today)
@@ -179,6 +197,21 @@ Rectangle {
                         }
                     }
 
+                    Rectangle {
+                        id: loadScale
+                        objectName: "miniweek-load-" + miniDay.index
+                        readonly property real frac: root.loadFraction(miniDay.index)
+                        visible: loadScale.frac > 0
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: Theme.sp2xs
+                        anchors.left: parent.left
+                        anchors.leftMargin: Theme.spSm
+                        width: (miniDay.width - 2 * Theme.spSm) * loadScale.frac
+                        height: 2
+                        radius: 1
+                        color: Theme.textMuted
+                    }
+
                     MouseArea {
                         id: dayMA
                         anchors.fill: parent
@@ -205,7 +238,7 @@ Rectangle {
         property string tip: ""
         // A catalogue shortcut the tooltip names, as bound now.
         property string shortcutId: ""
-        readonly property string _keys: nav.shortcutId.length > 0 ? AppController.shortcutFor(nav.shortcutId) : ""
+        readonly property string _keys: nav.shortcutId.length > 0 ? AppController.shortcutText(nav.shortcutId) : ""
         property bool accent: false
         signal clicked()
         implicitWidth: 24; implicitHeight: 24

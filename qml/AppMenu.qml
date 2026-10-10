@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Basic
 import TodoCpp
+import "KeyRules.js" as KeyRules
 
 // Every context and drop-down menu in the app. Basic's own Menu is a square
 // box in the window colour with 40px rows, drawn black whatever the theme
@@ -20,6 +21,10 @@ Menu {
     // does (PERA-2). The owner reopens the parent on back(), once this list
     // has finished closing, so focus is handed over in one direction only.
     property bool backOnLeft: false
+    // A list opened from a row goes back on Esc too, and only a second Esc
+    // (in the menu it came from) closes everything (APP-279).
+    closePolicy: menu.backOnLeft ? (Popup.CloseOnPressOutside | Popup.CloseOnPressOutsideParent)
+                                 : (Popup.CloseOnEscape | Popup.CloseOnPressOutside)
     signal back()
     property bool _backPending: false
     function goBack() {
@@ -27,9 +32,45 @@ Menu {
         menu.close();
     }
     onClosed: {
+        menu._typed = "";
         if (!menu._backPending) return;
         menu._backPending = false;
         menu.back();
+    }
+
+    // Typing in a menu (APP-279): a digit runs the row that has it as its
+    // number (1–4 in Priority, the columns in Status); letters find a row
+    // by the start of its name, "гот" → "Готово", and a pause of a second
+    // starts the search over.
+    property string _typed: ""
+    property real _typedAt: 0
+    function typeKey(event) {
+        if (event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier)) return false;
+        const t = event.text;
+        if (!t || t.length !== 1 || t.charCodeAt(0) <= 32 || t.charCodeAt(0) === 127) return false;
+        if (t >= "1" && t <= "9") {
+            for (let i = 0; i < menu.count; i++) {
+                const it = menu.itemAt(i) as AppMenuItem;
+                if (it && it.number === Number(t) && it.enabled && it.visible) {
+                    menu.currentIndex = i;
+                    it.triggered();
+                    return true;
+                }
+            }
+        }
+        const now = Date.now();
+        const fresh = now - menu._typedAt > 1000;
+        menu._typed = KeyRules.typeAheadBuffer(menu._typed, t, now, menu._typedAt, 1000);
+        menu._typedAt = now;
+        const labels = [];
+        for (let i = 0; i < menu.count; i++) {
+            const it = menu.itemAt(i) as AppMenuItem;
+            labels.push(it && it.enabled && it.visible && !it.isBack ? it.text : "");
+        }
+        const from = menu.currentIndex + (fresh && menu._typed.length === 1 ? 1 : 0);
+        const hit = KeyRules.typeAheadMatch(labels, menu._typed, from < 0 ? 0 : from % Math.max(1, menu.count));
+        if (hit >= 0) menu.currentIndex = hit;
+        return true;
     }
 
     // As wide as the longest row, between the old fixed 200px and a cap

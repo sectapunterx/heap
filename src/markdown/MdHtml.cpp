@@ -209,6 +209,21 @@ void appendInline(const MdAst& ast, int index, const MdHtmlOptions& options, QSt
     }
 
     case InlineType::WikiLink: {
+      const auto target = options.wikiTargets.constFind(node.href.trimmed());
+      if(target != options.wikiTargets.constEnd() && target->kind == QStringLiteral("task")) {
+        const QString chip = options.palette.codeBackground.isEmpty()
+                                 ? escapeHtml(target->label)
+                                 : QStringLiteral("<span style=\"background-color:%1;\">&nbsp;%2&nbsp;</span>")
+                                       .arg(options.palette.codeBackground, escapeHtml(target->label));
+        *out += internalLink(QStringLiteral("task"), node.href.trimmed(), chip, colorOr(options.palette.text, options.palette.ticket));
+        break;
+      }
+      if(target != options.wikiTargets.constEnd() && target->kind == QStringLiteral("missing")) {
+        // Still a link: a click offers to write the note.
+        *out +=
+            internalLink(QStringLiteral("note"), node.href, escapeHtml(target->label), colorOr(options.palette.dim, options.palette.link));
+        break;
+      }
       QString label;
       appendChildren(ast, node, options, &label);
       if(label.isEmpty()) {

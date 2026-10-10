@@ -1,4 +1,5 @@
 #include "cli/CliConsole.h"
+#include "platform/Brand.h"
 
 #include <QCoreApplication>
 
@@ -66,7 +67,7 @@ int report(const Response& r) {
 }
 
 int usage(const QString& message) {
-  write(true, QStringLiteral("heap: %1\nRun 'heap help' for usage.\n").arg(message));
+  write(true, QStringLiteral("lowkey: %1\nRun 'lowkey help' for usage.\n").arg(message));
   return kExitUsage;
 }
 
@@ -74,9 +75,9 @@ void quietMessages(QtMsgType, const QMessageLogContext&, const QString&) {
 }
 
 void setApplicationIdentity() {
-  QCoreApplication::setOrganizationName(QStringLiteral("heap"));
-  QCoreApplication::setOrganizationDomain(QStringLiteral("heap.local"));
-  QCoreApplication::setApplicationName(QStringLiteral("heap"));
+  QCoreApplication::setOrganizationName(QLatin1String(heap::brand::kName));
+  QCoreApplication::setOrganizationDomain(QStringLiteral("lowkey.local"));
+  QCoreApplication::setApplicationName(QLatin1String(heap::brand::kName));
   QCoreApplication::setApplicationVersion(QStringLiteral(HEAP_VERSION));
 }
 

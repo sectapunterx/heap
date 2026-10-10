@@ -31,7 +31,7 @@ cd "$work"
 "$image" --appimage-extract >/dev/null
 
 # Anything linuxdeploy left out and this desktop base does not provide.
-missing=$(find squashfs-root -type f \( -name '*.so*' -o -path '*/usr/bin/heap' \) -exec ldd {} + 2>/dev/null \
+missing=$(find squashfs-root -type f \( -name '*.so*' -o -path '*/usr/bin/lowkey' \) -exec ldd {} + 2>/dev/null \
   | grep "not found" | sort -u || true)
 if [[ -n "$missing" ]]; then
   echo "$missing"
@@ -57,6 +57,6 @@ apt-get install -y -q gdb >/dev/null
 # The binary itself, not AppRun (a shell script with linuxdeploy's hooks): it
 # finds its Qt through its rpath and the qt.conf beside it.
 timeout -s INT -k 20 90 gdb -q -batch -ex run -ex "thread apply all bt 25" \
-  --args squashfs-root/usr/bin/heap --smoke --data-dir /tmp/heap-smoke-gdb || true
+  --args squashfs-root/usr/bin/lowkey --smoke --data-dir /tmp/heap-smoke-gdb || true
 echo "::endgroup::"
 exit 1

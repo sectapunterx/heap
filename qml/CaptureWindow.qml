@@ -16,7 +16,7 @@ Window {
     width: 680
     height: 520
     visible: false
-    title: "heap."
+    title: "lowkey"
 
     // Screen the window opens on; the owner passes its own, which is where the
     // user last looked at heap.

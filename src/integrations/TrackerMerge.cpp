@@ -75,6 +75,13 @@ QString scopeFingerprint(const ProviderDescriptor& d, const QVariantMap& cfg) {
     // filter.
     parts.append(f.key + QChar('=') + cfg.value(f.key).toString().simplified().toLower());
   }
+  // Which merge / pull requests come along (APP-242) is part of the filter,
+  // but only once the user set it: a card pulled before stays in scope.
+  for(const QString& key : {d.reviewEnabledKey, d.reviewRolesKey}) {
+    if(!key.isEmpty() && cfg.contains(key)) {
+      parts.append(key + QChar('=') + cfg.value(key).toString().simplified().toLower());
+    }
+  }
   // A browser-signed-in Jira names its site through the cloud id, not a field.
   const QString cloudId = cfg.value(QStringLiteral("cloudId")).toString();
   if(!cloudId.isEmpty()) {

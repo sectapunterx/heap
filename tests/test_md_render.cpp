@@ -379,3 +379,16 @@ TEST(MdHtml, IsSafeLink_LocalProgramOrSystemScheme_IsNotSafe) {
   EXPECT_FALSE(isSafeLink(QStringLiteral("javascript:alert(1)")));
   EXPECT_FALSE(isSafeLink(QStringLiteral("smb://host/share")));
 }
+
+// Knowledge (APP-269): [[APP-1]] that is a task reads as a chip linked to the
+// task; a target nothing answers to is grey and says so, still a link.
+TEST(MdRender, WikiTaskIsAChipAndMissingSaysSo) {
+  MdHtmlOptions options = testOptions();
+  options.wikiTargets.insert(QStringLiteral("APP-1"), {QStringLiteral("task"), QStringLiteral("x APP-1")});
+  options.wikiTargets.insert(QStringLiteral("Gone"), {QStringLiteral("missing"), QStringLiteral("Gone - no such note")});
+  const QString html = renderFirst(QStringLiteral("See [[APP-1]] and [[Gone]]."), BlockType::Paragraph, options);
+  EXPECT_TRUE(html.contains(QStringLiteral("heap://task/APP-1"))) << html.toStdString();
+  EXPECT_TRUE(html.contains(QStringLiteral("background-color:#eeeeee"))) << html.toStdString();
+  EXPECT_TRUE(html.contains(QStringLiteral("no such note"))) << html.toStdString();
+  EXPECT_TRUE(html.contains(QStringLiteral("heap://note/Gone"))) << html.toStdString();
+}

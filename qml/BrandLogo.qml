@@ -1,109 +1,107 @@
-// heap. — reusable lockup component rendered with native QML primitives.
-// The mark is the "stack" glyph: three stacked rounded bars (widest base,
-// brighter crown). Drawing it with plain Rectangles avoids depending on
-// Qt6::Svg / the qsvg image-format plugin, so the brand always renders even
-// on minimal Qt installs.
+// lowkey — the brand mark and wordmark, drawn with native QML primitives
+// (APP-280; owner's pick 2026-10-08, logo sheet LK-06 column C). No SVG: the
+// brand renders without Qt6::Svg or the qsvg plugin.
+//
+//   mark      an "l" with a low lavender bar (the app icon's glyph)
+//   wordmark  "lowkey" in lowercase, Golos Text Medium, "low" underlined
+//             by the same lavender bar
+//   lockup    mark + wordmark
 //
 // Usage:
-//   BrandLogo { height: 28 }                       // horizontal lockup
+//   BrandLogo { variant: "wordmark"; height: 22 }
 //   BrandLogo { variant: "mark"; height: 32 }
-//   BrandLogo { variant: "wordmark"; height: 24 }
 
 import QtQuick
-import QtQuick.Layouts
 import TodoCpp
 
 Item {
     id: root
 
-    // "lockup" | "mark" | "wordmark"
-    property string variant: "lockup"
+    // "wordmark" | "mark" | "lockup"
+    property string variant: "wordmark"
     // "dark" | "light" | "mono"
     property string theme: "dark"
-    // for "mono" variant — color used for the whole mark
+    // for "mono" — the one colour of the whole logo (the tray, a print)
     property color monoColor: Brand.text
 
-    // Native aspect ratios (px) for layout sizing — matches the original SVGs.
-    readonly property real lockupAspect:   3.8   // 380 / 100
-    readonly property real wordmarkAspect: 3.11  // 280 / 90
-    readonly property real markAspect:     1.0
+    // Geometry of the production files (design/brand-export/lowkey,
+    // geometry.json): the icon's glyph spans 342 × 380 of its 1024 grid; the
+    // wordmark is 3141.9 × 925.8 font units (upem 1075), the bar sits 0.135 em
+    // under the baseline and is 0.075 em thick.
+    readonly property real markAspect: 342 / 380
+    readonly property real wordmarkAspect: 3.39
 
-    implicitHeight: 28
-    // From the height actually set, not the default: the splash sets 92 and
-    // got a 106px-wide box (28 × 3.8) that the wordmark ran far out of.
-    implicitWidth: (height > 0 ? height : implicitHeight) * (variant === "lockup"   ? lockupAspect
-                                  : variant === "wordmark" ? wordmarkAspect
-                                                           : markAspect)
+    readonly property int _px: Math.max(8, Math.round((height > 0 ? height : implicitHeight) / 0.95))
+    readonly property color _ink: theme === "light" ? "#0c0e11" : theme === "mono" ? monoColor : "#e9edf2"
+    readonly property color _bar: theme === "light" ? "#5a4fb3" : theme === "mono" ? monoColor : "#b1a7f0"
 
-    // Theme-resolved colors for the monochrome "stack" mark. On dark surfaces
-    // the glyph is a quiet slate with a brighter (white) crown bar; on light it
-    // inverts to near-black. "mono" collapses everything to monoColor.
-    readonly property color _inkColor:   theme === "light" ? "#404b58"
-                                       : theme === "mono"  ? monoColor
-            : "#c6d0dc"
-    readonly property color _crownColor: theme === "light" ? "#0b0e13"
-                                       : theme === "mono"  ? monoColor
-            : "#ffffff"
-    readonly property color _textColor:  theme === "light" ? "#0b0e13"
-                                       : theme === "mono"  ? monoColor
-            : "#e8eef4"
+    implicitHeight: 22
+    implicitWidth: {
+        const h = height > 0 ? height : implicitHeight;
+        if (variant === "mark")
+            return Math.round(h * markAspect);
+        if (variant === "wordmark")
+            return Math.ceil(word.contentWidth);
+        return Math.round(h * markAspect) + Math.round(h * 0.4) + Math.ceil(word.contentWidth);
+    }
 
-    // ── Mark — three stacked bars (widest base → brighter crown) ──
+    // ── Mark: the stem and the low bar ──
     Item {
-        id: markBox
+        id: mark
         visible: root.variant !== "wordmark"
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
-        width: root.height
         height: root.height
+        width: Math.round(height * root.markAspect)
 
-        // Geometry mirrors the 32-unit brand grid; radius = half the bar
-        // height for fully rounded ends. Base + middle share the ink color;
-        // the crown is the brighter accent bar.
-        Rectangle {   // base — widest
-            x: parent.width * (5 / 32);      y: parent.height * (20 / 32)
-            width: parent.width * (22 / 32); height: parent.height * (4.4 / 32)
-            radius: height / 2
-            color: root._inkColor
+        Rectangle {   // stem
+            x: 0; y: 0
+            width: Math.max(1, Math.round(parent.width * 76 / 342))
+            height: parent.height
+            radius: width / 2
+            color: root._ink
         }
-        Rectangle {   // middle
-            x: parent.width * (8 / 32);      y: parent.height * (13.8 / 32)
-            width: parent.width * (16 / 32); height: parent.height * (4.4 / 32)
+        Rectangle {   // bar
+            x: 0
+            height: Math.max(1, Math.round(parent.height * 76 / 380))
+            y: parent.height - height
+            width: parent.width
             radius: height / 2
-            color: root._inkColor
-        }
-        Rectangle {   // crown — narrowest, brightest
-            x: parent.width * (11 / 32);     y: parent.height * (7.6 / 32)
-            width: parent.width * (10 / 32); height: parent.height * (4.4 / 32)
-            radius: height / 2
-            color: root._crownColor
+            color: root._bar
         }
     }
 
-    // ── Wordmark — "heap" with a slightly brighter period ──────────────
+    // ── Wordmark ──
     Text {
         id: word
         objectName: "brand-wordmark"
         visible: root.variant !== "mark"
-        anchors.left: markBox.visible ? markBox.right : parent.left
-        anchors.leftMargin: markBox.visible ? Math.round(parent.height * 0.18) : 0
+        anchors.left: mark.visible ? mark.right : parent.left
+        anchors.leftMargin: mark.visible ? Math.round(root.height * 0.4) : 0
         anchors.verticalCenter: parent.verticalCenter
-        // Fits the lockup's own box. At the natural size the wordmark ran up
-        // to 166px past it, so anything centring the logo (the splash) put it
-        // off-centre by half of that.
-        width: root.width - (markBox.visible ? markBox.width + anchors.leftMargin : 0)
-        height: root.height
-        verticalAlignment: Text.AlignVCenter
-        fontSizeMode: Text.HorizontalFit
-        minimumPixelSize: 6
-        // StyledText so the period can carry the brighter crown tone while
-        // "heap" follows the surface text colour (and so the fit applies).
-        textFormat: Text.StyledText
-        text: "heap<font color=\"" + root._crownColor + "\">.</font>"
-        color: root._textColor
-        font.family: Brand.fontMono
-        font.weight: Font.DemiBold
-        font.pixelSize: Math.round(root.height * 0.72)
-        font.letterSpacing: -0.5
+        text: "lowkey"
+        color: root._ink
+        font.family: Brand.fontSans
+        font.weight: Font.Medium
+        // The x-height fills the logo's height the way the production
+        // wordmark does: cap height ≈ 0.7 em. Tracking −3.5 % of that size;
+        // read from root, not from `font`, which is being set here.
+        font.pixelSize: root._px
+        font.letterSpacing: -root._px * 0.035
+
+        TextMetrics {
+            id: low
+            font: word.font
+            text: "low"
+        }
+
+        Rectangle {   // the bar under "low"
+            x: 0
+            width: low.advanceWidth + word.font.letterSpacing * 2
+            height: Math.max(1, Math.round(word.font.pixelSize * 0.075))
+            y: word.baselineOffset + Math.round(word.font.pixelSize * 0.135)
+            radius: height / 2
+            color: root._bar
+        }
     }
 }

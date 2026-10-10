@@ -9,6 +9,10 @@ import "ThemePresets.js" as Presets
 // Geometry and fonts still come from the `Brand` singleton.
 QtObject {
     readonly property bool compact: AppController.density === "compact"
+    // Density (APP-259): Compact / Normal / Spacious, through the spacing
+    // tokens below, so it moves the whole layout.
+    readonly property bool spacious: AppController.density === "spacious"
+    function dens(c, n, s) { return compact ? c : (spacious ? s : n); }
 
     // ── Settings JSON shadow (re-parsed when appSettingsJson changes) ──
     readonly property var _settings: {
@@ -41,7 +45,10 @@ QtObject {
     // flips it); appearance.darkPreset / lightPreset say which theme sits in
     // each. Every colour below is a token of that theme — ThemePresets.js
     // lists them and holds the built-ins.
-    readonly property string slot: AppController.theme === "light" ? "light" : "dark"
+    // "system" (APP-270) follows the OS light / dark setting as it changes.
+    readonly property string slot: AppController.theme === "light" ? "light"
+        : AppController.theme === "system" ? (Application.styleHints.colorScheme === Qt.ColorScheme.Light ? "light" : "dark")
+        : "dark"
     readonly property var customThemes: Array.isArray(_appearance.customThemes) ? _appearance.customThemes : []
     readonly property string darkPresetId:  typeof _appearance.darkPreset === "string" && _appearance.darkPreset.length
                                             ? _appearance.darkPreset : Presets.DEFAULT_DARK
@@ -90,9 +97,14 @@ QtObject {
     // there a card is the theme's white panel and keeps its hairline.
     // Derived from bg, so a user's own theme gets the same steps.
     readonly property color surfaceColumn: "transparent"
-    readonly property color surfaceCard: dark ? Presets.lift(String(_c.bg), softContrast ? 8 : 9) : _c.panel
-    readonly property color surfaceCardHover: dark ? Presets.lift(String(_c.bg), softContrast ? 10 : 11)
-                                                   : Qt.tint(_c.panel, withAlpha(_c.text, 0.03))
+    // A heap 2 theme names its card surface (a few L* above the ground, the
+    // mockup's #13161b); any other derives it as before.
+    readonly property color surfaceCard: _c.card !== undefined ? _c.card
+        : (dark ? Presets.lift(String(_c.bg), softContrast ? 8 : 9) : _c.panel)
+    readonly property color surfaceCardHover: _c.cardHover !== undefined ? _c.cardHover
+        : (dark ? Presets.lift(String(_c.bg), softContrast ? 10 : 11) : Qt.tint(_c.panel, withAlpha(_c.text, 0.03)))
+    // The sidebar's ground (heap 2 shell, APP-258).
+    readonly property color surfaceNav: _c.nav !== undefined ? _c.nav : _c.bg2
     readonly property color cardBorder: dark && !highContrast ? "transparent" : border
     readonly property color cardBorderHover: dark && !highContrast ? "transparent" : borderStrong
 
@@ -152,9 +164,18 @@ QtObject {
     // Cursor colour picks it, appearance.cursorColor holds the pick, and
     // none means the theme's accent. A pick too faint for a surface is
     // strengthened like the accent is. Only focus is drawn in it.
-    readonly property string cursorColorPick: typeof _appearance.cursorColor === "string"
-                                              && /^#[0-9a-fA-F]{6}$/.test(_appearance.cursorColor)
-                                              ? _appearance.cursorColor.toLowerCase() : ""
+    //
+    // The accent of heap 2 (APP-270): Lavender (the theme's own accent),
+    // Ink or Graphite are stored there by name and drawn per light / dark;
+    // a colour picked from the swatches is "custom".
+    readonly property bool _cursorHex: typeof _appearance.cursorColor === "string"
+                                       && /^#[0-9a-fA-F]{6}$/.test(_appearance.cursorColor)
+    readonly property string accentTone: _cursorHex ? "custom"
+        : (_appearance.cursorColor === "ink" || _appearance.cursorColor === "graphite" ? _appearance.cursorColor : "lavender")
+    readonly property string cursorColorPick: _cursorHex ? _appearance.cursorColor.toLowerCase()
+        : accentTone === "ink" ? (dark ? "#e6e8ec" : "#14181d")
+        : accentTone === "graphite" ? (dark ? "#8f949c" : "#5c626b")
+        : (dark ? "#b1a7f0" : "#5a4fb3")
     readonly property color focusRing: Presets.ensureContrast(cursorColorPick.length ? cursorColorPick : String(accent),
         [String(bg), String(panel), String(panel2), String(panel3)], 3.0)
     // The soft glow just outside the ring, so the cursor reads at a glance
@@ -293,28 +314,55 @@ QtObject {
     function px(n) { return Math.round(n * scale); }
 
     // ── Geometry — pulled from Brand spacing/radius scale ────────────
-    readonly property int rowH:   px(compact ? 32 : 44)
-    readonly property int pad:    px(compact ? Brand.spacing2 : Brand.spacing4)
-    readonly property int gap:    px(compact ? Brand.spacing2 : Brand.spacing3)
+    readonly property int rowH:   px(dens(32, 44, 52))
+    readonly property int pad:    px(dens(Brand.spacing2, Brand.spacing4, 20))
+    readonly property int gap:    px(dens(Brand.spacing2, Brand.spacing3, 16))
     // Soft contrast rounds a little further; hairline borders read as
     // harsh on tight corners.
     readonly property int radius: softContrast ? Brand.radiusMd + 2 : Brand.radiusMd
-    readonly property int hourH:  px(compact ? 44 : 56)
+    readonly property int hourH:  px(dens(44, 56, 64))
 
     // ── Spacing scale ────────────────────────────────────────────────
     // Every `spacing`, margin and padding in the app picks one of these, so
     // Tweaks → Density moves the whole layout, not just the hour height.
     // Compact steps each one down a notch. 0 and 1px hairlines stay literal.
-    readonly property int sp2xs: px(compact ? 1 : 2)
-    readonly property int spXs:  px(compact ? 3 : 4)
-    readonly property int spSm:  px(compact ? 4 : 6)
-    readonly property int spMd:  px(compact ? 6 : 8)
-    readonly property int spLg:  px(compact ? 8 : 10)
-    readonly property int spXl:  px(compact ? 10 : 12)
-    readonly property int sp2xl: px(compact ? 12 : 16)
+    readonly property int sp2xs: px(dens(1, 2, 3))
+    readonly property int spXs:  px(dens(3, 4, 5))
+    readonly property int spSm:  px(dens(4, 6, 8))
+    readonly property int spMd:  px(dens(6, 8, 10))
+    readonly property int spLg:  px(dens(8, 10, 12))
+    readonly property int spXl:  px(dens(10, 12, 15))
+    readonly property int sp2xl: px(dens(12, 16, 20))
     // The inset dialogs, popups and settings cards keep from their edge.
-    readonly property int inset: px(compact ? 14 : 18)
-    readonly property int sp3xl: px(compact ? 18 : 24)
+    readonly property int inset: px(dens(14, 18, 22))
+    readonly property int sp3xl: px(dens(18, 24, 30))
+
+    // ── heap 2 components (APP-259) ──────────────────────────────────
+    // A chip is a fixed height, line-height 1 and its content centred, so
+    // chips line up at every scale and density; a filter condition is smaller.
+    readonly property int chipH:       px(28)
+    readonly property int chipHSmall:  px(24)
+    readonly property int chipMaxW:    px(240)
+    readonly property int statusRingSize: px(14)
+    readonly property int iconSize:    px(14)
+    // Quiet keeps a thin grey outline on chips; bold fills them (Style.chipFill).
+    readonly property color chipBg:     Style.chipFill ? panel2 : "transparent"
+    readonly property color chipBorder: Style.chipFill ? border : borderStrong
+    // Signals (heap 2 colour language). Off in the quiet style: shape and
+    // words carry the meaning, colour does not shout.
+    readonly property color signalNow:    Style.urgency ? warning : textMuted   // now, a running timer, soon
+    readonly property color signalUrgent: Style.urgency ? danger : text         // P0, due today, blocked
+    // Meetings: a calendar icon always; bold also fills the block with a bar.
+    readonly property color meeting:      mStandup
+    readonly property color meetingFill:  Style.chipFill ? (_c.meetingBg !== undefined ? _c.meetingBg : withAlpha(mStandup, 0.16))
+                                                         : surfaceCard
+    readonly property color nowLineColor: Style.urgency ? nowLine : borderStrong
+    // The keyboard cursor and the active item: a short lavender bar under the
+    // start of the text (the lowkey underline motif, APP-280).
+    readonly property int cursorBarW: px(18)
+    readonly property int cursorBarH: 2
+    // Links: a thin grey underline, never the lavender bar (2026-10-09).
+    readonly property color linkUnderline: dark ? "#4a525d" : "#b8bec7"
 
     // ── Radius scale ─────────────────────────────────────────────────
     readonly property int radiusXs: 2   // bars, hairline tracks
@@ -421,9 +469,10 @@ QtObject {
     // Earlier seeded defaults sit in existing profiles and read as "the
     // default": "IBM Plex Sans" from before the fonts were bundled, and the
     // upstream "Golos Text" / "JetBrains Mono" that 0.6.0 seeded. The bundled
-    // faces are "heap ..." now, and the upstream name may be an installed copy.
-    readonly property var legacyDefaultFontsUi: ["IBM Plex Sans", "Golos Text"]
-    readonly property var legacyDefaultFontsMono: ["JetBrains Mono"]
+    // faces are "lowkey ..." now ("heap ..." until 0.8.0, which a pick in
+    // Appearance may still name), and the upstream name may be an installed copy.
+    readonly property var legacyDefaultFontsUi: ["IBM Plex Sans", "Golos Text", "heap Golos Text"]
+    readonly property var legacyDefaultFontsMono: ["JetBrains Mono", "heap JetBrains Mono"]
     function _installedFont(family, fallback) {
         return family && Qt.fontFamilies().indexOf(family) >= 0 ? family : fallback;
     }
@@ -478,6 +527,13 @@ QtObject {
     function priorityColor(p) {
         switch (p) { case "P0": return p0; case "P1": return p1; case "P2": return p2; case "P3": return p3; }
         return textMuted;
+    }
+    // heap 2 (APP-259): only P0 and P1 say anything; P2 and P3 are not shown.
+    // In the quiet style the priority is a word in the text colour.
+    function priorityShown(p) { return p === "P0" || p === "P1"; }
+    function priorityInk(p) {
+        if (!Style.urgency) return textMuted;
+        return p === "P0" ? danger : (p === "P1" ? warning : textMuted);
     }
     // Colour is never the only sign (WCAG 1.4.1, APP-185): where a status or
     // a priority is a coloured mark with no word beside it, the mark's shape

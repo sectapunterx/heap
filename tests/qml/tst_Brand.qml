@@ -19,11 +19,11 @@ TestCase {
 
     // ── Identity ──────────────────────────────────────────────
     // The wordmark + taglines callers render verbatim (SplashScreen.qml,
-    // SettingsView.qml bind Brand.tagline; the "." in "heap." is load-bearing).
+    // SettingsView.qml bind Brand.tagline). lowkey since 0.8.0, always lowercase.
     function test_identity_strings() {
-        compare(Brand.name, "heap.");
-        compare(Brand.tagline, "Work, in one place.");
-        compare(Brand.taglineLong, "A quiet place for the work you owe.");
+        compare(Brand.name, "lowkey");
+        compare(Brand.tagline, "Quiet by default.");
+        compare(Brand.taglineLong, "A developer’s workday in one window.");
         verify(Brand.name.length > 0);
         verify(Brand.tagline.length > 0);
         verify(Brand.taglineLong.length > 0);
@@ -31,8 +31,8 @@ TestCase {
 
     // ── Typography ────────────────────────────────────────────
     function test_font_families() {
-        compare(Brand.fontSans, "heap Golos Text");
-        compare(Brand.fontMono, "heap JetBrains Mono");
+        compare(Brand.fontSans, "lowkey Golos Text");
+        compare(Brand.fontMono, "lowkey JetBrains Mono");
         verify(Brand.fontSans.length > 0);
         verify(Brand.fontMono.length > 0);
     }
@@ -132,12 +132,7 @@ TestCase {
     // themselves are a known dead-resource issue — only the contract that these
     // properties exist and are resource URLs is asserted here).
     function test_asset_paths_are_declared_qrc_strings() {
-        const paths = [
-            Brand.logoMark, Brand.logoMarkLight, Brand.logoMarkMono,
-            Brand.logoLockup, Brand.logoLockupLight,
-            Brand.logoWordmark, Brand.logoWordmarkLight,
-            Brand.appIcon, Brand.favicon
-        ];
+        const paths = [Brand.logoWordmark, Brand.logoWordmarkLight, Brand.appIcon, Brand.favicon];
         for (let i = 0; i < paths.length; ++i) {
             verify(paths[i].length > 0, "asset path #" + i + " must be non-empty");
             verify(paths[i].indexOf("qrc:") === 0, "asset path #" + i + " must be a qrc: url");

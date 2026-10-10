@@ -11,7 +11,10 @@ Rectangle {
     color: Theme.panel
     // One row when both groups fit; otherwise sort / archived / counts drop
     // to a second row instead of running off the right edge.
-    readonly property bool _wrapped: filtersRow.implicitWidth + 24 + actionsRow.implicitWidth > width - 32
+    readonly property bool _wrapped: !root.slim && filtersRow.implicitWidth + 24 + actionsRow.implicitWidth > width - 32
+    // Under the Tasks header (APP-261) the conditions, the view name and the
+    // count live in the query row; what stays is the view's own tools.
+    property bool slim: false
     implicitHeight: _wrapped ? 44 + 34 : 44
     height: implicitHeight
     property var priorities: ({})  // map P0..P3 -> bool
@@ -20,6 +23,8 @@ Rectangle {
     property int blockedCount: 0
     property int reviewCount: 0
     property bool showArchived: false
+    // Board and List (APP-262/263) take the archive as a query condition.
+    property bool showArchivedToggle: true
     property string viewLabel: "Board"
     // Only the board orders its columns; the other views carry their own
     // ordering, so the control hides rather than lying about what it does.
@@ -29,6 +34,8 @@ Rectangle {
         ({ id: "manual", label: I18n.t("filter.sort.manual") }),
         ({ id: "priority", label: I18n.t("filter.sort.priority") }),
         ({ id: "due", label: I18n.t("filter.sort.due") }),
+        ({ id: "when", label: I18n.t("filter.sort.when") }),
+        ({ id: "estimate", label: I18n.t("filter.sort.estimate") }),
         ({ id: "updated", label: I18n.t("filter.sort.updated") }),
         ({ id: "title", label: I18n.t("filter.sort.title") }),
         ({ id: "id", label: I18n.t("filter.sort.id") })
@@ -62,6 +69,7 @@ Rectangle {
 
     RowLayout {
         id: filtersRow
+        visible: !root.slim
         x: 16
         y: (44 - height) / 2
         width: Math.min(implicitWidth, root.width - 32)
@@ -174,7 +182,7 @@ Rectangle {
         // ── Saved view ──
         BarChip {
             objectName: "save-view"
-            visible: root.savedViewName.length === 0
+            visible: root.savedViewName.length === 0 && !root.slim
             glyph: "☆"
             text: I18n.t("filter.saveView")
             tip: I18n.t("filter.saveViewTip")
@@ -211,7 +219,7 @@ Rectangle {
             text: I18n.t("recap.button")
             dot: root.recapUnseen
             tip: {
-                const keys = (AppController.shortcuts, AppController.shortcutFor("recap.open"));
+                const keys = AppController.shortcuts.length >= 0 ? AppController.shortcutText("recap.open") : "";
                 const what = root.recapUnseen ? I18n.t("recap.button.unseen") : I18n.t("recap.button.tip");
                 return keys.length > 0 ? what + "  " + keys : what;
             }
@@ -306,6 +314,7 @@ Rectangle {
 
         Rectangle {
             objectName: "archived-toggle"
+            visible: root.showArchivedToggle
             radius: Theme.radiusPill
             color: root.showArchived ? Theme.accentSoft : (archMA.containsMouse ? Theme.panel3 : Theme.panel2)
             border.color: root.showArchived ? Theme.accent : (archMA.containsMouse ? Theme.borderStrong : Theme.border)
@@ -348,6 +357,7 @@ Rectangle {
         // own filters in the sidebar.
         Text {
             objectName: "filter-count"
+            visible: !root.slim
             text: I18n.tasks(root.totalCount)
             color: Theme.textDim
             font.family: Theme.fontUi

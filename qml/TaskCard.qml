@@ -5,6 +5,7 @@ import QtQuick.Controls as QQC
 import TodoCpp
 import "PlainText.js" as MdPlain
 import "Motion.js" as Motion
+import "TaskDates.js" as TaskDates
 
 Rectangle {
     id: card
@@ -46,19 +47,13 @@ Rectangle {
     // back while one is, or Down moved the board cursor under the menu.
     // `visible`, not `opened`: opened only turns true once the fade-in ends,
     // and a key pressed during it would still reach the board.
-    readonly property bool menuOpen: !!(card._menu && card._menu.visible)
-        || !!(card._statusMenu && card._statusMenu.visible)
-        || !!(card._priorityMenu && card._priorityMenu.visible)
+    readonly property bool menuOpen: menuHost.menuOpen
     readonly property bool _done: !!(card.task && card.task.status === "done")
     signal clicked()
 
     // Open the card's menu from the keyboard (board key M, or the Menu key),
     // anchored on the card rather than on a pointer that may be elsewhere.
-    function openMenu() {
-        const menu = card.contextMenu();
-        menu.popup(card, Theme.spLg, Math.min(card.height, 28));
-        menu.currentIndex = 1;
-    }
+    function openMenu() { menuHost.openMenu(); }
     Keys.onMenuPressed: card.openMenu()
 
     // Here vs tracker, field by field (APP-163). Made on first use: a board of
@@ -92,15 +87,7 @@ Rectangle {
         const sameDay = dl && dl.getTime && !isNaN(dl.getTime())
             && dl.getFullYear() === s.getFullYear() && dl.getMonth() === s.getMonth() && dl.getDate() === s.getDate();
         if (sameDay && !t.scheduledHasTime) return "";
-        const today = AppController.today;
-        const days = Math.round((new Date(s.getFullYear(), s.getMonth(), s.getDate()).getTime()
-            - new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()) / 86400000);
-        let day = days === 0 ? I18n.t("task.due.today")
-                : days === 1 ? I18n.t("task.due.tomorrow")
-                : AppController.shortDate(s);
-        if (t.scheduledHasTime)
-            day += " " + I18n.fmtTime(s);
-        return day;
+        return TaskDates.cardText(s, !!t.scheduledHasTime, AppController.today);
     }
 
     signal rangeSelectRequested(string anchorId)
@@ -153,10 +140,12 @@ Rectangle {
         : _selected ? Qt.tint(Theme.surfaceCard, Theme.withAlpha(Theme.text, 0.09))
         : hoverArea.containsMouse ? Theme.surfaceCardHover
         : Theme.surfaceCard
+    // heap 2 (APP-262): a card is a surface without a border; the cursor and
+    // the selection are told apart by shape (ring, check), not by an outline
+    // colour.
     border.color: dragArea.drag.active ? Theme.accent
                 : _isStuck ? Theme.danger
-                : hoverArea.containsMouse ? Theme.cardBorderHover
-                : Theme.cardBorder
+                : "transparent"
     border.width: dragArea.drag.active || _isStuck ? 2 : 1
     opacity: dragArea.drag.active ? 0.92 : (_isArchived ? 0.7 : 1.0)
     scale: dragArea.drag.active ? 1.03 : 1.0
@@ -226,6 +215,7 @@ Rectangle {
         if (moveChip.visible && moveChip.tip.length > 0) parts.push(moveChip.tip);
         const labels = card.task.labels || [];
         if (labels.length > 2) parts.push(labels.slice(2).map(l => l.id).join(", "));
+        if (localMarks.tip.length > 0) parts.push(localMarks.tip);
         return parts.join("
 ");
     }
@@ -328,6 +318,19 @@ Rectangle {
         || (card._isTicket && (card._ticket.commentCount || 0) > 0) || labelRep.count > 0
         || card._attachmentCount > 0 || card._waiting !== undefined || card._isTicket
     readonly property bool _hasDetails: card._excerpt.length > 0 || (card._cl.total || 0) > 0 || card._hasFacts
+        || localMarks.hasContent
+    readonly property bool _branchMatched: card.taskId.length > 0 && AppController.focusedTaskId === card.taskId
+    // The detailed card (APP-281 A1) keeps the description's first line, the
+    // checklist and the pull request at rest; the other facts wait for the
+    // cursor as on a compact one.
+    // One line at rest, the most telling one: the pull request, else the
+    // checklist, else the description's first line. Three lines turned the
+    // board into a feed; the rest waits for the cursor.
+    readonly property string _restLine: !Style.detailedCards ? ""
+        : (card.task ? String(card.task.prState || "") : "").length > 0 ? "pr"
+        : (card._cl.total || 0) > 0 ? "checklist"
+        : card._excerpt.length > 0 ? "excerpt" : ""
+    readonly property bool _hasRestDetails: card._restLine.length > 0
     readonly property bool _alerting: card._isStuck || card._isArchived
         || (card._isTicket && (syncChip.shown || !!card._ticket.conflict
                                || (!!card._ticket.outOfScope && !card._ticket.gone)))
@@ -515,7 +518,7 @@ Rectangle {
             // Wrap, not WordWrap: a URL or a long identifier has no space to
             // break at and ran off the card (TASKS-27).
             wrapMode: Text.Wrap
-            maximumLineCount: 2
+            maximumLineCount: 3
             elide: Text.ElideRight
             // Clear of the selection mark in the corner.
             rightPadding: card._selected && !card._alerting ? Theme.fsMd + Theme.spSm : 0
@@ -537,6 +540,7 @@ Rectangle {
                 color: Theme.textMuted
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsXs
+                wrapMode: Text.NoWrap
             }
             Text {
                 id: dueT
@@ -547,9 +551,7 @@ Rectangle {
                     // An unset date arrives as an Invalid Date — truthy, but its
                     // time is NaN, which used to render as "NaNd".
                     if (!dl.getTime || isNaN(dl.getTime())) return 99999;
-                    const t = AppController.today;
-                    const ms = dl.getTime() - new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime();
-                    return Math.round(ms / 86400000);
+                    return TaskDates.daysFrom(dl, AppController.today);
                 }
                 // Red is for a date already past, and only that (APP-179):
                 // today and the next few days used to be red and amber too,
@@ -557,6 +559,7 @@ Rectangle {
                 readonly property bool overdue: dlText.length > 0 && days < 0
                 readonly property string dlText: {
                     if (days === 99999) return "";
+                    const dl = card.task.deadline;
                     // Finished or archived work is not overdue (PLAT-24).
                     if ((card._done || card._isArchived) && days < 0) return "";
                     // A task due at a clock time shows it; a bare date does not.
@@ -567,14 +570,14 @@ Rectangle {
                     if (timed && card.task.dueAt && card.task.dueAt.getHours) {
                         clock = " " + I18n.fmtTime(card.task.dueAt);
                     }
-                    if (days < 0) return I18n.t("task.due.overdue").arg(-days) + clock;
-                    if (days === 0) return I18n.t("task.due.today") + clock;
-                    if (days === 1) return I18n.t("task.due.tomorrow") + clock;
-                    return I18n.t("task.due.inDays").arg(days) + clock;
+                    return TaskDates.cardText(dl, false, AppController.today) + clock;
                 }
+                // Today and tomorrow are amber in the bold style (APP-262);
+                // past, red; the quiet style says it in words only.
+                readonly property bool near: dlText.length > 0 && (days === 0 || days === 1)
                 visible: dlText.length > 0
                 text: dlText
-                color: overdue ? Theme.danger : Theme.textDim
+                color: overdue ? Theme.signalUrgent : near ? Theme.signalNow : Theme.textDim
                 font.family: Theme.fontUi
                 font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsXs
@@ -587,7 +590,7 @@ Rectangle {
                 objectName: "tc-scheduled"
                 readonly property string label: (AppController.today, I18n.lang, card._schedLabel())
                 visible: label.length > 0 && !dueT.visible
-                text: "▸ " + label
+                text: label
                 color: Theme.textDim
                 font.family: Theme.fontUi
                 font.features: Theme.tabularNums
@@ -615,21 +618,46 @@ Rectangle {
                     onClicked: if (card.task) AppController.stopTaskTimer(card.task.id)
                 }
             }
+            Text {
+                objectName: "tc-branch-glyph"
+                visible: Style.detailedCards && !card._branchMatched
+                         && !!(card.task && card.task.branch && String(card.task.branch).length > 0)
+                text: "⎇"
+                color: Theme.textDim
+                font.family: Theme.fontMono
+                font.pixelSize: Theme.fsXs
+                Accessible.name: I18n.t("taskcard.hasBranch")
+            }
             Item { Layout.fillWidth: true }
-            // Colour for P0 and P1 only, the priorities worth a glance; P2 and
-            // P3 are dim text.
+            // P0 and P1 only on a compact card (APP-262); the detailed one
+            // (APP-281 A1) shows any priority, P2 and P3 in dim text.
             Text {
                 id: priT
                 objectName: "tc-priority"
                 readonly property string pri: card.task ? String(card.task.priority || "") : ""
                 readonly property bool loud: pri === "P0" || pri === "P1"
-                visible: pri.length > 0
+                visible: pri.length > 0 && (loud || Style.detailedCards)
                 text: pri
-                color: loud ? Theme.priorityColor(pri) : Theme.textDim
+                color: loud ? Theme.priorityInk(pri) : Theme.textDim
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsXs
                 font.weight: loud ? Theme.fwTitle : Theme.fwBody
             }
+        }
+
+        // The branch checked out now is this task's (APP-281 A3): the one
+        // fact of "what am I on", so it shows in both styles — and only on
+        // this card.
+        Text {
+            objectName: "tc-branch"
+            Layout.fillWidth: true
+            visible: card._branchMatched
+            text: "⎇ " + AppController.focusedBranch
+            textFormat: Text.PlainText
+            color: Theme.textMuted
+            font.family: Theme.fontMono
+            font.pixelSize: Theme.fsXs
+            elide: Text.ElideMiddle
         }
 
         // Under the cursor: the description's first line, the checklist, and
@@ -639,7 +667,7 @@ Rectangle {
             id: details
             objectName: "tc-details"
             Layout.fillWidth: true
-            readonly property bool open: card.detailsOpen && card._hasDetails
+            readonly property bool open: (card.detailsOpen && card._hasDetails) || card._hasRestDetails
             Layout.preferredHeight: details.open ? detailsCol.implicitHeight : 0
             visible: details.open || details.height > 0
             opacity: details.open ? 1 : 0
@@ -655,7 +683,7 @@ Rectangle {
                 Text {
                     objectName: "tc-excerpt"
                     Layout.fillWidth: true
-                    visible: card._excerpt.length > 0
+                    visible: card._excerpt.length > 0 && (card.detailsOpen || card._restLine === "excerpt")
                     text: card._excerpt
                     textFormat: Text.PlainText
                     color: Theme.textMuted
@@ -671,7 +699,7 @@ Rectangle {
                     id: checklistRow
                     readonly property int _total: card._cl.total || 0
                     readonly property int _done: card._cl.done || 0
-                    visible: _total > 0
+                    visible: _total > 0 && (card.detailsOpen || card._restLine === "checklist")
                     Layout.fillWidth: true
                     spacing: Theme.spSm
 
@@ -701,19 +729,27 @@ Rectangle {
                     }
                 }
 
+                // My own layer: the next step, notes / draft / my tags marks
+                // (APP-236…241). Its own component; the card only places it.
+                TaskCardLocal {
+                    id: localMarks
+                    Layout.fillWidth: true
+                    task: card.task
+                }
+
                 // The quieter facts. Flow, not a row: on a narrow column the
                 // line wraps instead of pushing facts out past the card's edge.
                 Flow {
                     id: metaFlow
                     Layout.fillWidth: true
-                    visible: card._hasFacts
+                    visible: card.detailsOpen ? card._hasFacts : card._restLine === "pr"
                     spacing: Theme.spLg
 
                     // Provider badge: which tracker this card mirrors
                     // (HEAP-117), muted like the rest.
                     Text {
                         objectName: "tc-badge"
-                        visible: card._isTicket
+                        visible: card._isTicket && card.detailsOpen
                         text: card._badge.icon || "◍"
                         textFormat: Text.PlainText
                         color: Theme.textMuted
@@ -729,7 +765,7 @@ Rectangle {
                         id: schedMore
                         objectName: "tc-scheduled-more"
                         readonly property string label: dueT.visible ? schedT.label : ""
-                        visible: label.length > 0
+                        visible: label.length > 0 && card.detailsOpen
                         text: "▸ " + label
                         color: Theme.textMuted
                         font.family: Theme.fontUi
@@ -741,7 +777,7 @@ Rectangle {
                     // no people.
                     Text {
                         objectName: "tc-waiting"
-                        visible: card._waiting !== undefined
+                        visible: card._waiting !== undefined && card.detailsOpen
                         text: card._waiting ? I18n.t("waiting.chip.card").arg(card._waiting.days) : ""
                         textFormat: Text.PlainText
                         color: Theme.warning
@@ -752,7 +788,7 @@ Rectangle {
                     // How many files are attached. Opening them is the editor's job.
                     Text {
                         objectName: "tc-attachments"
-                        visible: card._attachmentCount > 0
+                        visible: card._attachmentCount > 0 && card.detailsOpen
                         text: "📎 " + card._attachmentCount
                         color: Theme.textMuted
                         font.family: Theme.fontUi
@@ -787,7 +823,7 @@ Rectangle {
                         readonly property string move: card.task ? String(card.task.prMove || "") : ""
                         readonly property string reason: card.task ? String(card.task.prMoveReason || "") : ""
                         readonly property bool mine: move === "mine"
-                        visible: AppController.showWhoseMove && move.length > 0 && prT.prState.length > 0
+                        visible: AppController.showWhoseMove && move.length > 0 && prT.prState.length > 0 && card.detailsOpen
                         implicitWidth: moveT.implicitWidth
                         implicitHeight: moveT.implicitHeight
                         Text {
@@ -811,7 +847,7 @@ Rectangle {
                     // Time already tracked — click to start again.
                     Text {
                         objectName: "tc-tracked"
-                        visible: !card._timing && card._tracked > 0
+                        visible: !card._timing && card._tracked > 0 && card.detailsOpen
                         text: "⧗ " + card._fmtElapsed(card._tracked)
                         color: Theme.textDim
                         font.family: Theme.fontUi
@@ -827,7 +863,7 @@ Rectangle {
                     }
                     // Recurrence (HEAP-77).
                     Text {
-                        visible: !!(card.task && card.task.recurrence && String(card.task.recurrence).length > 0)
+                        visible: !!(card.task && card.task.recurrence && String(card.task.recurrence).length > 0) && card.detailsOpen
                         text: "↻ " + card._recurLabel(card.task ? card.task.recurrence : "")
                         color: Theme.textDim
                         font.family: Theme.fontUi
@@ -839,7 +875,7 @@ Rectangle {
                     // both.
                     Text {
                         objectName: "tc-comments"
-                        visible: card._isTicket && (card._ticket.commentCount || 0) > 0
+                        visible: card._isTicket && (card._ticket.commentCount || 0) > 0 && card.detailsOpen
                         text: "❝ " + (card._ticket.commentCount || 0)
                         textFormat: Text.PlainText
                         color: Theme.textDim
@@ -849,7 +885,7 @@ Rectangle {
                     // and the name in muted text. Two fit; the rest are counted.
                     Repeater {
                         id: labelRep
-                        model: card.task && card.task.labels ? card.task.labels.slice(0, 2) : []
+                        model: card.detailsOpen && card.task && card.task.labels ? card.task.labels.slice(0, 2) : []
                         delegate: Row {
                             id: labelRow
                             required property var modelData
@@ -871,7 +907,7 @@ Rectangle {
                         }
                     }
                     Text {
-                        readonly property int more: card.task && card.task.labels ? card.task.labels.length - 2 : 0
+                        readonly property int more: card.detailsOpen && card.task && card.task.labels ? card.task.labels.length - 2 : 0
                         visible: more > 0
                         text: "+" + more
                         color: Theme.textDim
@@ -988,269 +1024,24 @@ Rectangle {
         }
     }
 
-    // The context menu is built on the first right-click, not with the card:
-    // thirteen menu items per card were most of what a card cost, and the
-    // board, the timeline and the archive build a card for every row they
-    // show. contextMenu() makes it (once per card), releaseMenu() lets it go —
-    // a recycled list delegate calls that when it is pooled.
-    property var _menu: null
-    function contextMenu() {
-        if (!card._menu) {
-            card._menu = taskMenuComponent.createObject(card);
-            card._menu.subMenuRequested.connect(card.openSubMenu);
-            card._menu.pushActionRequested.connect(card.runPushAction);
-        }
-        // The keys its rows show (APP-166), as they stand when it opens.
-        card._menu.editKey = card.boardKeys ? "board.open" : "";
-        card._menu.archiveKey = card.boardKeys && !card._isArchived ? "board.archive" : "";
-        card._menu.canSendPush = card._isTicket && !!card._ticket.unsynced && !card._ticket.gone;
-        card._menu.canDropPush = card._isTicket && !!card._ticket.unsynced;
-        return card._menu;
+    // The task menu, shared by every view (APP-268): TaskMenuHost builds
+    // it, its status and priority lists on first use, parented to the card.
+    TaskMenuHost {
+        id: menuHost
+        taskId: card.taskId
+        task: card.task
+        anchorItem: card
+        boardKeys: card.boardKeys
+        onOpenRequested: card.clicked()
+        onStatusPicked: (sid) => card.statusPicked(sid)
     }
-    function runPushAction(send) {
-        if (send) AppController.retryTrackerPush(card.taskId);
-        else AppController.discardTrackerPush(card.taskId);
-    }
-    // The status and priority lists are built the same way, on first use.
-    property var _statusMenu: null
-    property var _priorityMenu: null
-    function statusMenu() {
-        if (!card._statusMenu) {
-            card._statusMenu = statusMenuComponent.createObject(card);
-            card._statusMenu.back.connect(() => card.backToMenu("status"));
-            card._statusMenu.picked.connect(sid => {
-                card.statusPicked(sid);
-                AppController.moveTaskTo(card.taskId, sid, "");
-            });
-        }
-        return card._statusMenu;
-    }
-    function priorityMenu() {
-        if (!card._priorityMenu) {
-            card._priorityMenu = priorityMenuComponent.createObject(card);
-            card._priorityMenu.back.connect(() => card.backToMenu("priority"));
-        }
-        return card._priorityMenu;
-    }
-    // The status or priority list at the card, on the task's current value,
-    // so an Enter straight away changes nothing.
-    function openSubMenu(which) {
-        const sub = which === "status" ? card.statusMenu() : card.priorityMenu();
-        sub.popup(card, Theme.spLg, Math.min(card.height, 28));
-        let cur = -1;
-        if (card.task && which === "status")
-            cur = AppController.statuses.findIndex(st => st.id === card.task.status);
-        else if (card.task)
-            cur = ["P0", "P1", "P2", "P3"].indexOf(card.task.priority);
-        sub.currentIndex = Math.max(0, cur);
-    }
-    // Left in a list: the card menu again, on the row the list came from.
-    function backToMenu(which) {
-        card.openMenu();
-        const name = which === "status" ? "tc-menu-status" : "tc-menu-priority";
-        for (let i = 0; i < card._menu.count; i++) {
-            const it = card._menu.itemAt(i);
-            if (it && it.objectName === name) { card._menu.currentIndex = i; break; }
-        }
-    }
-    function releaseMenu() {
-        for (const k of ["_menu", "_statusMenu", "_priorityMenu"]) {
-            if (!card[k]) continue;
-            card[k].destroy();
-            card[k] = null;
-        }
-    }
-    Component {
-        id: taskMenuComponent
-    AppMenu {
-        id: taskMenu
-        objectName: "tc-menu"
-        // Set by contextMenu(): the catalogue ids of Return and E on the board.
-        property string editKey: ""
-        property string archiveKey: ""
-        // A move that never reached the tracker (APP-243): send or drop it.
-        // Set by contextMenu(), like the keys above.
-        property bool canSendPush: false
-        property bool canDropPush: false
-        signal pushActionRequested(bool send)
-        AppMenuItem {
-            enabled: false
-            contentItem: Text {
-                text: card.task ? (card.task.id + " · " + card.task.priority) : ""
-                color: Theme.textDim
-                font.family: Theme.fontMono
-                font.pixelSize: Theme.fsXs
-                font.weight: Theme.fwTitle
-                leftPadding: Theme.spXl
-                rightPadding: Theme.spXl
-            }
-        }
-        AppMenuItem {
-            glyph: "✎"; text: I18n.t("taskcard.edit"); onTriggered: card.clicked()
-            shortcutId: taskMenu.editKey
-        }
-        // Status and priority without opening the editor (UX-26). Each opens
-        // its own list at the card, so the keyboard can walk it too.
-        // The list opens once this menu has finished closing. Opened straight
-        // from the row, it came up while this menu's close was still handing
-        // focus back to the board: the board kept the keys, and the list sat
-        // open without them until another popup's close gave it focus back and
-        // a stray Enter picked P0 (PERA-1).
-        property string _openNext: ""
-        signal subMenuRequested(string which)
-        onClosed: {
-            const which = taskMenu._openNext;
-            taskMenu._openNext = "";
-            if (which) taskMenu.subMenuRequested(which);
-        }
-        AppMenuItem {
-            objectName: "tc-menu-status"
-            glyph: "⇥"; text: I18n.t("taskcard.setStatus"); opensList: true
-            onTriggered: taskMenu._openNext = "status"
-        }
-        AppMenuItem {
-            objectName: "tc-menu-priority"
-            glyph: "!"; text: I18n.t("taskcard.setPriority"); opensList: true
-            onTriggered: taskMenu._openNext = "priority"
-        }
-        AppMenuItem {
-            objectName: "tc-menu-archive"
-            glyph: card._isArchived ? "↺" : "▣"
-            text: card._isArchived ? I18n.t("taskcard.unarchive") : I18n.t("taskcard.archive")
-            shortcutId: taskMenu.archiveKey
-            onTriggered: AppController.setArchived(card.taskId, !card._isArchived)
-        }
-        AppMenuItem {
-            glyph: card.task && card.task.isTiming ? "■" : "▸"
-            text: card.task && card.task.isTiming ? I18n.t("taskcard.stopTimer") : I18n.t("taskcard.startTimer")
-            onTriggered: {
-                if (!card.task) return;
-                if (card.task.isTiming) AppController.stopTaskTimer(card.task.id);
-                else AppController.startTaskTimer(card.task.id);
-            }
-        }
-        AppMenuSeparator { objectName: "tc-menu-ticketSep"; visible: card._isTicket }
-        AppMenuItem {
-            objectName: "tc-menu-open"
-            visible: card._isTicket && String(card._ticket.url || "").length > 0
-            height: visible ? implicitHeight : 0
-            glyph: "↗"
-            shortcutId: "task.openExternal"
-            text: I18n.t("taskcard.openIn").arg(card._badge.name || card._ticket.provider || "")
-            onTriggered: AppController.openTaskExternal(card.taskId)
-        }
-        AppMenuItem {
-            objectName: "tc-menu-copylink"
-            visible: card._isTicket && String(card._ticket.url || "").length > 0
-            height: visible ? implicitHeight : 0
-            glyph: "⎘"
-            text: I18n.t("taskcard.copyLink")
-            onTriggered: AppController.copyToClipboard(String(card._ticket.url || ""))
-        }
-        // A move that never reached the tracker: send it (after heap checks
-        // the issue) or drop it and keep the column here only (APP-243).
-        AppMenuItem {
-            objectName: "tc-menu-send-push"
-            visible: taskMenu.canSendPush
-            height: visible ? implicitHeight : 0
-            glyph: "↑"
-            text: I18n.t("taskcard.sendPush")
-            onTriggered: taskMenu.pushActionRequested(true)
-        }
-        AppMenuItem {
-            objectName: "tc-menu-discard-push"
-            visible: taskMenu.canDropPush
-            height: visible ? implicitHeight : 0
-            glyph: "✕"
-            text: I18n.t("taskcard.discardPush")
-            onTriggered: taskMenu.pushActionRequested(false)
-        }
-        AppMenuSeparator {}
-        AppMenuItem {
-            glyph: "◷"
-            text: I18n.t("taskcard.schedule")
-            onTriggered: {
-                if (!card.task) return;
-                // 14:00 used to be hardcoded here, so every task scheduled from
-                // the card landed on top of the last one — and on a time that
-                // had already passed for most of the afternoon.
-                // The gap is looked for with the block's real length (the
-                // estimate, else the focus-block setting); it used to search
-                // for an hour and then book ninety minutes over a meeting.
-                AppController.scheduleTaskAtNextFreeSlot(card.task.id, AppController.selectedDate);
-            }
-        }
-        AppMenuItem {
-            glyph: "⎘"
-            text: I18n.t("taskcard.copyId")
-            onTriggered: {
-                if (card.task && card.task.id) AppController.copyToClipboard(card.task.id);
-            }
-        }
-        AppMenuItem {
-            glyph: "⎇"
-            text: I18n.t("taskcard.copyBranch")
-            enabled: !!(card.task && card.task.branch && String(card.task.branch).length > 0)
-            onTriggered: {
-                if (card.task && card.task.branch) AppController.copyToClipboard(card.task.branch);
-            }
-        }
-        AppMenuItem {
-            glyph: "+"
-            text: I18n.t("taskcard.createBranch")
-            onTriggered: {
-                if (card.task && card.task.id) AppController.createBranchForTask(card.task.id);
-            }
-        }
-        AppMenuSeparator {}
-        AppMenuItem {
-            glyph: "×"; danger: true
-            text: I18n.t("common.delete"); onTriggered: AppController.deleteTask(card.taskId)
-        }
-    }
-    }
-
-    Component {
-        id: statusMenuComponent
-    AppMenu {
-        id: statusMenu
-        objectName: "tc-status-menu"
-        backOnLeft: true
-        // A row was picked; statusMenu() moves the task.
-        signal picked(string statusId)
-        Instantiator {
-            model: AppController.statuses
-            delegate: AppMenuItem {
-                required property var modelData
-                text: modelData.name
-                marked: !!(card.task && card.task.status === modelData.id)
-            }
-            onObjectAdded: (index, object) => {
-                statusMenu.insertItem(index, object);
-                object["triggered"].connect(() => statusMenu.picked(object["modelData"].id));
-            }
-            onObjectRemoved: (index, object) => statusMenu.removeItem(object)
-        }
-    }
-    }
-
-    Component {
-        id: priorityMenuComponent
-    AppMenu {
-        id: priorityMenu
-        objectName: "tc-priority-menu"
-        backOnLeft: true
-        Instantiator {
-            model: ["P0", "P1", "P2", "P3"]
-            delegate: AppMenuItem {
-                required property string modelData
-                text: modelData
-                marked: !!(card.task && card.task.priority === modelData)
-                onTriggered: AppController.setTaskPriority(card.taskId, modelData)
-            }
-            onObjectAdded: (index, object) => priorityMenu.insertItem(index, object)
-            onObjectRemoved: (index, object) => priorityMenu.removeItem(object)
-        }
-    }
-    }
+    readonly property var _menu: menuHost.menu
+    readonly property var _statusMenu: menuHost.statusList
+    readonly property var _priorityMenu: menuHost.priorityList
+    function contextMenu() { return menuHost.contextMenu(); }
+    function releaseMenu() { menuHost.releaseMenu(); }
+    function openSubMenu(which) { menuHost.openSubMenu(which); }
+    function backToMenu(which) { menuHost.backToMenu(which); }
+    function statusMenu() { return menuHost.statusMenu(); }
+    function priorityMenu() { return menuHost.priorityMenu(); }
 }

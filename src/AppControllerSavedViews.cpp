@@ -169,9 +169,11 @@ bool AppController::deleteSavedView(const QString& id) {
 }
 
 bool AppController::moveSavedView(const QString& id, int delta) {
+  // Any distance: a drag in the sidebar lands a view several rows away in
+  // one move, and one undo (APP-258). Clamped to the list.
   const int i = heap::savedviews::indexOf(m_savedViews, id);
-  const int to = i + (delta < 0 ? -1 : 1);
-  if(i < 0 || delta == 0 || to < 0 || to >= m_savedViews.size()) {
+  const int to = qBound(0, i + delta, static_cast<int>(m_savedViews.size()) - 1);
+  if(i < 0 || delta == 0 || to == i) {
     return false;
   }
   const QString name = m_savedViews.at(i).name;

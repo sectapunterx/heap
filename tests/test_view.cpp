@@ -110,15 +110,44 @@ QString sequenceOf(AppController* app, const QString& id) {
 
 }  // namespace
 
-TEST_F(ViewFocusTest, ViewShortcutsFollowTheSideRailOrder) {
-  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.board")), QStringLiteral("Ctrl+1"));
-  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.timeline")), QStringLiteral("Ctrl+2"));
-  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.week")), QStringLiteral("Ctrl+3"));
-  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.month")), QStringLiteral("Ctrl+4"));
-  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.archive")), QStringLiteral("Ctrl+5"));
-  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.docs")), QStringLiteral("Ctrl+6"));
-  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.notes")), QStringLiteral("Ctrl+7"));
-  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.settings")), QStringLiteral("Ctrl+8"));
+// heap 2 (APP-258): Ctrl+1..3 are the sidebar's sections, Ctrl+, Settings;
+// the lenses have the keymap's g b / g l, the calendar zoom z w / z m
+// (APP-272); the other views have no key of their own (still bindable).
+TEST_F(ViewFocusTest, SectionShortcutsFollowTheSidebar) {
+  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("section.today")), QStringLiteral("Ctrl+1"));
+  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("section.tasks")), QStringLiteral("Ctrl+2"));
+  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("section.knowledge")), QStringLiteral("Ctrl+3"));
+  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.settings")), QStringLiteral("Ctrl+,"));
+  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.board")), QStringLiteral("G, B"));
+  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.timeline")), QStringLiteral("G, L"));
+  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.week")), QStringLiteral("Z, W"));
+  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.month")), QStringLiteral("Z, M"));
+  for(const char* v : {"view.archive", "view.docs", "view.notes"}) {
+    EXPECT_TRUE(sequenceOf(app_.get(), QString::fromLatin1(v)).isEmpty()) << v;
+  }
+  EXPECT_TRUE(sequenceOf(app_.get(), QStringLiteral("tweaks.open")).isEmpty()) << "Ctrl+, is Settings now";
+}
+
+// Each section opens on the view it was left on; the first time, on its
+// default. A view outside the section is never its "last view".
+TEST_F(ViewFocusTest, SectionsRememberTheirLastView) {
+  app_->setCurrentView(QStringLiteral("today"));
+  EXPECT_EQ(app_->currentSection(), QStringLiteral("today"));
+  app_->openSection(QStringLiteral("tasks"));
+  EXPECT_EQ(app_->currentView(), QStringLiteral("board"));
+  app_->setCurrentView(QStringLiteral("month"));
+  EXPECT_EQ(app_->currentSection(), QStringLiteral("tasks"));
+  app_->openSection(QStringLiteral("knowledge"));
+  EXPECT_EQ(app_->currentView(), QStringLiteral("notes"));
+  app_->setCurrentView(QStringLiteral("docs"));
+  app_->openSection(QStringLiteral("tasks"));
+  EXPECT_EQ(app_->currentView(), QStringLiteral("month"));
+  app_->openSection(QStringLiteral("knowledge"));
+  EXPECT_EQ(app_->currentView(), QStringLiteral("docs"));
+  app_->openSection(QStringLiteral("settings"));
+  EXPECT_EQ(app_->currentView(), QStringLiteral("settings"));
+  app_->openSection(QStringLiteral("nonsense"));
+  EXPECT_EQ(app_->currentView(), QStringLiteral("today"));
 }
 
 // Month is reachable from the rail, so it needs a binding like its neighbours.
@@ -206,9 +235,9 @@ TEST(ShortcutMigration, ALegacyFilesStoredDefaultsDoNotPinTheOldLayout) {
   });
 
   AppController app;
-  EXPECT_EQ(sequenceIn(app, QStringLiteral("view.month")), QStringLiteral("Ctrl+4"));
-  EXPECT_EQ(sequenceIn(app, QStringLiteral("view.docs")), QStringLiteral("Ctrl+6"));
-  EXPECT_EQ(sequenceIn(app, QStringLiteral("view.archive")), QStringLiteral("Ctrl+5"));
+  EXPECT_TRUE(sequenceIn(app, QStringLiteral("view.docs")).isEmpty());
+  EXPECT_TRUE(sequenceIn(app, QStringLiteral("view.notes")).isEmpty());
+  EXPECT_TRUE(sequenceIn(app, QStringLiteral("view.archive")).isEmpty()) << "Ctrl+7 was its old default, not a choice";
 }
 
 TEST(ShortcutMigration, ALegacyFilesRealRebindSurvives) {
@@ -219,7 +248,7 @@ TEST(ShortcutMigration, ALegacyFilesRealRebindSurvives) {
 
   AppController app;
   EXPECT_EQ(sequenceIn(app, QStringLiteral("task.new")), QStringLiteral("Ctrl+Shift+J"));
-  EXPECT_EQ(sequenceIn(app, QStringLiteral("view.docs")), QStringLiteral("Ctrl+6"));
+  EXPECT_TRUE(sequenceIn(app, QStringLiteral("view.docs")).isEmpty());
 }
 
 // A cleared binding is a choice too, and "" never matched a default.
@@ -228,6 +257,93 @@ TEST(ShortcutMigration, ALegacyFilesClearedBindingSurvives) {
 
   AppController app;
   EXPECT_TRUE(sequenceIn(app, QStringLiteral("task.openExternal")).isEmpty());
+}
+
+// ─── heap 2 shell (APP-258) ───────────────────────────────────────────
+// A 0.7 settings file (shortcutsSchema 2): the user's own bindings stay,
+// a new default that collides with one steps aside, and the change is said
+// once.
+
+namespace {
+
+void writeV2StateWithShortcuts(const QJsonObject& entries) {
+  QDir(appDataDir()).removeRecursively();
+  QDir().mkpath(appDataDir());
+  QJsonObject settings;
+  settings["shortcuts"] = entries;
+  settings["shortcutsSchema"] = 2;
+  settings["currentView"] = QStringLiteral("week");
+  QJsonObject root;
+  root["schemaVersion"] = heap::state::kSchemaVersion;
+  root["settings"] = settings;
+  root["profiles"] = QJsonArray{QJsonObject{{"id", "default"}, {"name", "Example"}}};
+  QFile f(appDataDir() + "/state.json");
+  ASSERT_TRUE(f.open(QIODevice::WriteOnly));
+  f.write(QJsonDocument(root).toJson());
+}
+
+}  // namespace
+
+// APP-281 A4: an old key says where its action went the first time it is
+// pressed after the update — once, and only the keys actually pressed.
+TEST(ShellMigration, AReturningUserIsToldOnceWhatMoved) {
+  writeV2StateWithShortcuts({});
+  {
+    AppController app;
+    EXPECT_TRUE(app.shellNotice().isEmpty()) << "nothing said up front";
+    EXPECT_TRUE(app.hasKeymapNotice());
+    EXPECT_EQ(app.currentView(), QStringLiteral("week")) << "the last screen stays the start screen";
+    EXPECT_EQ(app.currentSection(), QStringLiteral("tasks"));
+    EXPECT_EQ(sequenceIn(app, QStringLiteral("section.today")), QStringLiteral("Ctrl+1"));
+    EXPECT_EQ(sequenceIn(app, QStringLiteral("task.openExternal")), QStringLiteral("G, X"));
+    QSignalSpy toasts(&app, &AppController::toast);
+    app.noteKeyPressed(QStringLiteral("Ctrl+2"));
+    ASSERT_EQ(toasts.count(), 1);
+    EXPECT_TRUE(toasts.at(0).at(0).toString().contains(app.keyText(QStringLiteral("Ctrl+2"))))
+        << toasts.at(0).at(0).toString().toStdString();
+    app.noteKeyPressed(QStringLiteral("Ctrl+2"));
+    app.noteKeyPressed(QStringLiteral("J"));
+    EXPECT_EQ(toasts.count(), 1) << "said once; a key that did not move says nothing";
+    app.flushSave();
+  }
+  AppController again;
+  QSignalSpy toasts(&again, &AppController::toast);
+  again.noteKeyPressed(QStringLiteral("Ctrl+2"));
+  EXPECT_EQ(toasts.count(), 0) << "said once, across a restart";
+  again.noteKeyPressed(QStringLiteral("O"));
+  EXPECT_EQ(toasts.count(), 1) << "O was not pressed yet";
+}
+
+TEST(ShellMigration, TheUsersOwnBindingKeepsItsKey) {
+  writeV2StateWithShortcuts({{QStringLiteral("theme.toggle"), QStringLiteral("Ctrl+2")}});
+  AppController app;
+  EXPECT_EQ(sequenceIn(app, QStringLiteral("theme.toggle")), QStringLiteral("Ctrl+2"));
+  EXPECT_TRUE(sequenceIn(app, QStringLiteral("section.tasks")).isEmpty()) << "the new default steps aside";
+  EXPECT_EQ(sequenceIn(app, QStringLiteral("section.today")), QStringLiteral("Ctrl+1"));
+  EXPECT_TRUE(app.shellNotice().contains(app.keyText(QStringLiteral("Ctrl+2")))) << app.shellNotice().toStdString();
+  // Their own key is theirs: no "Ctrl 2 moved" when they press it.
+  QSignalSpy toasts(&app, &AppController::toast);
+  app.noteKeyPressed(QStringLiteral("Ctrl+2"));
+  EXPECT_EQ(toasts.count(), 0);
+}
+
+TEST(ShellMigration, ANewInstallHearsNothing) {
+  QDir(appDataDir()).removeRecursively();
+  AppController app;
+  EXPECT_TRUE(app.shellNotice().isEmpty());
+  EXPECT_FALSE(app.hasKeymapNotice());
+}
+
+// A 0.7 user who bound T to an action of their own keeps it: the timer's new
+// default steps aside (APP-272), and T is not announced as moved.
+TEST(ShellMigration, ANewSingleLetterDefaultStepsAsideForTheUsersOwn) {
+  writeV2StateWithShortcuts({{QStringLiteral("theme.toggle"), QStringLiteral("T")}});
+  AppController app;
+  EXPECT_EQ(sequenceIn(app, QStringLiteral("theme.toggle")), QStringLiteral("T"));
+  EXPECT_TRUE(sequenceIn(app, QStringLiteral("task.timer")).isEmpty());
+  QSignalSpy toasts(&app, &AppController::toast);
+  app.noteKeyPressed(QStringLiteral("T"));
+  EXPECT_EQ(toasts.count(), 0);
 }
 
 int main(int argc, char** argv) {

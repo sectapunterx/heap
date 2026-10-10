@@ -119,49 +119,4 @@ TestCase {
         te.close();
     }
 
-    // ── The header's sync dot ──
-
-    function test_sync_dot_rule_takes_the_clock() {
-        const bar = createTemporaryQmlObject('import TodoCpp; TopBar { width: 1100; syncing: false }', host);
-        compare(bar.syncDotDelay, 400);
-        verify(!bar.syncDotDue(true, 1000, 1399));
-        verify(bar.syncDotDue(true, 1000, 1400));
-        verify(!bar.syncDotDue(false, 1000, 5000), "a finished sync shows nothing");
-        verify(!bar.syncDotDue(true, 0, 5000), "no start, no dot");
-    }
-
-    function test_sync_dot_waits_400ms_and_goes_with_the_sync() {
-        const bar = createTemporaryQmlObject('import TodoCpp; TopBar { width: 1100; syncing: false }', host);
-        const dot = findByName(bar, "topbar-sync-dot");
-        verify(dot !== null);
-        verify(!dot.visible);
-        bar.syncing = true;
-        wait(200);
-        verify(!dot.visible, "a quick pull flashed the dot");
-        tryVerify(function () { return dot.visible; }, 1000, "a slow sync never said so");
-        bar.syncing = false;
-        verify(!dot.visible, "the dot outlived the sync");
-    }
-
-    function test_quick_sync_never_shows_it() {
-        const bar = createTemporaryQmlObject('import TodoCpp; TopBar { width: 1100; syncing: false }', host);
-        const dot = findByName(bar, "topbar-sync-dot");
-        bar.syncing = true;
-        wait(100);
-        bar.syncing = false;
-        wait(500);
-        verify(!dot.visible);
-    }
-
-    function test_sync_dot_click_asks_for_the_status() {
-        const bar = createTemporaryQmlObject('import TodoCpp; TopBar { width: 1100; syncing: false }', host);
-        const spy = createTemporaryQmlObject('import QtTest; SignalSpy { signalName: "syncStatusRequested" }', host);
-        spy.target = bar;
-        bar.syncing = true;
-        const dot = findByName(bar, "topbar-sync-dot");
-        tryVerify(function () { return dot.visible; }, 1000);
-        mouseClick(dot);
-        compare(spy.count, 1);
-        bar.syncing = false;
-    }
 }

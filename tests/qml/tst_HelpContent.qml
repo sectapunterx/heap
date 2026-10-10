@@ -123,8 +123,8 @@ TestCase {
     // Month and Archive (and no longer a "Day" view).
     function test_keys_are_live_and_views_are_current() {
         const hc = make('import TodoCpp; HelpContent {}');
-        compare(hc.kbd("tweaks.open"), AppController.shortcutFor("tweaks.open"));
-        compare(hc.kbd("hotkeys.open"), AppController.shortcutFor("hotkeys.open"));
+        compare(hc.kbd("tweaks.open"), AppController.shortcutText("tweaks.open"));
+        compare(hc.kbd("hotkeys.open"), AppController.shortcutText("hotkeys.open"));
         const views = hc.tocModel[0].label;
         verify(views.indexOf("Month") >= 0 || views.indexOf("месяц") >= 0, views);
         verify(views.indexOf("Archive") >= 0 || views.indexOf("архив") >= 0, views);

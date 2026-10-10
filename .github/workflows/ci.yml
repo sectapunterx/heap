@@ -150,7 +150,9 @@ jobs:
     name: clang-tidy
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    # A release PR (feature -> master) touches hundreds of files; 25 minutes
+    # cut it off before it finished.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -418,7 +420,7 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         # --perf-log: the startup timings (perf: lines) land in this log for
         # trend-watching; logged only, never judged (APP-161).
-        run: build/heap --smoke --perf-log --data-dir "$RUNNER_TEMP/smoke"
+        run: build/lowkey --smoke --perf-log --data-dir "$RUNNER_TEMP/smoke"
 
       # The portable bundle exactly as release.yml assembles it (windeployqt +
       # copy-deps + UCRT), started with a PATH that has no MSYS2 on it — so a DLL
@@ -438,11 +440,11 @@ jobs:
         run: |
           $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
           $dataDir = Join-Path $env:RUNNER_TEMP 'smoke'
-          # heap.exe is a GUI-subsystem binary with no console of its own: the
+          # lowkey.exe is a GUI-subsystem binary with no console of its own: the
           # verdict goes to the redirected stderr, and the run's whole log is
           # kept as <data-dir>\logs\smoke.log (the run itself uses a temp dir).
           $err = Join-Path $env:RUNNER_TEMP 'smoke-stderr.txt'
-          $p = Start-Process -FilePath build\heap-portable\heap.exe `
+          $p = Start-Process -FilePath build\heap-portable\lowkey.exe `
                  -ArgumentList '--smoke', '--data-dir', $dataDir `
                  -RedirectStandardError $err -Wait -PassThru
           Get-Content $err -ErrorAction SilentlyContinue
@@ -479,31 +481,31 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           set -eu
-          macdeployqt build/heap.app -qmldir="$PWD/qml"
-          test -d build/heap.app/Contents/Frameworks/QtCore.framework
-          if otool -L build/heap.app/Contents/MacOS/heap | grep -Eiq '/Users/runner/work/.*Qt|/aqt'; then
+          macdeployqt build/lowkey.app -qmldir="$PWD/qml"
+          test -d build/lowkey.app/Contents/Frameworks/QtCore.framework
+          if otool -L build/lowkey.app/Contents/MacOS/lowkey | grep -Eiq '/Users/runner/work/.*Qt|/aqt'; then
             echo "::error::macdeployqt left absolute Qt paths — relocation failed"
             exit 1
           fi
           # The re-sign + verify that the original workflow was missing: an
           # invalidated signature (the "damaged" bug) fails this verify.
-          codesign --force --deep --sign - build/heap.app
-          codesign --verify --deep --strict --verbose=2 build/heap.app
-          bash packaging/macos/make-dmg.sh build/heap.app smoke.dmg
+          codesign --force --deep --sign - build/lowkey.app
+          codesign --verify --deep --strict --verbose=2 build/lowkey.app
+          bash packaging/macos/make-dmg.sh build/lowkey.app smoke.dmg
 
       - name: Verify dmg mounts with the app + Applications target (macos)
         if: runner.os == 'macOS'
         run: |
           set -eu
-          hdiutil attach smoke.dmg -nobrowse -mountpoint /Volumes/heap
-          test -d /Volumes/heap/heap.app
-          test -L /Volumes/heap/Applications
-          hdiutil detach /Volumes/heap
+          hdiutil attach smoke.dmg -nobrowse -mountpoint /Volumes/lowkey
+          test -d /Volumes/lowkey/lowkey.app
+          test -L /Volumes/lowkey/Applications
+          hdiutil detach /Volumes/lowkey
 
       - name: Smoke-test the deployed app (macos)
         timeout-minutes: 5
         if: runner.os == 'macOS'
-        run: build/heap.app/Contents/MacOS/heap --smoke --data-dir "$RUNNER_TEMP/smoke"
+        run: build/lowkey.app/Contents/MacOS/lowkey --smoke --data-dir "$RUNNER_TEMP/smoke"
 
   # ──────────────────────────────────────────────────────────────────
   # 7. ASan + UBSan run (Linux only).

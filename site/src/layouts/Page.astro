@@ -1,0 +1,96 @@
+---
+// The frame of every page: head, nav, footer and the Ctrl K / "/" site search.
+// `path` is the page's route without the language prefix ('' for the home page, 'download/'),
+// so the language switch and the hreflang links point at the same page in the other language.
+import '@fontsource/jetbrains-mono/400.css';
+import '@fontsource/jetbrains-mono/500.css';
+import '@fontsource/golos-text/400.css';
+import '@fontsource/golos-text/500.css';
+import '@fontsource/golos-text/600.css';
+import '../styles/site.css';
+import wordmark from '../assets/lowkey-wordmark.svg?raw';
+import { copy, type Lang } from '../data/i18n';
+import { GITHUB_URL, LICENSE_URL, url } from '../lib/site';
+
+interface Props {
+  lang: Lang;
+  path: string;
+  title: string;
+  description: string;
+  /** Section links in the nav; on the home page they scroll, elsewhere they lead home. */
+  home?: boolean;
+  /** Where the big download buttons go before the script picks this platform's file. */
+  downloadHref: string;
+  /** Primary file per platform, as JSON, for the download buttons (see scripts/site.ts). */
+  primary: string;
+}
+const { lang, path, title, description, home = false, downloadHref, primary } = Astro.props;
+const t = copy[lang];
+const other = copy[t.otherLang.lang as Lang];
+const prefix = (l: Lang) => (l === 'ru' ? 'ru/' : '');
+const here = url(prefix(lang) + path);
+const there = url(prefix(t.otherLang.lang as Lang) + path);
+const homeHref = url(prefix(lang));
+const sec = (id: string) => (home ? `#${id}` : `${homeHref}#${id}`);
+const canonical = new URL(here, Astro.site).href;
+---
+
+<!doctype html>
+<html lang={lang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/svg+xml" href={url('favicon.svg')} />
+    <link rel="alternate" hreflang={lang} href={here} />
+    <link rel="alternate" hreflang={t.otherLang.lang} href={there} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="color-scheme" content="dark" />
+  </head>
+  <body data-primary={primary}>
+    <a class="skip" href="#main">{t.skip}</a>
+
+    <header class="nav">
+      <a class="brand" href={home ? '#top' : homeHref} data-scroll={home ? '#top' : undefined} aria-label={t.brandLabel} set:html={wordmark} />
+      <nav class="nav-links" aria-label={t.navLabel}>
+        <a href={sec('try')} data-scroll={home ? '#try' : undefined}>{t.nav.try}</a>
+        <a href={sec('day')} data-scroll={home ? '#day' : undefined}>{t.nav.day}</a>
+        <a href={sec('trust')} data-scroll={home ? '#trust' : undefined}>{t.nav.trust}</a>
+        <a href={sec('faq')} data-scroll={home ? '#faq' : undefined}>{t.nav.faq}</a>
+      </nav>
+      <button class="search-btn" type="button" aria-haspopup="dialog" aria-label={t.search.label}><span>{t.search.button}</span><kbd>Ctrl K</kbd></button>
+      <a class="lang-switch" href={there} hreflang={t.otherLang.lang} lang={t.otherLang.lang} title={t.otherLang.title}>{t.otherLang.label}</a>
+      <a class="btn ghost sm" href={url(prefix(lang) + 'download/')}>{t.download}</a>
+    </header>
+
+    <main id="main" data-download={downloadHref}>
+      <slot />
+
+      <footer class="foot">
+        <span class="brand-sm" set:html={wordmark} />
+        <span class="foot-links">
+          <a href={url(prefix(lang) + 'download/')}>{t.download}</a>
+          <a href={there} hreflang={t.otherLang.lang} lang={t.otherLang.lang}>{other.selfName}</a>
+          <a href={LICENSE_URL}>MIT</a>
+          <a href={GITHUB_URL}>GitHub</a>
+        </span>
+      </footer>
+    </main>
+
+    <dialog class="palette" aria-label={t.search.label} data-empty={t.search.empty} data-lenis-prevent>
+      <input class="pal-in" type="text" role="combobox" aria-expanded="true" aria-controls="pal-list" autocomplete="off" spellcheck="false" placeholder={t.search.placeholder} aria-label={t.search.label} />
+      <ul class="pal-list" id="pal-list" role="listbox"></ul>
+      <p class="pal-hint mono">{t.search.hint}</p>
+    </dialog>
+
+    <slot name="after" />
+
+    <script>
+      import '../scripts/site.ts';
+    </script>
+  </body>
+</html>

@@ -382,7 +382,105 @@ QStringList parseJiraStatuses(const QByteArray& json) {
   return out;
 }
 
-QVector<ExternalTask> parseJiraIssues(const QByteArray& json, const QString& baseUrl) {
+QString parseJiraSprintField(const QByteArray& fieldsJson) {
+  for(const QJsonValue& v : QJsonDocument::fromJson(fieldsJson).array()) {
+    const QJsonObject f = v.toObject();
+    if(f.value(QStringLiteral("schema")).toObject().value(QStringLiteral("custom")).toString() ==
+       QLatin1String("com.pyxis.greenhopper.jira:gh-sprint")) {
+      return f.value(QStringLiteral("id")).toString();
+    }
+  }
+  return {};
+}
+
+namespace {
+
+// Server/DC (older ones) render a sprint as the toString of a Java object:
+// "com.atlassian.greenhopper.service.sprint.Sprint@1a2b[id=1,rapidViewId=2,
+// state=ACTIVE,name=Sprint 14,startDate=2026-10-05T09:00:00.000+03:00,…]".
+QJsonObject sprintFromServerString(const QString& s) {
+  const qsizetype open = s.indexOf(QChar('['));
+  const qsizetype close = s.lastIndexOf(QChar(']'));
+  if(open < 0 || close <= open) {
+    return {};
+  }
+  QJsonObject o;
+  const QString body = s.mid(open + 1, close - open - 1);
+  // Values may hold commas (a name), so split on ",key=" boundaries only.
+  static const QRegularExpression kPair(QStringLiteral(R"((?:^|,)([A-Za-z]+)=)"));
+  QVector<QPair<QString, qsizetype>> keys;
+  auto it = kPair.globalMatch(body);
+  while(it.hasNext()) {
+    const QRegularExpressionMatch m = it.next();
+    keys.append({m.captured(1), m.capturedEnd()});
+  }
+  for(qsizetype i = 0; i < keys.size(); ++i) {
+    const qsizetype from = keys.at(i).second;
+    const qsizetype to = i + 1 < keys.size() ? body.lastIndexOf(QChar(','), keys.at(i + 1).second - 1) : body.size();
+    QString value = body.mid(from, to - from);
+    if(value == QLatin1String("<null>")) {
+      value.clear();
+    }
+    o.insert(keys.at(i).first, value);
+  }
+  return o;
+}
+
+}  // namespace
+
+QJsonObject jiraCurrentSprint(const QJsonValue& sprintFieldValue) {
+  QVector<QJsonObject> sprints;
+  const auto take = [&sprints](const QJsonValue& v) {
+    if(v.isObject()) {
+      sprints.append(v.toObject());
+    } else if(v.isString()) {
+      const QJsonObject o = sprintFromServerString(v.toString());
+      if(!o.isEmpty()) {
+        sprints.append(o);
+      }
+    }
+  };
+  if(sprintFieldValue.isArray()) {
+    for(const QJsonValue& v : sprintFieldValue.toArray()) {
+      take(v);
+    }
+  } else {
+    take(sprintFieldValue);
+  }
+  QJsonObject best;
+  int bestRank = 0;  // 2 = active, 1 = future
+  QDateTime bestStart;
+  for(const QJsonObject& s : sprints) {
+    const QString state = s.value(QStringLiteral("state")).toString().toLower();
+    const int rank = state == QLatin1String("active") ? 2 : state == QLatin1String("future") ? 1 : 0;
+    if(rank == 0) {
+      continue;  // closed: done with, and not shown
+    }
+    const QDateTime start = parseTrackerTimestamp(s.value(QStringLiteral("startDate")));
+    // Two active sprints (parallel boards): the one started last. Two future
+    // ones: the one starting first.
+    const bool better = rank > bestRank ||
+                        (rank == bestRank && rank == 2 && start.isValid() && (!bestStart.isValid() || start > bestStart)) ||
+                        (rank == bestRank && rank == 1 && start.isValid() && (!bestStart.isValid() || start < bestStart));
+    if(!better) {
+      continue;
+    }
+    bestRank = rank;
+    bestStart = start;
+    best = QJsonObject{{QStringLiteral("name"), s.value(QStringLiteral("name")).toString()}, {QStringLiteral("state"), state}};
+    const QString startText = s.value(QStringLiteral("startDate")).toString();
+    const QString endText = s.value(QStringLiteral("endDate")).toString();
+    if(!startText.isEmpty()) {
+      best.insert(QStringLiteral("start"), startText);
+    }
+    if(!endText.isEmpty()) {
+      best.insert(QStringLiteral("end"), endText);
+    }
+  }
+  return best;
+}
+
+QVector<ExternalTask> parseJiraIssues(const QByteArray& json, const QString& baseUrl, const QString& sprintField) {
   QVector<ExternalTask> out;
   const QJsonDocument doc = QJsonDocument::fromJson(json);
   if(!doc.isObject()) {
@@ -423,6 +521,13 @@ QVector<ExternalTask> parseJiraIssues(const QByteArray& json, const QString& bas
     t.milestone = fields.value(QStringLiteral("fixVersions")).toArray().isEmpty()
                       ? QString()
                       : fields.value(QStringLiteral("fixVersions")).toArray().at(0).toObject().value(QStringLiteral("name")).toString();
+    // The sprint, when the site has the field and the issue an open sprint.
+    if(!sprintField.isEmpty()) {
+      const QJsonObject sprint = jiraCurrentSprint(fields.value(sprintField));
+      if(!sprint.isEmpty()) {
+        t.details.insert(QStringLiteral("sprint"), sprint);
+      }
+    }
     // The comment count is not requested: asking for `comment` inlines every
     // comment body of all 100 issues into the search response.
     // Where the workflow lets the issue go from here, when the search was
@@ -653,7 +758,7 @@ void JiraProvider::sendOnce(const QByteArray& method, const QString& path, const
   // with it; keep every authenticated call on the origin it was aimed at.
   req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::SameOriginRedirectPolicy);
   req.setRawHeader("Accept", "application/json");
-  req.setRawHeader("User-Agent", "heap-sync");
+  req.setRawHeader("User-Agent", "lowkey-sync");
   if(m_oauth || (m_deployment == JiraDeployment::Server && m_email.isEmpty())) {
     // Two different bearer credentials that happen to travel the same way: a
     // Cloud 3LO access token, and a Server/DC Personal Access Token. Neither
@@ -691,7 +796,7 @@ void JiraProvider::resolveCloudId(std::function<void(bool)> done) {
   // with it; keep every authenticated call on the origin it was aimed at.
   req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::SameOriginRedirectPolicy);
   req.setRawHeader("Accept", "application/json");
-  req.setRawHeader("User-Agent", "heap-sync");
+  req.setRawHeader("User-Agent", "lowkey-sync");
   QNetworkReply* reply = m_nam->get(req);
   connect(reply, &QNetworkReply::finished, this, [this, reply, done = std::move(done)]() {
     reply->deleteLater();
@@ -716,7 +821,7 @@ void JiraProvider::detectDeployment(const std::function<void()>& then) {
   QNetworkRequest req{QUrl(m_baseUrl + QStringLiteral("/rest/api/2/serverInfo"))};
   req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::SameOriginRedirectPolicy);
   req.setRawHeader("Accept", "application/json");
-  req.setRawHeader("User-Agent", "heap-sync");
+  req.setRawHeader("User-Agent", "lowkey-sync");
   QNetworkReply* reply = m_nam->get(req);
   connect(reply, &QNetworkReply::finished, this, [this, reply, then]() {
     reply->deleteLater();
@@ -836,7 +941,19 @@ void JiraProvider::pullTasks() {
   m_pulling = true;
   m_pulled.clear();
   m_pullPage = 0;
-  pullPage(QString(), 0);
+  if(m_sprintFieldKnown) {
+    pullPage(QString(), 0);
+    return;
+  }
+  // Which custom field holds the sprint differs per site (APP-255). Asked
+  // once; a site without Jira Software, or a refusal, means no sprints. One
+  // plain request: a 401 here (a scoped token on the site host) is left for
+  // the search to sort out, and the field is asked for again next pull.
+  sendOnce("GET", QStringLiteral("/field"), QByteArray(), [this](const ApiResult& r) {
+    m_sprintFieldKnown = r.ok || r.status != 401;
+    m_sprintField = r.ok ? parseJiraSprintField(r.body) : QString();
+    pullPage(QString(), 0);
+  });
 }
 
 void JiraProvider::pullPage(const QString& cursor, int startAt) {
@@ -854,7 +971,11 @@ void JiraProvider::pullPage(const QString& cursor, int startAt) {
   // The /search/jql endpoint requires an explicit `fields` list (omitting it
   // returns only ids); the parser needs exactly these. `comment` stays out on
   // purpose — it would inline every comment body of all 100 issues.
-  payload.insert(QStringLiteral("fields"), QJsonArray::fromStringList(jiraIssueFields()));
+  QStringList fields = jiraIssueFields();
+  if(!m_sprintField.isEmpty()) {
+    fields.append(m_sprintField);
+  }
+  payload.insert(QStringLiteral("fields"), QJsonArray::fromStringList(fields));
   // Each issue's available workflow transitions, so a move the workflow cannot
   // make is caught on the drop. Cloud's /search/jql takes a comma-separated
   // string, Server's /search an array.
@@ -874,56 +995,60 @@ void JiraProvider::pullPage(const QString& cursor, int startAt) {
   const QString searchPath = m_deployment == JiraDeployment::Server ? QStringLiteral("/search") : QStringLiteral("/search/jql");
   const QString site = m_baseUrl;
   const bool server = m_deployment == JiraDeployment::Server;
-  send("POST", searchPath, QJsonDocument(payload).toJson(QJsonDocument::Compact), [this, site, server, startAt](const ApiResult& r) {
-    if(!r.ok) {
-      if(m_pullPage > 0) {
-        // Pages already in hand are real issues; discarding them because the
-        // tail failed is a worse answer than a short one. Status 0 keeps
-        // AppController out of its refresh-and-resync path, which a mid-walk
-        // 401 would otherwise spin on.
-        const QVector<ExternalTask> got = m_pulled;
-        const int pages = m_pullPage;
-        m_pulling = false;
-        m_pulled.clear();
-        setLastPullComplete(false);
-        emit tasksFetched(got);
-        emit pullFailed(0, QStringLiteral("Jira: only %1 page(s) — %2").arg(pages).arg(r.error));
-        return;
-      }
-      m_pulling = false;
-      emit pullFailed(r.status, r.error);
-      return;
-    }
-    const QVector<ExternalTask> page = parseJiraIssues(r.body, site);
-    m_pulled += page;
-    ++m_pullPage;
+  const QString sprintField = m_sprintField;
+  send("POST",
+       searchPath,
+       QJsonDocument(payload).toJson(QJsonDocument::Compact),
+       [this, site, server, startAt, sprintField](const ApiResult& r) {
+         if(!r.ok) {
+           if(m_pullPage > 0) {
+             // Pages already in hand are real issues; discarding them because the
+             // tail failed is a worse answer than a short one. Status 0 keeps
+             // AppController out of its refresh-and-resync path, which a mid-walk
+             // 401 would otherwise spin on.
+             const QVector<ExternalTask> got = m_pulled;
+             const int pages = m_pullPage;
+             m_pulling = false;
+             m_pulled.clear();
+             setLastPullComplete(false);
+             emit tasksFetched(got);
+             emit pullFailed(0, QStringLiteral("Jira: only %1 page(s) — %2").arg(pages).arg(r.error));
+             return;
+           }
+           m_pulling = false;
+           emit pullFailed(r.status, r.error);
+           return;
+         }
+         const QVector<ExternalTask> page = parseJiraIssues(r.body, site, sprintField);
+         m_pulled += page;
+         ++m_pullPage;
 
-    QString nextCursor;
-    int nextStart = 0;
-    const QJsonObject root = QJsonDocument::fromJson(r.body).object();
-    // Whether the tracker has more to give, cap or no cap.
-    const bool more = server ? page.size() >= kJiraPageSize : !root.value(QStringLiteral("isLast")).toBool(false);
-    if(m_pullPage < kJiraMaxPages) {
-      if(server) {
-        // No cursor and, on newer versions, no `total` either: a full page is
-        // the only evidence that another one exists.
-        if(page.size() >= kJiraPageSize) {
-          nextStart = startAt + kJiraPageSize;
-        }
-      } else if(!root.value(QStringLiteral("isLast")).toBool(false)) {
-        nextCursor = root.value(QStringLiteral("nextPageToken")).toString();
-      }
-    }
-    if(nextCursor.isEmpty() && nextStart == 0) {
-      const QVector<ExternalTask> got = m_pulled;
-      m_pulling = false;
-      m_pulled.clear();
-      setLastPullComplete(!more || m_pullPage < kJiraMaxPages);
-      emit tasksFetched(got);
-      return;
-    }
-    pullPage(nextCursor, nextStart);
-  });
+         QString nextCursor;
+         int nextStart = 0;
+         const QJsonObject root = QJsonDocument::fromJson(r.body).object();
+         // Whether the tracker has more to give, cap or no cap.
+         const bool more = server ? page.size() >= kJiraPageSize : !root.value(QStringLiteral("isLast")).toBool(false);
+         if(m_pullPage < kJiraMaxPages) {
+           if(server) {
+             // No cursor and, on newer versions, no `total` either: a full page is
+             // the only evidence that another one exists.
+             if(page.size() >= kJiraPageSize) {
+               nextStart = startAt + kJiraPageSize;
+             }
+           } else if(!root.value(QStringLiteral("isLast")).toBool(false)) {
+             nextCursor = root.value(QStringLiteral("nextPageToken")).toString();
+           }
+         }
+         if(nextCursor.isEmpty() && nextStart == 0) {
+           const QVector<ExternalTask> got = m_pulled;
+           m_pulling = false;
+           m_pulled.clear();
+           setLastPullComplete(!more || m_pullPage < kJiraMaxPages);
+           emit tasksFetched(got);
+           return;
+         }
+         pullPage(nextCursor, nextStart);
+       });
 }
 
 void JiraProvider::fetchComments(const QString& externalId, const QString& /*project*/) {

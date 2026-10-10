@@ -11,6 +11,8 @@
 #include <QVariantList>
 #include <QVector>
 
+#include <functional>
+
 namespace heap::query {
 
 // A search-box query with its date literals resolved and its free text
@@ -28,6 +30,19 @@ namespace heap::query {
 //   due:week   due:<7d        this week, relative/absolute comparisons,
 //   due:friday due:none       anything the date parser reads, or no date
 //   is:open  is:done  is:archived  is:overdue  is:recurring
+//   is:someday                parked for "someday"
+//   is:unscheduled            open, not someday, with no "when"
+//   is:blocked                an open card blocks it (APP-240)
+//   scheduled:today           "when", read like due: (today, tomorrow, week,
+//   scheduled:none            none, a date, <date, >date) (APP-250)
+//   estimate:none             no estimate; estimate:<30m estimate:>2h
+//   estimate:1.5h             (m / h / ч / м; a bare number is minutes)
+//   branch:login              a part of the branch name; branch:none
+//   has:notes has:draft       my notepad, a comment draft, a checklist,
+//   has:checklist has:links   links drawn by hand (APP-236…241)
+//   #tag also matches my own tags (APP-239)
+//   sprint:current  sprint:none  sprint:14   a Jira sprint (APP-255): the
+//                             active one, none, or a part of its name
 //   -clause   -#tag  -word    negation
 //   a OR b    a | b           either side (clauses on each side are ANDed;
 //                             a side's words are one of its clauses)
@@ -73,6 +88,17 @@ class TaskQuery {
   // in freeText().
   bool matches(const Task& t, const QString& haystack = QString()) const;
 
+  // `is:blocked` needs to know which cards an open card blocks — a fact about
+  // other rows. The caller hands the set over (openlyBlockedIds below) when
+  // usesBlocked() says the query asks.
+  bool usesBlocked() const {
+    return m_usesBlocked;
+  }
+
+  void setBlockedIds(QSet<QString> ids) {
+    m_blocked = std::move(ids);
+  }
+
  private:
   struct Clause {
     QString field;
@@ -82,6 +108,7 @@ class TaskQuery {
     QDate date;               // resolved for `deadline`; invalid otherwise
     QDate dateTo;             // `deadline:week`: the end of the range
     QString special;          // `deadline`: "none" | "overdue" | "range"
+    int minutes = 0;          // `estimate`: the value compared against
     bool negate = false;
   };
 
@@ -94,10 +121,16 @@ class TaskQuery {
   QStringList m_unknown;
   QDate m_today;
   QSet<QString> m_newIds;
+  QSet<QString> m_blocked;
   bool m_isQuery = false;
+  bool m_usesBlocked = false;
 };
 
 // The fields a clause may name, for the UI to hint with. Sorted.
 QStringList queryFields();
+
+// Ids of the tasks some open card blocks ("blocks" links whose source is
+// neither done nor archived). `isDone` says what done means on this board.
+QSet<QString> openlyBlockedIds(const QVector<Task>& tasks, const std::function<bool(const Task&)>& isDone);
 
 }  // namespace heap::query

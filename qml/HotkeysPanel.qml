@@ -61,8 +61,10 @@ Popup {
     readonly property var groupOrder: ["general", "views", "board", "calendar", "notes", "profiles"]
     function groupOf(actionId) {
         const id = String(actionId);
-        if (id.indexOf("view.") === 0 || id.indexOf("savedView.") === 0 || id.indexOf("zoom.") === 0) return "views";
-        if (id.indexOf("board.") === 0 || id.indexOf("selection.") === 0 || id === "task.openExternal") return "board";
+        if (id.indexOf("view.") === 0 || id.indexOf("savedView.") === 0 || id.indexOf("zoom.") === 0
+                || id.indexOf("section.") === 0 || id.indexOf("nav.") === 0) return "views";
+        if (id.indexOf("board.") === 0 || id.indexOf("selection.") === 0 || id.indexOf("task.") === 0
+                || id.indexOf("cursor.") === 0) return "board";
         if (id.indexOf("cal.") === 0) return "calendar";
         if (id.indexOf("notes.") === 0) return "notes";
         if (id.indexOf("profile.") === 0 || id === "person.new") return "profiles";
@@ -126,7 +128,7 @@ Popup {
                 anchors.leftMargin: Theme.sp2xl; anchors.rightMargin: Theme.spMd
                 spacing: Theme.spMd
                 Text {
-                    text: I18n.t("hotkeys.title")
+                    text: I18n.t("hotkeys.editTitle")
                     color: Theme.textDim
                     font.pixelSize: Theme.fsSm
                     font.weight: Theme.fwTitle
@@ -333,7 +335,9 @@ Popup {
         // The conflict is a built-in key (Ctrl+P, the board's arrows…): Enter
         // cannot take it, so the hint must not offer to (SHELL-4).
         property bool conflictBuiltin: false
-        onCapturingChanged: if (!capturing) { candidate = ""; conflictName = ""; conflictBuiltin = false; }
+        // Why the key cannot be had at all (the system keeps it), or "".
+        property string reserved: ""
+        onCapturingChanged: if (!capturing) { candidate = ""; conflictName = ""; conflictBuiltin = false; reserved = ""; }
 
         implicitWidth: 188
         implicitHeight: 46
@@ -383,6 +387,24 @@ Popup {
                 case Qt.Key_F12:        return "F12";
             }
             return "";
+        }
+
+        // The chord as the router reads it: by the physical key, so "п" on a
+        // Russian layout records "g" (APP-272).
+        function _chord(ev) {
+            return AppController.keyChord(ev.key, ev.modifiers, ev.text, ev.nativeScanCode);
+        }
+        // A bare key followed by another within a second records a two-key
+        // sequence ("g b"); anything else starts over.
+        property real _lastAt: 0
+        function _append(chord) {
+            const now = Date.now();
+            const bare = !/(^|\+)(Ctrl|Alt|Meta)\+/.test(chord);
+            const prev = chip.candidate;
+            const prevBare = prev.length > 0 && prev.indexOf(", ") < 0 && !/(^|\+)(Ctrl|Alt|Meta)\+/.test(prev);
+            const seq = bare && prevBare && now - chip._lastAt < 1000 ? prev + ", " + chord : chord;
+            chip._lastAt = now;
+            return seq;
         }
 
         function _buildSequenceString(ev) {
@@ -456,8 +478,8 @@ Popup {
                 Text {
                     anchors.centerIn: parent
                     text: chip.capturing
-                        ? (chip.candidate.length > 0 ? chip.candidate : I18n.t("hotkeys.recordPress"))
-                        : (chip.sequence.length > 0 ? chip.sequence : I18n.t("common.notSet"))
+                        ? (chip.candidate.length > 0 ? AppController.keyText(chip.candidate) : I18n.t("hotkeys.recordPress"))
+                        : (chip.sequence.length > 0 ? AppController.keyText(chip.sequence) : I18n.t("common.notSet"))
                     color: chip.capturing
                         ? (chip.candidate.length > 0 ? Theme.text : Theme.textDim)
                         : (chip.sequence.length > 0 ? Theme.text : Theme.textDim)
@@ -474,7 +496,9 @@ Popup {
                     focus: chip.capturing
                     activeFocusOnTab: true
                     Accessible.role: Accessible.Button
-                    Accessible.name: chip.sequence
+                    // An action with no key still has a name to read out
+                    // (heap 2 left the single views unbound).
+                    Accessible.name: chip.sequence.length > 0 ? AppController.keyText(chip.sequence) : I18n.t("common.notSet")
                     Keys.onPressed: (event) => {
                         // Not recording: this is a button. Enter used to
                         // commit an empty candidate and unbind the action, and
@@ -505,15 +529,20 @@ Popup {
                         if (chip._isPureModifier(event.key)) {
                             event.accepted = true; return;
                         }
-                        const seq = chip._buildSequenceString(event);
+                        const chord = chip._chord(event) || chip._buildSequenceString(event);
+                        const seq = chord.length > 0 ? chip._append(chord) : "";
                         if (seq.length > 0) {
                             chip.candidate = seq;
+                            chip.reserved = AppController.reservedShortcutReason(seq);
                             const conflictId = AppController.findShortcutConflict(chip.actionId, seq);
                             chip.conflictName = conflictId.length > 0
                                 ? AppController.shortcutLabel(conflictId)
                                 : "";
+                            // A built-in key, or the start of another's
+                            // sequence (g with g b): Enter cannot take it.
                             chip.conflictBuiltin = conflictId.length > 0
-                                && AppController.builtinShortcutConflict(chip.actionId, seq).length > 0;
+                                && (AppController.builtinShortcutConflict(chip.actionId, seq).length > 0
+                                    || AppController.prefixShortcutConflict(chip.actionId, seq).length > 0);
                             // Auto-commit if no modifier-free single-letter; otherwise wait for Enter.
                         }
                         event.accepted = true;
@@ -575,8 +604,9 @@ Popup {
             anchors.left: parent.left
             anchors.bottom: parent.bottom
             anchors.bottomMargin: -2
-            visible: chip.capturing && chip.conflictName.length > 0
-            text: I18n.t(chip.conflictBuiltin ? "hotkeys.conflict.builtin" : "hotkeys.conflict.body").arg(chip.conflictName)
+            visible: chip.capturing && (chip.conflictName.length > 0 || chip.reserved.length > 0)
+            text: chip.reserved.length > 0 ? chip.reserved
+                : I18n.t(chip.conflictBuiltin ? "hotkeys.conflict.builtin" : "hotkeys.conflict.body").arg(chip.conflictName)
             color: Theme.danger
             font.pixelSize: Theme.fsXs
             elide: Text.ElideRight

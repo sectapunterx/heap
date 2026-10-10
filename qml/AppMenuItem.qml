@@ -22,10 +22,27 @@ MenuItem {
     // the end of the row, dim, as a desktop menu shows its accelerators, so
     // a single-key action can be learnt from the menu (PERA-3).
     property string shortcutId: ""
+    // A word at the row's end, before its key (heap 2, APP-268): why the
+    // row is off ("no branch yet"), or "now" on the current choice.
+    property string note: ""
+    // What the note means, on hover or keyboard focus ("the tracker is not
+    // changed: writing to it is off").
+    property string noteTip: ""
+    ToolTip.visible: item.noteTip.length > 0 && (item.hovered || item.highlighted)
+    ToolTip.delay: 500
+    ToolTip.text: item.noteTip
+    // A key that works in this menu only — a column's number in Status.
+    property string keyText: ""
+    // The digit that runs this row while its menu is open (1–4 in Priority).
+    property int number: 0
+    // The "‹ Priority" row on top of a list opened from another menu.
+    property bool isBack: false
+    // Written the way every key is (keymap.md, APP-279): "s", "Shift S",
+    // "y y", "Enter", from the one catalogue, so a rebinding shows here too.
     readonly property string hint: item.shortcutId.length > 0
-        ? (AppController.shortcuts, AppController.shortcutFor(item.shortcutId)) : ""
+        ? (AppController.shortcuts.length >= 0 ? AppController.shortcutText(item.shortcutId) : "") : item.keyText
     // A third pick of the row with the mouse suggests its key once (APP-166).
-    onTriggered: if (item.hint.length > 0 && item.hovered) AppController.noteMouseAction(item.shortcutId)
+    onTriggered: if (item.shortcutId.length > 0 && item.hint.length > 0 && item.hovered) AppController.noteMouseAction(item.shortcutId)
     readonly property bool _check: item.marked || (item.checkable && item.checked)
     readonly property bool _arrow: item.subMenu !== null || item.opensList
     // The width the row wants for its whole label, hint and arrow. AppMenu
@@ -33,7 +50,8 @@ MenuItem {
     // the menu and its rows do not chase each other (VISP-5).
     // A row that brings its own contentItem is measured by that.
     readonly property real _arrowW: item._arrow && arrowText ? Theme.spMd + arrowText.implicitWidth : 0
-    readonly property real _hintW: item.hint.length > 0 ? Theme.sp2xl + hintText.implicitWidth : 0
+    readonly property real _hintW: (item.hint.length > 0 ? Theme.sp2xl + hintText.implicitWidth : 0)
+                                   + (item.note.length > 0 ? Theme.sp2xl + noteText.implicitWidth : 0)
     readonly property real naturalWidth: labelRow && item.contentItem === labelRow
         ? item.leftPadding + Theme.fsMd + Theme.spMd + labelText.implicitWidth + item._hintW + item._arrowW + item.rightPadding
         : item.implicitWidth
@@ -59,6 +77,17 @@ MenuItem {
         const m = item.menu as AppMenu;
         if (m && m.backOnLeft) { m.goBack(); event.accepted = true; }
         else event.accepted = false;
+    }
+    // Esc in such a list goes back to the menu it came from; the menu's own
+    // Esc then closes everything.
+    Keys.onEscapePressed: (event) => {
+        const m = item.menu as AppMenu;
+        if (m && m.backOnLeft) { m.goBack(); event.accepted = true; }
+        else event.accepted = false;
+    }
+    Keys.onPressed: (event) => {
+        const m = item.menu as AppMenu;
+        event.accepted = !!m && m.typeKey(event);
     }
 
     indicator: Item {}
@@ -114,6 +143,20 @@ MenuItem {
         textFormat: Text.PlainText
         color: Theme.textDim
         font.family: Theme.fontMono
+        font.pixelSize: Theme.fsXs
+    }
+
+    Text {
+        id: noteText
+        objectName: "menu-row-note"
+        visible: item.note.length > 0
+        x: item.width - width - item.rightPadding - item._arrowW
+           - (item.hint.length > 0 ? hintText.implicitWidth + Theme.spLg : 0)
+        anchors.verticalCenter: parent.verticalCenter
+        text: item.note
+        textFormat: Text.PlainText
+        color: Theme.textDim
+        font.family: Theme.fontUi
         font.pixelSize: Theme.fsXs
     }
 

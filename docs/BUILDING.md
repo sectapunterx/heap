@@ -9,7 +9,7 @@ You need **Qt 6.9+** (what CI builds and tests) and a **C++20** toolchain. On an
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
-./build/heap                  # ./build/heap.exe on Windows
+./build/lowkey                # ./build/lowkey.exe on Windows
 ```
 
 ## Linux
@@ -66,8 +66,8 @@ cmake --build build -j
    - **Toolset:** `C:\msys64\ucrt64`
 5. In **Settings → CMake**, add to **CMake options**: `-DCMAKE_PREFIX_PATH=C:/msys64/ucrt64`
 6. Pick the `heap` run configuration. `Shift+F10` to launch.
-7. To run `heap.exe` outside CLion, add `C:\msys64\ucrt64\bin` to `PATH`, or bundle the Qt DLLs once with
-   `windeployqt6 --qmldir ../qml heap.exe` from the build directory.
+7. To run `lowkey.exe` outside CLion, add `C:\msys64\ucrt64\bin` to `PATH`, or bundle the Qt DLLs once with
+   `windeployqt6 --qmldir ../qml lowkey.exe` from the build directory.
 
 ## Next
 

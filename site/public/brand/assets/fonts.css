@@ -1,9 +1,0 @@
-/* Self-hosted latin subsets (from @fontsource) — the brand book makes no third-party requests. */
-@font-face { font-family: 'IBM Plex Sans'; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/ibm-plex-sans-latin-400-normal.woff2) format('woff2'); }
-@font-face { font-family: 'IBM Plex Sans'; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/ibm-plex-sans-latin-500-normal.woff2) format('woff2'); }
-@font-face { font-family: 'IBM Plex Sans'; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/ibm-plex-sans-latin-600-normal.woff2) format('woff2'); }
-@font-face { font-family: 'IBM Plex Serif'; font-style: normal; font-weight: 300; font-display: swap; src: url(fonts/ibm-plex-serif-latin-300-normal.woff2) format('woff2'); }
-@font-face { font-family: 'IBM Plex Serif'; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/ibm-plex-serif-latin-400-normal.woff2) format('woff2'); }
-@font-face { font-family: 'IBM Plex Serif'; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/ibm-plex-serif-latin-500-normal.woff2) format('woff2'); }
-@font-face { font-family: 'JetBrains Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/jetbrains-mono-latin-400-normal.woff2) format('woff2'); }
-@font-face { font-family: 'JetBrains Mono'; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/jetbrains-mono-latin-500-normal.woff2) format('woff2'); }

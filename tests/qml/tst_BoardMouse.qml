@@ -47,9 +47,12 @@ TestCase {
         tc.seeded = [];
     }
 
-    function makeBoard() {
-        const b = createTemporaryQmlObject(
-            'import TodoCpp; KanbanBoard { anchors.fill: parent }', host);
+    function makeBoard(narrow) {
+        // heap 2 columns share the window (APP-262): a board that must run
+        // past its edge is made narrow.
+        const b = createTemporaryQmlObject(narrow
+            ? 'import TodoCpp; KanbanBoard { width: 600; height: 700 }'
+            : 'import TodoCpp; KanbanBoard { anchors.fill: parent }', host);
         verify(b !== null);
         b.searchText = tc.probe;
         waitForRendering(b);
@@ -75,7 +78,7 @@ TestCase {
 
     function test_wheel_at_the_bottom_of_a_long_column_does_not_move_the_board() {
         seed([30]);
-        const b = makeBoard();
+        const b = makeBoard(true);
         const hs = findChild(b, "board-hscroll");
         verify(hs !== null);
         verify(hs.contentWidth > hs.width, "the board must be wider than the window for this case");
@@ -92,7 +95,7 @@ TestCase {
 
     function test_wheel_over_a_short_column_still_scrolls_the_board() {
         seed([1]);
-        const b = makeBoard();
+        const b = makeBoard(true);
         const hs = findChild(b, "board-hscroll");
         const list = columnLists(b)[0];
         mouseWheel(list, list.width / 2, list.height / 2, 0, -240);

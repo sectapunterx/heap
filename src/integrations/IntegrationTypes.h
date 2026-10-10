@@ -2,6 +2,7 @@
 
 #include <QDateTime>
 #include <QHash>
+#include <QJsonObject>
 #include <QString>
 #include <QStringList>
 
@@ -45,6 +46,13 @@ struct ExternalTask {
   // so every move is left for the tracker to judge.
   QStringList transitions;
   bool transitionsKnown = false;
+  // Read-only facts a tracker gives about the item beyond an issue's fields,
+  // stored as they are on the card (ExternalMeta::details). A merge or pull
+  // request (APP-242): {kind: "mr"|"pr", state, draft, sourceBranch,
+  // targetBranch, mergeStatus, conflicts, pipeline, approvals,
+  // approvalsRequired, reviewers, closes}. A Jira sprint (APP-255): {sprint:
+  // {name, state, start, end}}. Keys absent when the tracker did not say.
+  QJsonObject details;
 };
 
 // A person pulled from a chat/directory integration (Mattermost). Separate from

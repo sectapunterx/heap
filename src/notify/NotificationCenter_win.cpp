@@ -1,6 +1,7 @@
 #include "NotificationCenter.h"
 
 #include "notify/NotifyPayload.h"
+#include "platform/Brand.h"
 #include "platform/Paths.h"
 
 #include <QCoreApplication>
@@ -47,7 +48,7 @@ using Microsoft::WRL::ComPtr;
 namespace wun = ABI::Windows::UI::Notifications;
 namespace xdom = ABI::Windows::Data::Xml::Dom;
 
-constexpr wchar_t kAppId[] = L"local.heap.app";
+constexpr wchar_t kAppId[] = L"local.lowkey.app";
 
 // An HSTRING for the duration of one call.
 class HString {
@@ -88,16 +89,18 @@ bool mayOverwriteRegistration() {
   return !heap::paths::dataDirOverridden();
 }
 
-// heap://… → `"heap.exe" "%1"`, so toast clicks reach heap. Per user, no admin.
-void registerUriScheme() {
-  QSettings cls(QStringLiteral(R"(HKEY_CURRENT_USER\Software\Classes\heap)"), QSettings::NativeFormat);
+// lowkey://… → `"lowkey.exe" "%1"`, so toast clicks reach lowkey. Per user,
+// no admin. heap:// is pointed here too: a 0.7.x toast may still sit in the
+// Action Center after the upgrade (APP-280).
+void registerUriScheme(const QString& scheme) {
+  QSettings cls(QStringLiteral(R"(HKEY_CURRENT_USER\Software\Classes\)") + scheme, QSettings::NativeFormat);
   const QString command =
       QStringLiteral("\"%1\" \"%2\"").arg(QDir::toNativeSeparators(QCoreApplication::applicationFilePath()), QStringLiteral("%1"));
   const QString key = QStringLiteral("shell/open/command/Default");
   if(!mayOverwriteRegistration() && !cls.value(key).toString().isEmpty()) {
     return;
   }
-  cls.setValue(QStringLiteral("Default"), QStringLiteral("URL:heap"));
+  cls.setValue(QStringLiteral("Default"), QStringLiteral("URL:") + scheme);
   cls.setValue(QStringLiteral("URL Protocol"), QString());
   cls.setValue(key, command);
   cls.sync();
@@ -110,7 +113,7 @@ void registerAppId(const QString& iconPath) {
   if(!mayOverwriteRegistration() && !reg.value(QStringLiteral("DisplayName")).toString().isEmpty()) {
     return;
   }
-  reg.setValue(QStringLiteral("DisplayName"), QStringLiteral("heap."));
+  reg.setValue(QStringLiteral("DisplayName"), QLatin1String(heap::brand::kName));
   if(!iconPath.isEmpty()) {
     reg.setValue(QStringLiteral("IconUri"), QDir::toNativeSeparators(iconPath));
   }
@@ -120,7 +123,9 @@ void registerAppId(const QString& iconPath) {
 // A PNG of the app icon next to the data, for the toast's logo (toasts take
 // file paths, not Qt resources).
 QString toastIconPath() {
-  return QDir(heap::paths::dataDir()).filePath(QStringLiteral("toast-icon.png"));
+  // Named after the brand, so the heap icon a 0.7 install left in the data
+  // folder is not reused after the rename.
+  return QDir(heap::paths::dataDir()).filePath(QStringLiteral("toast-icon-lowkey.png"));
 }
 
 QString ensureToastIcon() {
@@ -128,7 +133,7 @@ QString ensureToastIcon() {
     return toastIconPath();
   }
   QDir().mkpath(heap::paths::dataDir());
-  const QPixmap pm = QIcon(QStringLiteral(":/brand/icon/heap-icon.svg")).pixmap(QSize(96, 96));
+  const QPixmap pm = QIcon(QStringLiteral(":/brand/lowkey/lowkey-icon.svg")).pixmap(QSize(96, 96));
   return !pm.isNull() && pm.save(toastIconPath(), "PNG") ? toastIconPath() : QString();
 }
 
@@ -153,7 +158,8 @@ class WinToastBackend : public NotificationCenter {
     SetCurrentProcessExplicitAppUserModelID(kAppId);
     m_logo = ensureToastIcon();
     registerAppId(m_logo);
-    registerUriScheme();
+    registerUriScheme(QLatin1String(kUriScheme));
+    registerUriScheme(QLatin1String(kLegacyUriScheme));
 
     ComPtr<wun::IToastNotificationManagerStatics> manager;
     if(FAILED(

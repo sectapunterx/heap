@@ -64,8 +64,8 @@ TEST(BundledFonts, FamiliesAreRegistered) {
 // installed one (shaped against one file's glyph ids, drawn from the other's)
 // and text in it came out as random glyphs (0.6.0).
 TEST(BundledFonts, NamesNeverCollideWithAnInstalledCopy) {
-  EXPECT_TRUE(ui().startsWith(QStringLiteral("heap ")));
-  EXPECT_TRUE(mono().startsWith(QStringLiteral("heap ")));
+  EXPECT_TRUE(ui().startsWith(QStringLiteral("lowkey ")));
+  EXPECT_TRUE(mono().startsWith(QStringLiteral("lowkey ")));
   const QDir dir(QStringLiteral(":/fonts"));
   for(const QString& file : dir.entryList({QStringLiteral("*.ttf")}, QDir::Files)) {
     QFile f(dir.filePath(file));

@@ -1,3 +1,4 @@
+#include "platform/Brand.h"
 #include "platform/SingleInstance.h"
 
 #include <QCryptographicHash>
@@ -36,12 +37,12 @@ QString SingleInstance::serverName(const QString& dataDir) {
   key = key.toLower();  // C:\Users and c:\users are one folder
 #endif
   const QByteArray hash = QCryptographicHash::hash(key.toUtf8(), QCryptographicHash::Sha1).toHex().left(16);
-  return QStringLiteral("heap-") + QString::fromLatin1(hash);
+  return QLatin1String(heap::brand::kName) + QLatin1Char('-') + QString::fromLatin1(hash);
 }
 
 SingleInstance::Result SingleInstance::acquire(const QByteArray& message) {
   QDir().mkpath(m_dataDir);
-  m_lock = std::make_unique<QLockFile>(m_dataDir + QStringLiteral("/heap.lock"));
+  m_lock = std::make_unique<QLockFile>(m_dataDir + QLatin1Char('/') + QLatin1String(heap::brand::kLockFile));
   // Never stale by age: a heap left open for a week still owns its data. A
   // lock whose process is gone (a crash) is still detected and taken over.
   m_lock->setStaleLockTime(0);
@@ -90,7 +91,7 @@ bool SingleInstance::forwardOnly(const QString& dataDir, const QByteArray& messa
 
 bool SingleInstance::tryLock() {
   QDir().mkpath(m_dataDir);
-  m_lock = std::make_unique<QLockFile>(m_dataDir + QStringLiteral("/heap.lock"));
+  m_lock = std::make_unique<QLockFile>(m_dataDir + QLatin1Char('/') + QLatin1String(heap::brand::kLockFile));
   m_lock->setStaleLockTime(0);
   if(m_lock->tryLock(0)) {
     return true;

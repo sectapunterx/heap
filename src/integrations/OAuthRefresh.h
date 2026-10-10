@@ -89,7 +89,7 @@ inline QNetworkReply* postTokenRequest(QNetworkAccessManager* nam,
   // A hung endpoint would otherwise hold the refresh (and every push waiting
   // on it) until the OS gives up on the socket, minutes later.
   req.setTransferTimeout(kTokenRequestTimeoutMs);
-  req.setRawHeader("User-Agent", "heap-sync");
+  req.setRawHeader("User-Agent", "lowkey-sync");
 
   if(style == TokenStyle::BasicAuthForm) {
     // Bitbucket takes the client credentials in an Authorization header and

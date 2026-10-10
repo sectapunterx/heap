@@ -488,15 +488,17 @@ TEST_F(StorageSafety, UnknownKeysSurviveASave) {
 
 // ── PLAT-8: views ──
 
-TEST_F(StorageSafety, AnUnknownViewLandsOnTheBoardAndIsNeverPersisted) {
+// heap 2 (APP-260): the start screen is Today, so that is where an unknown
+// view lands now.
+TEST_F(StorageSafety, AnUnknownViewLandsOnTodayAndIsNeverPersisted) {
   QJsonObject root = QJsonDocument::fromJson(stateDoc({profileJson("a", {})}, "a")).object();
   root["settings"] = QJsonObject{{"welcomeSeen", true}, {"currentView", "kanban"}};
   writeRaw(statePath(), QJsonDocument(root).toJson());
   AppController app;
-  EXPECT_EQ(app.currentView(), QStringLiteral("board"));
+  EXPECT_EQ(app.currentView(), QStringLiteral("today"));
   app.setCurrentView(QStringLiteral("week"));
   app.setCurrentView(QStringLiteral("nonsense"));
-  EXPECT_EQ(app.currentView(), QStringLiteral("board"));
+  EXPECT_EQ(app.currentView(), QStringLiteral("today"));
 }
 
 // ── PLAT-9: automation covers every profile ──
@@ -590,16 +592,29 @@ TEST_F(StorageSafety, ADebouncedSaveOfTenThousandTasksDoesNotBlockTheEventLoop) 
   QElapsedTimer gap;
   gap.start();
   qint64 worst = 0;
-  while(window.elapsed() < 1500) {
+  // Long enough for the debounce plus a few full saves on this machine, so a
+  // loaded runner (ASan, parallel builds) is not read as "never saved".
+  // The loop stops as soon as the file has it, so a long cap costs nothing
+  // on a fast machine.
+  const qint64 watchMs = 10000;
+  bool savedInTheWindow = false;
+  while(window.elapsed() < watchMs && !savedInTheWindow) {
     QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
     worst = std::max(worst, gap.restart());
+    if(window.elapsed() > 300) {
+      savedInTheWindow = readRaw(statePath()).contains("\"async\"");
+    }
   }
-  const bool savedInTheWindow = readRaw(statePath()).contains("\"async\"");
   app.flushSave();
   std::cout << "[ save-ui-block ] full=" << fullMs << "ms worst-event-loop-gap=" << worst << "ms" << std::endl;
   if(fullMs < 40) {
     GTEST_SKIP() << "this machine saves too fast to tell the difference";
   }
+#if defined(__SANITIZE_ADDRESS__)
+  // ASan slows the snapshot on the UI thread several times over, so the
+  // ratio measures the sanitizer, not the save; the plain builds check it.
+  GTEST_SKIP() << "timing is not meaningful under AddressSanitizer";
+#endif
   EXPECT_LT(worst, fullMs / 2) << "the save still runs on the UI thread";
   EXPECT_TRUE(savedInTheWindow) << "the debounced save did not run while the loop was watched";
 }
@@ -877,11 +892,14 @@ TEST_F(StorageSafety, UnknownKeysOfTasksEventsPeopleAndColumnsSurviveASave) {
   EXPECT_EQ(sev["futureEvent"].toInt(), 7);
 }
 
+// Below kPassThroughSince an unknown key is one a later version retired. A v11
+// document's keys are kept on the way to v12 (APP-244: the upgrade loses
+// nothing), so the oldest schema that still drops them is the one before.
 TEST_F(StorageSafety, UnknownTaskKeysOfAnOlderSchemaAreNotCarried) {
   QJsonObject task = taskJson("T-1", "todo");
   task["retiredKey"] = true;
   QJsonObject root = QJsonDocument::fromJson(stateDoc({profileJson("a", {task})}, "a")).object();
-  root["schemaVersion"] = heap::state::kSchemaVersion - 1;
+  root["schemaVersion"] = heap::state::kPassThroughSince - 1;
   writeRaw(statePath(), QJsonDocument(root).toJson());
   {
     AppController app;

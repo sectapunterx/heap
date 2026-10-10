@@ -8,14 +8,14 @@
 // UI asked for fonts most machines do not have and drew in Segoe UI / Consolas
 // on Windows, something else on Linux and macOS.
 //
-// They are registered as "heap Golos Text" / "heap JetBrains Mono", never the
+// They are registered as "lowkey Golos Text" / "lowkey JetBrains Mono", never the
 // upstream names: on Windows with JetBrains Mono installed, a bundled face
 // under the same name got mixed with the installed one (glyph ids from one
 // file, outlines from the other) and every time and count read as gibberish.
 namespace heap::platform {
 
-inline constexpr const char* kUiFontFamily = "heap Golos Text";
-inline constexpr const char* kMonoFontFamily = "heap JetBrains Mono";
+inline constexpr const char* kUiFontFamily = "lowkey Golos Text";
+inline constexpr const char* kMonoFontFamily = "lowkey JetBrains Mono";
 
 // Adds every bundled face to the application font database. Call once, after
 // the QGuiApplication exists and before any QML loads. A face that cannot be

@@ -1,20 +1,33 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
-import react from '@astrojs/react';
-import { unified } from '@astrojs/markdown-remark';
-import remarkDocLinks from './src/lib/remark-doc-links.mjs';
+import { GITHUB_URL } from './src/lib/site.ts';
+import { BASE } from './repo.mjs';
 
-// Served from GitHub Pages as a project site: https://sectapunterx.github.io/heap/
-const base = '/heap';
+// Served from GitHub Pages as a project site: https://sectapunterx.github.io/<repository>/.
+// The path follows the repository name (repo.mjs), so a rename moves it on the next build.
+const base = BASE;
+const repo = GITHUB_URL;
+
+// Pages of the heap 0.7 site that the one-page site replaced. Old links (the README, posts)
+// land on the closest place instead of a 404.
+const docs = ['tutorial', 'hotkeys', 'integrations', 'oauth-setup', 'data', 'distribution', 'packaging'];
+const areas = ['plan', 'time', 'know', 'connect', 'flow'];
+const redirects = {
+  '/demo': `${base}/#try`,
+  '/privacy': `${base}/#trust`,
+  '/compare': `${base}/`,
+  '/features': `${base}/`,
+  ...Object.fromEntries(areas.map((a) => [`/features/${a}`, `${base}/`])),
+  '/docs': `${repo}/tree/master/docs`,
+  ...Object.fromEntries(docs.map((d) => [`/docs/${d}`, `${repo}/tree/master/docs`])),
+  '/changelog': `${repo}/releases`,
+  '/brand': `${base}/`,
+};
 
 export default defineConfig({
   site: 'https://sectapunterx.github.io',
   base,
   trailingSlash: 'always',
-  integrations: [react()],
-  prefetch: { prefetchAll: false, defaultStrategy: 'hover' },
-  markdown: {
-    processor: unified({ remarkPlugins: [[remarkDocLinks, { base }]] }),
-    shikiConfig: { themes: { light: 'github-light', dark: 'github-dark' } },
-  },
+  devToolbar: { enabled: false },
+  redirects,
 });

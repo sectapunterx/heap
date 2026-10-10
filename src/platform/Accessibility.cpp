@@ -34,7 +34,7 @@ QString firstRunAppearanceJson(const AccessibilityPrefs& prefs) {
   QJsonObject appearance{
       {QStringLiteral("darkPreset"), QStringLiteral("heap-ink")},
       {QStringLiteral("lightPreset"), QStringLiteral("heap-light")},
-      {QStringLiteral("contrast"), prefs.high_contrast ? QStringLiteral("high") : QStringLiteral("soft")},
+      {QStringLiteral("contrast"), prefs.high_contrast ? QStringLiteral("high") : QStringLiteral("normal")},
   };
   if(prefs.high_contrast) {
     appearance.insert(QStringLiteral("highContrast"), true);

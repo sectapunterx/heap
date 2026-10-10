@@ -60,7 +60,8 @@ TestCase {
         const b = createTemporaryQmlObject(
             'import TodoCpp; KanbanBoard { width: 2400; height: 800 }', host);
         verify(b !== null);
-        if (b.collapsed["done"]) b.toggleCollapsed("done");
+        // Done starts folded (APP-262); these cases are about the open one.
+        if (b.isFolded("done")) b.toggleCollapsed("done");
         b.searchText = tc.probe;
         wait(0);
         return b;

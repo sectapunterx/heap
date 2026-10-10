@@ -4,76 +4,138 @@ import QtQuick.Controls.Basic
 import QtQuick.Controls as QQC
 import TodoCpp
 
+// The header of the content column (heap 2, APP-258): the section's title,
+// its lenses (Tasks: Board / List / Calendar; Knowledge: Notes / Links), the
+// git focus banner and focus mode, and the task search. The profile, "+ Task"
+// and the right panel's toggle that the old top bar carried moved to the
+// sidebar, the "New task" field and the Today screen.
 Rectangle {
     id: root
-    color: Theme.panel
-    height: 48
+    objectName: "view-header"
+    color: Theme.bg
 
-    property alias searchText: searchField.text
+    // The current section and view, handed in by Main.
+    property string section: "tasks"
+    property string view: "board"
+    readonly property string title: section === "today" ? I18n.t("sidebar.today")
+                                  : section === "knowledge" ? I18n.t("sidebar.knowledge")
+                                  : section === "settings" ? I18n.t("sidebar.settings")
+                                  : I18n.t("sidebar.tasks")
+    readonly property var lenses: section === "tasks"
+        ? [{ id: "board", label: I18n.t("lens.board"), keys: "g b" },
+           { id: "list", label: I18n.t("lens.list"), keys: "g l" },
+           { id: "calendar", label: I18n.t("lens.calendar"), keys: "g c" }]
+        : section === "knowledge" && view === "docs"
+        ? [{ id: "notes", label: I18n.t("lens.notes"), keys: "" },
+           { id: "docs", label: I18n.t("lens.links"), keys: "" }]
+        : []
+    readonly property string lens: view === "timeline" ? "list"
+                                 : (view === "day" || view === "week" || view === "month") ? "calendar"
+                                 : view
+    signal lensSelected(string id)
+    // The lens's own setting, shown beside the tabs (see optionBtn).
+    property var option: null
+    signal optionPicked(string id)
+    // The calendar's zoom (APP-264): day / week / month, keys z d / z w / z m.
+    signal zoomSelected(string id)
+    // The task search belongs to the views that list tasks.
+    property bool searchShown: section === "tasks"
+
+    // The whole query: the conditions shown as chips, then what is still
+    // being typed (APP-261). Set from outside (a saved view, a link) it is
+    // split again into chips and the rest.
+    property string searchText: ""
+    // Clauses ("status:blocked", "due:week"), space-separated; drawn as chips.
+    property string _committed: ""
+    property bool _sync: false
+    onSearchTextChanged: if (!root._sync) root._split(root.searchText)
+    // The count under the query ("14 tasks"), from Main.
+    property int resultCount: -1
+    signal saveViewRequested()
     // Parse-only, so this costs nothing per keystroke — it never touches the
     // task list, unlike the filtering itself.
-    readonly property bool searchIsQuery: AppController.searchIsQuery(searchField.text)
-    // The widest a breadcrumb or the profile name may get before it elides.
-    readonly property int crumbMaxWidth: 150
+    readonly property bool searchIsQuery: AppController.searchIsQuery(root.searchText)
     // Clauses that mean nothing ("stauts:x", an unknown column, "due:banana"):
     // shown on the badge, so a typo does not read as an empty board.
-    readonly property var searchProblems: AppController.searchProblems(searchField.text)
-    signal newTaskRequested()
-    // The sync dot was clicked: show how the integrations are doing.
-    signal syncStatusRequested()
+    readonly property var searchProblems: AppController.searchProblems(root.searchText)
 
-    // ── Sync in flight (APP-186) ──
-    // Bound to the controller; a test can set it by hand.
-    property bool syncing: AppController.syncing
-    // How long a sync runs before the dot says so.
-    readonly property int syncDotDelay: 400
-    // When the current sync started (ms since the epoch), 0 when none runs.
-    property real _syncSince: 0
-    property bool syncDotShown: false
-    // Whether the dot is due at `now` for a sync running since `since`.
-    function syncDotDue(running, since, now) {
-        return running && since > 0 && now - since >= root.syncDotDelay;
+    function _tokens(t) { return String(t || "").match(/"[^"]*"|\S+/g) || []; }
+    function _isClause(tok) { return /^-?[a-z]+:\S+$/i.test(tok); }
+    function _split(t) {
+        const toks = root._tokens(t);
+        // An OR query stays as typed: its parts belong together.
+        const chips = toks.indexOf("OR") >= 0 ? [] : toks.filter(root._isClause);
+        const rest = toks.indexOf("OR") >= 0 ? toks : toks.filter(x => !root._isClause(x));
+        root._sync = true;
+        root._committed = chips.join(" ");
+        searchField.text = rest.join(" ");
+        root._sync = false;
     }
-    onSyncingChanged: {
-        root._syncSince = root.syncing ? Date.now() : 0;
-        root.syncDotShown = false;
-        syncDotTimer.interval = root.syncDotDelay;
-        if (root.syncing) syncDotTimer.restart();
-        else syncDotTimer.stop();
+    function _compose() {
+        root._sync = true;
+        root.searchText = [root._committed, searchField.text].filter(x => x.length > 0).join(" ");
+        root._sync = false;
     }
-    Timer {
-        id: syncDotTimer
-        onTriggered: {
-            const now = Date.now();
-            if (root.syncDotDue(root.syncing, root._syncSince, now)) {
-                root.syncDotShown = true;
-            } else if (root.syncing) {
-                // A coarse timer may wake a little early.
-                syncDotTimer.interval = Math.max(1, root._syncSince + root.syncDotDelay - now);
-                syncDotTimer.restart();
-            }
+    // A finished "key:value " moves out of the field into a chip.
+    function _onTyped() {
+        if (root._sync) return;
+        const m = /^(.*?)(-?[a-z]+:\S+)\s$/i.exec(searchField.text);
+        if (m && searchField.text.indexOf(" OR ") < 0) {
+            root._sync = true;
+            root._committed = [root._committed, m[2]].filter(x => x.length > 0).join(" ");
+            searchField.text = m[1].trim();
+            root._sync = false;
         }
+        root._compose();
+    }
+    function removeCondition(i) {
+        const list = root._tokens(root._committed);
+        list.splice(i, 1);
+        root._committed = list.join(" ");
+        root._compose();
+    }
+    function clearQuery() {
+        root._committed = "";
+        searchField.text = "";
+        root._compose();
+    }
+    readonly property var conditions: root._tokens(root._committed).map(root._chip)
+    // A clause as a chip: a word for the field, a word for the value.
+    function _chip(raw) {
+        const neg = raw.startsWith("-");
+        const body = neg ? raw.slice(1) : raw;
+        const at = body.indexOf(":");
+        const k = body.slice(0, at).toLowerCase();
+        const v = body.slice(at + 1);
+        const keys = { status: "status", priority: "priority", tag: "label", due: "due", deadline: "due",
+                       is: "is", mention: "mention" };
+        const key = I18n.t("query.key." + (keys[k] || "other"));
+        let value = v;
+        if (k === "is") value = I18n.t("query.is." + v.toLowerCase());
+        else if (k === "priority") value = v.toUpperCase().split(",").join(", ");
+        else if (k === "status") {
+            const sts = AppController.statuses;
+            value = v.split(",").map(id => { const st = sts.find(x => x.id === id.toLowerCase()); return st ? st.name : id; }).join(", ");
+        } else if (k === "due" || k === "deadline") {
+            const words = ["today", "tomorrow", "week", "overdue", "none"];
+            value = words.indexOf(v.toLowerCase()) >= 0 ? I18n.t("query.due." + v.toLowerCase()) : v;
+        }
+        if (value.indexOf("query.") === 0) value = v;
+        const bad = root.searchProblems.indexOf(raw) >= 0;
+        return { key: (neg ? I18n.t("query.not") + " " : "") + key, value: value + (bad ? " · " + I18n.t("query.unknown") : ""), raw: raw, bad: bad };
     }
     // The "seen this before" hint under the search was clicked (APP-159).
     signal seenBeforeActivated(var hit)
     // Esc on an empty search box, or Return in it: give the keyboard back.
     signal leaveRequested()
-    signal rightPanelToggleRequested()
-    // Whether the calendar/people column is on screen, for the toggle's look.
-    property bool rightPanelShown: true
-    signal newProfileRequested()
-    signal renameProfileRequested()
-    signal duplicateProfileRequested()
-    signal exportJsonRequested()
-    signal importJsonRequested()
-    signal exportIcsRequested()
-    signal importIcsRequested()
-    signal exportVaultRequested()
-    signal importVaultRequested()
 
     function focusSearch() {
         searchField.forceActiveFocus();
         searchField.selectAll();
+    }
+    function focusEnd() {
+        searchField.forceActiveFocus();
+        searchField.cursorPosition = searchField.text.length;
     }
     // Type to search (APP-117): the first letter typed on the board starts a
     // fresh search with it, and the rest follow into the field.
@@ -82,163 +144,112 @@ Rectangle {
         searchField.forceActiveFocus();
         searchField.cursorPosition = searchField.text.length;
     }
+    implicitHeight: headRow.implicitHeight + (root.searchShown ? queryRow.implicitHeight + Theme.spMd : 0) + 2 * Theme.spLg
 
-    function _activeProfileMap() {
-        const list = AppController.profiles;
-        const id = AppController.activeProfileId;
-        for (let i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
-        return ({ name: "—", color: Theme.accent });
-    }
-
-    Rectangle {
-        anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
-        height: 1; color: Theme.border
-    }
-
-    RowLayout {
+    ColumnLayout {
         anchors.fill: parent
-        // On macOS the window uses a full-size content view, so the traffic-light
-        // buttons overlay the top-left of this bar — inset the content to clear them.
-        anchors.leftMargin: 16 + (Qt.platform.os === "osx" ? 62 : 0)
+        anchors.leftMargin: Theme.sp2xl
         anchors.rightMargin: Theme.sp2xl
-        spacing: Theme.sp2xl
+        anchors.topMargin: Theme.spLg
+        anchors.bottomMargin: Theme.spLg
+        spacing: Theme.spMd
+    RowLayout {
+        id: headRow
+        Layout.fillWidth: true
+        spacing: Theme.spXl
 
-        // Brand
-        BrandLogo {
-            Layout.preferredHeight: 26
-            Layout.alignment: Qt.AlignVCenter
-            variant: "lockup"
-            theme: Theme.dark ? "dark" : "light"
+        Text {
+            objectName: "view-header-title"
+            text: root.title
+            color: Theme.text
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsXl
+            font.weight: Theme.fwHeading
+            Accessible.role: Accessible.Heading
+            Accessible.name: root.title
         }
-
-        // Just the active profile (and its menu). The editable "project /
-        // week / user" crumbs before it said nothing the rest of the window
-        // did not, and pushed the profile toward the middle of the bar.
-        RowLayout {
-            id: crumbs
-            spacing: Theme.spXs
-            // Profile pill — color dot + name + dropdown
-            Rectangle {
-                id: profilePill
-                Layout.preferredHeight: 24
-                Layout.alignment: Qt.AlignVCenter
-                radius: Theme.radiusMd
-                color: profileMA.containsMouse ? Theme.panel2 : Theme.panel3
-                border.color: profileMA.containsMouse ? Theme.borderStrong : Theme.border
-                border.width: 1
-                implicitWidth: pillRow.implicitWidth + 16
-                // Keyboard: Tab to it, Enter / Space / ↓ opens the profile menu.
-                activeFocusOnTab: true
-                Accessible.role: Accessible.ButtonMenu
-                Accessible.name: profilePill.active.name || I18n.t("topbar.profile.fallback")
-                Keys.onSpacePressed: profileMenu.popup(profilePill, 0, profilePill.height + 4)
-                Keys.onReturnPressed: profileMenu.popup(profilePill, 0, profilePill.height + 4)
-                Keys.onDownPressed: profileMenu.popup(profilePill, 0, profilePill.height + 4)
-                FocusRing {}
-
-                property var active: root._activeProfileMap()
-
-                RowLayout {
-                    id: pillRow
-                    anchors.fill: parent
-                    anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spMd
-                    spacing: Theme.spSm
-                    Rectangle {
-                        width: 8; height: 8; radius: 4
-                        color: profilePill.active.color || Theme.accent
-                    }
-                    Text {
-                        text: profilePill.active.name || I18n.t("topbar.profile.fallback")
-                        color: Theme.text
-                        font.family: Theme.fontUi
-                        font.features: Theme.tabularNums
-                        font.pixelSize: Theme.fsMd
-                        font.weight: Theme.fwTitle
-                        // A long profile name pushed "+ Task" and the panel
-                        // toggle off the window.
-                        elide: Text.ElideRight
-                        Layout.maximumWidth: root.crumbMaxWidth
-                    }
-                    Text {
-                        text: "▾"
-                        color: Theme.textDim
-                        font.pixelSize: Theme.fsXs
-                    }
+        LensTabs {
+            id: lensTabs
+            objectName: "view-header-lenses"
+            visible: root.lenses.length > 0
+            model: root.lenses
+            current: root.lens
+            onSelected: (id) => root.lensSelected(id)
+        }
+        // The lens's own setting beside the tabs (H2-List): "Group: by date"
+        // on the list, the sort on the board. { label, value, current,
+        // items: [{ id, label }] } from Main; a pick comes back as optionPicked.
+        Rectangle {
+            id: optionBtn
+            objectName: "view-header-option"
+            visible: !!root.option && root.section === "tasks"
+            Layout.alignment: Qt.AlignVCenter
+            implicitHeight: Theme.chipH
+            implicitWidth: optionRow.implicitWidth + 2 * Theme.spLg
+            radius: Theme.radiusMd
+            color: optionArea.hovered || optionMenu.visible ? Theme.surfaceCardHover : Theme.chipBg
+            border.width: 1
+            border.color: Theme.chipBorder
+            Row {
+                id: optionRow
+                anchors.centerIn: parent
+                spacing: Theme.spXs
+                Text {
+                    text: root.option ? root.option.label + ":" : ""
+                    color: Theme.textMuted
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
                 }
-                MouseArea {
-                    id: profileMA
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-                    onClicked: profileMenu.popup()
+                Text {
+                    objectName: "view-header-option-value"
+                    text: root.option ? root.option.value : ""
+                    color: Theme.text
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
                 }
-
-                AppMenu {
-                    id: profileMenu
-
-                    // Profile rows are inserted dynamically at the top of the
-                    // menu via Instantiator, so they show before the static
-                    // actions in declaration-order.
-                    Instantiator {
-                        id: profilesInst
-                        model: AppController.profiles
-                        delegate: AppMenuItem {
-                            required property var modelData
-                            marked: modelData.id === AppController.activeProfileId
-                            text: modelData.name
-                            onTriggered: AppController.activeProfileId = modelData.id
-                        }
-                        onObjectAdded:   (idx, obj) => profileMenu.insertItem(idx, obj)
-                        onObjectRemoved: (idx, obj) => profileMenu.removeItem(obj)
+            }
+            ClickArea {
+                id: optionArea
+                label: root.option ? root.option.label + " " + root.option.value : ""
+                showTip: false
+                onActivated: optionMenu.popup(optionBtn, 0, optionBtn.height + Theme.spXs)
+            }
+            AppMenu {
+                id: optionMenu
+                objectName: "view-header-option-menu"
+                Instantiator {
+                    model: root.option ? root.option.items : []
+                    delegate: AppMenuItem {
+                        required property var modelData
+                        objectName: "view-header-option-" + modelData.id
+                        text: modelData.label
+                        checkable: true
+                        checked: !!root.option && root.option.current === modelData.id
+                        onTriggered: root.optionPicked(modelData.id)
                     }
-                    AppMenuSeparator {}
-                    AppMenuItem {
-                        text: I18n.t("topbar.profile.new"); onTriggered: root.newProfileRequested()
-                    }
-                    AppMenuItem {
-                        text: I18n.t("topbar.profile.rename"); onTriggered: root.renameProfileRequested()
-                    }
-                    AppMenuItem {
-                        text: I18n.t("topbar.profile.duplicate"); onTriggered: root.duplicateProfileRequested()
-                    }
-                    AppMenuSeparator {}
-                    AppMenuItem {
-                        text: I18n.t("topbar.profile.import"); onTriggered: root.importJsonRequested()
-                    }
-                    AppMenuItem {
-                        text: I18n.t("topbar.profile.export"); onTriggered: root.exportJsonRequested()
-                    }
-                    AppMenuSeparator {}
-                    AppMenuItem {
-                        text: I18n.t("topbar.cal.import"); onTriggered: root.importIcsRequested()
-                    }
-                    AppMenuItem {
-                        text: I18n.t("topbar.cal.export"); onTriggered: root.exportIcsRequested()
-                    }
-                    AppMenuSeparator {}
-                    AppMenuItem {
-                        text: I18n.t("topbar.notes.import"); onTriggered: root.importVaultRequested()
-                    }
-                    AppMenuItem {
-                        text: I18n.t("topbar.notes.export"); onTriggered: root.exportVaultRequested()
-                    }
-                    // Last, apart and in red, and it says which profile goes
-                    // (design audit DES-9): "Delete active" sat between
-                    // Duplicate and Import looking like any other item.
-                    AppMenuSeparator {}
-                    AppMenuItem {
-                        objectName: "topbar-profile-delete"
-                        text: I18n.t("topbar.profile.delete").arg(profilePill.active.name || I18n.t("topbar.profile.fallback"))
-                        danger: true
-                        enabled: AppController.profiles.length > 1
-                        onTriggered: AppController.deleteProfile(AppController.activeProfileId)
-                    }
+                    onObjectAdded: (index, object) => optionMenu.insertItem(index, object)
+                    onObjectRemoved: (index, object) => optionMenu.removeItem(object)
                 }
             }
         }
+        LensTabs {
+            objectName: "view-header-zoom"
+            visible: root.lens === "calendar"
+            model: [{ id: "day", label: I18n.t("calzoom.day"), keys: "z d" },
+                    { id: "week", label: I18n.t("calzoom.week"), keys: "z w" },
+                    { id: "month", label: I18n.t("calzoom.month"), keys: "z m" }]
+            current: root.view
+            onSelected: (id) => root.zoomSelected(id)
+        }
 
         Item { Layout.fillWidth: true }
+
+        CalendarNav {
+            id: calendarNav
+            visible: root.lens === "calendar"
+            Layout.alignment: Qt.AlignVCenter
+            zoom: root.view
+        }
 
         // Git focus banner — appears when GitWatcher detects a checkout
         // matching a registered task prefix. Dismiss persists until next
@@ -461,44 +472,66 @@ Rectangle {
             }
         }
 
-        // A sync is out (APP-186): a quiet dot in the live colour, only once
-        // it has taken long enough to notice — a quick pull shows nothing.
-        // A click opens the integrations' status (APP-164).
-        Item {
-            id: syncDot
-            objectName: "topbar-sync-dot"
-            visible: root.syncDotShown
-            Layout.preferredWidth: 20
-            Layout.preferredHeight: 20
-            Layout.alignment: Qt.AlignVCenter
-            Rectangle {
-                anchors.centerIn: parent
-                width: 8
-                height: 8
-                radius: 4
-                color: syncDotMA.hovered ? Theme.withAlpha(Theme.live, 0.7) : Theme.live
-            }
-            ClickArea {
-                id: syncDotMA
-                objectName: "topbar-sync-dot-area"
-                label: I18n.t("topbar.syncing")
-                tip: I18n.t("topbar.syncing.tip")
-                onActivated: root.syncStatusRequested()
-            }
+        // "14 tasks" under the query.
+        Text {
+            objectName: "view-header-count"
+            visible: root.searchShown && root.resultCount >= 0
+            text: I18n.count(Math.max(0, root.resultCount), "query.n.tasks")
+            color: Theme.textDim
+            font.family: Theme.fontUi
+            font.features: Theme.tabularNums
+            font.pixelSize: Theme.fsSm
         }
+    }
 
-        // Search: 280px when there is room, down to 160 when there is not.
+        // The query (APP-261): conditions as chips (× drops one), then the
+        // field in the same language as quick capture; "Save as view".
         Rectangle {
-            id: searchBox
+            id: queryRow
+            objectName: "view-header-query"
+            visible: root.searchShown
             Layout.fillWidth: true
-            Layout.preferredWidth: 280
-            Layout.maximumWidth: 280
-            Layout.minimumWidth: 160
-            Layout.preferredHeight: 28
-            radius: Theme.radiusMd
-            color: Theme.panel2
-            border.color: searchField.activeFocus ? Theme.accent : Theme.border
-            border.width: searchField.activeFocus ? 2 : 1
+            implicitHeight: Math.max(Theme.chipH + 2 * Theme.spSm, queryFlow.implicitHeight + 2 * Theme.spSm)
+            radius: Theme.radiusLg
+            color: Style.chipFill ? Theme.panel : "transparent"
+            border.color: searchField.activeFocus ? Theme.focusRing : Theme.border
+            border.width: 1
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spLg
+                spacing: Theme.spMd
+                Text {
+                    text: "⌕"
+                    color: root.searchIsQuery ? Theme.accentStrong : Theme.textDim
+                    font.pixelSize: Theme.fsSm
+                }
+                Flow {
+                    id: queryFlow
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignVCenter
+                    spacing: Theme.spSm
+                    Repeater {
+                        model: root.conditions
+                        delegate: PropertyChip {
+                            id: qc
+                            required property var modelData
+                            required property int index
+                            objectName: "query-chip-" + qc.index
+                            small: true
+                            removable: true
+                            key: qc.modelData.key
+                            value: qc.modelData.value
+                            valueColor: qc.modelData.bad ? Theme.warning : Theme.text
+                            onRemoved: root.removeCondition(qc.index)
+                        }
+                    }
+                    Item {
+                        width: Math.max(Theme.px(200), queryFlow.width - x)
+                        height: Theme.chipHSmall
+                        Rectangle {
+                            id: searchBox
+                            anchors.fill: parent
+                            color: "transparent"
             Behavior on border.color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             RowLayout {
                 anchors.fill: parent
@@ -528,10 +561,18 @@ Rectangle {
                     // Esc clears what was typed, and a second Esc (or Return)
                     // hands the keyboard back to the view, so the board cursor
                     // can walk what the search left. It used to do neither.
+                    onTextChanged: root._onTyped()
                     Keys.onEscapePressed: (event) => {
                         if (searchField.text.length > 0) searchField.clear();
                         else root.leaveRequested();
                         event.accepted = true;
+                    }
+                    // Backspace on an empty field takes the last condition back.
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Backspace && searchField.text.length === 0 && root.conditions.length > 0) {
+                            root.removeCondition(root.conditions.length - 1);
+                            event.accepted = true;
+                        }
                     }
                     Keys.onReturnPressed: root.leaveRequested()
                     Keys.onEnterPressed: root.leaveRequested()
@@ -540,7 +581,7 @@ Rectangle {
                     QQC.ToolTip.visible: searchField.activeFocus && searchField.text.length === 0
                     QQC.ToolTip.delay: 600
                     QQC.ToolTip.text: I18n.t("topbar.searchQueryHint").arg(AppController.searchFields().join(": · ") + ":")
-                                                        .arg(AppController.shortcutFor("palette.open"))
+                                                        .arg(AppController.shortcutText("palette.open"))
                 }
                 // Clause count is not worth showing; that it *is* a query is.
                 Rectangle {
@@ -576,7 +617,7 @@ Rectangle {
                     width: kbd.implicitWidth + 10; height: 16
                     Text {
                         id: kbd; anchors.centerIn: parent
-                        text: AppController.shortcutFor("search.focus")
+                        text: AppController.shortcuts.length >= 0 ? AppController.shortcutText("search.focus") : ""
                         color: kbdMA.hovered ? Theme.text : Theme.textDim
                         font.family: Theme.fontMono; font.pixelSize: Theme.fsXs
                     }
@@ -613,25 +654,29 @@ Rectangle {
                 }
             }
         }
-
-        PillButton {
-            objectName: "topbar-new-task"
-            text: I18n.t("topbar.newTask")
-            // A quiet button (APP-198): the accent fill was the brightest
-            // spot on every screen. A filled button is only the one that
-            // confirms a dialog.
-            shortcutId: "task.new"
-            onClicked: root.newTaskRequested()
+                    }
+                }
+                Text {
+                    objectName: "query-save-view"
+                    visible: root.conditions.length > 0 || searchField.text.length > 0
+                    text: I18n.t("query.saveView")
+                    color: saveCA.hovered ? Theme.text : Theme.textMuted
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
+                    ClickArea { id: saveCA; label: parent.text; onActivated: root.saveViewRequested() }
+                }
+            }
         }
-        PillButton {
-            objectName: "topbar-right-panel"
-            text: root.rightPanelShown ? "▸" : "◂"
-            shortcutId: "panel.right"
-            onClicked: root.rightPanelToggleRequested()
-            ToolTip.visible: hovered || visualFocus
-            ToolTip.delay: 400
-            ToolTip.text: I18n.t(root.rightPanelShown ? "topbar.rightPanel.hide" : "topbar.rightPanel.show")
-                          + "  " + AppController.shortcutFor("panel.right")
+        // Nothing matches: say so, and the way back, in one line.
+        Text {
+            objectName: "view-header-nothing"
+            visible: root.searchShown && root.resultCount === 0 && root.searchText.length > 0
+            text: I18n.t("query.nothing")
+            color: Theme.textDim
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsSm
+            font.underline: resetCA.hovered
+            ClickArea { id: resetCA; label: parent.text; onActivated: root.clearQuery() }
         }
     }
 }

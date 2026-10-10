@@ -125,13 +125,15 @@ TEST_F(PersistenceTest, QuarantinesCorruptStateWhenNoBackup) {
   EXPECT_FALSE(corruptFiles(dir).isEmpty());
 }
 
-// An absent state.json is a genuine first run: seed the demo, quarantine
-// nothing.
+// An absent state.json is a genuine first run: one empty profile of the
+// person's own (APP-271, the example is a separate profile on request),
+// quarantine nothing.
 TEST_F(PersistenceTest, AbsentStateIsCleanFirstRun) {
   const QString dir = appDataDir();
   AppController app;
   EXPECT_TRUE(corruptFiles(dir).isEmpty());
-  EXPECT_EQ(firstProfileName(app), QStringLiteral("Example"));
+  EXPECT_EQ(firstProfileName(app), QStringLiteral("Personal"));
+  EXPECT_EQ(app.tasks()->rowCount(), 0);
 }
 
 // Tracked time must survive an app restart (HEAP-78 "across sessions").

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "local/TaskLocal.h"
 #include "safety/WaitingOn.h"
 #include "views/SavedView.h"
 
@@ -82,6 +83,11 @@ struct ExternalMeta {
   // The move in unsyncedStatus was never sent — the tracker was disconnected
   // or unreachable — so it goes out after the next successful pull.
   bool pushQueued = false;
+  // Read-only facts the tracker gave beyond an issue's fields, as it gave
+  // them (ExternalTask::details): a merge / pull request's branches, merge
+  // status and the issues it closes (APP-242), a Jira sprint (APP-255).
+  // Replaced on every pull, never edited here, never sent anywhere.
+  QJsonObject details;
 
   bool operator==(const ExternalMeta&) const = default;
 };
@@ -160,6 +166,10 @@ struct Task {
   QVector<TaskLink> links;
   // Files attached to the task, in the order they were attached.
   QVector<Attachment> attachments;
+  // What the developer keeps on top of the task, which no sync path writes
+  // (ADR 0001, APP-244). Read priority and due date through
+  // heap::local::effectivePriority/effectiveDue, never straight from here.
+  TaskLocal local;
   // Keys of the task object this build does not read, carried through a save
   // untouched (PLAT-15), the way Profile::extra is. Only filled for a document
   // at the current schema.
@@ -224,6 +234,11 @@ struct CalEvent {
 // pulled across projects is ambiguous on its own, so it is qualified with the
 // repo it came from ("web#42"). Empty for locally-created tasks.
 QString externalKeyOf(const Task& t);
+
+// A merge request or pull request mirrored from a forge (APP-242): read-only,
+// never written back, its column the request's stage unless the user lets
+// such cards move.
+bool isReviewItem(const Task& t);
 
 // Everything the ticket UI needs about a task's tracker link, as one map:
 // provider, key, url, assignee, author, type, project, milestone, comment count
@@ -502,6 +517,9 @@ class TaskModel : public QAbstractListModel {
     // and why (an I18n key suffix). Runtime only, like the rest of GitInfo.
     PrMoveRole,
     PrMoveReasonRole,
+    // What the card shows of its local layer (APP-237…241): notes / draft /
+    // my tags / my priority or due / "changed in the tracker" / related.
+    LocalRole,
   };
 
   explicit TaskModel(QObject* parent = nullptr) : QAbstractListModel(parent) {

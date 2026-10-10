@@ -36,7 +36,6 @@ TestCase {
         return [
             { tag: "CommandPalette", qml: "CommandPalette { }" },
             { tag: "HotkeysPanel", qml: "HotkeysPanel { }", popover: true },
-            { tag: "TweaksPanel", qml: "TweaksPanel { }", popover: true },
             { tag: "WeeklyRecapDialog", qml: "WeeklyRecapDialog { }" },
             { tag: "SeriesScopeDialog", qml: "SeriesScopeDialog { }" },
             { tag: "SavedViewNameDialog", qml: "SavedViewNameDialog { }" },

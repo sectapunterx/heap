@@ -4,6 +4,8 @@
 #include "integrations/IntegrationTypes.h"
 
 #include <QByteArray>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QString>
 #include <QVector>
 
@@ -19,7 +21,22 @@ namespace heap::integrations {
 // ExternalTasks. `baseUrl` builds each issue's browse URL. Descriptions arrive
 // as ADF (Atlassian Document Format) JSON and are converted to markdown.
 // Pure, no network — unit-tested with canned JSON.
-QVector<ExternalTask> parseJiraIssues(const QByteArray& json, const QString& baseUrl);
+// `sprintField` is the instance's sprint custom field ("customfield_10020"),
+// empty when the site has none (APP-255): the issue's current sprint then goes
+// to details.sprint.
+QVector<ExternalTask> parseJiraIssues(const QByteArray& json, const QString& baseUrl, const QString& sprintField = QString());
+
+// The sprint custom field of a site, read from a /field response: the one
+// whose schema.custom is com.pyxis.greenhopper.jira:gh-sprint. Empty when the
+// site has no Jira Software (APP-255). Pure.
+QString parseJiraSprintField(const QByteArray& fieldsJson);
+
+// The sprint an issue is in now, from its sprint field's value (APP-255):
+// {name, state, start, end}, the dates as ISO strings. The active one when
+// there is one, else the nearest future one; a closed sprint is never it.
+// Takes Cloud's objects and Server's "…Sprint@1a2b[id=1,state=ACTIVE,…]"
+// strings. Empty when the issue is in no open sprint. Pure.
+QJsonObject jiraCurrentSprint(const QJsonValue& sprintFieldValue);
 
 // Convert an Atlassian Document Format value (string or ADF object) to
 // markdown: headings, lists, task lists, code blocks, quotes, tables and links
@@ -205,6 +222,10 @@ class JiraProvider : public IntegrationProvider {
   // it took to get there.
   QVector<ExternalTask> m_pulled;
   int m_pullPage = 0;
+  // The sprint custom field (APP-255), looked up once per provider; a lookup
+  // that fails leaves it empty and the pull goes on without sprints.
+  QString m_sprintField;
+  bool m_sprintFieldKnown = false;
   bool m_pulling = false;
   bool m_usingGateway = false;
   bool m_gatewayTried = false;

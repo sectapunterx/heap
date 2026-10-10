@@ -5,6 +5,14 @@
 native artifacts for Windows, Linux and macOS and attaches them to a GitHub
 Release.
 
+
+> **heap → lowkey (0.8.0, APP-280).** Release files are `lowkey-<tag>-…`. The
+> same files are also published as `heap-<tag>-…`, because a 0.7.x install's
+> updater looks for those names; it then installs lowkey over heap (same
+> installer AppId) and restarts `heap.exe`, which in a lowkey install is a small
+> launcher that starts `lowkey.exe`. Stop publishing the `heap-` copies once 0.7
+> is no longer worth carrying.
+
 ## Triggering a release
 
 The version lives in **one** place — `project(heap VERSION X.Y.Z …)` in
@@ -55,9 +63,9 @@ checksum is shown to the user. A mismatch deletes the file.
 
 | Copy of heap | Detected by | Package | How it is replaced |
 |---|---|---|---|
-| Windows installer | `unins000.exe` beside `heap.exe` | `…-windows-setup.exe` | `heap-updater.exe` runs it `/VERYSILENT` with `/ALLUSERS` or `/CURRENTUSER`, whichever the previous install used (same AppId → in-place upgrade; UAC only for an all-users install) |
-| Windows portable | `heap-portable.txt` beside `heap.exe` | `…-windows-portable.zip` | `heap-updater.exe` unpacks it with Windows' `tar.exe` and swaps the shipped entries, rolling back on any failure; other files in the folder stay |
-| macOS | running from `*.app/Contents/MacOS` | `…-macos.dmg` | heap mounts the dmg, `ditto`s `heap.app` beside itself and swaps the bundles |
+| Windows installer | `unins000.exe` beside `lowkey.exe` | `…-windows-setup.exe` | `lowkey-updater.exe` runs it `/VERYSILENT` with `/ALLUSERS` or `/CURRENTUSER`, whichever the previous install used (same AppId → in-place upgrade; UAC only for an all-users install) |
+| Windows portable | `lowkey-portable.txt` (or 0.7's `heap-portable.txt`) beside `lowkey.exe` | `…-windows-portable.zip` | `lowkey-updater.exe` unpacks it with Windows' `tar.exe` and swaps the shipped entries, rolling back on any failure; other files in the folder stay |
+| macOS | running from `*.app/Contents/MacOS` | `…-macos.dmg` | lowkey mounts the dmg, `ditto`s `lowkey.app` beside itself and swaps the bundles |
 | Linux | `$APPIMAGE` set | `…-linux-x86_64.AppImage` | heap writes it beside the old one and `rename(2)`s it over |
 
 Anything else (a build folder, Scoop, Flatpak/Snap, a folder heap cannot write)
@@ -91,7 +99,7 @@ bypassable *"unidentified developer"* prompt. Open it either way:
 - **Right-click → *Open*** (then *Open* again in the dialog), or
 - strip the download quarantine flag:
   ```bash
-  xattr -dr com.apple.quarantine /Applications/heap.app
+  xattr -dr com.apple.quarantine /Applications/lowkey.app
   ```
 
 To codesign with a *Developer ID Application* certificate, notarize and staple
@@ -136,7 +144,7 @@ flow: CI uploads the unsigned artifact as a GitHub workflow artifact,
 [`signpath/github-action-submit-signing-request`](https://docs.signpath.io/trusted-build-systems/github)
 submits a signing request, SignPath verifies the build origin, signs the
 configured PE files (with an RFC-3161 timestamp, so signatures outlive the cert),
-and returns the signed files. `heap.exe` + the bundled Qt DLLs are signed before
+and returns the signed files. `lowkey.exe` + the bundled Qt DLLs are signed before
 packaging, then the setup `.exe` is signed after Inno builds it.
 
 Configure it after the SignPath Foundation application is approved:

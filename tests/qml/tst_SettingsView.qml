@@ -399,15 +399,15 @@ TestCase {
     // moves through the list and opens what it lands on.
     function test_tab_from_the_nav_enters_the_section_body() {
         const sv = make();
-        sv.activeSection = "profile";
-        const profileRow = findChild(sv, "settings-nav-profile");
-        const appearanceRow = findChild(sv, "settings-nav-appearance");
+        sv.activeSection = "appearance";
+        const profileRow = findChild(sv, "settings-nav-appearance");
+        const appearanceRow = findChild(sv, "settings-nav-calendar");
         verify(profileRow !== null && appearanceRow !== null);
         verify(profileRow.activeFocusOnTab);
         verify(!appearanceRow.activeFocusOnTab, "every nav row is a Tab stop");
         profileRow.forceActiveFocus(Qt.TabFocusReason);
         keyClick(Qt.Key_Tab);
-        compare(sv.activeSection, "profile", "Tab opened another section");
+        compare(sv.activeSection, "appearance", "Tab opened another section");
         const f = profileRow.Window.window.activeFocusItem;
         verify(f !== null);
         verify(String(f.objectName).indexOf("settings-nav-") !== 0, "Tab stayed in the nav: " + f.objectName);
@@ -415,7 +415,7 @@ TestCase {
         profileRow.forceActiveFocus(Qt.TabFocusReason);
         keyClick(Qt.Key_Down);
         verify(appearanceRow.activeFocus);
-        compare(sv.activeSection, "appearance");
+        compare(sv.activeSection, "calendar");
         verify(appearanceRow.activeFocusOnTab);
         verify(!profileRow.activeFocusOnTab);
 
@@ -424,7 +424,7 @@ TestCase {
         sv.searchText = target.title;
         verify(sv._navTabIndex >= 0, "no nav row is a Tab stop under a search");
         verify(sv._sectionMatches(sv.sections[sv._navTabIndex]));
-        verify(sv.sections[sv._navTabIndex].id !== "appearance");
+        verify(sv.sections[sv._navTabIndex].id !== "calendar");
         sv.searchText = "";
     }
 
@@ -531,7 +531,7 @@ TestCase {
         const savedLang = AppController.language;
         AppController.language = "ru";
         const sv = make();
-        sv.searchText = "Reduced motion";
+        sv.searchText = "Animations";
         const found = sv.searchMatches.map((m) => m.key);
         const appearanceHit = sv._sectionMatches(sv.sections.filter((s) => s.id === "appearance")[0]);
         const ruTitle = I18n.t("settings.appearance.reducedMotion");
@@ -539,7 +539,7 @@ TestCase {
         AppController.language = savedLang;
         verify(found.indexOf("settings.appearance.reducedMotion") >= 0, "English query found nothing in ru: " + found);
         verify(appearanceHit);
-        verify(ruTitle !== "Reduced motion", "the UI was not in Russian");
+        verify(ruTitle !== "Animations", "the UI was not in Russian");
     }
 
     // Nothing matches: the nav says so; Esc clears and every section is back.

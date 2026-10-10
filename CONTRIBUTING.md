@@ -73,7 +73,7 @@ When a budget fails, find what got slower first. Change a budget only on purpose
 deliberately larger fixture): re-measure locally in a Release build, take the middle of three runs, update `localMs`
 and `budgetMs` together, and say why in the commit.
 
-For the UI, `heap --perf-log` (or `HEAP_PERF_LOG=1`) writes `perf:` lines to the log: time from `main()` to the QML
+For the UI, `lowkey --perf-log` (or `HEAP_PERF_LOG=1`) writes `perf:` lines to the log: time from `main()` to the QML
 being loaded and to the main window's first frame, and from the capture hotkey (or `open()`) to the first frame
 showing the capture popup. It only logs.
 

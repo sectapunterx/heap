@@ -148,8 +148,22 @@ TEST(JsonMerger, ArrayElementBothEditNoTimestampConflict) {
   const MergeResult m = JsonMerger::merge(b, l, r);
   EXPECT_FALSE(m.ok);
   ASSERT_EQ(m.conflicts.size(), 1);
-  EXPECT_EQ(m.conflicts.at(0).path, QString("/tasks/T1"));
+  // Without a clock the element merges field by field (APP-244), so the
+  // conflict is the one field both sides changed.
+  EXPECT_EQ(m.conflicts.at(0).path, QString("/tasks/T1/t"));
   EXPECT_EQ(m.merged.value("tasks").toArray().at(0).toObject().value("t").toString(), QString("local"));
+}
+
+// Two devices editing different fields of one element both land.
+TEST(JsonMerger, ArrayElementBothEditDifferentFieldsMerges) {
+  const QJsonObject b = O(R"({"tasks":[{"id":"T1","t":"a","n":"x"}]})");
+  const QJsonObject l = O(R"({"tasks":[{"id":"T1","t":"a","n":"my notes"}]})");
+  const QJsonObject r = O(R"({"tasks":[{"id":"T1","t":"renamed","n":"x"}]})");
+  const MergeResult m = JsonMerger::merge(b, l, r);
+  EXPECT_TRUE(m.ok);
+  const QJsonObject t = m.merged.value("tasks").toArray().at(0).toObject();
+  EXPECT_EQ(t.value("t").toString(), QString("renamed"));
+  EXPECT_EQ(t.value("n").toString(), QString("my notes"));
 }
 
 TEST(JsonMerger, ArrayDeleteVsUnchangedDrops) {

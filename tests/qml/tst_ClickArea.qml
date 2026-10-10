@@ -64,7 +64,7 @@ TestCase {
     }
 
     function test_tooltip_carries_the_shortcut() {
-        const keys = AppController.shortcutFor("undo");
+        const keys = AppController.shortcutText("undo");
         verify(keys.length > 0);
         compare(area._tipText, "Delete column  " + keys);
     }

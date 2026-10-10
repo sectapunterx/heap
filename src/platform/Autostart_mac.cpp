@@ -11,9 +11,9 @@ namespace heap::platform::autostart::detail {
 namespace {
 
 // ~/Library/LaunchAgents/<label>.plist, or the same path under the test root.
-QString agentPath(const QString& root) {
+QString agentPath(const QString& root, const char* label = kMacLabel) {
   const QString home = root.isEmpty() ? QDir::homePath() : root;
-  return home + QStringLiteral("/Library/LaunchAgents/") + QLatin1String(kMacLabel) + QStringLiteral(".plist");
+  return home + QStringLiteral("/Library/LaunchAgents/") + QLatin1String(label) + QStringLiteral(".plist");
 }
 
 }  // namespace
@@ -28,6 +28,7 @@ Entry readSystem(const QString& root) {
 
 bool writeSystem(const QString& root, bool enabled, bool minimized) {
   const QString path = agentPath(root);
+  QFile::remove(agentPath(root, kLegacyMacLabel));  // heap 0.7's agent: one start, never two
   if(!enabled) {
     return !QFile::exists(path) || QFile::remove(path);
   }
@@ -39,6 +40,18 @@ bool writeSystem(const QString& root, bool enabled, bool minimized) {
   // The binary inside the bundle: launchd runs it directly.
   f.write(macLaunchAgentPlist(QLatin1String(kMacLabel), QCoreApplication::applicationFilePath(), minimized).toUtf8());
   return f.commit();
+}
+
+Entry readLegacySystem(const QString& root) {
+  QFile f(agentPath(root, kLegacyMacLabel));
+  if(!f.open(QIODevice::ReadOnly)) {
+    return {};
+  }
+  return parseMacLaunchAgent(QString::fromUtf8(f.readAll()));
+}
+
+void removeLegacySystem(const QString& root) {
+  QFile::remove(agentPath(root, kLegacyMacLabel));
 }
 
 }  // namespace heap::platform::autostart::detail

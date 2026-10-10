@@ -191,7 +191,13 @@ class SavedViewsTest : public ::testing::Test {
 };
 
 TEST_F(SavedViewsTest, AFreshInstallStartsWithTheStarterViews) {
-  EXPECT_EQ(names(), (QStringList{QStringLiteral("Urgent"), QStringLiteral("Due this week"), QStringLiteral("Overdue")}));
+  // The old sidebar's Focus pair first (APP-258), then the three starters.
+  EXPECT_EQ(names(),
+            (QStringList{QStringLiteral("Blocked"),
+                         QStringLiteral("In review"),
+                         QStringLiteral("Urgent"),
+                         QStringLiteral("Due this week"),
+                         QStringLiteral("Overdue")}));
   for(const QVariant& v : app_->savedViews()) {
     EXPECT_TRUE(v.toMap().value("problems").toStringList().isEmpty()) << v.toMap().value("query").toString().toStdString();
   }
@@ -200,7 +206,7 @@ TEST_F(SavedViewsTest, AFreshInstallStartsWithTheStarterViews) {
 TEST_F(SavedViewsTest, ANewProfileGetsStartersButDeletedOnesNeverComeBack) {
   const QString work = app_->createProfile(QStringLiteral("Work"));
   ASSERT_FALSE(work.isEmpty());
-  EXPECT_EQ(app_->savedViews().size(), 3);
+  EXPECT_EQ(app_->savedViews().size(), 5);
   clearViews();
   EXPECT_TRUE(app_->savedViews().isEmpty());
   app_->flushSave();
@@ -214,7 +220,7 @@ TEST_F(SavedViewsTest, ANewProfileGetsStartersButDeletedOnesNeverComeBack) {
   app_->setActiveProfileId(work);
   EXPECT_TRUE(app_->savedViews().isEmpty()) << "starter views are seeded once, at creation";
   app_->setActiveProfileId(other);
-  EXPECT_EQ(app_->savedViews().size(), 3);
+  EXPECT_EQ(app_->savedViews().size(), 5);
 }
 
 TEST_F(SavedViewsTest, ViewsBelongToTheirProfileAndSurviveARestart) {
@@ -425,11 +431,16 @@ TEST_F(SavedViewsTest, AQueryNamingADeletedColumnReportsTheProblem) {
   EXPECT_EQ(app_->searchProblems(QStringLiteral("status:review")), problemsOf(id));
 }
 
+// APP-281 A4: My views are Ctrl+4…9 after the three sections, and g 1…9.
 TEST_F(SavedViewsTest, AltDigitsAreInTheCatalogAndFree) {
   for(int n = 1; n <= 9; ++n) {
     const QString id = QStringLiteral("savedView.%1").arg(n);
-    EXPECT_EQ(app_->shortcutFor(id), QStringLiteral("Alt+%1").arg(n));
-    EXPECT_EQ(app_->findShortcutConflict(id, QStringLiteral("Alt+%1").arg(n)), QString()) << "Alt+" << n << " is taken";
+    const QString ctrl = n <= 6 ? QStringLiteral("Ctrl+%1").arg(n + 3) : QString();
+    EXPECT_EQ(app_->shortcutFor(id), ctrl);
+    EXPECT_EQ(app_->shortcutFor(id + QStringLiteral(".alt")), QStringLiteral("G, %1").arg(n));
+    if(!ctrl.isEmpty()) {
+      EXPECT_EQ(app_->findShortcutConflict(id, ctrl), QString()) << ctrl.toStdString() << " is taken";
+    }
     EXPECT_EQ(app_->shortcutLabel(id), QStringLiteral("Saved view %1").arg(n));
     EXPECT_FALSE(app_->shortcutDescription(id).startsWith(QStringLiteral("shortcut."))) << "untranslated description";
   }
