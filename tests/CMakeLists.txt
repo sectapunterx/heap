@@ -671,7 +671,14 @@ target_link_libraries(heap_qml_tests PRIVATE
 # CI's wall time. HEAP_QML_TEST_FILE gives each its own test-mode profile (see
 # quick_test_main.cpp). The results also go to a file: on Windows the binary's
 # stdout never reaches ctest, so a failure there said only "Failed";
-# ctest_with_retry.sh prints the failing cases from qml-results/.
+# ctest_with_retry.sh prints the failing cases from qml-results/. The .xml
+# beside it has each test function's duration.
+#
+# QT_QUICK_BACKEND=software: on the Linux runner Qt Quick otherwise rendered
+# through Mesa's llvmpipe, whose own threads fought the parallel suites for
+# the cores — the settings suites took 60–300 s each there against 9–38 s
+# on Windows. No QML here uses shaders, so the software renderer draws all
+# of it, and draws it the same way on every OS.
 file(GLOB HEAP_QML_TEST_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/qml/tst_*.qml)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/qml-results)
 foreach(qml_test IN LISTS HEAP_QML_TEST_FILES)
@@ -679,9 +686,10 @@ foreach(qml_test IN LISTS HEAP_QML_TEST_FILES)
   string(REGEX REPLACE "^tst_" "" qml_name ${qml_name})
   add_test(NAME heap_qml_tests.${qml_name}
           COMMAND heap_qml_tests -input ${qml_test}
-                  -o ${CMAKE_CURRENT_BINARY_DIR}/qml-results/${qml_name}.txt,txt -o -,txt)
+                  -o ${CMAKE_CURRENT_BINARY_DIR}/qml-results/${qml_name}.txt,txt
+                  -o ${CMAKE_CURRENT_BINARY_DIR}/qml-results/${qml_name}.xml,xml -o -,txt)
   set_tests_properties(heap_qml_tests.${qml_name} PROPERTIES
-          ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_CONTROLS_STYLE=Basic;HEAP_QML_TEST_FILE=${qml_name}"
+          ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_QUICK_CONTROLS_STYLE=Basic;HEAP_QML_TEST_FILE=${qml_name}"
           TIMEOUT 300)
 endforeach()
 
