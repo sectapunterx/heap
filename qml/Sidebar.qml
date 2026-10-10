@@ -252,7 +252,8 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 text: I18n.t("sidebar.newTask")
                 elide: Text.ElideRight
-                color: Theme.textMuted
+                // A prompt, not a label (H2-Today: #8f99a6).
+                color: Theme.textDim
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsMd
             }

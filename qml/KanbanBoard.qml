@@ -150,9 +150,10 @@ Item {
     //
     // heap 2 (APP-262): columns share the width like `flex: 1 1 150px` — at
     // least 150, growing to fill the board — with 16 px between them, so six
-    // columns and a folded Done fit a 1440 px window. Past that the board
-    // scrolls sideways.
-    readonly property int minColumnWidth: Theme.px(150)
+    // columns and a folded Done fit a 1440 px window. Down to 130 so they
+    // still fit a ~1300 px one (a clipped Done column read as broken); past
+    // that the board scrolls sideways.
+    readonly property int minColumnWidth: Theme.px(130)
     readonly property int maxColumnWidth: Theme.px(360)
     readonly property int foldedWidth: 44
     readonly property int doneFoldedWidth: Theme.px(88)
