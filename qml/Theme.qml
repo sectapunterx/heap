@@ -28,6 +28,14 @@ QtObject {
     // Convenience reads — all view'ы / делегаты могут идти через Theme.
     readonly property string weekStart:    _calendar.weekStart    || "mon"
     readonly property string timeFormat:   _calendar.timeFormat   || "24h"
+    // "system" (Settings → Language, DG-100): the clock of the system's locale.
+    readonly property bool twelveHour: timeFormat === "12h"
+        || (timeFormat === "system" && /a/i.test(Qt.locale().timeFormat(Locale.ShortFormat)))
+    // Settings → Git "working on …" line over the view (DG-099); off by default
+    // (sheet N/X-Oth-Knowledge "выключена по умолчанию", R3-095). Data from
+    // before 0.8.1 had it on and keeps it: the load writes it in once
+    // (AppController::migrateGitWorkingLine, Review 2).
+    readonly property bool gitWorkingLine: !!(_settings && _settings.git && _settings.git.workingOnLine === true)
     // An explicit undefined check, not `??`: qmlcachegen 6.9.1 (what CI
     // builds with) segfaults AOT-compiling Main.qml when a singleton
     // property it resolves uses the nullish operator. Same shape as
@@ -191,6 +199,15 @@ QtObject {
 
     // ── Alerts ────────────────────────────────────────────────────────
     readonly property color danger:      _c.danger
+    // The quiet style's destructive menu row (R3-102): the danger hue
+    // pulled toward the text colour, a muted salmon rather than a red.
+    readonly property color dangerMuted: Qt.tint(_c.danger, withAlpha(_c.text, 0.35))
+    // A destructive menu row's label: the danger colour in bold; quiet
+    // softens it toward the text (X-Menus-*: #d8a09c beside #ef6b63, R3-045),
+    // held at AA 4.5:1 on the menu and its highlighted row in every theme.
+    readonly property color dangerInk: Style.urgency ? danger
+        : Presets.ensureContrast(String(Qt.rgba((danger.r + text.r) * 0.46, (danger.g + text.g) * 0.46, (danger.b + text.b) * 0.46, 1)),
+                                 [String(popupFill), String(rowHighlight)], 4.5)
     readonly property color warning:     _c.warning
     readonly property color success:     _c.success
     readonly property color info:        _c.info
@@ -257,13 +274,18 @@ QtObject {
     })
     readonly property var mdPalette: ({
         "text": text, "dim": textDim, "link": mdLink, "code": mdCode,
-        "codeBackground": mdCodeBg, "highlightBackground": mdHighlight,
-        "mention": mdMention, "ticket": mdTicket, "tag": mdTag, "math": mdMath
+        // Quiet draws a [[task]] as underlined text, not a filled pill, and
+        // an external link plain (Q-Knowledge, R3-085); the pill is the only
+        // use of codeBackground while inline code has its own face.
+        "codeBackground": Style.fills ? String(mdCodeBg) : "", "codeFont": fontMono, "codeSize": String(fsMd), "highlightBackground": mdHighlight,
+        "mention": mdMention, "ticket": mdTicket, "tag": mdTag, "math": mdMath,
+        "taskDecoration": Style.fills ? "" : "underline", "linkDecoration": Style.fills ? "" : "none"
     })
 
     // What every colour picker offers for columns, labels, people and
     // profiles (ThemePresets.SWATCHES).
     readonly property var swatches: Presets.SWATCHES
+    readonly property var profileSwatches: Presets.PROFILE_SWATCHES
 
     // Token by key, for the theme editor and alert kinds.
     function token(key) { return _c[key]; }
@@ -340,6 +362,10 @@ QtObject {
     // ── heap 2 components (APP-259) ──────────────────────────────────
     // A chip is a fixed height, line-height 1 and its content centred, so
     // chips line up at every scale and density; a filter condition is smaller.
+    // A window narrower than this (logical px, the window's own width) is
+    // "small" (X-Oth-Small, DG-008): the sidebar folds to its icons and
+    // Today's side column goes under the day. 1280 folds, 1366 does not.
+    readonly property int compactWindowWidth: 1360
     readonly property int chipH:       px(28)
     readonly property int chipHSmall:  px(24)
     readonly property int chipMaxW:    px(240)
@@ -352,11 +378,35 @@ QtObject {
     // words carry the meaning, colour does not shout.
     readonly property color signalNow:    Style.urgency ? warning : textMuted   // now, a running timer, soon
     readonly property color signalUrgent: Style.urgency ? danger : text         // P0, due today, blocked
+    // A destructive text link ("Удалить…"): red in bold, a muted rose in quiet (R3-065).
+    readonly property color dangerLink:   Style.urgency ? danger : Presets.mix(String(danger), String(textMuted), 0.45)
     // Meetings: a calendar icon always; bold also fills the block with a bar.
     readonly property color meeting:      mStandup
     readonly property color meetingFill:  Style.chipFill ? (_c.meetingBg !== undefined ? _c.meetingBg : withAlpha(mStandup, 0.16))
                                                          : surfaceCard
     readonly property color nowLineColor: Style.urgency ? nowLine : borderStrong
+    // Selected segments, switches and buttons (DG-005, sheets H2/Q-Settings,
+    // X/N-Dlg-Small). Nothing is filled lavender: the bold style picks with a
+    // neutral fill and a heavier weight, the quiet one with a thin outline.
+    // Buttons are outlined in both; the primary one has the brighter line.
+    readonly property color segmentTrack:        Style.fills ? panel : "transparent"
+    readonly property color segmentSelected:     Style.fills ? Presets.mix(String(panel3), String(borderStrong), 0.6) : "transparent"
+    readonly property color segmentSelectedLine: Style.fills ? "transparent" : Presets.mix(String(borderStrong), String(textDim), 0.15)
+    readonly property color segmentText:         Style.fills ? textMuted : textDim
+    readonly property color segmentSelectedText: text
+    readonly property int   segmentSelectedWeight: Style.fills ? fwHeading : fwBody
+    // The Tasks page's margins (H2-Board / Q-Board): 22 / 28 px bold, the
+    // quiet page sits further in, 40 / 48 px. Header, board and list share them.
+    readonly property int   pagePadX:   Style.fills ? px(28) : px(48)
+    readonly property int   pagePadTop: Style.fills ? px(22) : px(40)
+    readonly property color switchOn:      Presets.mix(String(borderStrong), String(textDim), 0.15)
+    readonly property color switchOffLine: Presets.mix(String(border), String(borderStrong), 0.6)
+    readonly property color switchKnobOn:  text
+    readonly property color switchKnobOff: Presets.mix(String(textDim), String(bg), 0.2)
+    readonly property color buttonLine:        Presets.mix(String(border), String(borderStrong), 0.5)
+    readonly property color buttonLinePrimary: Presets.mix(String(borderStrong), String(textDim), 0.35)
+    readonly property color buttonText:        textMuted
+    readonly property color buttonTextPrimary: text
     // The keyboard cursor and the active item: a short lavender bar under the
     // start of the text (the lowkey underline motif, APP-280).
     readonly property int cursorBarW: px(18)
@@ -425,6 +475,19 @@ QtObject {
     readonly property int fsLg:  typeStep(1)   // dialog and section titles
     readonly property int fsXl:  typeStep(3)   // page headings
     readonly property int fs2xl: typeStep(5)   // display (welcome, empty hero)
+    // The title of a screen (R2-001/002): the sheets draw it off the scale.
+    // Bold: 24px on a section (H2-List/Board/Calendar/Settings), 30px for the
+    // day on Today (H2-Today); quiet: 26px for both (Q-*, H2-Today-Calm).
+    readonly property int fsScreenTitle: Style.fills ? px(24) : px(26)
+    readonly property int fsDayTitle:    Style.fills ? px(30) : px(26)
+    // The day in a small window (N/X-Oth-Small, R4-010): 22px/600 in both.
+    readonly property int fsDayTitleSmall: px(22)
+    // Bold titles are 600, quiet ones 500 (the same sheets).
+    readonly property int fwScreenTitle: Style.fills ? Font.DemiBold : Font.Medium
+    // A note in Knowledge (H2/Q-Knowledge, R3-084): the title 30 / 28,
+    // a "##" section 18 / 16, at the screen title's weight.
+    readonly property int fsNoteTitle:   Style.fills ? px(30) : px(28)
+    readonly property int fsNoteHeading: Style.fills ? px(18) : px(16)
 
     // ── Accessibility / motion ───────────────────────────────────────
     readonly property bool reducedMotion: !!_appearance.reducedMotion
@@ -458,6 +521,8 @@ QtObject {
     // three; it does not run at all with "Reduce motion" on.
     readonly property int durPulse:  reducedMotion ? 0 : 600
     readonly property int easePulse: Easing.InOutQuad
+    // The sync mark turning while a pull runs: slowly (X/N-Ntf-Toasts).
+    readonly property int durSpin: reducedMotion ? 0 : 2400
 
     // ── Typography — Brand defaults, overrideable via settings ───────
     // Golos Text and JetBrains Mono ship inside the app (platform/BundledFonts),
@@ -492,6 +557,10 @@ QtObject {
     readonly property int fwBody:    Font.Normal    // descriptions, meta, inputs
     readonly property int fwTitle:   Font.Medium    // card titles, the active item, labels
     readonly property int fwHeading: Font.DemiBold  // only the title of a screen or a dialog
+    // A task's title on a card or a list row (R2-005/008): 600 in bold, where
+    // the title has to stand above the detail line (H2-Board, H2-List); quiet
+    // keeps the medium weight of its sheets.
+    readonly property int fwTaskTitle: Style.fills ? Font.DemiBold : Font.Medium
 
     function withAlpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a); }
 
@@ -502,7 +571,7 @@ QtObject {
         const hh = Math.floor(h);
         const mm = Math.round((h - hh) * 60);
         const mmS = String(mm).padStart(2, "0");
-        if (timeFormat === "12h") {
+        if (twelveHour) {
             // 24:00 (midnight at the end of a day) is 12:00am, not noon.
             const h24 = hh % 24;
             const h12 = ((h24 + 11) % 12) + 1;
@@ -530,7 +599,8 @@ QtObject {
     }
     // heap 2 (APP-259): only P0 and P1 say anything; P2 and P3 are not shown.
     // In the quiet style the priority is a word in the text colour.
-    function priorityShown(p) { return p === "P0" || p === "P1"; }
+    // H2-Board / H2-List mark P0 and P1; Q-Board / Q-List only P0 (R3-030).
+    function priorityShown(p) { return p === "P0" || (p === "P1" && !Style.quiet); }
     function priorityInk(p) {
         if (!Style.urgency) return textMuted;
         return p === "P0" ? danger : (p === "P1" ? warning : textMuted);

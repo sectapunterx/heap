@@ -43,7 +43,7 @@ TestCase {
         const s = findChild(b, "board-empty-state");
         verify(s !== null);
         verify(s.title.length > 0 && s.line.length > 0, "the whole-board state says what to press");
-        verify(s.line.indexOf(AppController.shortcutFor("task.new")) >= 0 || AppController.tasks.rowCount() > 0);
+        verify(s.line.indexOf(AppController.shortcutText("task.new")) >= 0 || AppController.tasks.rowCount() > 0);
     }
 
     // EYE-4: a board with no cards says so once. Every column used to add
@@ -87,8 +87,15 @@ TestCase {
             tryVerify(() => !s.visible, 2000, "the board has a task but says it is empty");
             b.searchText = tc.nothing;
             verifyState(s, "board search");
-            compare(s.title, I18n.t("view.empty.noMatch.title"));
-            compare(s.line, I18n.t("view.empty.noMatch.hint"));
+            // DG-160: one plain line naming the filter, and the way back.
+            compare(s.title, I18n.t("view.empty.noMatchFor").arg(tc.nothing));
+            compare(s.line, I18n.t("view.empty.resetFilter"));
+            verify(b.nothingFound);
+            verify(!findChild(b, "board-empty"), "no card behind the empty state (R3-131)");
+            const spy = createTemporaryQmlObject('import QtTest; SignalSpy { signalName: "resetFilterRequested" }', b);
+            spy.target = b;
+            s.lineActivated();
+            compare(spy.count, 1);
             const cols = [];
             (function walk(it) {
                 if (!it) return;
@@ -112,23 +119,19 @@ TestCase {
         }
     }
 
-    function test_timeline_search_finds_nothing() {
-        const v = make('import TodoCpp; TimelineView { anchors.fill: parent }');
-        v.searchText = tc.nothing;
-        const s = findChild(v, "timeline-empty");
-        verifyState(s, "timeline");
-        compare(s.title, I18n.t("timeline.empty.title"));
-    }
-
     function test_week() {
         AppController.selectedDate = new Date(2099, 5, 15);
         const v = make('import TodoCpp; WeekView { anchors.fill: parent }');
         const s = findChild(v, "week-empty");
         verifyState(s, "week");
         compare(s.title, I18n.t("week.empty.title"));
-        verify(s.line.indexOf(AppController.shortcutFor("task.new")) >= 0, s.line);
+        // "S на задаче — поставить на день" (R3-133).
+        verify(s.line.indexOf(AppController.shortcutText("task.schedule")) >= 0, s.line);
         v.searchText = tc.nothing;
-        tryCompare(s, "title", I18n.t("view.empty.noMatch.title"));
+        // "Ничего под «…»" + "сбросить фильтр · Esc", as on the board (R4-100).
+        tryCompare(s, "line", I18n.t("view.empty.resetFilter"));
+        verify(s.lineLink);
+        verify(s.title !== I18n.t("week.empty.title"), s.title);
     }
 
     function test_month() {
@@ -141,34 +144,15 @@ TestCase {
         verifyState(state, "month");
         compare(state.title, I18n.t("month.empty.title"));
         v.searchText = tc.nothing;
-        tryCompare(state, "title", I18n.t("view.empty.noMatch.title"));
-    }
-
-    function test_archive_search_finds_nothing() {
-        const v = make('import TodoCpp; ArchiveView { anchors.fill: parent }');
-        v.searchText = tc.nothing;
-        const s = findChild(v, "archive-empty");
-        verifyState(s, "archive");
-        compare(s.title, I18n.t("view.empty.noMatch.title"));
+        tryCompare(state, "line", I18n.t("view.empty.resetFilter"));
+        verify(state.lineLink);
+        verify(state.title !== I18n.t("month.empty.title"), state.title);
     }
 
     function test_notes_list() {
         const p = make('import TodoCpp; NotesListPane { width: 240; height: 600 }');
         p.filter = tc.nothing;
         verifyState(findChild(p, "notes-empty"), "notes");
-    }
-
-    function test_docs() {
-        const dv = make('import TodoCpp; DocsView { anchors.fill: parent }');
-        dv.sections = [];
-        dv.snippets = [];
-        dv.contacts = [];
-        const s = findChild(dv, "docs-empty");
-        verifyState(s, "docs");
-        compare(s.title, I18n.t("docs.empty"));
-        dv.searchText = tc.nothing;
-        tryVerify(() => !s.visible);
-        verify(findChild(dv, "docs-no-matches").visible, "a docs search that finds nothing says so");
     }
 
     function test_docs_page_pane() {

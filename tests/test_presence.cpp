@@ -357,6 +357,28 @@ TEST(ReminderProfiles, AnEditFromAnotherProfileIsNotSavedThere) {
   EXPECT_EQ(c.taskById(QStringLiteral("ONLYA-1")).value(QStringLiteral("title")).toString(), QStringLiteral("edited"));
 }
 
+// ── The git "working on" line default (Review 2, R3-095) ──
+
+// Data from before 0.8.1 keeps the line on: an unset switch is written as on.
+TEST(GitWorkingLine, MigrationTurnsAnUnsetSwitchOn) {
+  QJsonObject app;
+  ASSERT_TRUE(AppController::migrateGitWorkingLine(app));
+  EXPECT_TRUE(app.value(QStringLiteral("git")).toObject().value(QStringLiteral("workingOnLine")).toBool());
+}
+
+// A choice the person made stays, and the other git settings survive.
+TEST(GitWorkingLine, MigrationKeepsAnExplicitChoice) {
+  QJsonObject app{{QStringLiteral("git"), QJsonObject{{QStringLiteral("workingOnLine"), false}}}};
+  EXPECT_FALSE(AppController::migrateGitWorkingLine(app));
+  EXPECT_FALSE(app.value(QStringLiteral("git")).toObject().value(QStringLiteral("workingOnLine")).toBool(true));
+
+  QJsonObject other{{QStringLiteral("git"), QJsonObject{{QStringLiteral("linkBranches"), false}}}};
+  ASSERT_TRUE(AppController::migrateGitWorkingLine(other));
+  const QJsonObject g = other.value(QStringLiteral("git")).toObject();
+  EXPECT_TRUE(g.value(QStringLiteral("workingOnLine")).toBool());
+  EXPECT_FALSE(g.value(QStringLiteral("linkBranches")).toBool(true));
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);

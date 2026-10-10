@@ -278,9 +278,10 @@ kbd { min-width: 44px; height: 44px; padding: 0 12px; display: grid; place-items
 .term-out { color: var(--muted); }
 .term-caret { display: inline-block; width: 7px; height: 1.1em; vertical-align: -0.2em; margin-left: 2px; background: var(--muted); animation: caret 1s steps(1) infinite; }
 @keyframes caret { 50% { opacity: 0; } }
-.gcard { position: relative; padding: 16px 18px 18px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); transition: border-color 0.5s; }
+.gcard { position: relative; padding: 16px 18px 18px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); transition: border-color 0.5s, background-color 0.5s, box-shadow 0.5s; }
 .gcard::after { content: ""; position: absolute; left: 18px; bottom: 8px; width: 32px; height: 2px; border-radius: 2px; background: var(--accent); transform: scaleX(0); transform-origin: left; transition: transform 0.6s var(--ease); }
-.gcard.on { border-color: var(--line2); }
+/* The branch's task, marked once the switch lands (R3-151): an accent edge and halo, a lifted ground, the cursor bar under it. */
+.gcard.on { border-color: color-mix(in srgb, var(--accent) 60%, var(--line2)); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
 .gcard.on::after { transform: scaleX(1); }
 .gcard-title { color: var(--ink); font-size: 16px; font-weight: 500; }
 .gcard-meta { display: flex; gap: 12px; margin-top: 6px; color: var(--muted); font-size: 13px; }

@@ -50,7 +50,12 @@ Rectangle {
         return true;
     }
 
+    // Quiet (Q-Calendar, R2-011): no divider, no hint, the title in grey
+    // as "Без даты · 3"; bold keeps the panel line, the bold title and the hint.
+    readonly property bool plain: Style.plainRows
+
     Rectangle {
+        visible: !root.plain
         anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
         width: 1
         color: Theme.border
@@ -66,13 +71,15 @@ Rectangle {
         Row {
             spacing: Theme.spXs
             Text {
-                text: I18n.t("tray.title")
-                color: Theme.text
+                text: I18n.t("tray.title") + (root.plain ? " · " + root.count : "")
+                color: root.plain ? Theme.textDim : Theme.text
                 font.pixelSize: Theme.fsMd
-                font.weight: Theme.fwHeading
+                font.weight: root.plain ? Theme.fwBody : Theme.fwHeading
+                font.features: Theme.tabularNums
             }
             Text {
                 objectName: "undated-tray-count"
+                visible: !root.plain
                 text: root.count
                 color: Theme.textDim
                 font.pixelSize: Theme.fsMd
@@ -80,6 +87,7 @@ Rectangle {
             }
         }
         Text {
+            visible: !root.plain
             Layout.fillWidth: true
             text: I18n.t("tray.hint")
             color: Theme.textDim
@@ -125,6 +133,7 @@ Rectangle {
                     border.width: row.armed ? 1 : 0
                 }
                 Rectangle {
+                    visible: !root.plain
                     anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
                     height: 1
                     color: Theme.border

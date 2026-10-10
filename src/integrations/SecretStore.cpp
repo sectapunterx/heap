@@ -105,7 +105,7 @@ void SecretStore::setValue(const QString& providerId, const QString& field, cons
   }
   m_cache.insert(key, value);
 #ifdef HEAP_USE_KEYCHAIN
-  if(m_keychain) {
+  if(m_keychain && !m_fileProviders.contains(providerId)) {
     const QStringList chunks = chunkValue(value, kMaxKeychainBytes);
     const int newCount = chunks.size() > 1 ? static_cast<int>(chunks.size()) : 0;
     const int oldCount = m_chunkCounts.value(key);
@@ -132,7 +132,7 @@ void SecretStore::remove(const QString& providerId, const QString& field) {
   const QString key = cacheKey(providerId, field);
   m_cache.remove(key);
 #ifdef HEAP_USE_KEYCHAIN
-  if(m_keychain) {
+  if(m_keychain && !m_fileProviders.contains(providerId)) {
     deleteKeychain(key);
     const int oldCount = m_chunkCounts.take(key);
     for(int i = 0; i < oldCount; ++i) {
@@ -152,9 +152,14 @@ void SecretStore::writeKeychain(const QString& key, const QString& value) {
   job->setTextData(value);
   // A failed write used to vanish: the token worked until restart (the cache
   // still had it) and then the integration was silently signed out.
-  connect(job, &QKeychain::Job::finished, this, [key](QKeychain::Job* j) {
+  connect(job, &QKeychain::Job::finished, this, [this, key](QKeychain::Job* j) {
     if(j->error() != QKeychain::NoError) {
       qWarning() << "keychain write failed for" << key << ":" << j->errorString();
+      const QString provider = providerOf(key);
+      if(!m_failedReported.contains(provider)) {
+        m_failedReported.insert(provider);
+        emit keychainWriteFailed(provider, j->errorString());
+      }
     }
   });
   job->start();
@@ -179,6 +184,21 @@ void SecretStore::load(const QVector<QPair<QString, QString>>& keys, const std::
       });
       return;
     }
+    // Tokens the user chose to keep in the file (R2-040) come from there.
+    QHash<QString, QString> fromFile;
+    {
+      QFile f(fallbackPath());
+      if(f.open(QIODevice::ReadOnly)) {
+        const QJsonObject obj = QJsonDocument::fromJson(f.readAll()).object();
+        for(auto it = obj.constBegin(); it != obj.constEnd(); ++it) {
+          const QString value = unprotectFromFile(it.value().toString());
+          if(!value.isEmpty()) {
+            fromFile.insert(it.key(), value);
+            m_fileProviders.insert(providerOf(it.key()));
+          }
+        }
+      }
+    }
     auto remaining = std::make_shared<int>(keys.size());
     const auto finishOne = [remaining, done]() {
       if(--(*remaining) == 0 && done) {
@@ -189,6 +209,13 @@ void SecretStore::load(const QVector<QPair<QString, QString>>& keys, const std::
       const QString providerId = k.first;
       const QString field = k.second;
       const QString cache = cacheKey(providerId, field);
+      if(m_fileProviders.contains(providerId)) {
+        if(fromFile.contains(cache)) {
+          m_cache.insert(cache, fromFile.value(cache));
+        }
+        QTimer::singleShot(0, this, finishOne);
+        continue;
+      }
       readKeychainValue(kService, cache, [this, cache, providerId, field, finishOne](const QString& text) {
         if(!text.isEmpty()) {
           m_cache.insert(cache, text);
@@ -298,6 +325,31 @@ QString SecretStore::unprotectFromFile(const QString& stored) {
   return {};
 }
 
+QString SecretStore::providerOf(const QString& key) {
+  return key.section(QLatin1Char('/'), 0, 0);
+}
+
+void SecretStore::keepInFile(const QString& providerId) {
+  m_fileProviders.insert(providerId);
+  m_failedReported.remove(providerId);
+  writeFallbackFile();
+}
+
+void SecretStore::retryKeychain(const QString& providerId) {
+  m_failedReported.remove(providerId);
+  const bool wasInFile = m_fileProviders.remove(providerId);
+  const QString prefix = providerId + QLatin1Char('/');
+  const QStringList keys = m_cache.keys();
+  for(const QString& k : keys) {
+    if(k.startsWith(prefix)) {
+      setValue(providerId, k.mid(prefix.size()), m_cache.value(k));
+    }
+  }
+  if(wasInFile) {
+    writeFallbackFile();
+  }
+}
+
 QString SecretStore::fallbackPath() const {
   return heap::paths::dataDir() + QStringLiteral("/secrets.json");
 }
@@ -325,6 +377,10 @@ void SecretStore::writeFallbackFile() const {
   QDir().mkpath(QFileInfo(path).absolutePath());
   QJsonObject obj;
   for(auto it = m_cache.constBegin(); it != m_cache.constEnd(); ++it) {
+    // A keychain build writes only the providers kept in the file by choice.
+    if(m_keychain && !m_fileProviders.contains(providerOf(it.key()))) {
+      continue;
+    }
     obj.insert(it.key(), protectForFile(it.value()));
   }
   QSaveFile f(path);

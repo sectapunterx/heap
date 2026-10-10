@@ -40,7 +40,8 @@ const QHash<QString, Entry>& table() {
       {QStringLiteral("safety.standup.yesterday"), {"Yesterday:", "Вчера:"}},
       {QStringLiteral("safety.standup.today"), {"Today:", "Сегодня:"}},
       {QStringLiteral("safety.standup.blockers"), {"Blockers:", "Блокеры:"}},
-      {QStringLiteral("safety.standup.meeting"), {"Meeting: %1", "Встреча: %1"}},
+      {QStringLiteral("safety.standup.meeting"), {"meeting \u201c%1\u201d", "встреча \u00ab%1\u00bb"}},
+      {QStringLiteral("safety.standup.at"), {"%1 at %2", "%1 в %2"}},
       {QStringLiteral("safety.standup.timer"), {"worked on it (timer)", "работа по таймеру"}},
       {QStringLiteral("safety.standup.commitForms"), {"commit|commits|commits", "коммит|коммита|коммитов"}},
       // ── APP-158: waiting on a reply ──

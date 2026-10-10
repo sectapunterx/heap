@@ -1,6 +1,6 @@
 # Data, backups & moving your work
 
-lowkey (heap until 0.8.0) stores everything locally — there is no account and no server. This page
+Everything in lowkey is stored locally — there is no account and no server. This page
 covers where your data lives, how backups work, and how to move a profile
 between machines today.
 
@@ -18,11 +18,12 @@ location (`QStandardPaths::AppDataLocation`):
 (The folder is named twice — organisation, then application.) **Settings →
 About** shows the exact folder of the running copy.
 
-**Coming from heap 0.7.** The first start of lowkey copies the whole `heap\heap`
-folder (state, backups, snapshots, attachments) into `lowkey\lowkey` and works
-from there. The old folder is left as it was, with a `MOVED-TO-LOWKEY.txt` in
-it; delete it once you no longer need to go back to heap 0.7. While heap 0.7 is
-still running, lowkey asks you to close it first and copies nothing. A folder
+**Data from earlier versions.** On first start, a data folder left by a 0.7.x
+version (`heap\heap` in the same location) is copied whole — state, backups,
+snapshots, attachments — into `lowkey\lowkey`, and the app works from there.
+The old folder is left as it was, with a `MOVED-TO-LOWKEY.txt` in it; delete it
+once you no longer need to go back to that version. While the old version is
+still running, the app asks you to close it first and copies nothing. A folder
 given with `--data-dir` or `HEAP_DATA_DIR` is used as it is, never moved.
 
 `state.json` holds every profile (tasks, people, statuses, docs, notes), the
@@ -145,64 +146,64 @@ it is harmless.
 `secrets.json` fallback somewhere else for that run:
 
 ```bash
-heap --data-dir /path/to/throwaway-profile
+lowkey --data-dir /path/to/throwaway-profile
 ```
 
 `HEAP_DATA_DIR` does the same for a whole shell; the flag wins when both are
 set. Use it to try a build against a scratch profile, reproduce a bug, or take
 screenshots without touching your real data. `--data-dir ""` is an error, never
 a silent fall-back to the real profile, and an unknown option or `--view` name
-exits with the usage text (code 2). Run `heap --help` for the full option list.
+exits with the usage text (code 2). Run `lowkey --help` for the full option list.
 
-`heap --smoke --data-dir <dir>` checks a build against a *copy* of that
+`lowkey --smoke --data-dir <dir>` checks a build against a *copy* of that
 profile's `state.json` in a temporary folder: the real file is never migrated
 or rewritten, and the temporary folder is removed on exit. The verdict
 (`smoke: OK` or `smoke: FAILED (n problem(s))` with one line per problem) is
 printed to stderr, and the run's full log is kept as `<dir>/logs/smoke.log`.
 
-### One heap per data folder
+### One running copy per data folder
 
-A data folder is used by one running heap at a time (`heap.lock` in the
-folder). Starting heap again — from the Start menu, a shortcut, or with
+A data folder is used by one running copy of lowkey at a time (`lowkey.lock` in the
+folder). Starting lowkey again — from the Start menu, a shortcut, or with
 `--view <name>` — brings the running window forward (switching view if asked)
 instead of opening a second copy that would save over the first one's edits.
-A heap with a different `--data-dir` is a different workspace and runs
+A copy with a different `--data-dir` is a different workspace and runs
 alongside.
 
 ### When state.json can't be used
 
-heap never replaces a `state.json` it could not read with anything else:
+A `state.json` that could not be read is never replaced with anything else:
 
-- **Locked** (an antivirus scan, a backup or sync tool holding the file): heap
+- **Locked** (an antivirus scan, a backup or sync tool holding the file): lowkey
   waits about two seconds for the lock to lift. If it doesn't, the window opens
   **read-only** with a red banner, showing the newest backup (or an empty
-  workspace) — nothing is saved over the real file. heap reopens it by itself
+  workspace) — nothing is saved over the real file. The app reopens it by itself
   once the lock lifts, or when you press **Retry** (after that, changes typed
   into the read-only session are not kept).
 - **Damaged** (not JSON, or JSON without any profile): the file is kept as
   `state.corrupt-<time>.json` next to it (moved, or copied when a lock forbids
   moving) and the newest usable backup is loaded. A banner that stays up until
   you dismiss it names both files, with **Open data folder**: whatever changed
-  after that backup is not in it. With no backup at all, heap opens an empty
+  after that backup is not in it. With no backup at all, lowkey opens an empty
   workspace under the same banner — not the demo and the welcome tour, since
   this is not a new install. If the damaged file cannot be set aside at all,
   the session is read-only.
-- **From a newer heap** (a higher `schemaVersion`): opens read-only with a
+- **From a newer version** (a higher `schemaVersion`): opens read-only with a
   banner that stays up; a copy is kept once as
-  `backups/state-premigration-v<N>-<time>.json`. Update heap to edit it.
+  `backups/state-premigration-v<N>-<time>.json`. Update lowkey to edit it.
 - **A save fails** (read-only file, full disk, a lock): a red banner says why,
-  your changes stay in memory, and heap retries on its own (2 s, 5 s, 15 s, …)
+  your changes stay in memory, and lowkey retries on its own (2 s, 5 s, 15 s, …)
   or when you press **Retry**. An unwritable data folder is reported at start-up
   (banner, and on stderr).
 
-Every one of these leaves a line in `logs/recovery.log`. Keys heap does not
+Every one of these leaves a line in `logs/recovery.log`. Keys lowkey does not
 know (from a newer point release or a hand edit) are kept on save at the
 document, settings and profile level, and on every task, event, person and
 column.
 
 ## Automatic backups
 
-heap. copies `state.json` into the `backups/` folder next to it, at most once
+The app copies `state.json` into the `backups/` folder next to it, at most once
 per interval — hourly, daily (the default) or weekly, set in **Settings → Data**
 — and keeps the newest 20 copies (`state-<time>.json`; the retention count is
 fixed). Pre-migration copies (`state-premigration-*`) are kept apart from that
@@ -253,7 +254,7 @@ left as written.
 
 ## Multi-device sync (roadmap)
 
-Continuous multi-device sync — pointing heap. at your own **private git remote**
+Continuous multi-device sync — pointing lowkey at your own **private git remote**
 as canonical storage, with one human-readable file per profile and git history
 for free — is on the roadmap. The serialization layer that produces those
 stable, diff-friendly per-entity files already exists

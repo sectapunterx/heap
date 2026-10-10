@@ -34,8 +34,13 @@ describe('the committed release snapshot', () => {
     expect(Object.keys(primaryAssets(latest)).sort()).toEqual(['linux', 'macos', 'windows']);
   });
 
+  it('offers the lowkey-* files, not the heap-* copies kept for the 0.7.x updater', () => {
+    const by = assetsByOS(latest);
+    for (const list of Object.values(by)) for (const a of list) expect(a.name).toMatch(/^lowkey-/);
+  });
+
   it('points every download at the repository the site names', () => {
-    for (const a of latest.assets) expect(a.url).toMatch(/^https:\/\/github\.com\/sectapunterx\/heap\/releases\/download\//);
+    for (const a of latest.assets) expect(a.url).toMatch(/^https:\/\/github\.com\/sectapunterx\/lowkey\/releases\/download\//);
   });
 });
 

@@ -22,8 +22,25 @@ ColumnLayout {
     property string _adding: ""
 
     spacing: Theme.spSm
+    // Not in the sheets' meta column (DG-061): drawn only while there are
+    // links or one is being added ("+ свойство → Связь" starts it); the add
+    // row shows on hover.
+    visible: root.links.length > 0 || root._adding.length > 0
+    function startAdding(kind) {
+        root._adding = kind || "related";
+        refField.text = "";
+        Qt.callLater(() => refField.forceActiveFocus());
+    }
+    HoverHandler { id: relHover }
 
-    SectionHeader { title: I18n.t("local.links"); count: root.links.length }
+    Text {
+        objectName: "task-doc-links-head"
+        text: I18n.t("local.links")
+        color: Theme.textMuted
+        font.family: Theme.fontUi
+        font.pixelSize: Theme.fsSm
+        font.weight: Style.fills ? Theme.fwHeading : Theme.fwBody
+    }
 
     Repeater {
         model: root.links
@@ -97,7 +114,7 @@ ColumnLayout {
     Flow {
         Layout.fillWidth: true
         spacing: Theme.spMd
-        visible: root._adding.length === 0
+        visible: root._adding.length === 0 && relHover.hovered
         Repeater {
             model: ["related", "blockedBy", "blocks"]
             delegate: Text {

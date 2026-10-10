@@ -2,7 +2,7 @@
 
 Everything in this file is **maintainer work you do once**. Until it is done,
 every integration still works — the cards just show a token field instead of a
-**Connect with browser** button. Nothing here is required to build or ship heap.
+**Connect with browser** button. Nothing here is required to build or ship lowkey.
 
 The short version:
 
@@ -14,7 +14,7 @@ The short version:
 
 ## 0. The one value everything depends on
 
-heap listens on a fixed loopback port and expects the browser to be redirected
+The app listens on a fixed loopback port and expects the browser to be redirected
 back to it:
 
 ```
@@ -28,7 +28,7 @@ Two traps, both of which have cost people days:
 
 - **`localhost` and `127.0.0.1` are not interchangeable.** They reach the same
   socket, but a redirect-URI *allowlist* is a string match. Todoist documents
-  `localhost`; Atlassian wants the IP literal. heap advertises whichever the
+  `localhost`; Atlassian wants the IP literal. The app advertises whichever the
   provider needs (`OAuthConfig::redirectHost`), and the table below says which.
   **Where a provider accepts several redirect URIs, register both forms** — it
   costs nothing and removes the guesswork.
@@ -44,19 +44,19 @@ did, this file records what the console did.
 ## 1. Register the apps
 
 Nothing below needs a paid plan. Where a step says "workspace admin", that is a
-restriction the provider imposes, not heap.
+restriction the provider imposes, not lowkey.
 
 ### Jira Cloud — `HEAP_OAUTH_JIRA_CLIENT_ID` + `_CLIENT_SECRET`
 
 1. <https://developer.atlassian.com/console/myapps/> → **Create → OAuth 2.0 integration**, name it `heap`.
    Pick **Access type: Resource-level** — the token is then scoped to the one
    site the user selects while authorizing, which is exactly what
-   `pickJiraSite()` expects. Account-level would hand heap every site on the
+   `pickJiraSite()` expects. Account-level would hand lowkey every site on the
    customer's account for no benefit. Tick the developer-terms box and Create.
 2. **Permissions → Jira API → Add**, then **Configure → Edit Scopes** and enable
    the three classic scopes `read:jira-work`, `read:jira-user`,
    `write:jira-work`. The footer counts them: it must say *add 3 new scopes*.
-   Ignore the console's nudge about granular scopes — heap uses the classic set.
+   Ignore the console's nudge about granular scopes — lowkey uses the classic set.
 3. **Authorization → OAuth 2.0 (3LO) → Add** → Callback URLs:
    `http://127.0.0.1:51789/` → Save changes.
    It is a textarea taking up to 30 URIs, one per line. Plain `http` on loopback
@@ -69,12 +69,12 @@ After saving, the same page prints an **Authorization URL generator**. Use it as
 a cross-check: it should read
 `audience=api.atlassian.com`, the three scopes space-separated, the loopback
 `redirect_uri`, and `prompt=consent` — which is what `ProviderRegistry.cpp`
-builds. `offline_access` is absent there but heap adds it; without it Atlassian
+builds. `offline_access` is absent there but lowkey adds it; without it Atlassian
 issues no refresh token and the session would die after an hour.
 
 **Rotating refresh tokens are now mandatory** for every newly created 3LO app:
 each refresh returns a *new* refresh token and invalidates the old one, and
-reuse is treated as a breach. heap handles this — it writes the rotated token
+reuse is treated as a breach. This is handled: lowkey writes the rotated token
 back before the access token, and keeps the stored one when a provider returns
 none (see `ARefreshThatReturnsNoNewRefreshTokenKeepsTheOldOne`).
 
@@ -102,11 +102,11 @@ anything. Create or join one first, then come back.
    (origins, so no trailing slash). **If Allowed origins is empty, no redirect
    works at all** — this is the single most common Trello mistake, and it
    presents as the browser simply doing nothing after you approve.
-4. Copy the API Key. That is the client id; heap needs no secret. The page also
-   shows a Secret for OAuth 1 — heap does not use it.
+4. Copy the API Key. That is the client id; lowkey needs no secret. The page also
+   shows a Secret for OAuth 1 — lowkey does not use it.
 
-The path heap uses is not OAuth 2.0: it returns the token in the URL *fragment*,
-which a server never receives, so heap serves a small page that posts it back —
+The path lowkey uses is not OAuth 2.0: it returns the token in the URL *fragment*,
+which a server never receives, so lowkey serves a small page that posts it back —
 expected, not a bug. Trello has since shipped a real OAuth 2.0 flow (the
 **OAuth 2.0** entry in the developer sidebar). Moving to it would replace the
 fragment dance with an ordinary authorization-code exchange, but it is a code
@@ -123,7 +123,7 @@ above is what the shipped build expects.
    is the one that must be there.
 3. Copy the Client ID and Client Secret.
 
-heap requests the `data:read` scope — read-only, since Todoist sync is pull-only.
+The scope requested is `data:read` — read-only, since Todoist sync is pull-only.
 
 ### Asana — `HEAP_OAUTH_ASANA_CLIENT_ID` + `_CLIENT_SECRET`
 
@@ -131,7 +131,7 @@ heap requests the `data:read` scope — read-only, since Todoist sync is pull-on
 2. Redirect URL: `http://127.0.0.1:51789/` — **the trailing slash is mandatory**
    here. Leave the *"this is a native or command-line app"* checkbox **off**:
    ticking it switches Asana to the `oob` out-of-band redirect, which is not
-   what heap does.
+   what lowkey does.
 3. **App type: API app.**
 4. Under Permission scopes enable Read on: Projects, Tasks, Users, Workspaces
    (`projects:read`, `tasks:read`, `users:read`, `workspaces:read`), then Save.
@@ -166,14 +166,14 @@ revisiting.
 
 ### Sentry — already done, no secret, nothing to set
 
-Sentry accepts a **public** client, so heap uses one: there is no client secret
+Sentry accepts a **public** client, so lowkey uses one: there is no client secret
 to ship, PKCE takes its place, and the client ID is committed in
 [`OAuthClients.h`](../src/integrations/OAuthClients.h) like GitHub's and
 GitLab's. **Sentry sign-in therefore works in every build — a local one, a
 fork's, yours — not only in a release made with the CI credentials.** There is
 no `HEAP_OAUTH_SENTRY_*` repository secret and nothing for you to do.
 
-Only if you want to point heap at your *own* Sentry application:
+Only if you want to point lowkey at your *own* Sentry application:
 
 1. **Settings → Account → API → Applications → Create New Application.**
    This is the plain *OAuth Application*, **not** a Developer-Settings
@@ -189,11 +189,11 @@ Only if you want to point heap at your *own* Sentry application:
 4. Put the Client ID in the card's **OAuth client ID** field under Advanced, or
    override `HEAP_OAUTH_SENTRY_CLIENT_ID` at build time.
 
-heap requests `org:read project:read event:read`. The access token lives 30 days.
+The scopes requested are `org:read project:read event:read`. The access token lives 30 days.
 
 **The refresh token rotates on every use and Sentry gives no grace period** —
 spend the same one twice and the grant is revoked outright, not merely refused.
-heap serialises refreshes per provider so two syncs cannot race one
+Refreshes are serialised per provider so two syncs cannot race one
 (`TwoSyncsRacingAnExpiredTokenSpendTheRefreshTokenOnce`).
 
 ### Bitbucket Cloud — `HEAP_OAUTH_BITBUCKET_CLIENT_ID` + `_CLIENT_SECRET`
@@ -217,7 +217,7 @@ page below simply will not exist.
    **Repositories → Read**, **Issues → Read**. Nothing else.
 5. Save, then copy the Client ID and Secret from the confirmation dialog.
 
-Scopes are fixed on the client, so heap sends none. The token lives two hours
+Scopes are fixed on the client, so lowkey sends none. The token lives two hours
 and refreshes.
 
 ### GitHub and GitLab — already done
@@ -283,7 +283,7 @@ The configure log prints provider **names only**, never values:
 
 Then build and open **Settings → Integrations**. The Jira card should show
 **Connect with browser**. Click it: your browser opens, you approve, and the
-card goes to connected. heap then asks Atlassian which site the token was
+card goes to connected. After that, lowkey asks Atlassian which site the token was
 granted and caches its cloudId.
 
 A maintainer who would rather not export variables can drop an untracked
@@ -310,7 +310,7 @@ It is already in `.gitignore`.
 |---|---|
 | Button never appears | That provider's secret is unset in this build. Check the configure log line. |
 | Provider rejects the redirect at registration | The allowlist wants the other loopback literal, or the trailing slash. Try both forms. |
-| `redirect port 51789 is busy` | Another copy of heap — or another app — holds the port. Close it. |
+| `redirect port 51789 is busy` | Another copy of lowkey — or another app — holds the port. Close it. |
 | Times out after 3 minutes | The provider never redirected back. Almost always a redirect URI that does not match **exactly**. |
 | Trello: nothing happens after approving | Allowed Origins on the API key is empty or lacks the loopback origin. |
 
@@ -318,10 +318,10 @@ It is already in `.gitignore`.
 
 ## 4. What this is not
 
-The secrets end up **inside the shipped binary**. `strings heap.exe` will find
+The secrets end up **inside the shipped binary**. `strings lowkey.exe` will find
 them, exactly as it would for the GitHub CLI or any other desktop OAuth client.
 There is no way around that for a native app without running a server, which
-heap deliberately does not do.
+lowkey deliberately does not do.
 
 What this scheme does buy:
 

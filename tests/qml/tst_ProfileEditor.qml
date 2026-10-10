@@ -43,8 +43,8 @@ TestCase {
         compare(pe.presetColor, "");
         verify(!pe.visible, "popup must start closed");
         // Save picks colors out of this array — pin its shape.
-        compare(pe.swatches.length, Theme.swatches.length);
-        compare(String(pe.swatches[0]).toLowerCase(), "#5cc2dd");
+        compare(pe.swatches.length, 8, "the sheet offers eight");
+        compare(String(pe.swatches[0]).toLowerCase(), "#8aa4c2");
     }
 
     // showCreate() resets stale rename state back to create mode and opens.

@@ -1,0 +1,240 @@
+# Review of the 0.8.1 design decisions
+
+Every entry of `docs/DESIGN-DECISIONS.md` (heap2/0.8.1 @ 406d188), checked with ui-ux-pro-max
+(Quick Reference rule ids; `search.py --domain ux` hits named "ux:<Issue>") against the sheets in
+`New heap design/screens` (X- = quiet, N-/H2- = bold, Q- = quiet full screens) and `keymap.md`.
+Weighed: the sheets are the spec; no data loss; keyboard-first; lowkey shows facts and never
+decides for the person.
+
+Result: **77 KEEP · 5 CHANGE · 0 OWNER** (82 decisions).
+
+| Section | Decision (short) | Verdict | Reason (guideline · sheet) | Change needed |
+|---|---|---|---|---|
+| Knowledge | DG-070 list = Закреплено/Заметки/Сниппеты; refs & contacts only in search / Ctrl K | KEEP | progressive-disclosure, content-priority; nothing unreachable · Q-Knowledge, X-Oth-Knowledge draw only these groups | — |
+| Knowledge | DG-070 old Docs pages flat under "Страницы", edited like a note | KEEP | no data loss (pages stay editable), consistency · X-Oth-Knowledge has no page tree | — |
+| Knowledge | DG-071 attach / list toggle / source on keys; links column by width | KEEP | keyboard-shortcuts, overflow-menu (actions kept on keys) · Q-Knowledge toolbar | — |
+| Knowledge | DG-072 column order, empty group hidden, outgoing links out of column | KEEP | empty-states (no empty headers), visual-hierarchy · Q-Knowledge / H2-Knowledge column | — |
+| Knowledge | DG-073 notes newest-first by creation | KEEP | state-preservation (the row being typed in does not jump) · Q-Knowledge order is not alphabetical | — |
+| Settings | DG-090 unsheeted rows under "Ещё настройки"; search opens the fold | KEEP | progressive-disclosure, no lost settings · H2/Q-Settings show exactly the sheet rows | — |
+| Settings | DG-101 Профиль removed, values kept in JSON | KEEP | no data loss; disabled-states (no inert fields) · X sheets have no Профиль | — |
+| Settings | DG-091 eleven X sections + Помощь, Git nav name | KEEP | navigation-consistency, nav-hierarchy · X-Set-* order | — |
+| Settings | DG-090 one row layout (label left, options right) | KEEP | consistency, visual-hierarchy · H2-Settings, X-Set-Columns, X-Set-StyleKeys | — |
+| Settings | DG-090 quiet = chip-fill switch | KEEP | consistency (one style switch) · X-Set-StyleKeys | — |
+| Settings | DG-093 live sign-in state instead of 3 static cards | KEEP | state-clarity; no decorative duplicate of live state · X-Set-Trackers (cards illustrate states) | — |
+| Settings | DG-093 one sync cadence for all trackers, Синхронизировать beside | KEEP | honest UI over an invented per-tracker schedule; manual sync kept · X-Set-Trackers | — |
+| Settings | DG-093 rows without a function omitted (ask-before-send); "только здесь" | KEEP | disabled-states (no controls that do nothing); external writes off by default · X-Set-Trackers | Follow-up ticket for ask-before-send (as written) |
+| Settings | DG-093 MR/PR switches under sheet rows; connection fields folded | KEEP | progressive-disclosure · X-Set-Trackers | — |
+| Settings | DG-095 deadline lead "за 24 ч", not 9:00 | KEEP | honest copy (no promise the scheduler cannot keep) · X-Set-CalNotif | — |
+| Settings | DG-096 deleted-task retention omitted; snapshot options wired; 90 d kept as 4th option | KEEP | disabled-states; no data loss (stored 90 stays) · X-Set-GitLangAbout / Данные | — |
+| Settings | DG-099 Git rows wired, rest folded | KEEP | progressive-disclosure · X-Set-GitLangAbout | — |
+| Settings | DG-100 date format = clock format; parser row informative | KEEP | number-formatting (locale), honest copy · X-Set-GitLangAbout | — |
+| Settings | DG-102 Помощь three rows, guide in a reader | KEEP | consistent-help · X-Set-GitLangAbout | — |
+| Settings | DG-103 channel omitted, shown in section line; check-now kept | KEEP | disabled-states; "только вручную" keeps an escape route · X-Set-GitLangAbout | — |
+| Settings | DG-097 one row per action, conflict box under the row | KEEP | error-placement (error next to the field) · X-Set-StyleKeys | — |
+| Settings | DG-003 drawn dots / StatusRing until Icon.qml lands | KEEP | icon-style-consistent, no-emoji-icons (interim, vector) | Swap to Icon.qml when it lands (as written) |
+| Shell (wave 1) | DG-002 Ctrl \ removed; people in an Archive-People-shaped dialog without "Связанные задачи" / "Встречи" | CHANGE | Removing the key is right (no sheet draws a day panel; DESIGN-GAPS DG-002 "no right panel"). The omission rests on a false premise: lowkey stores person↔task links (`WaitingOn{taskId, personId}`, src/safety/WaitingOn.h) and meeting `attendees` (src/Models.h). Showing them is a fact, not autopilot. content-priority · X-Oth-Archive-People draws both blocks | `qml/PeopleDialog.qml`: add "Связанные задачи" (tasks whose WaitingOn.personId is the person; key + title, Enter opens) and "Встречи" (upcoming events whose attendees name the person: "пт 11:00 · title"); hide a block when empty. `docs/HOTKEYS.md:149`: drop the Ctrl+\ day-panel sentence. |
+| Shell (wave 1) | DG-161 archive month = last status change | KEEP | closest stored fact, nothing invented · X-Oth-Archive-People "группа по месяцу" | — |
+| Shell (wave 1) | DG-161 no "вернуть U" on the row | CHANGE | The sheet draws "вернуть" on the selected archive row; dropping it hides the archive's main action (primary-action, gesture-alternative). The key objection is valid (keymap rule 2: a bare capital is never written; `u` = Undo), so drop the key, not the action | `qml/TaskListView.qml`: while the query holds `is:archived`, show a quiet "вернуть" text action on the current/hovered row, running the same restore as the task menu / SelectionBar; no key hint (no binding exists). |
+| Shell (wave 1) | DG-162 "timeline"/"archive" names open the list | KEEP | deep-linking, back-stack-integrity (saved links never dead) | — |
+| Shell (wave 1) | DG-140 one toast, "+N" waiting, ring kinds, key after action | KEEP | ux:Toast Notifications, toast-accessibility, color-not-only (ring shape carries the kind) · X-Ntf-Toasts "не больше одного, остальные в «+N»" | — |
+| Shell (wave 1) | DG-005 danger outranks primary | KEEP | destructive-emphasis · X-Dlg-Small dan('Удалить колонку'), X-Menus-Column danger item | — |
+| Shell (wave 1) | DG-004 quiet flags derived from chip fill | KEEP | consistency; the seven switches as drawn · X-Set-StyleKeys | — |
+| Shell (wave 1) | DG-007 "Example" in RU UI; stored "Пример" kept | KEEP | no data loss; sheets use Example (X-Menus-Other, X-Oth-Capture, X-Set-Columns, X-Dlg-TimeMachine) | — |
+| Shell (wave 1) | DG-008 small layout below 1360 px | KEEP | breakpoint-consistency; X-Oth-Small frame is 1280 (its note says ~1100), 1366 laptops keep the full sidebar | — |
+| Dialogs | DG-120 non-move edits apply to the series without asking | KEEP | form-autosave, undo-support; the sheet's question is about move/duration/delete · X-Dlg-Event | — |
+| Dialogs | DG-120 new meetings only via the one-line input | KEEP | keyboard-first, nothing made without a name · X-Dlg-Event / X-Oth-Capture | — |
+| Dialogs | DG-120 location/context/type/custom RRULE kept off-panel, never lost | KEEP | no data loss, progressive-disclosure · X-Dlg-Event | — |
+| Dialogs | DG-121 per-item restore via diff links | KEEP | undo-support; X-Dlg-TimeMachine has "Открыть копией…", no per-item list | — |
+| Dialogs | DG-121 retention behind one quiet line | KEEP | progressive-disclosure · X-Dlg-TimeMachine | — |
+| Dialogs | DG-122 log source by kind; undo only on the newest entry | KEEP | honest data (no invented provider); state-clarity · X-Dlg-Log-Import | — |
+| Dialogs | DG-123 next week opens the calendar; "Перенесено" omitted | KEEP | support, not autopilot; no invented counts · X-Dlg-Recap | — |
+| Dialogs | DG-124 closed today = count; timer sentence | KEEP | content-priority · X-Dlg-Recap / X-Ntf-Focus | — |
+| Dialogs | DG-126 person = name + what to ask | KEEP | redundant-entry (handle derived), stored fields kept · X-Dlg-Small "Человек" | — |
+| Dialogs | DG-133 nine X-Keys areas; "Сдвинуть колонку Ctrl Shift H/L" left out | CHANGE | Areas: right. Column move with no key breaks keyboard-first while keymap.md line 81, X-Keys and X-Menus-Column all list it; keymap scopes it "на заголовке колонки", so it can coexist with log Ctrl Shift L (keymap line 108) | Bind column move left/right to Ctrl+Shift+H / Ctrl+Shift+L, active only while the board cursor is on a column header (catalogue in `src/AppController.cpp` ~13600, handler in `qml/Main.qml` board keys); elsewhere Ctrl+Shift+L stays the log. Show the row in `qml/KeyCheatSheet.qml` and the keys in the column menu. |
+| Dialogs | DG-132 focus screen under toasts; D done; no empty toast | KEEP | z-index-management; success-feedback only when there is something · X-Ntf-Focus | — |
+| Calendar | DG-041 day load moved into the day-name tooltip | CHANGE | Week follows the sheet (no load bar on H2/Q-Calendar), right. But a hover-only fact fails tooltip-keyboard / ux:Hover vs Tap in a keyboard-first app | `qml/WeekView.qml` (day header): show the same load text when the keyboard cursor enters that day (tooltip on cursor, or the bottom hint line), not only on hover. Same for the month meeting-time tooltip (DG-050, `qml/MonthView.qml`). |
+| Calendar | DG-041 deadline row = flag + title, +N selects the day | KEEP | consistency with the sheet row · X-Oth-DayMonth ("срок — флажок", "+N ещё") | — |
+| Calendar | DG-044 query row hidden at rest, shown when active | KEEP | state-clarity (no hidden active filter) · H2-Calendar has no query row | — |
+| Calendar | DG-045 event menu items open the panel / short lists | KEEP | one way per action, nothing made without a name · X-Menus-Other / X-Dlg-Event | — |
+| Calendar | DG-050 month order: deadlines & tasks, then meetings | KEEP | keyboard-nav (cursor order = drawn order); the sheet itself is inconsistent (day 8 task last, day 16 task first), deadlines first matches · X-Oth-DayMonth | Tooltip: see DG-041 change |
+| Calendar | DG-051 day zoom header and rows | KEEP | visual-hierarchy · X-Oth-DayMonth day view | — |
+| Today | DG-010 zero parts left out | KEEP | empty-states, honest copy · H2-Today, H2-Today-Calm, X-Oth-Small | — |
+| Today | DG-011 no arrows where sheets have none; keys still work | KEEP | keyboard alternatives kept · H2-First, Q-First, X-Oth-Small | — |
+| Today | DG-012 quiet free time = gap; 🔒 removed | KEEP | whitespace-balance, no-emoji-icons · H2-Today-Calm | — |
+| Today | DG-013 quiet side = sheet; overdue dim line kept | KEEP | content-priority without hiding facts · H2-Today-Calm, X-Err-Empty | — |
+| Today | DG-014 one card + rest as lines | KEEP | content-priority; nothing in progress hidden · H2-Today | — |
+| Today | DG-015 "Написал" button / text link | KEEP | style consistency (textLinks) · H2-Today / H2-Today-Calm | — |
+| Today | DG-110 "?" key on cards; Enter text hint | KEEP | no text glyphs as icons · H2-First, Q-First | — |
+| Today | DG-131 tour removed, guide stays, id kept | KEEP | consistent-help; stored bindings kept · no tour in any sheet | — |
+| Today | DG-160 Esc in two steps, filter named | KEEP | escape-routes, state-preservation, ux:No Results (offer the reset) · X-Err-Empty | — |
+| Tasks | DG-020 default `is:open` chip | KEEP | state-clarity (visible, removable chip) · H2-Board / H2-List "статус не готово" | — |
+| Tasks | DG-020 profile chip without × | KEEP | disabled-states (no dead ×), compact-label-overflow (chip semantics) · H2-Board | — |
+| Tasks | DG-020 "Сохранить как вид" always on the bold line | KEEP | consistency (stable placement) · H2-Board | — |
+| Tasks | DG-020/046 calendar query line only when it says more | KEEP | state-clarity · H2-Calendar | — |
+| Tasks | DG-022 folded Done ignores "не готово" | KEEP | content-priority · H2-Board "Готово 2 · Показать" | — |
+| Tasks | DG-021 quiet lens option as an outline chip | KEEP | consistency · Q-List | — |
+| Tasks | DG-021 quiet field folds on hand-back only | KEEP | state-preservation (no edits in a hidden field) · Q-List | — |
+| Tasks | DG-022 no add-column on the board | KEEP | sheet has none · H2-Board; X-Set-Columns "+ Колонка" | — |
+| Tasks | DG-025 column extras as Ctrl K commands | KEEP | overflow-menu, keyboard-first · X-Menus-Column | — |
+| Tasks | DG-026 selection-bar extras as Ctrl K commands | KEEP | overflow-menu · X-Menus-Task (selection bar) | — |
+| Tasks | DG-027 "Перенести…" out of the task menu; "сейчас" marker | KEEP | one way per action · X-Menus-Task | — |
+| Tasks | DG-031 dates without the dot, quiet weekday | KEEP | number-formatting · Q-List / H2-List | — |
+| Tasks | DG-150 saved view menu trimmed | KEEP | one way per action · X-Menus-Other | — |
+| Tasks | DG-151 profile switcher; delete = one undoable click "Удалить профиль" | CHANGE | Switcher, sync line, Ctrl ] row: right (X-Menus-Other). Delete is not: the sheet labels it "Удалить профиль…" (danger) and X-Dlg-Small draws its confirmation ("Удалить профиль «Платежи»? 87 задач и 12 заметок. Снимок сохранится…"). ux:Confirmation Dialogs (High), confirmation-dialogs; a whole profile is too big for one click | `qml/ProfileSwitcher.qml`: label "Удалить профиль…", danger style; open the X-Dlg-Small confirmation (task/note counts, snapshot note, Отмена + danger "Удалить профиль"); keep Ctrl Z undo after it. Strings in `qml/I18n.qml`. |
+| Tasks | DG-152 text field menu trimmed | KEEP | consistency · X-Menus-Other text field menu | — |
+| Document | DG-060 panel first, full on Enter | KEEP | state-preservation, back-behavior · X-Ntf-OS / X-Dlg-Event ("панель справа"), H2/Q-Task widths | — |
+| Document | DG-061 local layer hidden at rest, one click from "+ свойство"; delete via menu/Del | KEEP | progressive-disclosure, undo-support · H2-Task / Q-Task | — |
+| Document | DG-061 CI from gh/glab, История from the log | KEEP | facts only, nothing invented · H2-Task | — |
+| Document | DG-063 "Сохранено" state at rest / "сохраняю…" | KEEP | submit-feedback, form-autosave · H2-Task | — |
+| Document | DG-065 quiet Готово, timer text link | KEEP | primary-action subdued in quiet · Q-Task | — |
+| Document | DG-080/082 bold chips tinted by signal, quiet outline | KEEP | color-not-only (text kept), consistency · H2-Command | — |
+| Document | DG-081 command line matches by name only | KEEP | content-priority; full text one Enter away · H2-Command / Q-Command | — |
+| Document | DG-082/083 "?" toggle removed, card by width | KEEP | progressive-disclosure · H2-Command / Q-Command | — |
+| Document | DG-130 "встреча" as a chip; Enter/Esc | KEEP | nothing put in the calendar without a click (support, not autopilot); keyboard-first · X-Oth-Capture | — |
+| Document | DG-003 ⤢/⤡ as expand/collapse line icons | KEEP | icon-style-consistent, no-emoji-icons | — |
+
+## CHANGE items
+
+1. **DG-002 people dialog**: add "Связанные задачи" (WaitingOn) and "Встречи" (attendees) to
+   `qml/PeopleDialog.qml`, hidden when empty; remove the Ctrl+\ sentence from `docs/HOTKEYS.md`.
+2. **DG-161 archive row**: restore the sheet's "вернуть" row action in `qml/TaskListView.qml`
+   (only under `is:archived`), no key hint.
+3. **DG-133 column move**: Ctrl+Shift+H/L on a column header (scoped; the log keeps
+   Ctrl+Shift+L elsewhere); catalogue in `src/AppController.cpp`, handler in `qml/Main.qml`, row
+   in `qml/KeyCheatSheet.qml`.
+4. **DG-151 profile delete**: "Удалить профиль…" + the X-Dlg-Small confirmation in
+   `qml/ProfileSwitcher.qml`, undo kept.
+5. **DG-041 / DG-050 tooltips**: day load (week) and meeting time (month) also shown when the
+   keyboard cursor is on the day / item, not on hover only.
+
+## Review 2 — r3/r4 decisions
+
+Entries of `docs/DESIGN-DECISIONS.md` added after Review 1 (heap2/0.8.1 @ fa0e541: "Tasks & type
+(wave 3)" through the r4 tasks group and the lead notes), checked the same way: ui-ux-pro-max
+Quick Reference rule ids against the sheets in `New heap design/screens`. Several were taken
+without the skill; each is re-judged here. Weighed as before: sheets are the spec; no data loss;
+keyboard-first; facts, never decisions for the person; no tracker write without the opt-in.
+
+Result: **56 KEEP · 4 CHANGE · 0 OWNER** (60 decisions).
+
+| Section | Decision (short) | Verdict | Reason (guideline · sheet) | Change needed |
+|---|---|---|---|---|
+| Tasks & type | R2-001/002 two screen-title sizes as tokens | KEEP | font-scale, weight-hierarchy; tokens not literals · H2-Today 30/600, H2-Today-Calm 26/500, H2-List/Board 24/600 | — |
+| Tasks & type | R2-005/008 task title 600 in bold only | KEEP | weight-hierarchy · H2-Board / H2-List cards vs Q-Board | — |
+| Tasks & type | R2-041 delete column: Enter runs delete, undoable | KEEP | undo-support makes the confirm cheap; X-Dlg-Small rule "Enter — основная" | — |
+| Tasks & type | R2-058 example profile keeps starter views, new ones none | KEEP | no data loss (existing views kept) · H2-First | — |
+| Tasks & type | DG-161 "вернуть" on the archive row | KEEP | gesture-alternative, primary-action · X-Oth-Archive-People (Review 1 CHANGE done) | — |
+| Tasks & type | DG-133 Ctrl+Shift+H/L only with focus in a column header | KEEP | keyboard-shortcuts, dragging-alternative; scoped so Ctrl+Shift+L log survives · X-Menus-Column | — |
+| Tasks & type | DG-041/050 tooltip follows the keyboard cursor | KEEP | tooltip-keyboard, hover-vs-tap · X-Oth-DayMonth | — |
+| Tasks & type | Leftovers: Icon glyphs, `is:open` = no search, clauses as words | KEEP | icon-style-consistent, empty-states · X-Menus-Column, X-Err-Empty | — |
+| Editor & people | R2-020 inline code pill drawn under the span | KEEP | consistency (`Style.chipFill` split) · H2-Knowledge fill / Q-Knowledge stroke | — |
+| Editor & people | R2-024 "/" menu = sheet's six rows; Esc leaves "/" | KEEP | escape-routes; heading/quote stay one markdown keystroke · X-Oth-Knowledge | — |
+| Editor & people | R2-042 "+ Добавить «…» как человека" adds at once, not on bare Enter | KEEP | no modal mid-sentence; Enter keeps submitting forms (no accidental adds) · X-Oth-Archive-People | — |
+| Editor & people | R2-062 note menu as sheet; merge on drag, export .md | KEEP | consistency, overflow-menu · X-Menus-Other | — |
+| Editor & people | R2-063 person menu; delete undoable | KEEP | undo-support · X-Menus-Other | — |
+| Editor & people | R2-069 quick note: Esc keeps the draft **for the session**; branch task preselected, "Не прикреплять" | CHANGE | form-autosave / no data loss: sheet X-Oth-Capture promises "Esc — черновик сохранится", but the draft lives only in the popup's QML text and is lost on quit or crash. Preselection is a fact (branch), not a decision — fine | Persist the draft: on close write it (and the attach target) to `settings.quickNoteDraft`, restore in onOpened, clear on save. `qml/QuickCaptureNotesPopup.qml`, settings read/write in `src/AppController.cpp` |
+| Editor & people | R2-070 import: "- [ ]" to tasks in one undo; no folder-watch checkbox | KEEP | disabled-states (no control that does nothing), undo-support · X-Dlg-Log-Import | — |
+| Editor & people | DG-151 profile delete with typed-name field, undo kept | KEEP | confirmation-dialogs, destructive-emphasis, undo-support · X-Dlg-Small | — |
+| Errors & sync | R2-032 conflict rows start on "Yours"; nothing applied until a button | KEEP | no data loss, local never overwritten by sync; focus-states · X-Dlg-Conflict | — |
+| Errors & sync | R2-033 "Тикет назначен: <name>" / outside filter; "Только у меня" default | KEEP | facts only; no tracker write by default · X-Err-Tracker | — |
+| Errors & sync | R2-034 mark on its own line; "оставить у себя" / "убрать" undoable | KEEP | truncation-strategy, color-not-only (dashed + text) · X-Err-Tracker | — |
+| Errors & sync | R2-035 only failure lines with facts; no "38 из 41" | KEEP | error-clarity, error-recovery; no invented numbers · X-Err-Tracker | — |
+| Errors & sync | R2-036 skeleton + "Можно работать дальше…", no "120 из ~400" | KEEP | progressive-loading, no-blocking-animation · X-Err-Tracker | — |
+| Errors & sync | R2-037 snapshot choice; retry capped at 30 s so the copy is true | KEEP | error-recovery, no data loss (snapshots stay in time machine) · X-Err-Storage | — |
+| Errors & sync | R2-038 damaged-file workspace named like a fresh one | KEEP | consistency · X-Err-Storage | — |
+| Errors & sync | R2-040 keychain copy states the real protection (DPAPI) | KEEP | error-clarity; report task titles off by default · X-Err-Storage | — |
+| Errors & sync | R2-048 sync popover; `sync.all` = Ctrl+Shift+R | KEEP | keyboard-shortcuts; no clash in the `src/AppController.cpp` catalogue · X-Err-Tracker | — |
+| Errors & sync | R2-053 update toasts replaced by a persistent sidebar line | KEEP | toast-dismiss (no transient for a lasting state); X-Ntf-Toasts draws no update toast | — |
+| Errors & sync | R2-054 "Что нового" default Насыщенный, once per release line | KEEP | owner's default supersedes the older sheet note; reachable from Settings → О программе | — |
+| r4 Knowledge… | R3-098 capture chips plain; × badge overlaid on hover/focus, Delete | KEEP | hover-vs-tap, layout-shift-avoid, keyboard-nav · X-Oth-Capture | — |
+| r4 Knowledge… | R3-097 "из ветки … — связать?" sets `branch` only on click | KEEP | support, not autopilot (person confirms a fact) · X-Oth-Capture | — |
+| r4 Knowledge… | R3-089 reference tags: ≤4-char code, else API/REF | KEEP | truncation-strategy (no cut words) · X-Oth-Knowledge | — |
+| r4 Knowledge… | R3-103 native tray menu with the sheet rows | KEEP | system-controls, platform-adaptive · X-Menus-Other | — |
+| r4 Knowledge… | R3-095 git "working on" line off by default | KEEP | X-Oth-Knowledge "выключена по умолчанию" — holds for new profiles (see next row) | — |
+| r4 Knowledge… | Lead override: git line **on** by default for everyone | CHANGE | Upgrade-lossless is right (0.8.0 users had it on), but on for new installs contradicts X-Oth-Knowledge / X-Set-GitLangAbout; README promises the feature, not its default | Split the default: a profile from before 0.8.1 keeps the line on; a fresh profile starts off. Default + migration in `src/AppController.cpp`; rewrite the override in `docs/DESIGN-DECISIONS.md` and move it under R3-095 (it now sits between R3-085 and R3-067) |
+| r4 Knowledge… | R3-106 "→ В работу" only for the default column | KEEP | the user's names are not rewritten · X-Menus-Task | — |
+| r4 Knowledge… | R3-085 quiet refs underlined + ring, bold pill | KEEP | color-not-only, consistency · Q-Knowledge / H2-Knowledge | — |
+| r4 Knowledge… | R3-067 "↓ ближайшее окно" applies at once, undo toast | KEEP | undo-support over a second confirm; the slot is a fact, the person presses ↓ · X-Dlg-Schedule | — |
+| r4 Knowledge… | R3-068 Tab picker lists every hour, "занято" as a word | KEEP | color-not-only; overlap is a fact, not a refusal · X-Dlg-Schedule | — |
+| r4 Knowledge… | R3-076 external web link asks: Enter opens, Esc, Копировать | KEEP | confirmation for third-party content, one key of friction · X-Dlg-Small (Копировать / Открыть present in `qml/LinkConfirmDialog.qml`) | — |
+| r4 Knowledge… | R3-080 merge adds missing ids only, names the kept ones | KEEP | no data loss, success-feedback · X-Dlg-TimeMachine | — |
+| r3 Today… | R3-002 waiting reason = "ждёт ответа: <имя>" | KEEP | facts only (no invented free text) · H2-Today | — |
+| r3 Today… | R3-014 stacked side columns 220 px, titles elide | KEEP | consistent widths; truncation-strategy (full title on tooltip) · H2-Today | — |
+| r3 Today… | R3-015 folded sidebar: sections only; views on Alt 1…9 / Ctrl K | KEEP | progressive-disclosure, keyboard alternative kept · H2 sidebar | — |
+| r3 Today… | R3-017/018 splash held ~0.9 s each launch, input swallowed; crash card | CHANGE | Crash card is right (nothing sent, person decides; X-Ntf-Focus). The fixed hold plus a MouseArea that eats input break no-blocking-animation / loading-states and zero friction; the sheet draws a splash, not a duration | Normal launch: dismiss as soon as the scene is ready (drop the fixed `autoDuration: 900`), and the first key or click ends the splash and reaches the app; keep the wait only for the crash card. `qml/Main.qml` (SplashScreen block), `qml/SplashScreen.qml` |
+| r3 Today… | R3-025/026 OS notification copy and buttons | KEEP | primary-action (one button + snooze), facts only · X-Ntf-OS | — |
+| r3 Today… | R3-027/103 tray: DnD "session-only; picking again lifts it" | CHANGE | Contradicts R3-103 and the code: DnD is the persisted `notifications.dndUntil` via `doNotDisturbFor` (lead note). consistency | Docs only: in `docs/DESIGN-DECISIONS.md` replace "session-only…" in R3-027/103 with "held until `notifications.dndUntil`; «Не беспокоить до … — выключить» lifts it" |
+| r3 Today… | R3-133 month empty state backing, week none | KEEP | contrast-readability · X-Err-Empty | — |
+| r3 Today… | R3-137 no-Done-column card → Settings stages | KEEP | error-recovery path · X-Dlg-Small | — |
+| r3 Today… | R3-138 orphan column mark not built | KEEP | no state the app cannot produce | — |
+| r3 Today… | R3-144 list rows share TrackerMark, edge colours, strike | KEEP | consistency, color-not-only · H2-List | — |
+| r3 Today… | Lead: one tray menu (C++), Windows toast forwarding, shared DnD | KEEP | consistency (one implementation) | — |
+| r4 tasks | R3-057 «ответили» / «написал <когда>», `stateAt` | KEEP | clarity over a guessed gender; field round-trips · X-Oth-Archive-People | — |
+| r4 tasks | R3-137 small-dialog template, buttons right | KEEP | consistency beats one off-template card · X-Dlg-Small | — |
+| r4 tasks | R3-046 tracker task menu as sheet; other actions on keys / Ctrl K | KEEP | progressive-disclosure, keyboard-shortcuts · X-Menus-Task | — |
+| r4 tasks | R3-044 digits pick a column, no drawn numbers | KEEP | keyboard-first; the sheet draws none · X-Menus-Task | — |
+| r4 tasks | R3-048 calendar block menu; "убрать" clears the plan date only | KEEP | no data loss (deadline kept) · X-Menus-Other | — |
+| r4 tasks | R3-056 hand-archived task gets its month | KEEP | facts (status-change time) · X-Oth-Archive-People | — |
+| r4 tasks | R3-147 ask before a write, on by default, only where writes are on | KEEP | tracker writes opt-in; Esc sends nothing · X-Oth-Select-Drag | — |
+| r4 tasks | R3-045 quiet danger ink softened, bold full red | KEEP | destructive-emphasis kept by text + placement; verify color-accessible-pairs ≥4.5:1 in quiet | — |
+| r4 tasks | Saved view "Заблокировано" not a bug | KEEP | verified fact | — |
+| r4 tasks | Lead r4 merge: one Done card, one menu rule; line heights 1.7 / 1.65 | KEEP | line-height 1.5–1.75, consistency | — |
+
+### Review 2 CHANGE items
+
+1. **R2-069 quick-note draft survives a restart**: persist on close (`settings.quickNoteDraft` +
+   attach target), restore on open, clear on save — `qml/QuickCaptureNotesPopup.qml`,
+   `src/AppController.cpp`.
+2. **Git "working on" default**: off for fresh profiles (sheet), kept on for profiles from before
+   0.8.1 — `src/AppController.cpp`; move and rewrite the lead override under R3-095 in
+   `docs/DESIGN-DECISIONS.md`.
+3. **Splash never blocks**: no fixed 0.9 s hold; the first key/click dismisses it and is delivered;
+   wait only for the crash card — `qml/Main.qml`, `qml/SplashScreen.qml`.
+4. **R3-027/103 text**: replace the stale "session-only" DnD wording — `docs/DESIGN-DECISIONS.md`.
+
+## Review 3 — r4 calendar/dialogs and r5 decisions
+
+Entries of `docs/DESIGN-DECISIONS.md` added or rewritten after Review 2 (`git log -p 8e2bb96..232feda`,
+heap2/0.8.1 @ 232feda: "r4 · Calendar / dialogs", "0.8.1 r5 — Knowledge, command line, keys",
+"r5 · Today, notifications, system", "r5 · tasks, settings, errors group", the R3-095 / R3-017/018 /
+R3-027/103 rewrites and the r5 lead note). Each checked against the sheet's markup and data
+(`New heap design/screens/*.dc.html`) and the code, judged with ui-ux-pro-max rule ids. Owner
+decisions in the header of `docs/DESIGN-GAPS-0.8.1-r4.md` are fixed; sheet beats ticket text.
+
+Result: **23 KEEP · 1 CHANGE · 1 REVERT** (25 decisions).
+
+| Section | Decision (short) | Verdict | Reason (guideline · sheet) | Change needed |
+|---|---|---|---|---|
+| r4 Calendar / dialogs | R4-056 ↵ (U+21B5) added to the five bundled TTFs | KEEP | one fix for every hint; "←" read as "back" (keyboard-shortcuts, consistency) · N/X-Dlg-Schedule, N-Keys. OFL 1.1 without a Reserved Font Name allows a modified version. Follow-up, not a design change: keep the glyph build script in the repo and note the modification in `resources/fonts/*-OFL.txt`, or a font update silently drops the glyph | — |
+| r4 Calendar / dialogs | R4-055 series question preselects "Только эту встречу" | KEEP | the sheet data says so (`scope = [{ 'Только эту встречу', on: true }, …]` in N- and X-Dlg-Event); the r4 gap line was wrong; least-change default keeps Return safe | — |
+| r4 Calendar / dialogs | R4-059 `TextLeading`: fixed-px line height on TextArea (standup 22px) | KEEP | line-height 1.5–1.75; Qt TextArea has no lineHeight, fixed px is the only exact match · N/X-Dlg-Recap 1.7 | — |
+| r4 Calendar / dialogs | R4-062/063 small-dialog spacing; fact "13px at 1.45" | CHANGE | spacing, width 428 and the link / "Убрать пример?" dialogs on one template are right (consistency · X-Dlg-Small). The leading in this entry is stale: the r5 lead note set SmallDialog.fact to 1.5, so the doc now states two values for one property | Docs only, `docs/DESIGN-DECISIONS.md` R4-062/063: "Fact 13px at 1.45 leading" → "Fact 13px at 1.5 leading (r5 lead note; the sheet's template draws 1.45, its in-context cards 1.5)" |
+| r4 Calendar / dialogs | R4-065 event-log error mark = line icon "warning", danger ink | KEEP | icon-style-consistent / no-emoji-icons over the sheet's "⚠" text glyph (font-dependent); same position after the source, colour plus shape · N-Dlg-Log-Import | — |
+| r5 Knowledge… | R4-073 quick note always to «Входящие»; open note stays open; toast says where | KEEP | the sheet header is "быстрая заметка → «Входящие»" · N/X-Oth-Capture; state-preservation; success-feedback. Code only sets the active note when none is open, no view switch | — |
+| r5 Knowledge… | R2-069 quick-note draft in `settings.quickNoteDraft`, 0.6 s debounce, shared by both windows | KEEP | form-autosave, no data loss; implements Review 2 CHANGE 1 | — |
+| r5 Knowledge… | R4-077 "Перейти к докам / заметкам" off the command line, ids kept while bound | KEEP | one way to Knowledge · H2/Q-Command (no such rows); a user's binding is not lost (back-stack-integrity, no silent loss) | — |
+| r5 Knowledge… | R4-080 Enter written ↵ in every key label | KEEP | consistency · N/X-Keys ("Открыть ↵") and every sheet hint | — |
+| r5 Knowledge… | R4-081 no "Панель дня Ctrl \\" row | KEEP | N-Keys is the one sheet that still lists it; no shell sheet draws a day panel and Review 1 kept DG-002 (sheet internally inconsistent). A key for a missing feature would be a dead control | — |
+| r5 Knowledge… | R4-082 cheat-sheet footer + link to Settings → Клавиши, intro wraps ~900px | KEEP | matches N/X-Keys ("Изменить сочетание — Настройки → Клавиши · Ctrl / тоже открывает этот экран", both parts in `keys.sheet.edit` / `keys.sheet.footer`); line-length | — |
+| r5 Knowledge… | R3-095 git line off for a fresh profile, kept on for data from before 0.8.1 (migration) | KEEP | implements Review 2 CHANGE 2: the sheet's default (X-Oth-Knowledge, X-Set-GitLangAbout) for new installs, upgrade-lossless for everyone who had it. Note for the lead: the r4 gaps header lists "git 'working on' line on by default" among owner decisions, while the plan log records it as a lead override. If the owner did make that call, flip only the fresh-profile default to on in `src/AppController.cpp` | — |
+| r5 Knowledge… | R3-017/018 splash leaves on the first frame, never takes input; only the crash card waits | KEEP | no-blocking-animation, loading-states; implements Review 2 CHANGE 3 (`qml/SplashScreen.qml`: MouseArea passes presses, focus only when crashed) · N/X-Ntf-Focus | — |
+| r3 Today… | R3-027/103 DnD wording: held until `notifications.dndUntil` | KEEP | consistency with R3-103 and the code; implements Review 2 CHANGE 4 | — |
+| r5 Today… | R4-006 first-run sidebar: no section key hints, no Ctrl K footer, no profile dot | KEEP | matches H2-First / Q-First (Ctrl N on "Новая задача…" stays in bold, as the sheet draws it); progressive-disclosure | — |
+| r5 Today… | R4-011 folded active section = 34px rounded tile (`panel2`) | KEEP | N/X-Oth-Small draw the tile; nav-state-active by form, not a colour bar | — |
+| r5 Today… | R4-017 every sync source: reason + "повторить"; 429 = amber pending ring "просит подождать (429)" | KEEP | error-recovery (message + action); same wording and "Повторить сейчас" as N-Err-Tracker; pending ring as N-Ntf-Toasts. Retry is the person's press, nothing is written | — |
+| r5 Today… | R4-019 update line wraps inside the sidebar gutters | KEEP | fixes the A-level overflow (no horizontal push; truncation-strategy: elide only the version) · N/X-Ntf-OS | — |
+| r5 tasks… | APP-281 A3 branch name + icon row on the checked-out branch's card | REVERT | H2-Board's card meta is id · when · priority only (no branch anywhere in its markup or data); the entry's "H2-Board allows Icon branch + name" is not in the sheet. DG-023 "No branch" on cards, and the owner's 1.0 direction (cards show no branch; the cursor's expanded state shows no branch). "What am I on" already has its place: the git working-on line at the top (X-Oth-Knowledge). Sheet and owner beat the ticket | Remove the `_branchMatched` row (Icon "branch" + `tc-branch`) from `qml/TaskCard.qml` (~l.380, ~l.609–630) and its case in `tests/qml/tst_Heap2Board.qml`; rewrite the APP-281 entry in `docs/DESIGN-DECISIONS.md` as "no branch on any card; the current branch is the top-bar git line" |
+| r5 tasks… | R4-113 picked conflict cell = 1px outline + bright text, no fill | KEEP | exactly N-Dlg-Conflict (`inset 0 0 0 1px #4a525d; color: #ffffff`, other side #8f99a6); color-not-only | — |
+| r5 tasks… | R4-037 empty rings on every card while a selection exists | KEEP | exactly N/X-Oth-Select-Drag (unselected 1.5px ring, selected filled with ✓); the affordance shows where the choice is offered | — |
+| r5 tasks… | R4-105 one SmallDialog fact style; ticket-naming fact a step brighter (`factColor`) | KEEP | N-Dlg-Conflict: write-ask fact #c4ccd6, "Тикет назначен" fact #8f99a6, both 1.5; consistency | — |
+| r5 tasks… | R4-104 "state.json не читается с позиции N." only when the parse failed | KEEP | matches N-Err-Storage text (digits grouped as "18 230"); error-clarity; no invented position for a shape error | — |
+| r5 tasks… | R3-045 quiet danger ink held at 4.5:1 on menu fill and highlight (tst_Theme) | KEEP | color-accessible-pairs; closes Review 2's verify note | — |
+| r5 tasks… | Lead r5 merge: small-dialog fact leading 1.5; ↵ from the R4-056 font fix | KEEP | the sheets disagree (X-Dlg-Small template `d.sub` 1.45; storage, keychain, tracker push and "нет Готово" cards 1.5 in N-Err-Storage / N-Dlg-Conflict / N-Err-Empty); one value for one component, 0.65 px apart. The lead's "every small-dialog fact at 1.5" overstates it — see the R4-062/063 row | — |
+
+### Review 3 CHANGE / REVERT items
+
+1. **REVERT APP-281 A3 branch row on the card**: delete the `_branchMatched` RowLayout and the
+   property from `qml/TaskCard.qml` and its test in `tests/qml/tst_Heap2Board.qml`; rewrite the entry
+   in `docs/DESIGN-DECISIONS.md` (no branch on any card, DG-023; the current branch lives in the git line).
+2. **R4-062/063 text**: replace "13px at 1.45 leading" with the 1.5 the lead note set —
+   `docs/DESIGN-DECISIONS.md` only.

@@ -71,7 +71,7 @@ TestCase {
     }
 
     function test_views_name_every_tab_stop_data() {
-        return ["board", "timeline", "week", "month", "archive", "docs", "notes"].map(function (v) { return { tag: v, view: v }; });
+        return ["board", "list", "week", "month", "notes"].map(function (v) { return { tag: v, view: v }; });
     }
     function test_views_name_every_tab_stop(data) {
         const missing = unnamedIn(data.view);
@@ -89,7 +89,7 @@ TestCase {
 
     // The dialogs and panels, open, the same way.
     function test_dialogs_name_every_tab_stop_data() {
-        return ["TaskEditor", "CommandPalette", "WelcomePopup", "HotkeysPanel", "QuickCapturePopup"]
+        return ["TaskEditor", "CommandPalette", "HotkeysPanel", "QuickCapturePopup"]
             .map(function (p) { return { tag: p, prefix: p }; });
     }
     function test_dialogs_name_every_tab_stop(data) {

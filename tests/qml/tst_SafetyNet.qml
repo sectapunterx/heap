@@ -85,6 +85,8 @@ TestCase {
 
     function test_a_switch_writes_settings_safety() {
         const sv = settingsAtSafety();
+        // Under the section's "more" line (DG-090).
+        findChild(findChild(sv, "settings-block-safety"), "settings-more-toggle").parent.userOpen = true;
         findChild(sv, "settings-safety-endOfDay").toggled(true);
         verify(AppController.safety.endOfDay === true);
         tryVerify(() => findChild(sv, "settings-safety-endOfDayTime").visible);
@@ -172,7 +174,7 @@ TestCase {
         d.showNow();
         tryVerify(() => d.opened);
         const field = findChild(d.contentItem, "standup-draft-text");
-        verify(field.text.split("\n").length >= 6, field.text);
+        compare(field.text.split("\n").length, 3, field.text);
         field.text = "edited";
         compare(field.text, "edited");
         d.close();

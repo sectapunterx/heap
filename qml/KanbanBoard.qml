@@ -4,11 +4,14 @@ import QtQuick.Controls
 import QtQuick.Controls.Basic
 import QtQuick.Controls as QQC
 import TodoCpp
+import "QueryWords.js" as QueryWords
 import "Motion.js" as Motion
 
 Item {
     id: root
     property string searchText: ""
+    readonly property var stages: ["backlog", "todo", "prog", "half", "blocked", "review", "done"]
+    readonly property string _searchKeepDone: root.searchText.replace(/(^|\s)is:open(?=\s|$)/gi, " ").trim()
     // How every column is ordered. "manual" is the board's own rank, which is
     // what a drag writes; the others are read-only views over the same cards,
     // so switching back to manual restores the order the user arranged rather
@@ -22,6 +25,8 @@ Item {
     property string hoveredTaskId: ""
     signal taskClicked(string id)
     signal createInStatus(string statusId)
+    // "сбросить фильтр · Esc" under a filter that found nothing (DG-160).
+    signal resetFilterRequested()
 
     // Anchor for shift-click range selection. Reset when the selection
     // disappears so the next shift-click starts a fresh range.
@@ -136,7 +141,7 @@ Item {
     // One of the board's own dialogs or menus is up (new column, WIP limit,
     // delete confirmation, a card menu). Main.qml keeps Ctrl+Z from acting
     // on the board behind it.
-    readonly property bool dialogOpen: cardMenuOpen || addColumnPopup.opened || wipPopup.opened || archivePopup.opened
+    readonly property bool dialogOpen: cardMenuOpen || wipPopup.opened || archivePopup.opened
                                        || confirmDelete.opened || colorPopup.opened
 
     // One source of truth for the column width. focusColumn() scrolls by
@@ -159,8 +164,8 @@ Item {
             if (!root.isFolded(sts[i].id)) open++;
             else fixed += root.isDoneColumn(sts[i].id) ? root.doneFoldedWidth : root.foldedWidth;
         }
-        const gaps = sts.length * root.columnGap;   // the "+" tile after the last column too
-        const avail = hscroll.width - fixed - gaps - addColTile.width;
+        const gaps = Math.max(0, sts.length - 1) * root.columnGap;
+        const avail = hscroll.width - fixed - gaps;
         if (open === 0) return root.minColumnWidth;
         return Math.max(root.minColumnWidth, Math.min(root.maxColumnWidth, Math.floor(avail / open)));
     }
@@ -201,6 +206,18 @@ Item {
     // Walk every column's TaskCard repeater, collect ids of currently
     // visible cards (respects search/priority/archived filters), hand them
     // to AppController as the new selection set.
+    function columnCommand(kind) {
+        const cols = root._visibleByColumn();
+        const pos = root._cursorPos(cols);
+        const idx = pos ? pos.col : 0;
+        const c = colRepeater.itemAt(idx);
+        if (!c) return;
+        const sid = String(c["statusId"]);
+        if (kind === "color") colorPopup.openFor(sid, c["statusColor"], c);
+        else if (kind === "archive") archivePopup.openFor(sid, String(c["statusName"]));
+        else if (kind === "doing" && sid !== "prog")
+            AppController.setStatusDoing(sid, !AppController.isDoingStatus(sid));
+    }
     function selectAllVisible() {
         AppController.setSelectedTaskIds(_flatVisibleIds());
     }
@@ -213,6 +230,29 @@ Item {
     // a filter change, a drag, or the card moving column — all of which
     // renumber the rows underneath it.
     property string cursorTaskId: ""
+    // The column whose header holds the keyboard (Tab onto one of its
+    // buttons); "" when none. Ctrl+Shift+H / L move that column (DG-133,
+    // keymap "на заголовке колонки"); a header marks itself with `headerOf`.
+    function focusedHeaderStatus() {
+        for (let it = root.Window.activeFocusItem; it; it = it.parent)
+            if (typeof it.headerOf === "string" && it.headerOf.length > 0) return it.headerOf;
+        return "";
+    }
+    function moveFocusedColumn(dx) {
+        const sid = root.focusedHeaderStatus();
+        if (!sid) return;
+        const sts = AppController.statuses;
+        const i = sts.findIndex(st => st.id === sid);
+        if (i < 0 || i + dx < 0 || i + dx >= sts.length) return;
+        AppController.moveStatus(sid, i + dx);
+        // The header keeps the keyboard, so the key can be pressed again.
+        Qt.callLater(function () {
+            for (let k = 0; k < colRepeater.count; k++) {
+                const c = colRepeater.itemAt(k);
+                if (c && c["statusId"] === sid) { c["focusHeader"](); return; }
+            }
+        });
+    }
     // The ring is drawn only once the keyboard has moved the cursor. A click
     // still puts the cursor on the card (so J/K carry on from there), but a
     // ring left behind by a mouse click read as the card being stuck
@@ -643,9 +683,9 @@ Item {
         id: hscroll
         objectName: "board-hscroll"
         anchors.fill: parent
-        anchors.leftMargin: Theme.sp2xl
-        anchors.rightMargin: Theme.sp2xl
-        anchors.topMargin: Theme.spXl
+        anchors.leftMargin: Theme.pagePadX
+        anchors.rightMargin: Theme.pagePadX
+        anchors.topMargin: Style.fills ? Theme.spXs : Theme.px(16)
         anchors.bottomMargin: Theme.sp2xl
         contentWidth: rowL.implicitWidth
         contentHeight: height
@@ -714,6 +754,7 @@ Item {
                     required property int index
                     readonly property string statusId: sid
                     readonly property string statusName: sname
+                    function startRename() { col.renaming = true; renameField.forceActiveFocus(); renameField.selectAll(); }
                     readonly property color statusColor: scolor
                     // Set by colRepeater (Qt 6.9's qmllint does not resolve
                     // root inside the column): the board, whether this is a
@@ -753,6 +794,8 @@ Item {
                     readonly property bool headerKeyFocus: moveLeftIcon.keyFocused || moveRightIcon.keyFocused
                                                            || deleteIcon.keyFocused || foldIcon.keyFocused
                     readonly property bool headerRevealed: col.headerHovered || col.headerKeyFocus
+                    // After Ctrl+Shift+H / L the header keeps the keyboard (DG-133).
+                    function focusHeader() { foldIcon.focusKey(); }
                     // Briefly emphasised when the sidebar Blocked / Code Review
                     // button jumps focus to this column.
                     readonly property bool focusPulse: root._focusPulseStatus === col.statusId
@@ -789,17 +832,63 @@ Item {
                     // No frame and no fill (APP-262): a drop target is marked
                     // by an outline, a shape rather than a colour change.
                     color: Theme.surfaceColumn
-                    border.color: (dragOver || focusPulse) ? Theme.focusRing : "transparent"
-                    border.width: (dragOver || focusPulse) ? 2 : 1
+                    border.color: focusPulse ? Theme.focusRing : "transparent"
+                    border.width: focusPulse ? 2 : 1
                     clip: true
                     Behavior on border.color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
+
+                    // The drop target's frame hugs the column's cards, not
+                    // the window (R3-050): 1.5px blue in bold, a 1px line in
+                    // quiet (R3-049). A folded Done becomes a tall strip.
+                    Rectangle {
+                        id: dropFrame
+                        objectName: "column-drop-frame"
+                        visible: col.dragOver
+                        z: 30
+                        width: parent.width
+                        height: col.folded ? (col.isDone ? Math.min(col.height, Theme.px(200)) : col.height)
+                              : Math.min(col.height, Theme.px(38) + 2 * Theme.spMd + bodyFlick.contentHeight)
+                        radius: col.radius
+                        color: "transparent"
+                        border.color: Style.urgency ? Theme.info : Theme.borderStrong
+                        border.width: Style.urgency ? 1.5 : 1
+                    }
+                    // Folded Done under the pointer: ring, name and
+                    // "отпустите" in the middle of the strip (R3-053).
+                    Column {
+                        objectName: "column-done-drop"
+                        visible: col.folded && col.isDone && col.dragOver
+                        z: 31
+                        anchors.horizontalCenter: dropFrame.horizontalCenter
+                        y: (dropFrame.height - height) / 2
+                        spacing: Theme.spXs
+                        StatusRing {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            category: "done"
+                        }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: col.statusName
+                            color: Theme.text
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsMd
+                            font.weight: Theme.fwTitle
+                        }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: I18n.t("kanban.done.drop")
+                            color: Theme.textMuted
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsSm
+                        }
+                    }
 
                     // Folded: the name runs down the strip, with the count; a
                     // click (or Z on the board) opens it again.
                     Item {
                         objectName: "column-done-folded"
                         anchors.fill: parent
-                        visible: col.folded && col.isDone
+                        visible: col.folded && col.isDone && !col.dragOver
                         Column {
                             anchors.left: parent.left
                             anchors.right: parent.right
@@ -819,14 +908,15 @@ Item {
                                 Text {
                                     objectName: "column-done-folded-name"
                                     anchors.verticalCenter: parent.verticalCenter
-                                    width: Math.min(implicitWidth, col.width - 2 * Theme.spMd - doneCount.implicitWidth - Theme.iconSize - Theme.spSm)
+                                    width: Math.min(implicitWidth, col.width - 2 * Theme.spMd
+                                                    - (Style.chipFill ? doneCount.implicitWidth + Theme.iconSize + 2 * Theme.spXs : 0))
                                     elide: Text.ElideRight
                                     // Quiet: "Done · 2"; bold: ring, name, count.
                                     text: col.statusName + (Style.chipFill ? "" : " · " + col.shownCount)
                                     color: Style.chipFill ? Theme.text : Theme.textMuted
                                     font.family: Theme.fontUi
                                     font.pixelSize: Theme.fsMd
-                                    font.weight: Style.chipFill ? Theme.fwTitle : Theme.fwBody
+                                    font.weight: Style.chipFill ? Theme.fwHeading : Theme.fwBody
                                 }
                                 Text {
                                     id: doneCount
@@ -841,6 +931,8 @@ Item {
                             }
                             Text {
                                 objectName: "column-done-show"
+                                // Quiet: the header itself opens it (Q-Board).
+                                visible: Style.chipFill || col.dragOver
                                 text: col.dragOver ? I18n.t("kanban.done.drop") : I18n.t("kanban.done.show")
                                 color: col.dragOver ? Theme.text : Theme.textMuted
                                 font.family: Theme.fontUi
@@ -936,27 +1028,20 @@ Item {
                             Layout.preferredHeight: 38
                             color: "transparent"
                             HoverHandler { onHoveredChanged: col.headerHovered = hovered }
+                            readonly property string headerOf: col.statusId
                             // The header's menu from the keyboard: Menu or
                             // Shift+F10 on any of its buttons, which pass the
                             // key up to here.
                             Keys.onMenuPressed: colHeaderMenu.popup()
-                            // Ctrl Shift H / L on the header (APP-278): the
-                            // column one place left / right, as the menu's
-                            // Move left / right. Taken before the window's
-                            // shortcuts: elsewhere Ctrl Shift L is the log.
-                            function _columnStep(event) {
-                                if (event.modifiers !== (Qt.ControlModifier | Qt.ShiftModifier)) return 0;
-                                // By the physical key on Windows, so a Russian layout works too.
-                                const vk = Qt.platform.os === "windows" ? event.nativeVirtualKey : 0;
-                                return event.key === Qt.Key_H || vk === 0x48 ? -1
-                                     : event.key === Qt.Key_L || vk === 0x4C ? 1 : 0;
-                            }
-                            Keys.onShortcutOverride: (event) => { if (_columnStep(event) !== 0) event.accepted = true; }
+                            // Ctrl Shift H / L on the header (APP-278, DG-133)
+                            // are catalogue keys now (board.columnLeft /
+                            // Right): KeyRouter runs them while a header holds
+                            // the keyboard (moveFocusedColumn), so they are
+                            // rebindable and listed; elsewhere Ctrl Shift L is
+                            // the log.
                             Keys.onPressed: (event) => {
-                                const step = _columnStep(event);
-                                if (step !== 0) {
-                                    if (!(step < 0 && col.isFirst) && !(step > 0 && col.isLast))
-                                        AppController.moveStatus(col.statusId, col.index + step);
+                                if (event.key === Qt.Key_F2) {
+                                    col.startRename();
                                     event.accepted = true;
                                 } else if (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier)) {
                                     colHeaderMenu.popup();
@@ -1000,10 +1085,10 @@ Item {
                                         // tracking shouted across seven columns and cut
                                         // "In progress" to "IN PROGR…" on a 1680px window.
                                         text: col.statusName
-                                        color: Theme.text
+                                        color: Style.fills ? Theme.text : Theme.textMuted
                                         font.family: Theme.fontUi
                                         font.pixelSize: Theme.fsMd
-                                        font.weight: Theme.fwTitle
+                                        font.weight: Style.fills ? Theme.fwHeading : Theme.fwBody
                                         elide: Text.ElideRight
                                         width: parent.width
                                     }
@@ -1159,7 +1244,7 @@ Item {
                                     HoverIcon {
                                         id: moveLeftIcon
                                         objectName: "column-move-left"
-                                        glyph: "‹"; tip: I18n.t("kanban.moveLeft")
+                                        icon: "chevron-left"; tip: I18n.t("kanban.moveLeft"); shortcutId: "board.columnLeft"
                                         visible: !col.isFirst
                                         revealed: col.headerRevealed
                                         onActivated: AppController.moveStatus(col.statusId, col.index - 1)
@@ -1167,7 +1252,7 @@ Item {
                                     HoverIcon {
                                         id: moveRightIcon
                                         objectName: "column-move-right"
-                                        glyph: "›"; tip: I18n.t("kanban.moveRight")
+                                        icon: "chevron-right"; tip: I18n.t("kanban.moveRight"); shortcutId: "board.columnRight"
                                         visible: !col.isLast
                                         revealed: col.headerRevealed
                                         onActivated: AppController.moveStatus(col.statusId, col.index + 1)
@@ -1175,7 +1260,7 @@ Item {
                                     HoverIcon {
                                         id: deleteIcon
                                         objectName: "column-delete"
-                                        glyph: "×"; tip: I18n.t("kanban.deleteColumn")
+                                        icon: "close"; tip: I18n.t("kanban.deleteColumn")
                                         danger: true
                                         visible: AppController.statuses.length > 1
                                         revealed: col.headerRevealed
@@ -1184,7 +1269,7 @@ Item {
                                     HoverIcon {
                                         id: foldIcon
                                         objectName: "column-fold"
-                                        glyph: "⇤"; tip: I18n.t("kanban.collapse")
+                                        icon: "collapse"; tip: I18n.t("kanban.collapse")
                                         shortcutId: "board.collapseColumn"
                                         revealed: col.headerRevealed
                                         onActivated: root.toggleCollapsed(col.statusId)
@@ -1201,25 +1286,55 @@ Item {
 
                             AppMenu {
                                 id: colHeaderMenu
-                                AppMenuItem { text: I18n.t("kanban.addTask"); onTriggered: root.createInStatus(col.statusId) }
-                                AppMenuItem { text: I18n.t("kanban.rename"); onTriggered: { col.renaming = true; renameField.forceActiveFocus(); renameField.selectAll() } }
-                                AppMenuItem { text: I18n.t("kanban.changeColorMenu"); onTriggered: colorPopup.openFor(col.statusId, col.statusColor, col) }
-                                AppMenuItem { text: I18n.t("kanban.wip.set"); onTriggered: wipPopup.openFor(col.statusId, col.statusName, col.wipLimit, col) }
-                                AppMenuItem { objectName: "col-archive-menu"; text: I18n.t("kanban.archive.set"); onTriggered: archivePopup.openFor(col.statusId, col.statusName) }
-                                AppMenuItem { text: I18n.t("kanban.collapse"); onTriggered: root.toggleCollapsed(col.statusId) }
-                                // A "doing" column books a focus block for a card
-                                // that enters it, like In Progress (always on).
-                                AppMenuItem {
-                                    enabled: col.statusId !== "prog"
-                                    text: (AppController.statuses, AppController.isDoingStatus(col.statusId))
-                                          ? I18n.t("kanban.doing.off") : I18n.t("kanban.doing.on")
-                                    onTriggered: AppController.setStatusDoing(col.statusId, !AppController.isDoingStatus(col.statusId))
+                                objectName: "column-menu"
+                                // The stage list opens once this menu has
+                                // closed (TaskMenuHost does the same).
+                                property bool _openStage: false
+                                onClosed: if (colHeaderMenu._openStage) { colHeaderMenu._openStage = false; stageMenu.popup(); stageMenu.currentIndex = 1 + Math.max(0, col.board ? col.board.stages.indexOf(col.category) : 0); }
+                                AppMenuHeader {
+                                    text: I18n.t("colmenu.header").arg(col.statusName) + " · " + I18n.count(col.shownCount, "list.tasks")
                                 }
+                                AppMenuItem { objectName: "col-menu-new"; text: I18n.t("colmenu.newTask"); shortcutId: "task.newBelow"; onTriggered: root.createInStatus(col.statusId) }
+                                AppMenuItem { objectName: "col-menu-rename"; text: I18n.t("kanban.rename"); keyText: "F2"; onTriggered: col.startRename() }
+                                AppMenuItem {
+                                    objectName: "col-menu-stage"
+                                    text: I18n.t("colmenu.stage")
+                                    opensList: true
+                                    note: I18n.t("status.stage." + col.category).toLowerCase()
+                                    onTriggered: colHeaderMenu._openStage = true
+                                }
+                                AppMenuItem { objectName: "col-menu-fold"; text: I18n.t("colmenu.fold"); shortcutId: "board.collapseColumn"; onTriggered: root.toggleCollapsed(col.statusId) }
+                                AppMenuItem { objectName: "col-menu-wip"; text: I18n.t("colmenu.wip"); onTriggered: wipPopup.openFor(col.statusId, col.statusName, col.wipLimit, col) }
                                 AppMenuSeparator {}
-                                AppMenuItem { text: I18n.t("kanban.moveLeft");  enabled: !col.isFirst; keyText: AppController.keyText("Ctrl+Shift+H"); onTriggered: AppController.moveStatus(col.statusId, col.index - 1) }
-                                AppMenuItem { text: I18n.t("kanban.moveRight"); enabled: !col.isLast; keyText: AppController.keyText("Ctrl+Shift+L"); onTriggered: AppController.moveStatus(col.statusId, col.index + 1) }
+                                AppMenuItem { text: I18n.t("kanban.moveLeft");  enabled: !col.isFirst; shortcutId: "board.columnLeft"; onTriggered: AppController.moveStatus(col.statusId, col.index - 1) }
+                                AppMenuItem { text: I18n.t("kanban.moveRight"); enabled: !col.isLast; shortcutId: "board.columnRight"; onTriggered: AppController.moveStatus(col.statusId, col.index + 1) }
                                 AppMenuSeparator {}
-                                AppMenuItem { danger: true; text: I18n.t("kanban.deleteColumn"); enabled: AppController.statuses.length > 1; onTriggered: root.requestDeleteColumn(col.statusId, col.statusName) }
+                                AppMenuItem { objectName: "col-menu-delete"; danger: true; text: I18n.t("colmenu.delete"); enabled: AppController.statuses.length > 1; onTriggered: root.requestDeleteColumn(col.statusId, col.statusName) }
+                            }
+                            // "Этап колонки ›": the stage sets the ring and
+                            // what counts as done (X-Menus-Column).
+                            AppMenu {
+                                id: stageMenu
+                                objectName: "column-stage-menu"
+                                backOnLeft: true
+                                onBack: { colHeaderMenu.popup(); colHeaderMenu.currentIndex = 3; }
+                                AppMenuItem {
+                                    isBack: true
+                                    text: "‹ " + I18n.t("colmenu.stageBack")
+                                    onTriggered: stageMenu.goBack()
+                                }
+                                Repeater {
+                                    model: col.board ? col.board.stages : []
+                                    AppMenuItem {
+                                        id: stageRow
+                                        required property string modelData
+                                        objectName: "col-stage-" + stageRow.modelData
+                                        ring: stageRow.modelData
+                                        text: I18n.t("status.stage." + stageRow.modelData)
+                                        note: col.category === stageRow.modelData ? I18n.t("taskmenu.now") : ""
+                                        onTriggered: AppController.setStatusCategory(col.statusId, stageRow.modelData)
+                                    }
+                                }
                             }
                         }
 
@@ -1517,7 +1632,8 @@ Item {
                                 width: parent.width - 20
                                 height: 2
                                 radius: 1
-                                color: Theme.accent
+                                // Orange in bold, a light line in quiet (R3-049).
+                                color: Style.urgency ? Theme.warning : Theme.textMuted
                                 y: bodyFlick.y - bodyFlick.contentY + colDrop.indicatorY - 5
                                 z: 20
                             }
@@ -1546,7 +1662,10 @@ Item {
                         status: col.statusId
                         statuses: AppController.statuses
                         showArchived: root.showArchived
-                        searchText: root.searchText
+                        // The folded Done is how the board keeps done work out
+                        // of sight: "не готово" leaves its count and its cards
+                        // to it (H2-Board shows "Готово 2").
+                        searchText: col.isDone && col.board ? col.board._searchKeepDone : root.searchText
                         priorities: root.activePriorities
                         sortMode: root.sortMode
                         today: AppController.today
@@ -1563,124 +1682,10 @@ Item {
                 }
             }
 
-            // "+ Add column" tile at the end of the row
-            Rectangle {
-                id: addColTile
-                width: Theme.chipH
-                height: Theme.chipH
-                y: (Theme.px(38) - height) / 2
-                radius: Theme.radiusMd
-                color: addColMA.hovered || addColMA.keyboardFocused ? Theme.panel2 : "transparent"
-                Text {
-                    anchors.centerIn: parent
-                    text: "+"
-                    color: addColMA.hovered || addColMA.keyboardFocused ? Theme.text : Theme.textDim
-                    font.pixelSize: Theme.fsLg
-                }
-                ClickArea {
-                    id: addColMA
-                    objectName: "board-add-column"
-                    label: I18n.t("kanban.newColumn")
-                    onActivated: addColumnPopup.open()
-                }
-            }
         }
     }
 
     // ── Popups ──────────────────────────────────────────────────────────────
-
-    Popup {
-        id: addColumnPopup
-        objectName: "add-column-popup"
-        modal: true
-        focus: true
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-        padding: 0
-        width: 360
-        anchors.centerIn: Overlay.overlay
-        background: ModalSurface {}
-
-        // Dimmed backdrop so the board stays visible behind the dialog.
-        Overlay.modal: ModalScrim {}
-
-        // Not `palette`: that is QQuickPopup's own property, which every
-        // Control inside the popup resolves its colours through. Shadowing it
-        // with an array of hex strings hands those controls an array where
-        // they expect a palette.
-        readonly property var swatches: Theme.swatches
-        property color picked: swatches[0]
-
-        function reset() { nameField.text = ""; picked = swatches[0] }
-        onOpened: { reset(); nameField.forceActiveFocus() }
-
-        contentItem: ColumnLayout {
-            spacing: Theme.spLg
-            Item { Layout.preferredHeight: 4 }
-            Text {
-                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("kanban.newColumn"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Theme.fwHeading
-            }
-            Text {
-                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("kanban.colName"); color: Theme.textDim; font.pixelSize: Theme.fsSm; font.weight: Theme.fwTitle
-            }
-            TextField {
-                id: nameField
-                ContextMenu.menu: TextEditMenu { editor: nameField }
-                objectName: "add-column-name"
-                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
-                placeholderText: I18n.t("kanban.colName.ph")
-                color: Theme.text
-                placeholderTextColor: Theme.textDim
-                background: FieldFrame {}
-                onAccepted: saveBtn.activate()
-            }
-            Text {
-                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("common.color"); color: Theme.textDim; font.pixelSize: Theme.fsSm; font.weight: Theme.fwTitle
-            }
-            Row {
-                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
-                spacing: Theme.spSm
-                Repeater {
-                    model: addColumnPopup.swatches
-                    delegate: Rectangle {
-                        id: newSwatch
-                        required property string modelData
-                        required property int index
-                        readonly property bool isPicked: String(addColumnPopup.picked).toLowerCase() === modelData.toLowerCase()
-                        width: 24; height: 24; radius: 12
-                        color: modelData
-                        border.color: newSwatch.isPicked ? Theme.text : Theme.border
-                        border.width: 2
-                        ClickArea {
-                            label: I18n.t("kanban.swatch").arg(newSwatch.index + 1)
-                            showTip: false
-                            role: Accessible.RadioButton
-                            checkable: true
-                            checked: newSwatch.isPicked
-                            onActivated: addColumnPopup.picked = newSwatch.modelData
-                        }
-                    }
-                }
-            }
-            RowLayout {
-                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.bottomMargin: Theme.sp2xl; Layout.topMargin: Theme.spMd
-                Item { Layout.fillWidth: true }
-                PillButton {
-                    text: I18n.t("common.cancel"); onClicked: addColumnPopup.close()
-                }
-                PillButton {
-                    id: saveBtn
-                    text: I18n.t("kanban.create"); primary: true
-                    function activate() {
-                        const n = nameField.text.trim();
-                        if (n.length === 0) return;
-                        AppController.addStatus(n, String(addColumnPopup.picked));
-                        addColumnPopup.close();
-                    }
-                    onClicked: activate()
-                }
-            }
-        }
-    }
 
     Popup {
         id: colorPopup
@@ -1695,7 +1700,7 @@ Item {
         background: PopupSurface {}
         property string forStatusId: ""
 
-        readonly property var swatches: addColumnPopup.swatches
+        readonly property var swatches: Theme.swatches
 
         function openFor(id, currentColor, anchorItem) {
             const sameSwatch = colorPopup.opened && colorPopup.forStatusId === id;
@@ -1883,7 +1888,7 @@ Item {
 
     component HoverIcon: Rectangle {
         id: hoverIcon
-        property string glyph: ""
+        property string icon: ""
         property string tip: ""
         property string shortcutId: ""
         property bool danger: false
@@ -1911,12 +1916,12 @@ Item {
                              : "transparent"
         border.color: hoverIcon.hot ? (danger ? Theme.danger : Theme.border) : "transparent"
         border.width: 1
-        Text {
+        function focusKey() { hoverIconMA.forceActiveFocus(Qt.TabFocusReason); }
+        Icon {
             anchors.centerIn: parent
-            text: hoverIcon.glyph
+            name: hoverIcon.icon
+            size: Theme.iconSize
             color: hoverIcon.hot ? (hoverIcon.danger ? Theme.danger : Theme.text) : Theme.textMuted
-            font.pixelSize: Theme.fsMd
-            font.weight: Theme.fwTitle
         }
         ClickArea {
             id: hoverIconMA
@@ -1938,7 +1943,8 @@ Item {
     // A search or a priority filter that hides every card is not an empty
     // board: it says the search found nothing, once, like the other views
     // (FUNC-1). It used to be "Nothing here yet" in every column.
-    readonly property bool _filtering: root.searchText.trim().length > 0 || root.activePriorities.length > 0
+    // The default "не готово" is not a search (DG-020).
+    readonly property bool _filtering: root._searchKeepDone.length > 0 || root.activePriorities.length > 0
     // Every card the search lets through, in any column.
     TaskFilterProxy {
         id: boardFilter
@@ -1950,6 +1956,9 @@ Item {
         today: AppController.today
     }
     readonly property bool _nothingFound: root._filtering && root._boardTotal > 0 && boardFilter.count === 0
+    readonly property bool nothingFound: root._nothingFound
+    // The filter as words for "Ничего под «…»" (DG-160).
+    readonly property string filterLabel: QueryWords.label(root.searchText, root.activePriorities)
     property int _allRows: AppController.tasks.rowCount()
     Connections {
         target: AppController.tasks
@@ -1957,33 +1966,24 @@ Item {
         function onRowsInserted() { root._allRows = AppController.tasks.rowCount() }
         function onRowsRemoved()  { root._allRows = AppController.tasks.rowCount() }
     }
-    // On a card of its own: laid straight over the columns, the text crossed
-    // their borders and read as part of whichever column it touched.
-    Rectangle {
-        objectName: "board-empty"
-        anchors.centerIn: parent
-        width: boardEmptyCol.width + 2 * Theme.sp3xl
-        height: boardEmptyCol.implicitHeight + 2 * Theme.sp2xl
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-        visible: root._boardTotal === 0 || root._nothingFound
-    }
+    // An empty board and a filter that found nothing: one plain centred
+    // line and its key, no card, no picture (N/X-Err-Empty, R3-131). The
+    // columns have no border to cross, so it needs no backing.
     EmptyState {
         id: boardEmptyCol
         objectName: "board-empty-state"
         anchors.centerIn: parent
         width: Math.min(parent.width - 96, 360)
         visible: root._boardTotal === 0 || root._nothingFound
-        icon: root._nothingFound ? "" : root._allRows > 0 ? "heap-05-archive" : "heap-01-board"
-        title: root._nothingFound ? I18n.t("view.empty.noMatch.title")
+        title: root._nothingFound ? I18n.t("view.empty.noMatchFor").arg(root.filterLabel)
              : root._allRows > 0 ? I18n.t("board.empty.archivedTitle") : I18n.t("board.empty.title")
         // The keys as bound now, not as they shipped (design audit DES-15).
-        line: root._nothingFound ? I18n.t("view.empty.noMatch.hint")
+        lineLink: root._nothingFound
+        onLineActivated: root.resetFilterRequested()
+        line: root._nothingFound ? I18n.t("view.empty.resetFilter")
             : root._allRows > 0
-              ? I18n.t("board.empty.archivedHint").arg(AppController.shortcutFor("view.archive")).arg(AppController.shortcutFor("task.new"))
-              : I18n.t("board.empty.hint").arg(AppController.shortcutFor("task.new")).arg(AppController.shortcutFor("quick-capture"))
+              ? I18n.t("board.empty.archivedHint").arg(AppController.shortcutText("view.archive")).arg(AppController.shortcutText("task.new"))
+              : I18n.t("tasks.empty.line").arg(AppController.shortcutText("task.new"))
     }
     // ── Column delete: confirm when it is not empty ───────────────────
     // Deleting a column re-homes every card in it. That is undoable, but a
@@ -2006,55 +2006,66 @@ Item {
         confirmDelete.open();
     }
 
-    QQC.Dialog {
+    // X-Dlg-Small (R2-041): the question, one line of fact with the undo
+    // key, "Перенести задачи в [column ▾]", Отмена / Удалить колонку.
+    SmallDialog {
         id: confirmDelete
         objectName: "confirm-delete-column"
-        // Takes the keyboard, so Esc and Tab work in it and the board keys
-        // behind it stand down.
-        focus: true
+        parent: Overlay.overlay
         property string statusId: ""
         property string statusName: ""
         property int cardCount: 0
+        // The other columns, in board order; the first is the default target.
+        readonly property var targets: (AppController.statuses || []).filter(st => st.id !== confirmDelete.statusId)
 
-        modal: true
-        Overlay.modal: ModalScrim {}
-        anchors.centerIn: Overlay.overlay
-        parent: Overlay.overlay
-        padding: Theme.inset
-        // Explicit, because the contentItem is a wrapping Text: without a width
-        // of its own it sizes itself from the dialog, which is sizing itself
-        // from the text. Qt reports that as a binding loop on implicitWidth and
-        // settles on whatever it measured first.
-        width: 420
         title: I18n.t("kanban.confirmDelete.title").arg(confirmDelete.statusName)
-
-        background: ModalSurface {}
-
-        contentItem: Text {
-            text: I18n.t("kanban.confirmDelete.body").arg(confirmDelete.cardCount)
-            color: Theme.textMuted
-            font.pixelSize: Theme.fsMd
-            wrapMode: Text.Wrap
+        fact: I18n.t("kanban.confirmDelete.fact")
+                .arg(I18n.count(confirmDelete.cardCount, "query.n.tasks"))
+                .arg(AppController.shortcutText("undo").replace(/\+/g, " "))
+        // Enter is the main button, as in every small dialog (X-Dlg-Small);
+        // Tab reaches the column field.
+        onOpened: { targetBox.currentIndex = 0; deleteKeys.forceActiveFocus(); }
+        onAccepted: confirmDelete.deleteNow()
+        function deleteNow() {
+            const t = confirmDelete.targets[targetBox.currentIndex];
+            AppController.deleteStatus(confirmDelete.statusId, t ? t.id : "");
+            confirmDelete.close();
         }
 
-        footer: RowLayout {
-            spacing: Theme.spMd
-            Item { Layout.fillWidth: true }
+        ColumnLayout {
+            id: deleteKeys
+            Layout.fillWidth: true
+            spacing: Theme.spXs
+            focus: true
+            Keys.onReturnPressed: confirmDelete.accepted()
+            Keys.onEnterPressed: confirmDelete.accepted()
+            Text {
+                text: I18n.t("kanban.confirmDelete.into")
+                color: Theme.textMuted
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsXs
+            }
+            AppComboBox {
+                id: targetBox
+                objectName: "confirm-delete-target"
+                Accessible.name: I18n.t("kanban.confirmDelete.into")
+                Layout.fillWidth: true
+                model: confirmDelete.targets.map(st => st.name)
+            }
+        }
+
+        buttons: [
             PillButton {
                 text: I18n.t("common.cancel")
                 onClicked: confirmDelete.close()
-            }
+            },
             PillButton {
                 objectName: "confirm-delete-ok"
                 text: I18n.t("kanban.confirmDelete.ok")
                 danger: true
-                onClicked: {
-                    AppController.deleteStatus(confirmDelete.statusId);
-                    confirmDelete.close();
-                }
+                onClicked: confirmDelete.deleteNow()
             }
-            Item { Layout.preferredWidth: 10 }
-        }
+        ]
     }
 
     // ── Work-in-progress limit ────────────────────────────────────────

@@ -1,6 +1,6 @@
 # Tracker integrations
 
-`heap.` syncs issues from external trackers into its columns. The provider layer
+Issues from external trackers sync into lowkey's columns. The provider layer
 is **descriptor-driven**: every tracker is one `ProviderDescriptor` in
 [`src/integrations/ProviderRegistry.cpp`](../src/integrations/ProviderRegistry.cpp),
 executed by the generic `RestIssueProvider`. Adding a REST tracker is a registry
@@ -13,7 +13,7 @@ See [`docs/DATA.md`](DATA.md) for what does get persisted.
 
 ## The rule: every external write is opt-in
 
-heap reads from trackers; it writes to one only where the user switched that
+The app reads from trackers; it writes to one only where the user switched that
 write on. **Every write to an external system sits behind its own switch, per
 tracker, and the switch is off by default** — on a new install and on an
 updated one alike. Today there is exactly one such write:
@@ -30,7 +30,7 @@ table. Being able to write is not permission to: `writesStatus()` in
 trackerWriteEnabled()` says the user *let* it.
 
 **With the switch off** a move is a local one. The card changes column in
-heap, nothing is sent or queued, and no later pull moves it back: the column
+lowkey, nothing is sent or queued, and no later pull moves it back: the column
 the user picked is theirs (`mergeStatusOnPull(…, localOwnsColumn)`). A card
 the user never moved keeps following the tracker. The tracker's own status is
 shown where it does not clutter the card — the tracker badge's tooltip, the
@@ -47,7 +47,7 @@ issue (`IntegrationProvider::checkIssue`):
   moved out of the JQL — is not written. The card is marked **outside filter**
   and a dialog names the issue, its status in the tracker now and the target;
   **Send anyway** is the only way out, and Cancel is the default.
-- *Still in the status heap last saw?* If the tracker moved it meanwhile, nothing
+- *Still in the status lowkey last saw?* If the tracker moved it meanwhile, nothing
   is sent and the card gets a status conflict (the same side-by-side choice as
   a pull conflict).
 - A card already **outside filter** or **gone** is read-only: dropping it in
@@ -128,7 +128,7 @@ set(HEAP_OAUTH_JIRA_CLIENT_ID "…")
 set(HEAP_OAUTH_JIRA_CLIENT_SECRET "…")
 ```
 
-This is **not real secrecy** — `strings heap.exe` finds an embedded secret, the
+This is **not real secrecy** — `strings lowkey.exe` finds an embedded secret, the
 same as for any desktop OAuth client. It means an attacker has to extract it
 rather than read it in the repo, and it lets the credential be rotated without a
 commit.
@@ -144,14 +144,14 @@ The loopback redirect URI every OAuth app must register is
 ### GitHub — done (Device Flow)
 
 GitHub OAuth Apps can't do PKCE and would need a client secret for the web flow,
-which is unsafe to embed. `heap.` uses the **Device Authorization Grant** instead
+which is unsafe to embed. Instead, lowkey uses the **Device Authorization Grant**
 (client ID only, no secret). The app is registered:
 
 - OAuth App **heap**, owner `sectapunterx` — <https://github.com/settings/applications/3713650>
 - **Enable Device Flow** is checked; scope `repo`.
 
 To recreate: <https://github.com/settings/applications/new> → name `heap`,
-homepage `https://github.com/sectapunterx/heap`, callback `http://127.0.0.1:51789/`,
+homepage `https://github.com/sectapunterx/lowkey`, callback `http://127.0.0.1:51789/`,
 tick **Enable Device Flow** → Register → copy the **Client ID** into
 `HEAP_OAUTH_GITHUB_CLIENT_ID` in `OAuthClients.h`.
 
@@ -204,7 +204,7 @@ Two Atlassian-specific details the flow handles:
   would die an hour later.
 - **A 3LO token is not bound to a site.** It is only accepted at
   `https://api.atlassian.com/ex/jira/{cloudId}`, never at `acme.atlassian.net`.
-  After sign-in heap calls `/oauth/token/accessible-resources`, picks the site
+  After sign-in lowkey calls `/oauth/token/accessible-resources`, picks the site
   (keeping the one the card already names, so a second site can't silently
   repoint synced issues) and caches `cloudId` + `siteUrl` in the card's config.
 
@@ -213,7 +213,7 @@ is **Cloud only**; Server/DC uses a Personal Access Token (below).
 
 ### Jira Server / Data Center
 
-A different product behind the same name, and heap detects which one it is
+A different product behind the same name, and lowkey detects which one it is
 rather than asking: it reads `deploymentType` from `{site}/rest/api/2/serverInfo`
 on the first request, falling back to the URL (`*.atlassian.net` is Cloud,
 anything else self-hosted is Server/DC) when the instance refuses anonymous
@@ -252,7 +252,7 @@ or Trello refuses the redirect. Only `HEAP_OAUTH_TRELLO_CLIENT_ID` is needed.
 
 Redmine ships no OAuth 2.0 provider at all. The REST API only takes an API key
 (**My account → API access key**), sent as `X-Redmine-API-Key`. This is not a
-gap in heap and will not change until Redmine itself changes.
+gap in lowkey and will not change until Redmine itself changes.
 
 ## No browser button?
 
@@ -261,7 +261,7 @@ with no help from you. It is hidden when any of these is true:
 
 | Reason | What to do |
 |--------|------------|
-| You built heap yourself, and the provider needs a client secret | Register your own OAuth app and pass `HEAP_OAUTH_<PROVIDER>_CLIENT_ID/_SECRET` at configure time, or paste a client ID under **Advanced** |
+| You built lowkey yourself, and the provider needs a client secret | Register your own OAuth app and pass `HEAP_OAUTH_<PROVIDER>_CLIENT_ID/_SECRET` at configure time, or paste a client ID under **Advanced** |
 | Self-hosted provider (Gitea, Forgejo, self-managed GitLab) | There is no single app to ship — register one on your instance and paste its client ID under **Advanced** |
 | The provider has no OAuth at all (Redmine) | Use the API key; this is not going to change |
 | GitHub on a build against Qt < 6.9 | The device grant needs Qt 6.9 (`OAuthManager::deviceFlowAvailable()`); use a token |
@@ -282,8 +282,8 @@ to push back.
 leave the OAuth provider disabled (both are System Console settings), so the
 primary path is the same credentials you use in the Mattermost app. The password
 is sent once to `POST /api/v4/users/login` and never stored — only the session
-token it returns, which is stored like any other token. heap refuses to
-send it at all unless the server URL is `https` (or loopback). A personal access
+token it returns, which is stored like any other token. Unless the server URL is
+`https` (or loopback), lowkey refuses to send it at all. A personal access
 token works too, where your admin allows them.
 
 **What is imported.** Everyone you have a direct-message conversation with, plus
@@ -336,7 +336,7 @@ nothing to refresh.
 
 ## Where secrets live
 
-The OS keychain, service `heap.integrations`, key `<provider>/<field>`
+The OS keychain, service `lowkey.integrations`, key `<provider>/<field>`
 (`github/token`, `gitlab/refreshToken`). Values over ~2 KB (Windows Credential
 Manager caps a blob at 2560 bytes) are split across `<key>#0`, `<key>#1`, … .
 A run that must not touch your real data — `--data-dir` / `HEAP_DATA_DIR`, or
@@ -403,7 +403,7 @@ tracker's write switch on.
 ## How much a sync pulls
 
 Every tracker caps a list response — 100 issues for GitHub and GitLab, 50 for
-Gitea and Sentry, 100 for Jira. heap follows the continuation the API offers
+Gitea and Sentry, 100 for Jira. The sync follows the continuation the API offers
 until the tracker says there is no more, or until it has read **20 pages**,
 whichever comes first. One sync therefore mirrors at most a couple of thousand
 issues and always terminates, even against a server that keeps claiming another

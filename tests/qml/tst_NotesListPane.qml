@@ -293,4 +293,68 @@ TestCase {
 
         compare(got, a, "stepping off the top stays put rather than wrapping");
     }
+
+    // ── The catalogue in Knowledge (DG-070, DG-073) ──────────────────
+    function withDocs(blob, fn) {
+        const saved = AppController.docsState;
+        AppController.docsState = JSON.stringify(blob);
+        try { fn(); } finally { AppController.docsState = saved; }
+    }
+    function kindsOf(pane, kind) {
+        return pane.rows.filter(function (r) { return r.kind === kind; });
+    }
+    readonly property var catalogue: ({
+        sections: [{ id: "s", title: "S", items: [
+            { ref: "RFC 9110", title: "HTTP probe", url: "https://example.org/9110", pinned: true },
+            { ref: "RFC 8259", title: "JSON probe", url: "https://example.org/8259" }
+        ] }],
+        snippets: [{ title: "stand probe", lang: "sh", code: "make up", tags: [] }],
+        contacts: [{ name: "Ada probe", role: "eng", mattermost: "@ada" }]
+    })
+
+    function test_only_pinned_references_are_listed_at_rest() {
+        withDocs(tc.catalogue, function () {
+            const pane = makePane();
+            const refs = kindsOf(pane, "ref");
+            compare(refs.length, 1);
+            compare(refs[0].name, "HTTP probe");
+            compare(headersOf(pane)[0], I18n.t("notes.pinned"));
+            compare(kindsOf(pane, "snippet").length, 1);
+            compare(kindsOf(pane, "contact").length, 0, "contacts only come up in a search");
+        });
+    }
+
+    function test_a_search_reaches_the_whole_catalogue() {
+        withDocs(tc.catalogue, function () {
+            const pane = makePane();
+            pane.setFilter("probe");
+            const refs = kindsOf(pane, "ref");
+            compare(refs.length, 2, "an unpinned reference is found");
+            verify(headersOf(pane).indexOf(I18n.t("knowledge.refs")) >= 0);
+            compare(kindsOf(pane, "contact").length, 1);
+            compare(kindsOf(pane, "contact")[0].handle, "@ada");
+        });
+    }
+
+    function test_pinning_a_reference_writes_only_its_flag() {
+        withDocs(tc.catalogue, function () {
+            const pane = makePane();
+            pane.setRefPinned(0, 1, true);
+            const d = JSON.parse(AppController.docsState);
+            verify(d.sections[0].items[1].pinned === true);
+            compare(d.sections[0].items[1].title, "JSON probe");
+            compare(d.contacts.length, 1, "the rest of the blob is kept");
+            pane.setRefPinned(0, 0, false);
+            verify(JSON.parse(AppController.docsState).sections[0].items[0].pinned === undefined);
+        });
+    }
+
+    function test_notes_are_listed_newest_first() {
+        const a = note("older probe");
+        wait(20);
+        const b = note("newer probe");
+        const pane = makePane();
+        const t = titlesOf(pane);
+        verify(t.indexOf("newer probe") < t.indexOf("older probe"));
+    }
 }

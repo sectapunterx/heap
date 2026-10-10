@@ -43,7 +43,11 @@ export function classifyAsset(asset: Asset): ClassifiedAsset | null {
 
 export function assetsByOS(release: Release): Record<DesktopOS, ClassifiedAsset[]> {
   const out: Record<DesktopOS, ClassifiedAsset[]> = { windows: [], macos: [], linux: [] };
+  // From 0.8.0 a release also carries heap-* copies for the 0.7.x updater; the page offers the
+  // lowkey-* files only.
+  const renamed = release.assets.some((a) => /^lowkey-/i.test(a.name));
   for (const a of release.assets) {
+    if (renamed && /^heap-/i.test(a.name)) continue;
     const c = classifyAsset(a);
     if (c) out[c.os].push(c);
   }

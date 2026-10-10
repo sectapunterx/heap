@@ -542,7 +542,7 @@ TEST_F(SoundWiring, FocusModeMutes) {
 TEST_F(SoundWiring, NavigationIsSilent) {
   setSoundEnabled(true);
   const int before = allRequests();
-  for(const char* view : {"timeline", "week", "month", "archive", "notes", "docs", "settings", "board"}) {
+  for(const char* view : {"list", "week", "month", "notes", "docs", "settings", "board"}) {
     app_->setCurrentView(QLatin1String(view));
   }
   app_->setSelectedTaskIds({QStringLiteral("S-1"), QStringLiteral("S-2")});

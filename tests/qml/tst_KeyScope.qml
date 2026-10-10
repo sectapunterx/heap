@@ -33,8 +33,6 @@ TestCase {
         AppController.resetAllShortcuts();
         tryVerify(function () { return !tc.win.findChild || true; });
         wait(1200);   // splash
-        const w = popup("WelcomePopup");
-        if (w && w.opened) w.close();
         tc.win.requestActivate();
         AppController.currentView = "board";
         tryVerify(function () { return tc.win.activeViewItem() !== null; }, 3000);
@@ -325,26 +323,6 @@ TestCase {
         tryCompare(doc, "opened", false);
     }
 
-    // TASKS-5: Enter in "New column" creates the column, not a task editor.
-    function test_add_column_enter_creates_column() {
-        const b = board();
-        const pop = dataByName(b, "add-column-popup");
-        verify(pop !== null);
-        const before = AppController.statuses.length;
-        b.moveCursor(0, 1);
-        pop.open();
-        tryCompare(pop, "opened", true);
-        const field = byName(pop.contentItem, "add-column-name");
-        tryVerify(function () { return field.activeFocus; });
-        keyClick(Qt.Key_Q); keyClick(Qt.Key_A);
-        keyClick(Qt.Key_Return);
-        tryCompare(pop, "opened", false);
-        compare(popup("TaskEditor").opened, false, "Enter opened the task editor over the dialog");
-        compare(AppController.statuses.length, before + 1);
-        const sts = AppController.statuses;
-        AppController.deleteStatus(sts[sts.length - 1].id);
-    }
-
     // TASKS-5: Enter in the WIP dialog saves the limit.
     function test_wip_dialog_enter_saves() {
         const b = board();
@@ -375,11 +353,16 @@ TestCase {
         dlg.open();
         tryCompare(dlg, "opened", true);
         tryVerify(function () { return tc.win._dimmerShown; }, 1000, "no dimmer seen");
+        keyClick(Qt.Key_3, Qt.ControlModifier);
+        compare(AppController.currentView, "board", "Ctrl+3 switched the view behind the dialog");
+        // Return is the dialog's own main button (X-Dlg-Small): it answers
+        // the dialog (no column named here, so nothing is deleted), never
+        // the card behind it.
+        const before = AppController.statuses.length;
         keyClick(Qt.Key_Return);
         wait(50);
         compare(popup("TaskEditor").opened, false, "Return opened a card behind the dialog");
-        keyClick(Qt.Key_3, Qt.ControlModifier);
-        compare(AppController.currentView, "board", "Ctrl+3 switched the view behind the dialog");
+        compare(AppController.statuses.length, before);
         dlg.close();
         tryCompare(dlg, "opened", false);
         dlg.focus = true;
@@ -411,11 +394,11 @@ TestCase {
         keyClick(Qt.Key_Escape);
         tryCompare(te, "opened", false);
 
-        const welcome = popup("WelcomePopup");
+        const welcome = popup("KeyCheatSheet");
         welcome.open();
         tryCompare(welcome, "opened", true);
         keyClick(Qt.Key_K, Qt.ControlModifier);
-        compare(popup("CommandPalette").opened, false, "Ctrl+K opened the palette over the tour");
+        compare(popup("CommandPalette").opened, false, "Ctrl+K opened the palette over the cheat sheet");
         welcome.close();
         tryCompare(welcome, "opened", false);
 

@@ -15,8 +15,10 @@
 #include <QDate>
 #include <QDir>
 #include <QFile>
+#include <QHash>
 #include <QStandardPaths>
 #include <QTemporaryDir>
+#include <QUrl>
 #include <QVector>
 
 #include <gtest/gtest.h>
@@ -91,6 +93,46 @@ TEST_F(ProfileIoTest, ExportExcludesOtherProfilesEvents) {
   const QString json = app_->exportActiveProfileJson();
   EXPECT_TRUE(json.contains(QStringLiteral("MineEvent")));
   EXPECT_FALSE(json.contains(QStringLiteral("OtherEvent")));
+}
+
+// R3-080: the import shows what a file holds before anything is written, and
+// "merge" adds only what the active profile does not have — a task whose id
+// is already here is never overwritten.
+TEST_F(ProfileIoTest, PreviewThenMergeKeepsMatchingIds) {
+  Task a;
+  a.id = QStringLiteral("MRG-1");
+  a.title = QStringLiteral("kept as it is");
+  a.status = QStringLiteral("todo");
+  Task b = a;
+  b.id = QStringLiteral("MRG-2");
+  b.title = QStringLiteral("comes back");
+  app_->tasks()->reset({a, b});
+  QTemporaryDir dir;
+  ASSERT_TRUE(dir.isValid());
+  const QUrl url = QUrl::fromLocalFile(dir.filePath(QStringLiteral("profile-work.json")));
+  ASSERT_TRUE(app_->exportActiveProfileToFile(url));
+
+  const QVariantMap pv = app_->previewProfileImport(url);
+  EXPECT_FALSE(pv.contains(QStringLiteral("error")));
+  EXPECT_EQ(pv.value(QStringLiteral("file")).toString(), QStringLiteral("profile-work.json"));
+  EXPECT_EQ(pv.value(QStringLiteral("tasks")).toInt(), 2);
+  EXPECT_FALSE(pv.value(QStringLiteral("version")).toString().isEmpty());
+
+  // The local copy of MRG-1 changed since; MRG-2 was deleted.
+  a.title = QStringLiteral("edited here");
+  app_->tasks()->reset({a});
+  const int profiles = static_cast<int>(app_->profiles().size());
+  EXPECT_TRUE(app_->mergeProfileFromFile(url).isEmpty());
+  EXPECT_EQ(static_cast<int>(app_->profiles().size()), profiles) << "a merge makes no new profile";
+  QHash<QString, QString> titles;
+  for(const Task& t : app_->tasks()->items()) {
+    titles.insert(t.id, t.title);
+  }
+  EXPECT_EQ(titles.value(QStringLiteral("MRG-1")), QStringLiteral("edited here"));
+  EXPECT_EQ(titles.value(QStringLiteral("MRG-2")), QStringLiteral("comes back"));
+
+  const QVariantMap bad = app_->previewProfileImport(QUrl::fromLocalFile(dir.filePath(QStringLiteral("missing.json"))));
+  EXPECT_TRUE(bad.contains(QStringLiteral("error")));
 }
 
 int main(int argc, char** argv) {

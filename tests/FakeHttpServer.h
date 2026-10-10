@@ -216,6 +216,18 @@ class FakeHttpServer {
     return Response{404, "{}", {}};
   }
 
+  // The sockets are children of m_server, which goes last; they emit
+  // disconnected while it deletes them, after m_buffers is already gone.
+  struct SocketGuard {
+    QTcpServer* server;
+
+    ~SocketGuard() {
+      for(QTcpSocket* s : server->findChildren<QTcpSocket*>()) {
+        QObject::disconnect(s, nullptr, nullptr, nullptr);
+      }
+    }
+  };
+
   QTcpServer m_server;
   QHash<QByteArray, Response> m_routes;
   QHash<QByteArray, QList<Response>> m_sequences;
@@ -223,6 +235,7 @@ class FakeHttpServer {
   QHash<QTcpSocket*, QByteArray> m_buffers;
   QList<QByteArray> m_seen;
   QList<Request> m_requests;
+  SocketGuard m_guard{&m_server};  // last member: runs first on destruction
 };
 
 // The code under test answers from the event loop, so the test has to run one.

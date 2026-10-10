@@ -21,6 +21,15 @@ Menu {
     // does (PERA-2). The owner reopens the parent on back(), once this list
     // has finished closing, so focus is handed over in one direction only.
     property bool backOnLeft: false
+    // Whether the rows keep a check / glyph column (R3-041): only when one
+    // of them has a glyph, a ring or a check to show.
+    readonly property bool glyphColumn: {
+        for (let i = 0; i < menu.count; i++) {
+            const it = menu.itemAt(i) as AppMenuItem;
+            if (it && it.visible && it._ownCol) return true;
+        }
+        return false;
+    }
     // A list opened from a row goes back on Esc too, and only a second Esc
     // (in the menu it came from) closes everything (APP-279).
     closePolicy: menu.backOnLeft ? (Popup.CloseOnPressOutside | Popup.CloseOnPressOutsideParent)
@@ -78,13 +87,17 @@ Menu {
     // ("Запланировать в календар") with no ellipsis (VISP-5). Measured from
     // each row's naturalWidth, which does not depend on the row's own width,
     // so the menu's width and its rows' widths do not chase each other.
-    readonly property int minWidth: 200
+    property int minWidth: 200
     readonly property int maxWidth: 360
     contentWidth: {
         let w = menu.minWidth - menu.leftPadding - menu.rightPadding;
+        // The header line counts too, so "APP-109 · Рефакторинг обработчика
+        // вебхуков" fits up to the cap (R3-047).
         for (let i = 0; i < menu.count; i++) {
             const it = menu.itemAt(i) as AppMenuItem;
+            const head = menu.itemAt(i) as AppMenuHeader;
             if (it && it.visible) w = Math.max(w, it.naturalWidth);
+            else if (head && head.visible) w = Math.max(w, head.naturalWidth);
         }
         return Math.min(w, menu.maxWidth - menu.leftPadding - menu.rightPadding);
     }

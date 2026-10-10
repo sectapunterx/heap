@@ -7,6 +7,7 @@
 
 #include "platform/Paths.h"
 #include "storage/AsyncSaver.h"
+#include "storage/Attachments.h"
 #include "storage/Snapshots.h"
 #include "storage/StateIO.h"
 #include "text/LocaleFormat.h"
@@ -147,6 +148,17 @@ QVariantList AppController::listSnapshots() const {
                            {QStringLiteral("docs"), s.value(QStringLiteral("docs")).toInt()}});
   }
   return out;
+}
+
+// A copy before an import or an update replaces what is there (Settings →
+// Safety net "Snapshot before import and update", on unless switched off).
+void AppController::snapshotBeforeChange(const QString& tag) {
+  if(!settingsMap().value(QStringLiteral("data")).toMap().value(QStringLiteral("snapshotBeforeImport"), true).toBool()) {
+    return;
+  }
+  if(QFile::exists(stateFilePath())) {
+    takeSnapshotNow(tag);
+  }
 }
 
 QString AppController::takeSnapshotNow(const QString& tag) {
@@ -324,6 +336,14 @@ QVariantMap AppController::previewSnapshot(const QString& name) {
   out[QStringLiteral("missing")] = missing;
   out[QStringLiteral("changed")] = changed;
   return out;
+}
+
+bool AppController::revealSnapshot(const QString& name) const {
+  if(!heap::history::parseName(name)) {
+    return false;
+  }
+  const QString path = historyDirPath() + QLatin1Char('/') + name;
+  return QFile::exists(path) && heap::attachments::shell(path, true);
 }
 
 bool AppController::restoreSnapshot(const QString& name) {

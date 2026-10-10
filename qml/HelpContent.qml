@@ -22,7 +22,7 @@ Item {
     }
 
     readonly property var tocModel: [
-        {anchor: "help-views", label: root.tr2("Views — Board, Timeline, Week, Month, Archive, Docs, Notes, day panel", "Виды — доска, лента, неделя, месяц, архив, доки, заметки, панель дня")},
+        {anchor: "help-views", label: root.tr2("Views — Today, Tasks, Calendar (Week, Month), Archive, Knowledge", "Виды — сегодня, задачи, календарь (неделя, месяц), архив, знания")},
         {anchor: "help-tasks", label: root.tr2("Tasks — statuses, priorities, deadlines", "Задачи — статусы, приоритеты, сроки")},
         {anchor: "help-capture", label: root.tr2("Quick Capture — text parsing, @-mentions", "Быстрый ввод — разбор текста, @-упоминания")},
         {anchor: "help-calendar", label: root.tr2("Calendar — events, drag-create, focus blocks", "Календарь — события, создание перетаскиванием, фокус-блоки")},
@@ -40,18 +40,21 @@ Item {
         {anchor: "help-tips", label: root.tr2("Tips & non-obvious things", "Советы и неочевидные вещи")}
     ]
 
-    component HelpCard: Rectangle {
+    // A section of the guide: plain text on the reader's own surface, a
+    // hairline between sections — no card inside the card (R3-012).
+    component HelpCard: Item {
         Layout.fillWidth: true
-        radius: Theme.radiusLg
-        color: Theme.panel
-        border.color: Theme.border
-        border.width: 1
         default property alias content: inner.data
-        implicitHeight: inner.implicitHeight + 24
+        implicitHeight: inner.implicitHeight + Theme.sp2xl
+        Rectangle {
+            anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+            height: 1
+            color: Theme.border
+        }
         ColumnLayout {
             id: inner
-            anchors.fill: parent
-            anchors.margins: Theme.sp2xl
+            anchors.left: parent.left
+            anchors.right: parent.right
             spacing: Theme.spLg
         }
     }
@@ -59,43 +62,43 @@ Item {
     component H2: Text {
         color: Theme.text
         font.pixelSize: Theme.fsLg
-        font.weight: Theme.fwTitle
-        font.family: Theme.fontMono
+        font.weight: Theme.fwHeading
+        font.family: Theme.fontUi
         Layout.fillWidth: true
     }
 
     component H3: Text {
-        color: Theme.accentStrong
+        color: Theme.text
         font.pixelSize: Theme.fsMd
-        font.family: Theme.fontMono
+        font.family: Theme.fontUi
         font.weight: Theme.fwTitle
         Layout.fillWidth: true
         Layout.topMargin: Theme.spSm
     }
 
     component Body: Text {
-        color: Theme.text
+        color: Theme.textMuted
+        font.family: Theme.fontUi
         font.pixelSize: Theme.fsMd
         wrapMode: Text.WordWrap
-        lineHeight: 1.35
+        lineHeight: 1.5
         Layout.fillWidth: true
     }
 
     component Hint: Text {
-        color: Theme.textMuted
+        color: Theme.textDim
+        font.family: Theme.fontUi
         font.pixelSize: Theme.fsSm
         wrapMode: Text.WordWrap
-        font.italic: true
         Layout.fillWidth: true
     }
 
     component Kbd: Text {
         property string keys: ""
         text: keys
-        color: Theme.accentStrong
+        color: Theme.textMuted
         font.family: Theme.fontMono
         font.pixelSize: Theme.fsSm
-        font.weight: Theme.fwTitle
     }
 
     ColumnLayout {
@@ -106,43 +109,27 @@ Item {
 
         // ─────────────────────────────────────────── Intro
         HelpCard {
-            RowLayout {
-                spacing: Theme.spXl
+            ColumnLayout {
+                spacing: Theme.sp2xs
                 Layout.fillWidth: true
-                Rectangle {
-                    width: 36; height: 36; radius: Theme.radius
-                    color: Theme.accent
-                    Text {
-                        anchors.centerIn: parent
-                        text: "?"
-                        color: Theme.textOnAccent
-                        font.pixelSize: Theme.fsXl
-                        font.weight: Theme.fwTitle
-                    }
+                Text {
+                    text: root.tr2("Getting started", "С чего начать")
+                    color: Theme.text
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsXl
+                    font.weight: Theme.fwHeading
                 }
-                ColumnLayout {
-                    spacing: Theme.sp2xs
-                    Layout.fillWidth: true
-                    H2 {
-                        text: root.tr2("lowkey help",
-                                      "Справка lowkey")
-                    }
-                    Text {
-                        text: root.tr2("Everything the app can do, in one place.",
-                                      "Всё, что умеет приложение, в одном месте.")
-                        color: Theme.textMuted
-                        font.pixelSize: Theme.fsSm
-                    }
+                Text {
+                    text: root.tr2("Everything the app can do, in one place.",
+                                  "Всё, что умеет приложение, в одном месте.")
+                    color: Theme.textDim
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
                 }
             }
             Body {
-                text: root.tr2("A developer's workday in lowkey, laid out across widgets: board, timeline, week and month calendars, a day panel, notes and documentation. Everything stays local in JSON; nothing goes to the cloud unless you connect a tracker. Below — a tour of the sections. Click an item in the table of contents to jump to the topic you need.",
-                              "Рабочий день разработчика в lowkey, разложенный по виджетам: доска, лента, календари недели и месяца, панель дня, заметки и документация. Всё хранится локально в JSON; в облако ничего не уходит, пока вы сами не подключите трекер. Ниже — обзор разделов. Нажмите пункт оглавления, чтобы перейти к нужной теме.")
-            }
-            PillButton {
-                Layout.topMargin: Theme.sp2xs
-                text: I18n.t("welcome.replay")
-                onClicked: AppController.replayWelcome()
+                text: root.tr2("A developer's workday in lowkey, laid out across widgets: Today, tasks as a board or a list, week and month calendars, notes and documentation. Everything stays local in JSON; nothing goes to the cloud unless you connect a tracker. Below — a tour of the sections. Click an item in the table of contents to jump to the topic you need.",
+                              "Рабочий день разработчика в lowkey, разложенный по виджетам: «Сегодня», задачи доской или списком, календари недели и месяца, заметки и документация. Всё хранится локально в JSON; в облако ничего не уходит, пока вы сами не подключите трекер. Ниже — обзор разделов. Нажмите пункт оглавления, чтобы перейти к нужной теме.")
             }
         }
 
@@ -154,33 +141,21 @@ Item {
             }
             Repeater {
                 model: root.tocModel
-                delegate: Rectangle {
+                delegate: Item {
                     id: tocRow
                     required property var modelData
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 28
-                    radius: Theme.radiusMd
-                    color: tocMa.hovered ? Theme.panel2 : "transparent"
-                    border.color: tocMa.hovered ? Theme.border : "transparent"
-                    border.width: 1
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: Theme.spLg
-                        anchors.rightMargin: Theme.spLg
-                        spacing: Theme.spMd
-                        Text {
-                            text: "›"
-                            color: Theme.accentStrong
-                            font.family: Theme.fontMono
-                            font.pixelSize: Theme.fsMd
-                        }
-                        Text {
-                            text: modelData.label
-                            color: tocMa.hovered ? Theme.accentStrong : Theme.text
-                            font.pixelSize: Theme.fsMd
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
-                        }
+                    Layout.preferredHeight: Theme.px(18)
+                    Text {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: tocRow.modelData.label
+                        color: tocMa.hovered ? Theme.text : Theme.textMuted
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsMd
+                        font.underline: tocMa.hovered
+                        elide: Text.ElideRight
                     }
                     ClickArea {
                         id: tocMa
@@ -241,8 +216,8 @@ Item {
                 text: root.tr2("Month View", "Месяц")
             }
             Body {
-                text: root.tr2("A month grid of deadlines and events, the week start from settings. Clicking a day selects it for the day panel; the arrows step a month, T goes to today, G picks any date.",
-                              "Сетка месяца: сроки и события, начало недели — из настроек. Клик по дню выбирает его для панели дня; стрелки листают месяцы, T — к сегодняшнему дню, G — к любой дате.")
+                text: root.tr2("A month grid of deadlines and events, the week start from settings. Clicking a day selects it, and the week opens on it; the arrows step a month, T goes to today, G picks any date.",
+                              "Сетка месяца: сроки и события, начало недели — из настроек. Клик по дню выбирает его, и неделя открывается на нём; стрелки листают месяцы, T — к сегодняшнему дню, G — к любой дате.")
             }
 
             H3 {
@@ -254,12 +229,12 @@ Item {
             }
 
             H3 {
-                text: root.tr2("Day Calendar (right panel)",
-                              "Календарь дня (правая панель)")
+                text: root.tr2("Today",
+                              "Сегодня")
             }
             Body {
-                text: root.tr2("An hourly grid for the selected day. The current time is highlighted with a live line. Clicking an empty spot creates an hour-long event; a vertical drag — an event of the duration you need. Dropping a task card on the grid schedules a focus block for that hour.",
-                              "Почасовая сетка выбранного дня. Текущее время отмечено живой линией. Клик по пустому месту создаёт событие на час; вертикальное перетаскивание — событие нужной длительности. Карточка задачи, брошенная на сетку, ставит фокус-блок на этот час.")
+                text: root.tr2("The day on one screen: meetings and planned tasks in time order, free time between them, what is in progress, deadlines and “Who to write to”. The current time is a line across the plan. Arrows step to another day.",
+                              "День на одном экране: встречи и запланированные задачи по времени, свободное время между ними, что в работе, сроки и «Кому написать». Текущее время — линия поперёк плана. Стрелки листают дни.")
             }
             Hint {
                 text: root.tr2("Workday bounds (9–19 by default) are changed in Settings → Calendar.",
@@ -300,8 +275,8 @@ Item {
                               "Клавиши форматирования работают, пока курсор в заметке или на странице Docs: Ctrl+B — жирный, Ctrl+I — курсив, Ctrl+E — код, Ctrl+K — ссылка, Ctrl+Shift+X — зачёркивание, Ctrl+Shift+H — выделение, Ctrl+Shift+L — уровень заголовка, Tab и Shift+Tab — отступ в списке, Ctrl+Enter — отметить чекбокс. Если выделен текст, они оборачивают выделение и действуют на каждую выделенную строку. Enter продолжает список или цитату, в которой вы находитесь.")
             }
             Body {
-                text: root.tr2("Images render from disk: an absolute path (C:\\shots\\x.png, file:///…) anywhere, a relative one from the attachments folder in heap's data folder. A remote image is shown as a link, with Load images to fetch it on request — heap makes no network requests you did not ask for, and network shares are never opened.",
-                              "Изображения с диска отрисовываются: абсолютный путь (C:\\shots\\x.png, file:///…) — откуда угодно, относительный — из папки attachments в папке данных heap. Удалённое изображение показывается ссылкой, а кнопка «Загрузить изображения» скачивает его по запросу — heap не делает сетевых запросов, о которых вы не просили, и никогда не открывает сетевые папки.")
+                text: root.tr2("Images render from disk: an absolute path (C:\\shots\\x.png, file:///…) anywhere, a relative one from the attachments folder in lowkey's data folder. A remote image is shown as a link, with Load images to fetch it on request — lowkey makes no network requests you did not ask for, and network shares are never opened.",
+                              "Изображения с диска отрисовываются: абсолютный путь (C:\\shots\\x.png, file:///…) — откуда угодно, относительный — из папки attachments в папке данных lowkey. Удалённое изображение показывается ссылкой, а кнопка «Загрузить изображения» скачивает его по запросу — lowkey не делает сетевых запросов, о которых вы не просили, и никогда не открывает сетевые папки.")
             }
             Body {
                 objectName: "help-attachments-notes"
@@ -439,8 +414,8 @@ Item {
                               "Создание событий")
             }
             Body {
-                text: root.tr2("In Day Calendar and Week View, clicking an empty spot makes an hour-long event. If you hold and drag — the duration equals the height you dragged across. The snap step (15 min by default) is set in Settings → Calendar → Snap.",
-                              "В календаре дня и на неделе клик по пустому месту создаёт событие на час. Если зажать и потянуть — длительность равна протянутой высоте. Шаг привязки (по умолчанию 15 мин) задаётся в Настройки → Календарь → Привязка.")
+                text: root.tr2("In the week grid, clicking an empty spot makes an hour-long event. If you hold and drag — the duration equals the height you dragged across. The snap step (15 min by default) is set in Settings → Calendar → Snap.",
+                              "В сетке недели клик по пустому месту создаёт событие на час. Если зажать и потянуть — длительность равна протянутой высоте. Шаг привязки (по умолчанию 15 мин) задаётся в Настройки → Календарь → Привязка.")
             }
 
             H3 {
@@ -457,8 +432,8 @@ Item {
                               "Фокус-блок — автопостановка")
             }
             Body {
-                text: root.tr2("Drag a task from the kanban onto the Day Calendar — a focus block appears for that hour. The default length comes from Settings → Calendar → Focus duration (90 minutes). You can enable the 'Auto focus block' option — then the block is created as soon as you switch the git branch to the one linked to the task.",
-                              "Перетащите задачу с доски на календарь дня — на этот час появится фокус-блок. Длина по умолчанию — из Настройки → Календарь → Длительность фокуса (90 минут). Можно включить «Авто фокус-блок» — тогда блок создаётся, как только вы переключаетесь на git-ветку задачи.")
+                text: root.tr2("Pick a task in the week's “Without a date” tray and click an hour, or drag it there — it is planned for that hour. The default length comes from Settings → Calendar → Focus duration (90 minutes). You can enable the 'Auto focus block' option — then the block is created as soon as you switch the git branch to the one linked to the task.",
+                              "Выберите задачу в лотке недели «Без даты» и щёлкните по часу или перетащите её туда — она запланируется на этот час. Длина по умолчанию — из Настройки → Календарь → Длительность фокуса (90 минут). Можно включить «Авто фокус-блок» — тогда блок создаётся, как только вы переключаетесь на git-ветку задачи.")
             }
 
             H3 {
@@ -466,8 +441,8 @@ Item {
                               "Рабочий день и формат времени")
             }
             Body {
-                text: root.tr2("The workday is 9–19 by default — it is shaded on the Day Calendar, whose grid covers the whole day. Change it in Settings → Calendar. The time format switches between 12h and 24h. The week starts on Mon or Sun — also from settings. Snaps are 5/10/15/30 min.",
-                              "Рабочий день по умолчанию 9–19 — он затенён в календаре дня, сетка которого покрывает все сутки. Меняется в Настройки → Календарь. Формат времени переключается между 12 и 24 часами. Неделя начинается с понедельника или воскресенья — тоже в настройках. Привязка — 5/10/15/30 мин.")
+                text: root.tr2("The workday is 9–19 by default — it is shaded on the week grid, which covers the whole day. Change it in Settings → Calendar. The time format switches between 12h and 24h. The week starts on Mon or Sun — also from settings. Snaps are 5/10/15/30 min.",
+                              "Рабочий день по умолчанию 9–19 — он затенён в сетке недели, которая покрывает все сутки. Меняется в Настройки → Календарь. Формат времени переключается между 12 и 24 часами. Неделя начинается с понедельника или воскресенья — тоже в настройках. Привязка — 5/10/15/30 мин.")
             }
         }
 
@@ -479,8 +454,8 @@ Item {
                               "Люди — контакты и упоминания")
             }
             Body {
-                text: root.tr2("The list of people in the bottom-right panel — who you need to reply to or write to. Each has: a name, a handle (unique), a role, an avatar color, a current question.",
-                              "Список людей в правой нижней панели — кому нужно ответить или написать. У каждого: имя, уникальный ник, роль, цвет аватара и текущий вопрос.")
+                text: root.tr2("“Who to write to” on Today — who you need to reply to or write to; click a name for the full list. Each has: a name, a handle (unique), a role, an avatar color, a current question.",
+                              "«Кому написать» на «Сегодня» — кому нужно ответить или написать; клик по имени открывает полный список. У каждого: имя, уникальный ник, роль, цвет аватара и текущий вопрос.")
             }
 
             H3 {
@@ -871,8 +846,8 @@ Item {
                               "Авто фокус-блок")
             }
             Body {
-                text: root.tr2("An option: automatically books a focus block in the Day Calendar at the nearest free hour when you switch to the task's branch. The block length — from Settings → Calendar.",
-                              "Опция: при переключении на ветку задачи в календаре дня бронируется фокус-блок на ближайший свободный час. Длина блока — из Настройки → Календарь.")
+                text: root.tr2("An option: automatically books a focus block in the calendar at the nearest free hour when you switch to the task's branch. The block length — from Settings → Calendar.",
+                              "Опция: при переключении на ветку задачи в календаре бронируется фокус-блок на ближайший свободный час. Длина блока — из Настройки → Календарь.")
             }
 
             H3 {
@@ -1030,8 +1005,8 @@ Item {
                               "Автобэкапы")
             }
             Body {
-                text: root.tr2("At most once per interval (hourly, daily — the default — or weekly; Settings → Data), checked on save, heap. copies state.json into the backups folder next to it. The newest 20 copies are kept, older ones are deleted.",
-                              "Не чаще раза за интервал (час, день — по умолчанию — или неделя; Настройки → Данные), с проверкой при сохранении, heap. копирует state.json в папку backups рядом с ним. Хранятся 20 последних копий, более старые удаляются.")
+                text: root.tr2("At most once per interval (hourly, daily — the default — or weekly; Settings → Data), checked on save, lowkey copies state.json into the backups folder next to it. The newest 20 copies are kept, older ones are deleted.",
+                              "Не чаще раза за интервал (час, день — по умолчанию — или неделя; Настройки → Данные), с проверкой при сохранении, lowkey копирует state.json в папку backups рядом с ним. Хранятся 20 последних копий, более старые удаляются.")
             }
             Body {
                 objectName: "help-attachments-backups"
@@ -1082,7 +1057,7 @@ Item {
             Body {
                 objectName: "help-attachments"
                 text: root.tr2("A task carries files: Attach files… in the editor (or Ctrl+Shift+A), a drop on the editor or on a card, and an image pasted into the description. The card shows 📎 and a count. In the editor each file is a chip — Tab to it, Enter opens it in its default app, Shift+Enter shows it in its folder, Delete detaches it; attaching and detaching are one undo step each. A program or a script asks before it opens, and a file that is gone shows as broken. Files are stored once, by content, in the attachments folder next to state.json (at most 100 MB each; links and shortcuts are never followed). Detaching keeps the file: Settings → Data → Unused attachments shows what nothing refers to any more and deletes it after a second press. A profile export carries the files (up to 64 MB, otherwise it says what it left out), and the notes-folder export copies them into an attachments folder beside the notes.",
-                              "К задаче можно прикрепить файлы: «Прикрепить файлы…» в редакторе (или Ctrl+Shift+A), перетаскиванием в редактор или на карточку, а картинку — вставкой в описание. На карточке видно 📎 и число. В редакторе каждый файл — плашка: Tab до неё, Enter открывает в программе по умолчанию, Shift+Enter показывает в папке, Delete открепляет; прикрепление и открепление — по одному шагу отмены. Программа или скрипт перед открытием спрашивают подтверждение, а пропавший файл показан как битый. Файлы хранятся один раз, по содержимому, в папке attachments рядом с state.json (до 100 МБ каждый; по ссылкам и ярлыкам heap не ходит). Открепление файл не удаляет: Настройки → Данные → «Неиспользуемые вложения» показывает, на что больше ничто не ссылается, и удаляет по второму нажатию. Экспорт профиля несёт файлы с собой (до 64 МБ, иначе говорит, что оставил), а экспорт заметок папкой копирует их в папку attachments рядом с заметками.")
+                              "К задаче можно прикрепить файлы: «Прикрепить файлы…» в редакторе (или Ctrl+Shift+A), перетаскиванием в редактор или на карточку, а картинку — вставкой в описание. На карточке видно 📎 и число. В редакторе каждый файл — плашка: Tab до неё, Enter открывает в программе по умолчанию, Shift+Enter показывает в папке, Delete открепляет; прикрепление и открепление — по одному шагу отмены. Программа или скрипт перед открытием спрашивают подтверждение, а пропавший файл показан как битый. Файлы хранятся один раз, по содержимому, в папке attachments рядом с state.json (до 100 МБ каждый; по ссылкам и ярлыкам lowkey не ходит). Открепление файл не удаляет: Настройки → Данные → «Неиспользуемые вложения» показывает, на что больше ничто не ссылается, и удаляет по второму нажатию. Экспорт профиля несёт файлы с собой (до 64 МБ, иначе говорит, что оставил), а экспорт заметок папкой копирует их в папку attachments рядом с заметками.")
             }
 
             H3 {
@@ -1104,8 +1079,8 @@ Item {
             }
 
             H3 {
-                text: root.tr2("Day Calendar — drag empty area",
-                              "Календарь дня — перетаскивание по пустому месту")
+                text: root.tr2("Week grid — drag empty area",
+                              "Сетка недели — перетаскивание по пустому месту")
             }
             Body {
                 text: root.tr2("Not just a click — hold and drag vertically, and the duration of the new event will be exactly as far as you stretched it.",
@@ -1113,30 +1088,21 @@ Item {
             }
 
             H3 {
-                text: root.tr2("Drag TaskCard onto the calendar",
-                              "Карточка задачи на календарь")
+                text: root.tr2("A task onto the calendar",
+                              "Задача на календарь")
             }
             Body {
-                text: root.tr2("From the kanban/timeline you can drop a card straight into the Day Calendar — a focus block appears at the hour where you released it.",
-                              "С доски или ленты карточку можно бросить прямо в календарь дня — фокус-блок появится на часе, где вы её отпустили.")
+                text: root.tr2("A task from the week's “Without a date” tray dropped on an hour is planned there; dropped on a day of the month, it gets that date.",
+                              "Задача из лотка «Без даты», брошенная на час недели, планируется туда; брошенная на день месяца — получает эту дату.")
             }
 
             H3 {
-                text: root.tr2("MiniWeek dots",
-                              "Точки в мини-неделе")
+                text: root.tr2("The now line",
+                              "Линия «сейчас»")
             }
             Body {
-                text: root.tr2("The small dots under a date in the top panel are a marker that this day has at least one event. Handy for a quick scan of the week.",
-                              "Маленькие точки под датой на верхней панели — знак, что в этот день есть хотя бы одно событие. Удобно, чтобы быстро окинуть неделю взглядом. С клавиатуры: Tab на полосу дней, ←/→ — день, PgUp/PgDn — неделя.")
-            }
-
-            H3 {
-                text: root.tr2("Now-line in Day Calendar",
-                              "Линия «сейчас» в календаре дня")
-            }
-            Body {
-                text: root.tr2("The horizontal line — the current time. Updates once a minute. Visible only when today is selected.",
-                              "Горизонтальная линия — текущее время. Обновляется раз в минуту. Видна, только если выбран сегодняшний день.")
+                text: root.tr2("The horizontal line — the current time. Updates once a minute. On Today and in the week that holds today.",
+                              "Горизонтальная линия — текущее время. Обновляется раз в минуту. Видна на «Сегодня» и в неделе, где есть сегодняшний день.")
             }
 
             H3 {

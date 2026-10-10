@@ -43,6 +43,27 @@ QVector<QVariantMap> statuses(Lang lang) {
   };
 }
 
+void addExampleLabels(QVector<Task>& tasks) {
+  static const QHash<QString, QString> kLabels = {
+      {QStringLiteral("APP-101"), QStringLiteral("auth")},
+      {QStringLiteral("APP-102"), QStringLiteral("api")},
+      {QStringLiteral("APP-103"), QStringLiteral("ui")},
+      {QStringLiteral("APP-104"), QStringLiteral("ui")},
+      {QStringLiteral("APP-105"), QStringLiteral("payments")},
+      {QStringLiteral("APP-106"), QStringLiteral("api")},
+      {QStringLiteral("APP-107"), QStringLiteral("perf")},
+      {QStringLiteral("APP-108"), QStringLiteral("auth")},
+      {QStringLiteral("APP-109"), QStringLiteral("infra")},
+      {QStringLiteral("APP-110"), QStringLiteral("ui")},
+  };
+  for(Task& t : tasks) {
+    const auto it = kLabels.constFind(t.id);
+    if(it != kLabels.constEnd() && t.labels.isEmpty()) {
+      t.labels.append(Label{it.value(), QString()});
+    }
+  }
+}
+
 QVector<Task> tasks(Lang lang) {
   const QDate today = QDate::currentDate();
   auto d = [&](int n) {
@@ -254,7 +275,7 @@ QVector<CalEvent> events(const QDate& today, Lang lang) {
     return {
         mk("ev-1", "Дейли стендап", "standup", 10.0, 10.25, "Команда продукта", 0),
         mk("ev-2", "1:1 с Олегом", "oneone", 11.0, 11.5, "Олег Т.", 1),
-        mk("ev-3", "Фокус-блок", "focus", 13.0, 15.0, "🔒 глубокая работа", 0),
+        mk("ev-3", "Фокус-блок", "focus", 13.0, 15.0, "глубокая работа", 0),
         mk("ev-4", "Планирование спринта", "sync", 16.0, 16.5, "Вся команда", 2),
         mk("ev-5", "Ревью кода", "sync", 17.0, 17.5, "Андрей, Виктор", 3),
     };
@@ -262,7 +283,7 @@ QVector<CalEvent> events(const QDate& today, Lang lang) {
   return {
       mk("ev-1", "Daily standup", "standup", 10.0, 10.25, "Product team", 0),
       mk("ev-2", "1:1 with Oleg", "oneone", 11.0, 11.5, "Oleg T.", 1),
-      mk("ev-3", "Focus block", "focus", 13.0, 15.0, "🔒 deep work", 0),
+      mk("ev-3", "Focus block", "focus", 13.0, 15.0, "deep work", 0),
       mk("ev-4", "Sprint planning", "sync", 16.0, 16.5, "Whole team", 2),
       mk("ev-5", "Code review", "sync", 17.0, 17.5, "Andrey, Victor", 3),
   };
@@ -277,6 +298,10 @@ QVector<Person> people(Lang lang) {
     p.question = QString::fromUtf8(q);
     p.state = st;
     p.color = c;
+    // "написал вчера" on the sheet (X-Oth-Archive-People).
+    if(p.state != QLatin1String("todo")) {
+      p.stateAt = QDateTime::currentDateTime().addDays(-1);
+    }
     return p;
   };
   if(lang == Lang::Ru) {
@@ -315,32 +340,101 @@ QVector<Person> people(Lang lang) {
 }
 
 QVector<Note> notes(Lang lang) {
-  Note n;
-  n.id = QStringLiteral("note-welcome");
-  n.created = QDateTime::currentDateTime();
-  n.updated = n.created;
+  // The notes of the Knowledge sheet (H2-Knowledge, DG-074): the open one
+  // first, so the example opens on it. Each says only what the app does now.
+  const QDateTime now = QDateTime::currentDateTime();
+  auto mk = [&now](const char* id, const QString& title, const QString& body, int minutesAgo) {
+    Note n;
+    n.id = QString::fromLatin1(id);
+    n.title = title;
+    n.body = body;
+    // Made and last edited at the same moment: the list shows the newest first.
+    n.created = now.addSecs(-60LL * minutesAgo);
+    n.updated = n.created;
+    return n;
+  };
   if(lang == Lang::Ru) {
-    n.title = QStringLiteral("С чего начать");
-    n.body = QStringLiteral(
-        "# С чего начать\n\n"
-        "Заметки — это markdown: **жирный**, *курсив*, `код`, списки и таблицы.\n\n"
-        "- [ ] Открыть задачу APP-101 на доске\n"
-        "- [ ] Перетащить задачу в календарь справа\n"
-        "- [x] Прочитать эту заметку\n\n"
-        "Ссылка на задачу: [[APP-101]].\n\n"
-        "> Нажмите «Начать с чистого листа» на баннере, чтобы убрать демо-данные.\n");
-  } else {
-    n.title = QStringLiteral("Getting started");
-    n.body = QStringLiteral(
-        "# Getting started\n\n"
-        "Notes are markdown: **bold**, *italic*, `code`, lists and tables.\n\n"
-        "- [ ] Open APP-101 on the board\n"
-        "- [ ] Drag a task onto the calendar on the right\n"
-        "- [x] Read this note\n\n"
-        "Link to a task: [[APP-101]].\n\n"
-        "> Press \"Start fresh\" on the banner to clear the demo data.\n");
+    return {
+        mk("note-rate-limit",
+           QStringLiteral("Дизайн rate-limit"),
+           QStringLiteral("# Дизайн rate-limit\n\n"
+                          "Лимитер считает попытки по ключу `login:<email>`. Баг в [[APP-101]] — ключ не нормализован.\n\n"
+                          "## Что отвечаем клиенту\n\n"
+                          "429 с заголовком `Retry-After`, как в "
+                          "[RFC 6585](https://www.rfc-editor.org/rfc/rfc6585 \"429 Too Many Requests\"). "
+                          "Тело — без подсказки, существует ли аккаунт.\n\n"
+                          "## Открытые вопросы\n\n"
+                          "- Окно 15 мин или скользящее? Спросить Олега.\n"
+                          "- Нужна ли капча после 5 попыток — см. [[APP-108]]\n"),
+           5),
+        mk("note-retro-41",
+           QStringLiteral("Ретро спринта 41"),
+           QStringLiteral("# Ретро спринта 41\n\n"
+                          "## Что получилось\n\n"
+                          "- Экспорт CSV ушёл на ревью вовремя.\n\n"
+                          "## Что мешало\n\n"
+                          "- Лимит попыток входа: разбираем в [[Дизайн rate-limit]].\n"),
+           60 * 26),
+        mk("note-release-checklist",
+           QStringLiteral("Чек-лист релиза"),
+           QStringLiteral("# Чек-лист релиза\n\n"
+                          "- [ ] Все задачи релиза в колонке «Готово»\n"
+                          "- [ ] Changelog обновлён\n"
+                          "- [ ] Тег поставлен, сборка зелёная\n"),
+           60 * 50),
+        mk("note-welcome",
+           QStringLiteral("С чего начать"),
+           QStringLiteral("# С чего начать\n\n"
+                          "Заметки — это markdown: **жирный**, *курсив*, `код`, списки и таблицы.\n\n"
+                          "- [ ] Открыть задачу APP-101 на доске\n"
+                          "- [ ] Наберите / в пустой строке — чек-лист, код, ссылка на задачу\n"
+                          "- [x] Прочитать эту заметку\n\n"
+                          "Ссылка на задачу: [[APP-101]].\n\n"
+                          "> Пример живёт в своём профиле: переключите профиль вверху боковой панели, чтобы начать своё.\n"),
+           60 * 72),
+    };
   }
-  return {n};
+  return {
+      mk("note-rate-limit",
+         QStringLiteral("Rate-limit design"),
+         QStringLiteral("# Rate-limit design\n\n"
+                        "The limiter counts attempts by the key `login:<email>`. The bug in [[APP-101]]: the key is not "
+                        "normalised.\n\n"
+                        "## What the client gets\n\n"
+                        "429 with a `Retry-After` header, as in "
+                        "[RFC 6585](https://www.rfc-editor.org/rfc/rfc6585 \"429 Too Many Requests\"). "
+                        "The body does not hint whether the account exists.\n\n"
+                        "## Open questions\n\n"
+                        "- A 15 min window or a sliding one? Ask Oleg.\n"
+                        "- Captcha after 5 attempts? See [[APP-108]]\n"),
+         5),
+      mk("note-retro-41",
+         QStringLiteral("Sprint 41 retro"),
+         QStringLiteral("# Sprint 41 retro\n\n"
+                        "## What went well\n\n"
+                        "- CSV export reached review on time.\n\n"
+                        "## What got in the way\n\n"
+                        "- The login attempt limit: worked out in [[Rate-limit design]].\n"),
+         60 * 26),
+      mk("note-release-checklist",
+         QStringLiteral("Release checklist"),
+         QStringLiteral("# Release checklist\n\n"
+                        "- [ ] Every task of the release is in Done\n"
+                        "- [ ] Changelog updated\n"
+                        "- [ ] Tag pushed, build green\n"),
+         60 * 50),
+      mk("note-welcome",
+         QStringLiteral("Getting started"),
+         QStringLiteral("# Getting started\n\n"
+                        "Notes are markdown: **bold**, *italic*, `code`, lists and tables.\n\n"
+                        "- [ ] Open APP-101 on the board\n"
+                        "- [ ] Type / on an empty line: a checklist, code, a link to a task\n"
+                        "- [x] Read this note\n\n"
+                        "Link to a task: [[APP-101]].\n\n"
+                        "> The example lives in its own profile: switch profiles at the top of the sidebar to start "
+                        "your own.\n"),
+         60 * 72),
+  };
 }
 
 }  // namespace SampleData

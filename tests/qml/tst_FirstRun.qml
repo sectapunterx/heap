@@ -39,6 +39,33 @@ TestCase {
         verify(findChild(hero, "first-run-example") !== null);
     }
 
+    // DG-110 / DG-111: bold has three equal key cards, the third "?"; quiet
+    // has no cards, only hint lines and text links.
+    function test_bold_cards_and_quiet_links() {
+        const saved = AppController.appSettingsJson;
+        try {
+            Style.apply("bold");
+            const hero = createTemporaryQmlObject('import TodoCpp; FirstRunHero { width: 800 }', host);
+            const cards = [];
+            (function walk(it) {
+                if (!it) return;
+                if (it.objectName === "first-run-key") cards.push(it);
+                for (const k of it.children || []) walk(k);
+            })(hero);
+            compare(cards.length, 3);
+            compare(cards[2].modelData.keys, "?");
+            wait(50);
+            compare(cards[0].height, cards[2].height, "the key cards are not one height");
+            verify(cards[0].visible);
+            Style.apply("quiet");
+            verify(hero.quiet);
+            verify(!cards[0].visible, "quiet still shows the key cards");
+            verify(!findChild(hero, "first-run-connect").visible);
+        } finally {
+            AppController.appSettingsJson = saved;
+        }
+    }
+
     function test_example_is_its_own_profile() {
         const own = AppController.activeProfileId;
         const ownTasks = AppController.tasks.rowCount();

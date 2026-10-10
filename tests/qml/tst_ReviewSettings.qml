@@ -34,12 +34,22 @@ TestCase {
         return null;
     }
 
+    // Mark trackers connected: their settings rows show only then (DG-093).
+    function connect(ids) {
+        const s = JSON.parse(AppController.appSettingsJson || "{}");
+        s.integrations = s.integrations || ({});
+        for (const id of ids) s.integrations[id] = Object.assign({}, s.integrations[id], { connected: true });
+        AppController.appSettingsJson = JSON.stringify(s);
+    }
+    // The tracker's detail, connected and picked in the list.
     function openCard(id) {
+        connect([id]);
         const sv = createTemporaryQmlObject('import TodoCpp; SettingsView { anchors.fill: parent }', host);
         sv.activeSection = "integrations";
         let card = null;
         tryVerify(function () { card = find(sv, "int-card-" + id); return card !== null; }, 2000, id + " card");
-        card.open = true;
+        sv.pickedTracker = id;
+        tryVerify(function () { return card.visible; }, 1000);
         return card;
     }
 

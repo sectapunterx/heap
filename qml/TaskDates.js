@@ -23,12 +23,21 @@ function cardText(d, hasTime, today) {
     return I18n.fmtDate(d, "dayMonth") + clock;
 }
 
-// The list row, right-aligned: "сегодня", "сб, 10 окт", "9 окт · 15:00".
-function rowText(d, hasTime, today) {
+// The list row, right-aligned (H2-List): "сегодня", "9 окт · 15:00" for
+// tomorrow, "сб, 10 окт" further on. Quiet (Q-List, `plain`): a weekday
+// alone while it is this week ("пт", "пт, 15:00"), then "пн, 12 окт".
+function rowText(d, hasTime, today, plain) {
     const days = daysFrom(d, today);
     if (isNaN(days)) return "";
-    const clock = hasTime ? " · " + I18n.fmtTime(d) : "";
+    const clock = hasTime ? (plain ? ", " : " · ") + I18n.fmtTime(d) : "";
     if (days === 0) return I18n.t("task.due.today") + clock;
+    if (plain) {
+        const toSunday = (7 - today.getDay()) % 7;
+        if (days > 0 && days <= toSunday) return I18n.dayName(d.getDay()) + clock;
+        if (days > 0 && days < 14) return I18n.fmtDate(d, "weekdayDay") + clock;
+        return I18n.fmtDate(d, "dayMonth") + clock;
+    }
+    if (days === 1) return I18n.fmtDate(d, "dayMonth") + clock;
     if (days > 0 && days < 14) return I18n.fmtDate(d, "weekdayDay") + clock;
     return I18n.fmtDate(d, "dayMonth") + clock;
 }

@@ -136,7 +136,7 @@ TestCase {
         tryCompare(dlg, "opened", true);
         const field = find(dlg.contentItem, function (it) { return it.objectName === "saved-view-name-field"; });
         tryVerify(function () { return field.activeFocus; }, 1000, "the name field takes the keyboard");
-        compare(field.text, "svprobe priority:P0", "the query is the suggested name");
+        compare(field.text, "Svprobe · P0", "the query, read as words, is the suggested name");
         field.selectAll();
         typeText("Hot");
         keyClick(Qt.Key_Return);
@@ -181,7 +181,7 @@ TestCase {
                                                       archived: true, showDone: true, view: "timeline" });
         compare(tc.host.activeId, "", "saving through the API does not activate");
         mouseClick(railRow(0));
-        compare(AppController.currentView, "timeline");
+        compare(AppController.currentView, "list", "the timeline of 0.8.0 opens as the list (DG-162)");
         compare(tc.win.searchText, "svprobe");
         compare(tc.win.prioritiesFilter["P0"], true);
         compare(tc.win.boardSortMode, "priority");
@@ -314,15 +314,16 @@ TestCase {
         tc.win.focusActiveView();
     }
 
+    // X-Menus-Other (DG-150): no Duplicate row; a copy is "Сохранить как
+    // вид" on the open view. The menu still deletes the row it was opened on.
     function test_context_menu_duplicate_and_delete() {
         const a = mkView("Alpha", "svprobe");
         mouseClick(railRow(0), 20, 10, Qt.RightButton);
         const menu = railMenu();
         verify(menu !== null);
         tryCompare(menu, "opened", true);
-        const dup = findMenuItem(menu, "sidebar-view-duplicate");
-        verify(dup !== null);
-        dup.triggered();
+        verify(findMenuItem(menu, "sidebar-view-duplicate") === null);
+        AppController.duplicateSavedView(a);
         tryVerify(function () { return AppController.savedViews.length === 2; });
         compare(AppController.savedViews[1].name, "Alpha copy");
         compare(AppController.savedViews[1].query, "svprobe");

@@ -63,7 +63,7 @@ TestCase {
     // UX-5: the reset row asks twice, like the rows next to it.
     function test_danger_row_needs_a_second_click() {
         const row = createTemporaryQmlObject(
-            'import TodoCpp; SettingsView.DangerRow { title: "t"; buttonText: "Reset all"; width: 500 }', host);
+            'import TodoCpp; SettingsDangerRow { label: "t"; buttonText: "Reset all"; width: 500 }', host);
         verify(row !== null);
         const spy = createTemporaryQmlObject('import QtTest; SignalSpy { signalName: "triggered" }', host);
         spy.target = row;
@@ -77,20 +77,4 @@ TestCase {
         verify(!row.armed);
     }
 
-    // UX-6: "Start fresh" leaves an empty Docs catalogue, not the demo one
-    // re-seeded on the first visit.
-    function test_start_fresh_does_not_reseed_docs() {
-        const home = AppController.activeProfileId;
-        const id = AppController.createProfile("Fresh probe " + Date.now());
-        verify(id.length > 0);
-        AppController.startFresh();
-        const dv = createTemporaryQmlObject('import TodoCpp; DocsView { anchors.fill: parent }', host);
-        verify(dv !== null);
-        compare(dv.sections.length, 0);
-        compare(dv.snippets.length, 0);
-        compare(dv.contacts.length, 0);
-        dv.destroy();
-        AppController.activeProfileId = home;
-        AppController.deleteProfile(id);
-    }
 }

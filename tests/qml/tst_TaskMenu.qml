@@ -50,6 +50,41 @@ TestCase {
         verify(a.indexOf("tc-menu-delete") > a.indexOf("tc-menu-archive"), "Delete is last");
     }
 
+    // R3-046: a tracker's task shows the sheet's rows, in its order.
+    function test_tracker_menu_is_the_sheets() {
+        const h = createTemporaryQmlObject('import TodoCpp; TaskMenuHost {}', host);
+        h.anchorItem = host;
+        h.task = { id: "github-1", title: "t", status: "todo", priority: "P2",
+                   ticket: { provider: "github", key: "#1", url: "https://example.com/1" } };
+        const m = h.contextMenu();
+        m.popup(host, 0, 0);
+        tryVerify(() => m.opened, 1000);
+        const shown = [];
+        for (let i = 0; i < m.count; i++) {
+            const it = m.itemAt(i);
+            if (it && it.objectName && it.visible && it.height > 0 && String(it.objectName).indexOf("Sep") < 0) shown.push(it.objectName);
+        }
+        compare(shown, ["tc-menu-edit", "tc-menu-open", "tc-menu-done", "tc-menu-priority", "tc-menu-due",
+                        "tc-menu-schedule", "tc-menu-copylink", "tc-menu-refresh", "tc-menu-delete", "tc-menu-delete-off"]);
+        let off = null;
+        for (let i = 0; i < m.count; i++) if (m.itemAt(i).objectName === "tc-menu-delete-off") off = m.itemAt(i);
+        verify(!off.enabled);
+        m.close();
+    }
+    // R3-044: the Done-stage column is last, after a separator, with d.
+    function test_status_list_puts_done_last() {
+        const id = mkTask("status probe");
+        const h = createTemporaryQmlObject('import TodoCpp; TaskMenuHost {}', host);
+        h.anchorItem = host;
+        h.taskId = id;
+        const s = h.statusMenu();
+        const last = s.itemAt(s.count - 1);
+        compare(AppController.statusCategory(last.modelData.id), "done");
+        compare(s.itemAt(s.count - 2).objectName, "tc-status-doneSep");
+        compare(last.hint, AppController.shortcutText("task.done"));
+        compare(s.itemAt(1).hint, "", "no number keys drawn");
+    }
+
     function test_done_row_runs_done_and_shows_its_key() {
         const id = mkTask("done probe");
         const h = createTemporaryQmlObject('import TodoCpp; TaskMenuHost {}', host);

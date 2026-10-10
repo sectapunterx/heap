@@ -125,11 +125,15 @@ MdHtmlOptions MdDocument::buildOptions() const {
   options.palette.link = colorAt(m_palette, "link");
   options.palette.code = colorAt(m_palette, "code");
   options.palette.codeBackground = colorAt(m_palette, "codeBackground");
+  options.palette.codeFont = colorAt(m_palette, "codeFont");
+  options.palette.codeSize = colorAt(m_palette, "codeSize");
   options.palette.highlightBackground = colorAt(m_palette, "highlightBackground");
   options.palette.mention = colorAt(m_palette, "mention");
   options.palette.ticket = colorAt(m_palette, "ticket");
   options.palette.tag = colorAt(m_palette, "tag");
   options.palette.math = colorAt(m_palette, "math");
+  options.palette.taskDecoration = colorAt(m_palette, "taskDecoration");
+  options.palette.linkDecoration = colorAt(m_palette, "linkDecoration");
   options.allowRemoteImages = m_allowRemoteImages;
   options.imageBaseDir = m_imageBaseDir;
   for(auto it = m_ticketTitles.constBegin(); it != m_ticketTitles.constEnd(); ++it) {

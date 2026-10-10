@@ -59,6 +59,20 @@ TEST_F(CommandLine, StatusPriorityAndWords) {
   EXPECT_EQ(q.query(), QStringLiteral("status:blocked priority:P0 оформ"));
 }
 
+// The chips' words typed back (DG-080): "статус:заблок приоритет:p0".
+TEST_F(CommandLine, RussianKeysOfTheChips) {
+  const CommandQuery q = p(QStringLiteral("статус:заблок приоритет:P0 оформ"));
+  ASSERT_EQ(q.tokens.size(), 2);
+  EXPECT_EQ(q.tokens[0].clause, QStringLiteral("status:blocked"));
+  EXPECT_EQ(q.tokens[0].value, QStringLiteral("Заблокировано"));
+  EXPECT_EQ(q.tokens[1].clause, QStringLiteral("priority:P0"));
+  EXPECT_EQ(q.text, QStringLiteral("оформ"));
+  // A value no column starts with stays a word.
+  const CommandQuery w = p(QStringLiteral("статус:нечто"));
+  EXPECT_TRUE(w.tokens.isEmpty());
+  EXPECT_EQ(w.text, QStringLiteral("статус:нечто"));
+}
+
 TEST_F(CommandLine, DeadlineWordMakesADueClause) {
   const CommandQuery q = p(QStringLiteral("отчёт до пятницы"));
   ASSERT_EQ(q.tokens.size(), 1);

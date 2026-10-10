@@ -97,6 +97,7 @@ QVariantList AppController::taskListRows(const QString& query,
     it.priority = heap::local::effectivePriority(t);
     it.profile = s.profile;
     it.profileIndex = profileIndex.value(s.profile, 0);
+    it.changed = t.statusChangedAt.isValid() ? t.statusChangedAt.date() : QDate();
     items.append(it);
   }
 
@@ -135,6 +136,8 @@ QVariantList AppController::taskListRows(const QString& query,
                     {QStringLiteral("due"), dateOrNull(heap::local::effectiveDueAt(t))},
                     {QStringLiteral("dueHasTime"), heap::local::effectiveDueHasTime(t)},
                     {QStringLiteral("repeats"), !t.recurrence.isEmpty()},
+                    {QStringLiteral("archived"), t.archived},
+                    {QStringLiteral("changed"), dateOrNull(t.statusChangedAt)},
                     {QStringLiteral("own"), src.at(i).own},
                     {QStringLiteral("profile"), src.at(i).profile}};
       rows.append(r);

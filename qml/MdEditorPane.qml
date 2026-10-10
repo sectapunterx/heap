@@ -21,8 +21,12 @@ Item {
     property string pageId: ""
     property string emptyText: ""
 
-    // "edit" or "split".
+    // "edit", "split" or "live" (drawn, the block under the caret edited
+    // in place — how Knowledge shows a page, DG-070).
     property string mode: "split"
+    // No head row (title, word count, mode chips): the page sits in the
+    // Knowledge document, which has no toolbar (DG-071).
+    property bool bare: false
 
     property bool _loading: false
     property bool _dirty: false
@@ -117,6 +121,7 @@ Item {
 
         // Head: the title of the page, and how it is being shown.
         Rectangle {
+            visible: !root.bare
             Layout.fillWidth: true
             Layout.preferredHeight: 38
             color: Theme.panel
@@ -195,6 +200,7 @@ Item {
             spacing: 0
 
             QQC.ScrollView {
+                visible: root.mode !== "live"
                 // Equal preferred widths and both filling: that is what splits
                 // a RowLayout down the middle. Sizing one half to parent.width
                 // instead leaves the other at zero, which looks exactly like
@@ -259,6 +265,21 @@ Item {
                         if (mdEditor.handleKey(event.key, event.modifiers)) event.accepted = true;
                     }
                 }
+            }
+
+            // The page drawn; its edits go through the text field, which
+            // keeps the debounce and the flush.
+            MdBlockEditor {
+                id: live
+                objectName: "docpage-live"
+                headingRules: false
+                noteType: true
+                visible: root.mode === "live"
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                text: area.text
+                onEdited: (t) => { if (t !== area.text) area.text = t; }
+                onInternalLinkActivated: (kind, target) => root.internalLinkActivated(kind, target)
             }
 
             Rectangle {

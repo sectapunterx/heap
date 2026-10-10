@@ -83,7 +83,8 @@ TestCase {
         settingsSaved = false;
     }
 
-    // One provider's card, expanded, with `cfg` as its stored config.
+    // One provider's card, picked in the tracker list, with `cfg` as its
+    // stored config.
     function _card(sv, provider, cfg) {
         if (!settingsSaved) {
             savedSettings = AppController.appSettingsJson;
@@ -98,9 +99,10 @@ TestCase {
         tryVerify(function () { return findChild(sv, "int-card-" + provider) !== null; },
                   2000, provider + " must have a card on the Integrations page");
         const card = findChild(sv, "int-card-" + provider);
-        // A collapsed card makes every child read `visible: false`, whatever
-        // the binding under test says.
-        card.open = true;
+        // Only the picked tracker's detail shows (DG-093); a hidden one makes
+        // every child read `visible: false`.
+        sv.pickedTracker = provider;
+        tryVerify(function () { return card.visible; }, 1000, provider + " detail did not show");
         return card;
     }
 
@@ -159,38 +161,31 @@ TestCase {
         const sv = make();
         const card = _card(sv, "jira", {
             clientId: "cid", connected: true,
-            seenStatuses: ["In Progress", "To Do"],
+            seenStatuses: ["In Progress"],
             statusMap: { "In Progress": "blocked" }
         });
         tryVerify(function () { return findChild(sv, "status-map-combo") !== null; }, 2000);
         const combo = findChild(sv, "status-map-combo");
-        tryCompare(combo, "currentValue", "blocked");
-        verify(combo.currentIndex > 0);
+        tryCompare(combo, "value", "blocked");
+        verify(combo.currentIndex >= 0);
+        compare(combo.options[combo.currentIndex].value, "blocked");
     }
 
-    // The mapping folds away: closed by default, the header says what is
-    // behind it, and a click opens it.
-    function test_status_map_folds_and_unfolds() {
+    // The mapping is open, as the sheet shows it (DG-093), and a status the
+    // built-in table does not know says the default was picked.
+    function test_status_map_is_open_and_flags_unknown_statuses() {
         const sv = make();
         const card = _card(sv, "jira", {
             clientId: "cid", connected: true,
-            seenStatuses: ["In Progress", "To Do", "Done"],
-            statusMap: { "In Progress": "blocked" }
+            seenStatuses: ["In Progress", "QA", "Done"]
         });
-        tryVerify(function () { return findChild(card, "status-map-toggle-area") !== null; }, 2000);
-        // The card sits below the fold of the settings page, out of reach of
-        // a synthetic click; the header's own handler is what a click runs.
-        const toggle = findChild(card, "status-map-toggle-area");
-        verify(!card.mapOpen, "the status mapping must start folded");
-        const combo = findChild(card, "status-map-combo");
-        verify(!combo.parent.visible, "a folded mapping still shows its rows");
-
-        toggle.activated();
-        tryVerify(function () { return card.mapOpen; }, 1000, "a click did not unfold the mapping");
-        verify(combo.parent.visible);
-
-        toggle.activated();
-        tryVerify(function () { return !card.mapOpen; }, 1000, "a second click did not fold it again");
+        tryVerify(function () { return findChild(card, "status-map-combo") !== null; }, 2000);
+        const block = findChild(card, "status-map-jira");
+        verify(block.visible, "the mapping is hidden");
+        const rows = AppController.statusMappingFor("jira");
+        const qa = rows.filter((r) => r.status === "QA")[0];
+        compare(qa.known, false);
+        compare(rows.filter((r) => r.status === "Done")[0].known, true);
     }
 
     // ─── Integrations: busy buttons and the last error (DES-5) ─────────
@@ -319,15 +314,17 @@ TestCase {
     function test_data_actions_are_on_the_tab_path_and_named() {
         const sv = make();
         sv.activeSection = "data";
-        tryVerify(function () { return findChild(sv, "settings-export-json") !== null; }, 2000);
-        const exp = findChild(sv, "settings-export-json");
-        const imp = findChild(sv, "settings-import-json");
+        // Резервные копии: two buttons; Экспорт: one, named for its row.
+        tryVerify(function () { return findChild(sv, "settings-export-export-click") !== null; }, 2000);
+        const exp = findChild(sv, "settings-backups-restore-click");
+        const imp = findChild(sv, "settings-export-export-click");
         verify(exp.activeFocusOnTab);
         compare(exp.Accessible.role, Accessible.Button);
-        compare(exp.Accessible.name, I18n.t("settings.data.exportJson"));
+        compare(exp.Accessible.name, I18n.t("settings.data.restoreDots"));
+        compare(imp.Accessible.name, I18n.t("settings.data.export") + ": " + I18n.t("settings.data.exportDots"));
         exp.forceActiveFocus();
         keyClick(Qt.Key_Tab);
-        verify(imp.activeFocus, "Tab from Export did not reach Import");
+        verify(imp.activeFocus, "Tab from Backups did not reach Export");
     }
 
     // Design audit DES-16: "Delete everything" asks in a dialog that names
@@ -338,6 +335,8 @@ TestCase {
         sv.activeSection = "data";
         tryVerify(function () { return findChild(sv, "settings-wipe") !== null; }, 2000);
         const wipe = findChild(sv, "settings-wipe");
+        // Under the section's "more" line (DG-090).
+        findChild(findChild(sv, "settings-block-data"), "settings-more-toggle").parent.userOpen = true;
         const dialog = findChild(sv, "settings-wipe-dialog");
         verify(dialog !== null);
         const before = AppController.profiles.length;
@@ -357,18 +356,18 @@ TestCase {
     function test_about_actions_are_named_buttons() {
         const sv = make();
         sv.activeSection = "about";
-        tryVerify(function () { return findChild(sv, "settings-open-logs") !== null; }, 2000);
+        tryVerify(function () { return findChild(sv, "settings-open-logs-open-click") !== null; }, 2000);
         const names = {
-            "settings-report-issue": "settings.about.reportIssue",
-            "settings-open-logs": "settings.about.openLogs",
-            "settings-check-updates": "settings.about.checkUpdates"
+            "settings-report-issue-open-click": I18n.t("settings.help.report") + ": " + I18n.t("settings.help.open"),
+            "settings-open-logs-open-click": I18n.t("settings.about.logs") + ": " + I18n.t("settings.about.openLogs"),
+            "settings-check-updates-click": I18n.t("settings.about.checkUpdates")
         };
         for (const id in names) {
             const b = findChild(sv, id);
             verify(b !== null, id);
             verify(b.activeFocusOnTab, id + " is not on the Tab path");
             compare(b.Accessible.role, Accessible.Button, id);
-            compare(b.Accessible.name, I18n.t(names[id]), id);
+            compare(b.Accessible.name, names[id], id);
         }
     }
 
@@ -401,7 +400,7 @@ TestCase {
         const sv = make();
         sv.activeSection = "appearance";
         const profileRow = findChild(sv, "settings-nav-appearance");
-        const appearanceRow = findChild(sv, "settings-nav-calendar");
+        const appearanceRow = findChild(sv, "settings-nav-tasks");
         verify(profileRow !== null && appearanceRow !== null);
         verify(profileRow.activeFocusOnTab);
         verify(!appearanceRow.activeFocusOnTab, "every nav row is a Tab stop");
@@ -415,7 +414,7 @@ TestCase {
         profileRow.forceActiveFocus(Qt.TabFocusReason);
         keyClick(Qt.Key_Down);
         verify(appearanceRow.activeFocus);
-        compare(sv.activeSection, "calendar");
+        compare(sv.activeSection, "tasks");
         verify(appearanceRow.activeFocusOnTab);
         verify(!profileRow.activeFocusOnTab);
 
@@ -424,7 +423,7 @@ TestCase {
         sv.searchText = target.title;
         verify(sv._navTabIndex >= 0, "no nav row is a Tab stop under a search");
         verify(sv._sectionMatches(sv.sections[sv._navTabIndex]));
-        verify(sv.sections[sv._navTabIndex].id !== "calendar");
+        verify(sv.sections[sv._navTabIndex].id !== "tasks");
         sv.searchText = "";
     }
 
@@ -477,7 +476,7 @@ TestCase {
     function test_search_hides_sections_without_a_hit() {
         const sv = make();
         sv.searchText = I18n.t("settings.sound.meetingMinutes");
-        verify(findChild(sv, "settings-nav-appearance").visible);
+        verify(findChild(sv, "settings-nav-notifications").visible);
         verify(!findChild(sv, "settings-nav-git").visible, "Git kept with nothing matching");
         sv.searchText = "";
     }
@@ -486,13 +485,13 @@ TestCase {
     // setting and focus lands on it.
     function test_enter_opens_the_section_on_the_setting() {
         const sv = make();
-        sv.activeSection = "profile";
-        const text = I18n.t("settings.sound.enabled");   // low on the Appearance page
+        sv.activeSection = "about";
+        const text = I18n.t("settings.safety.beforeImport");   // mid-page, Подстраховка
         sv.searchText = text;
         const field = findChild(sv, "settings-search");
         field.forceActiveFocus();
         keyClick(Qt.Key_Return);
-        compare(sv.activeSection, "appearance");
+        compare(sv.activeSection, "safety");
         tryVerify(() => _row(sv, text) !== null, 2000, "row not built");
         const row = _row(sv, text);
         // Focus lands once the scroll has settled on the laid-out page.

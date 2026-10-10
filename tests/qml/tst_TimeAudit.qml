@@ -60,13 +60,6 @@ TestCase {
         const occ = AppController.eventOccurrences(day, day);
         return occ.length > 0 ? occ[0] : null;
     }
-    function makeDay(day) {
-        AppController.selectedDate = day;
-        const dc = createTemporaryQmlObject('import TodoCpp; DayCalendar { anchors.fill: parent }', host);
-        verify(dc !== null);
-        wait(0);
-        return dc;
-    }
     function scrollToTop(root) {
         const stack = [root];
         while (stack.length > 0) {
@@ -88,75 +81,9 @@ TestCase {
 
     // ── TIME-17: a click on the day grid opens the editor, snapped ──
 
-    function test_day_click_asks_for_an_editor_instead_of_saving() {
-        const day = probeDay(1201);
-        clearRange(day, day);
-        const dc = makeDay(day);
-        let got = null;
-        dc.createRequested.connect((s, e, d) => { got = { s: s, e: e, d: d }; });
-        const before = AppController.events.rowCount();
-        const area = findChild(dc, "day-create-area");
-        verify(area !== null);
-        // 14:40 on the grid, which a 15-minute snap puts at 14:45.
-        mouseClick(area, 20, Theme.hourH * (14 + 40 / 60));
-
-        compare(AppController.events.rowCount(), before, "nothing is saved by a click");
-        verify(got !== null, "the editor is asked for");
-        fuzzyCompare(got.s, 14.75, 0.01);
-        fuzzyCompare(got.e, 15.75, 0.01);
-    }
-
     // ── TIME-1: dragging one occurrence asks, and "this" moves only it ──
 
-    function test_dragging_an_occurrence_asks_and_moves_only_it() {
-        const first = probeDay(1210);
-        clearRange(first, probeDay(1216));
-        const id = addEvent(first, 10, 11, "FREQ=DAILY;COUNT=5");
-        const day = probeDay(1212);
-        const dc = makeDay(day);
-        const block = findChild(dc, "event-" + id);
-        verify(block !== null && block.visible);
-
-        dragBy(block, 0, Theme.hourH * 2);
-        const scope = dc.scopePrompt;
-        verify(scope !== null, "the scope dialog exists");
-        verify(scope.opened, "the scope question is asked");
-        scope.answer("this");
-        wait(20);
-
-        fuzzyCompare(occOn(day).start, 12, 0.01);
-        fuzzyCompare(occOn(first).start, 10, 0.01);
-        compare(AppController.eventOccurrences(first, probeDay(1216)).length, 5, "no occurrence vanished");
-    }
-
     // ── TIME-10: the after-midnight piece moves the event by the drag ──
-
-    function test_dragging_an_overnight_tail_shifts_the_hours() {
-        const day = probeDay(1218);
-        const eve = probeDay(1217);
-        clearRange(eve, day);
-        const ev = AppController.newEventDraft(22, eve);
-        ev.title = "overnight";
-        ev.date = eve;
-        ev.endDate = day;
-        ev.end = 2;
-        AppController.saveEvent(ev);
-        tc.seeded.push(ev.id);
-        const dc = makeDay(day);
-        const block = findChild(dc, "event-" + ev.id);
-        verify(block !== null && block.visible);
-        verify(!block.wholeEvent);
-        // The day opens on the working hours; the tail sits at 00:00.
-        scrollToTop(dc);
-
-        dragBy(block, 0, Theme.hourH);
-        wait(20);
-
-        const back = AppController.eventById(ev.id);
-        fuzzyCompare(back.start, 23, 0.01);
-        fuzzyCompare(back.end, 3, 0.01);
-        verify(sameDay(back.date, eve), "the event still starts the evening before");
-    }
 
     // ── TIME-4: the week grid's vertical drag reaches the model ──
 
@@ -193,47 +120,7 @@ TestCase {
 
     // ── TIME-11: an event and a task block at the same time sit side by side ──
 
-    function test_task_block_and_event_do_not_overlap() {
-        const day = probeDay(1240);
-        clearRange(day, day);
-        const evId = addEvent(day, 10, 11, "", "covering meeting");
-        const at = new Date(day);
-        at.setHours(10, 0, 0, 0);
-        const draft = AppController.newTaskDraft("todo");
-        draft.title = "side-by-side probe";
-        draft.scheduledAt = at;
-        draft.hasTime = true;
-        AppController.saveTask(draft);
-        tc.seededTasks.push(draft.id);
-
-        const dc = makeDay(day);
-        const ev = findChild(dc, "event-" + evId);
-        const tb = findChild(dc, "taskblock-" + draft.id);
-        verify(ev !== null && tb !== null);
-        verify(tb.visible);
-        verify(tb.x + tb.width <= ev.x + 1 || ev.x + ev.width <= tb.x + 1, "the two columns do not overlap");
-        let got = "";
-        dc.taskClicked.connect((tid) => got = tid);
-        mouseClick(tb);
-        compare(got, draft.id, "the task block takes its own click");
-    }
-
     // ── TIME-29: the empty-day hint is not drawn over task blocks ──
-
-    function test_no_events_hint_hides_under_task_blocks() {
-        const day = probeDay(1245);
-        clearRange(day, day);
-        const at = new Date(day);
-        at.setHours(15, 0, 0, 0);
-        const draft = AppController.newTaskDraft("todo");
-        draft.title = "hint probe";
-        draft.scheduledAt = at;
-        draft.hasTime = true;
-        AppController.saveTask(draft);
-        tc.seededTasks.push(draft.id);
-        const dc = makeDay(day);
-        compare(dc._visibleTaskBlocks, 1);
-    }
 
     // ── TIME-24 / TIME-32: the editor's parsing and rule builder ──
 
@@ -247,63 +134,41 @@ TestCase {
         verify(isNaN(ed.parseHourStrict("")));
     }
 
+    // DG-120: the panel saves on its own, so "refused" means nothing is
+    // written — no name, no meeting; an end typed before the start keeps the
+    // length instead of becoming a 23-hour event.
     function test_editor_refuses_an_empty_title_and_a_backwards_end() {
         const day = probeDay(1250);
         clearRange(day, day);
         const ed = createTemporaryQmlObject('import TodoCpp; EventEditor { }', host);
         const draft = AppController.newEventDraft(10, day);
+        draft.title = "";
         ed.showForDraft(draft);
         const before = AppController.events.rowCount();
         findChild(ed, "event-title").text = "";
-        ed._save();
-        compare(AppController.events.rowCount(), before);
-        verify(ed._error.length > 0);
+        ed._save("text");
+        compare(AppController.events.rowCount(), before, "a nameless meeting is not made");
 
         findChild(ed, "event-title").text = "named";
-        findChild(ed, "event-start").text = "11:00";
-        findChild(ed, "event-end").text = "10:00";
-        ed._save();
-        compare(AppController.events.rowCount(), before, "an end before the start is not saved as a 23-hour event");
+        ed._save("text");
+        tc.seeded.push(draft.id);
+        compare(ed.applyWhen("11:00-10:00"), "");
+        const back = AppController.eventById(draft.id);
+        verify(back.end > back.start, "an end before the start is not saved as a 23-hour event");
+        verify(back.end - back.start <= 1.01);
         ed.close();
     }
 
+    // The repeat menu's kinds and the rules they stand for; a rule the menu
+    // cannot show stays as written ("custom").
     function test_editor_builds_weekday_and_end_rules() {
         const ed = createTemporaryQmlObject('import TodoCpp; EventEditor { }', host);
-        const day = probeDay(1260);
-        ed.showForDraft(AppController.newEventDraft(10, day));
-        ed._loadRule("FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR");
-        compare(ed._kind(), "weekdays");
-        compare(ed._ruleFromBox(), "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR");
-
-        ed._loadRule("FREQ=WEEKLY;BYDAY=MO,WE;COUNT=6");
-        compare(ed._kind(), "weekly");
-        compare(ed.repeatDays.join(","), "1,3");
-        compare(ed._ruleFromBox(), "FREQ=WEEKLY;BYDAY=MO,WE;COUNT=6");
-
-        ed._loadRule("FREQ=MONTHLY;BYDAY=-1FR");
-        compare(ed._kind(), "custom", "a rule the controls cannot show stays as text");
-        compare(ed._ruleFromBox(), "FREQ=MONTHLY;BYDAY=-1FR");
-        ed.close();
-    }
-
-    // Design audit DES-3: the days of a weekly rule are toggles the keyboard
-    // can reach — Tab to a day, Space or Enter flips it — and read as checkboxes.
-    function test_weekday_chips_toggle_from_the_keyboard() {
-        const ed = createTemporaryQmlObject('import TodoCpp; EventEditor { }', host);
-        ed.showForDraft(AppController.newEventDraft(10, probeDay(1262)));
-        ed._loadRule("FREQ=WEEKLY;BYDAY=MO");
-        const tue = findChild(ed.contentItem, "event-repeat-day-2");
-        verify(tue !== null);
-        verify(tue.activeFocusOnTab, "a weekday chip is not on the Tab path");
-        compare(tue.Accessible.role, Accessible.CheckBox);
-        verify(!tue.Accessible.checked);
-        tue.forceActiveFocus(Qt.TabFocusReason);
-        keyClick(Qt.Key_Space);
-        compare(ed.repeatDays.join(","), "1,2");
-        verify(tue.Accessible.checked);
-        keyClick(Qt.Key_Return);
-        compare(ed.repeatDays.join(","), "1");
-        ed.close();
+        compare(ed.repeatKindOf("FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"), "weekdays");
+        compare(ed.ruleFor("weekdays"), "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR");
+        compare(ed.repeatKindOf("FREQ=WEEKLY;INTERVAL=2"), "biweekly");
+        compare(ed.repeatKindOf("FREQ=WEEKLY;BYDAY=MO,WE;COUNT=6"), "custom");
+        compare(ed.repeatKindOf("FREQ=MONTHLY;BYDAY=-1FR"), "custom", "a rule the menu cannot show stays as text");
+        compare(ed.repeatKindOf(""), "never");
     }
 
     function test_editor_saves_notes_link_and_reminder() {
@@ -313,30 +178,29 @@ TestCase {
         const draft = AppController.newEventDraft(10, day);
         ed.showForDraft(draft);
         findChild(ed, "event-title").text = "with extras";
-        findChild(ed, "event-notes").text = "agenda";
-        findChild(ed, "event-link").text = "https://meet.example/x";
-        findChild(ed, "event-location").text = "Room 1";
-        findChild(ed, "event-reminder").currentIndex = ed.reminderChoices.indexOf(15);
-        ed._save();
+        findChild(ed, "event-agenda").text = "agenda";
+        findChild(ed, "event-call").text = "https://meet.example/x";
+        ed.reminderMinutes = 15;
+        ed._save("text");
         tc.seeded.push(draft.id);
         const back = AppController.eventById(draft.id);
         compare(back.notes, "agenda");
         compare(back.url, "https://meet.example/x");
-        compare(back.location, "Room 1");
         compare(back.reminderMinutes, 15);
     }
 
-    // ── TIME-25: a click outside with unsaved edits asks first ──
-
+    // TIME-25 is moot with autosave: what is typed is written on close.
     function test_unsaved_edits_survive_a_first_close_request() {
+        const day = probeDay(1270);
+        clearRange(day, day);
         const ed = createTemporaryQmlObject('import TodoCpp; EventEditor { }', host);
-        ed.showForDraft(AppController.newEventDraft(10, probeDay(1270)));
+        const draft = AppController.newEventDraft(10, day);
+        ed.showForDraft(draft);
         findChild(ed, "event-title").text = "half typed";
-        ed._requestClose();
-        verify(ed.opened, "the first request only warns");
-        verify(ed._confirmDiscard);
-        ed._requestClose();
-        verify(!ed.opened, "the second one discards");
+        ed.close();
+        verify(!ed.opened);
+        tc.seeded.push(draft.id);
+        compare(AppController.eventById(draft.id).title, "half typed", "closing writes what was typed");
     }
 
     // ── TIME-16: the date picker is keyboard-driven ──
@@ -423,14 +287,6 @@ TestCase {
 
     // ── TIME-28: the mini week counts occurrences ──
 
-    function test_mini_week_counts_a_daily_series() {
-        const first = probeDay(1300);
-        clearRange(first, probeDay(1310));
-        addEvent(first, 9, 10, "FREQ=DAILY");
-        const mw = createTemporaryQmlObject('import TodoCpp; MiniWeek { }', host);
-        verify(mw.eventCountFor(probeDay(1303)) >= 1, "a later day of the series has a dot");
-    }
-
     // ── TIME-1: an occurrence moved days away shows on its new day ──
 
     function occOf(id, day) {
@@ -440,7 +296,7 @@ TestCase {
         return null;
     }
 
-    function test_moved_occurrence_shows_in_week_and_mini_week() {
+    function test_moved_occurrence_shows_in_week() {
         const friday = new Date(2034, 0, 13);
         const monday = new Date(2034, 0, 16);
         clearRange(new Date(2034, 0, 1), new Date(2034, 0, 31));
@@ -456,8 +312,6 @@ TestCase {
             for (const e of d.events)
                 if (e.title === "moved friday" && sameDay(d.date, monday)) seen = true;
         verify(seen, "the week of the new day draws it");
-        const mw = createTemporaryQmlObject('import TodoCpp; MiniWeek { }', host);
-        compare(mw.eventCountFor(monday), 1, "the mini week counts it");
     }
 
     // ── TIME-2: an untouched repeat rule is saved back as it was given ──
@@ -471,7 +325,6 @@ TestCase {
         const ed = createTemporaryQmlObject('import TodoCpp; EventEditor { }', host);
         ed.showForOccurrence(occOf(id, new Date(2034, 2, 27)));
         findChild(ed, "event-title").text = "renamed weekly";
-        compare(ed._ruleFromBox(), "FREQ=WEEKLY", "the controls' own spelling");
         compare(ed._draft().rrule, "FREQ=WEEKLY;BYDAY=MO", "an untouched rule goes back as given");
         AppController.saveOccurrence(ed._draft(), "all");
         ed.close();
@@ -479,10 +332,6 @@ TestCase {
         verify(occOf(id, new Date(2034, 2, 13)) === null, "the deleted one stays deleted");
         compare(occOf(id, new Date(2034, 3, 3)).title, "renamed weekly");
 
-        // Touched, the controls say what is saved.
-        ed.showForOccurrence(occOf(id, new Date(2034, 3, 3)));
-        ed._toggleDay(3);
-        compare(ed._draft().rrule, "FREQ=WEEKLY;BYDAY=MO,WE");
         ed.close();
     }
 }

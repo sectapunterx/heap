@@ -1,4 +1,4 @@
-# heap. — public release announcement
+# lowkey — public release announcement
 
 Reusable copy for the GitHub Release body, Show HN, Reddit, and social. Trim to
 fit each channel. Replace `<REPO_URL>` and `<RELEASE_URL>` before posting.
@@ -7,13 +7,13 @@ fit each channel. Replace `<REPO_URL>` and `<RELEASE_URL>` before posting.
 
 ## Long form (GitHub Release / blog / Show HN body)
 
-**heap. — Work, in one place.**
+**lowkey — Work, in one place.**
 *A native, local-first desktop planner for engineers: kanban board, calendar,
 notes and docs in one keyboard-driven window.*
 
 I got tired of keeping tasks in a browser tab, the calendar in another, notes in
-a third, and paying latency (and my attention) for the privilege. heap. puts all
-of it in **one native binary** — no Electron, no browser, no account, no server.
+a third, and paying latency (and my attention) for the privilege. That is why
+lowkey puts all of it in **one native binary** — no Electron, no browser, no account, no server.
 Your data is a plain JSON file on your disk.
 
 ### What it is
@@ -64,16 +64,16 @@ Jira/GitHub/GitLab. Feedback and issues welcome: `<REPO_URL>`.
 ## Short forms
 
 **Show HN / HN title**
-> Show HN: heap. – a local-first native task board, calendar and notes for engineers
+> Show HN: lowkey – a local-first native task board, calendar and notes for engineers
 
 **Reddit (r/QtFramework, r/opensource, r/productivity) title**
-> heap. — a single-binary, local-first planner (board + calendar + notes) built in Qt 6 / C++20 [MIT]
+> lowkey — a single-binary, local-first planner (board + calendar + notes) built in Qt 6 / C++20 [MIT]
 
 **Tweet / Mastodon (≤280)**
-> heap. is out — a native, local-first desktop planner for engineers: kanban board, calendar, notes & docs in one keyboard-driven window. No Electron, no account, your data is one JSON file. Win/macOS/Linux, MIT. <RELEASE_URL>
+> Out now: lowkey — a native, local-first desktop planner for engineers: kanban board, calendar, notes & docs in one keyboard-driven window. No Electron, no account, your data is one JSON file. Win/macOS/Linux, MIT. <RELEASE_URL>
 
 **One-liner**
-> heap. — Work, in one place. A native, local-first board + calendar + notes app for engineers.
+> lowkey — Work, in one place. A native, local-first board + calendar + notes app for engineers.
 
 ---
 

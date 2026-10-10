@@ -1,6 +1,6 @@
 # Keyboard reference
 
-lowkey 0.8 has a Vim-based keymap. `?` (or `Ctrl+/`) opens the cheat sheet:
+The keymap of lowkey 0.8 is Vim-based. `?` (or `Ctrl+/`) opens the cheat sheet:
 every key by area, in columns, with a search by action or by key. The cheat
 sheet is read-only; **Change shortcuts…** at its foot (or **Settings →
 Shortcuts**) opens the panel that rebinds. There, `Enter` on a binding starts
@@ -146,7 +146,7 @@ Arrow keys work alongside the letters.
 
 The List lens of Tasks walks with the same keys (`J` / `K`, `Return`,
 `Space` or `V` to mark, `M`, `E`, `S`, `1`–`4`, `D`); `Z` folds the group the
-cursor is in. `Ctrl+\` shows or hides the day panel beside Board and List.
+cursor is in.
 
 While a card's menu is open its arrows and letters belong to the menu.
 
@@ -241,12 +241,12 @@ listed in the sidebar under *My views*, numbered; `G, 1` … `G, 9` and
 | New profile | `Ctrl+Shift+P` |
 | Export active profile to Markdown (clipboard) | `Ctrl+Shift+E` |
 | Weekly shipped report (clipboard) | `Ctrl+Shift+W` |
+| Sync every tracker now | `Ctrl+Shift+R` |
 
 ## Panels
 
 | Action | Default |
 |--------|---------|
-| Show / hide the day panel | `Ctrl+\` |
 | Expand / collapse the sidebar | `Ctrl+Shift+B` |
 | Focus mode on / off (once turned on in Settings → Safety net; `Esc` also leaves it) | `Ctrl+Shift+F` |
 

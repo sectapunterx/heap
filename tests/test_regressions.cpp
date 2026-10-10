@@ -109,7 +109,7 @@ TEST_F(AppController, MergeExternalTasks_RemoteStatusUnchanged_KeepsLocalColumn)
 TEST_F(AppController, MergeExternalTasks_RemoteStatusChanged_TakesTrackerColumn) {
   // Only while heap writes this tracker: the move was (or would be) sent, so
   // a later move in the tracker is the newer word (APP-243).
-  app_->setAppSettingsJson(QStringLiteral(R"({"integrations":{"github":{"writeStatus":true}}})"));
+  app_->setAppSettingsJson(QStringLiteral(R"({"integrations":{"github":{"writeStatus":true,"askBeforeWrite":false}}})"));
   merge({issue(QStringLiteral("3"), QStringLiteral("open"))});
   Task t = *task(QStringLiteral("gh-3"));
   t.status = QStringLiteral("prog");

@@ -675,10 +675,11 @@ add_test(NAME heap_qml_tests
 # the rest run alongside it instead of after it. TIMEOUT: one process runs every
 # tst_*.qml, and on the macOS runner it already took ~285 s against ctest's
 # default 300 s, so each new suite risked a timeout that is not a failure.
+# On the Linux and macOS runners it now takes 12–14 min (0.8.1).
 set_tests_properties(heap_qml_tests PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_CONTROLS_STYLE=Basic"
         COST 1000
-        TIMEOUT 900)
+        TIMEOUT 1500)
 
 # HEAP-71: the static TodoCpp module's file-based components (SideRail,
 # ArchiveView, …) failed to resolve in the Quick Test binary on Linux under

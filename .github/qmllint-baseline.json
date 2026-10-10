@@ -39,6 +39,5 @@
   "qml/TopBar.qml": 8,
   "qml/TweaksPanel.qml": 11,
   "qml/UnscheduledRail.qml": 2,
-  "qml/WeekView.qml": 113,
-  "qml/WelcomePopup.qml": 9
+  "qml/WeekView.qml": 113
 }

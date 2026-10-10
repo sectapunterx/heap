@@ -144,6 +144,9 @@ class AppController : public QObject {
   // data" banner should offer to start fresh. Both persist in the settings blob.
   Q_PROPERTY(bool welcomeSeen READ welcomeSeen NOTIFY onboardingChanged)
   Q_PROPERTY(bool demoActive READ demoActive NOTIFY onboardingChanged)
+  // An update to a new release line since the last run (R2-054): the
+  // "What's new" card is due once. ackWhatsNew() puts it away.
+  Q_PROPERTY(bool whatsNewDue READ whatsNewDue NOTIFY onboardingChanged)
 
   Q_PROPERTY(QVariantList profiles READ profiles NOTIFY profilesChanged)
   // Calendars read from a link (APP-118), with how their last fetch went.
@@ -214,6 +217,21 @@ class AppController : public QObject {
   // storageMessage is the localized banner text, reason included.
   Q_PROPERTY(QString storageState READ storageState NOTIFY storageStateChanged)
   Q_PROPERTY(QString storageMessage READ storageMessage NOTIFY storageStateChanged)
+  // The write failure's cause in a few words ("на диске C: нет места"), or
+  // "" (R2-037); the strip leads with it.
+  Q_PROPERTY(QString storageReason READ storageReason NOTIFY storageStateChanged)
+  // The file names the message carries (the damaged copy, the backup shown).
+  Q_PROPERTY(QStringList storageArgs READ storageArgs NOTIFY storageStateChanged)
+  // Where a damaged state.json stops parsing, as a byte offset; -1 when it
+  // parsed but had the wrong shape, or nothing is damaged (R4-104).
+  Q_PROPERTY(int storageDamagedAt READ storageDamagedAt NOTIFY storageStateChanged)
+  Q_PROPERTY(QVariantList syncSources READ syncSources NOTIFY integrationHealthChanged)
+  Q_PROPERTY(QVariantMap keychainProblem READ keychainProblem NOTIFY keychainProblemChanged)
+  // The previous window session did not end cleanly (R3-018): its marker
+  // file was still there at start. lastSaveTime is when state.json was last
+  // written, so the launch card can say the data is intact as of then.
+  Q_PROPERTY(bool lastExitUnclean READ lastExitUnclean NOTIFY lastExitUncleanChanged)
+  Q_PROPERTY(QDateTime lastSaveTime READ lastSaveTime NOTIFY lastExitUncleanChanged)
 
  public:
   explicit AppController(QObject* parent = nullptr);
@@ -230,6 +248,20 @@ class AppController : public QObject {
   static bool isHeadless() {
     return s_headless;
   }
+
+  bool lastExitUnclean() const {
+    return m_lastExitUnclean;
+  }
+
+  QDateTime lastSaveTime() const {
+    return m_lastSaveTime;
+  }
+
+  // The person answered the launch card: it does not come back this session.
+  Q_INVOKABLE void dismissUncleanExit();
+  // Tests and the capture harness only (no-op outside QStandardPaths test
+  // mode): pretend the last session crashed, saved at `savedAt`.
+  Q_INVOKABLE void simulateUncleanExitForTest(const QDateTime& savedAt);
 
   // `heap done` sent to the open window goes through moveTask() like a drag
   // does. The CLI executor mutes the sound palette (APP-177) around it: only
@@ -251,6 +283,22 @@ class AppController : public QObject {
   QString storageMessage() const {
     return m_storageMessage;
   }
+
+  QString storageReason() const {
+    return m_storageReason;
+  }
+
+  QStringList storageArgs() const {
+    return m_storageSpec.isEmpty() ? QStringList() : m_storageSpec.first().second;
+  }
+
+  int storageDamagedAt() const {
+    return m_storageDamagedAt;
+  }
+
+  // The strip's "Save a copy elsewhere…" (R2-037): the whole state as it is
+  // in memory, written to `fileUrl`. True when it landed.
+  Q_INVOKABLE bool saveStateCopyTo(const QUrl& fileUrl);
 
   // The banner's Retry: re-reads an unreadable state.json (and loads it), or
   // writes a failed save again now.
@@ -425,12 +473,15 @@ class AppController : public QObject {
   // nor a failure. Keys: imported, updated, unchanged, kept (edited here, not
   // on disk), conflicts (edited in both: the file arrives as a copy), skipped,
   // files, folder, warnings. The whole import is one undo step.
-  Q_INVOKABLE QVariantMap importNotesFolder(const QUrl& folderUrl);
+  Q_INVOKABLE QVariantMap importNotesFolder(const QUrl& folderUrl, bool checklistTasks = false);
   // The same summary without changing anything, for a confirm step.
   Q_INVOKABLE QVariantMap previewNotesFolder(const QUrl& folderUrl);
   // Writes into a new folder inside `folderUrl` — named `subfolder`, or dated
   // when that is empty, with a suffix when the name is taken — so an export
   // never overwrites a file. Keys: written, skipped, folder.
+  // One note as a .md file (R2-062 "Экспорт в .md"), the same contents a
+  // folder export writes for it. False when the file cannot be written.
+  Q_INVOKABLE bool exportNoteToFile(const QString& id, const QUrl& fileUrl);
   Q_INVOKABLE QVariantMap exportNotesFolder(const QUrl& folderUrl, const QString& subfolder = QString());
 
   // ── Links between notes ──
@@ -488,13 +539,21 @@ class AppController : public QObject {
 
   void setNotesState(const QString& v);
 
-  // QuickCapture for Notes: appends `text` to notesState separated by a
-  // timestamped horizontal-rule header. First entry gets the heading only
-  // (no leading HR — there is nothing to separate from yet).
+  // QuickCapture for Notes: appends `text` to the Inbox note (made on first
+  // use) under a timestamped horizontal-rule header, whichever note is open
+  // (sheet N/X-Oth-Capture: "быстрая заметка → «Входящие»", R4-073). First
+  // entry gets the heading only (no leading HR — nothing to separate from).
   Q_INVOKABLE void appendNoteEntry(const QString& text);
   // The title of the note appendNoteEntry() writes into, so the quick-note
   // popup can say where the text will land before it does.
   Q_INVOKABLE QString quickNoteTarget() const;
+  // The Inbox note's id, "" until the first quick note made it.
+  Q_INVOKABLE QString inboxNoteId() const;
+  // The quick note's unsaved draft and the task it is attached to, kept in
+  // settings.quickNoteDraft so it outlives a quit or a crash (R2-069).
+  // {text, attachId}, empty when there is none; an empty text clears it.
+  Q_INVOKABLE QVariantMap quickNoteDraft() const;
+  Q_INVOKABLE void setQuickNoteDraft(const QString& text, const QString& attachId);
 
   // Note wiki-links (HEAP-79). Headings feed [[…]] autocomplete; backlinks list
   // which lines reference each [[target]]; the offset lets the editor jump to a
@@ -677,6 +736,11 @@ class AppController : public QObject {
   Q_INVOKABLE void setTrackerWriteEnabled(const QString& providerId, bool enabled);
   // Whether the tracker can be written to at all, i.e. has the switch.
   Q_INVOKABLE bool trackerCanWriteStatus(const QString& providerId) const;
+  // With writes on, a move asks before its status goes out ("Отправить
+  // статус в Jira?", X/N-Dlg-Conflict, R3-147) until the user ticks "don't
+  // ask again for <tracker>". On by default.
+  Q_INVOKABLE bool trackerAskBeforeWrite(const QString& providerId) const;
+  Q_INVOKABLE void setTrackerAskBeforeWrite(const QString& providerId, bool ask);
   QStringList trackerWriteProviders() const;
   // Once per install after the update that made writes opt-in: the sentence
   // naming the connected trackers whose status heap no longer changes, or an
@@ -689,6 +753,20 @@ class AppController : public QObject {
   // One field of it ("title" | "body" | "priority" | "status"). Keeping my
   // status sends it to the tracker; taking the tracker's drops the unsent move.
   Q_INVOKABLE void resolveTrackerConflictField(const QString& taskId, const QString& field, bool useTracker);
+  // The conflict sheet's "Apply choice" (R2-032): the fields in `mine` keep
+  // the local value, the fields in `theirs` take the tracker's — one undo
+  // step, one toast. Keeping my status sends it only where writes are on.
+  Q_INVOKABLE void resolveTrackerConflictChoices(const QString& taskId, const QStringList& mine, const QStringList& theirs);
+  // The newest local edit of the task (ISO, "" = none known): the "you —
+  // 14:58" half of the conflict sheet's subtitle.
+  Q_INVOKABLE QString lastLocalEditAt(const QString& taskId) const;
+  // A card whose issue is gone from the tracker, kept as the user's own
+  // task (R2-034 "оставить у себя"): the tracker link goes, the key and the
+  // address go into its notepad, everything local stays. Undoable.
+  Q_INVOKABLE void keepGoneTicketLocally(const QString& taskId);
+  // The task whose timer runs in the active profile: { id, title, key,
+  // seconds }, or an empty map (R2-052, the sidebar's timer line).
+  Q_INVOKABLE QVariantMap runningTimer() const;
   // Archive every card of this tracker the current filter no longer covers.
   Q_INVOKABLE void archiveOutOfScope(const QString& providerId);
   // Settings → Integrations → Health (APP-164): one row per connected
@@ -697,6 +775,36 @@ class AppController : public QObject {
   // language. Read-only.
   Q_INVOKABLE QVariantList integrationHealth() const;
   QVariantList integrationHealthAt(const QDateTime& now) const;
+
+  // The same rows as a property, for bindings (R2-035/036/048); also
+  // { kind, failedAt, failedAtMs, inFlight, everOk, waiting }.
+  QVariantList syncSources() const {
+    return integrationHealth();
+  }
+
+  // The keychain refused a sign-in (R2-040): { provider, name, error }, or
+  // empty. keepSecretsInFile() keeps that tracker's tokens in secrets.json
+  // in the data folder (DPAPI on Windows); retryKeychain() writes them to the
+  // keychain again; dismissKeychainProblem() puts the card away.
+  QVariantMap keychainProblem() const {
+    return m_keychainProblem;
+  }
+
+  bool whatsNewDue() const {
+    return m_whatsNewDue;
+  }
+
+  Q_INVOKABLE void ackWhatsNew() {
+    if(m_whatsNewDue) {
+      m_whatsNewDue = false;
+      emit onboardingChanged();
+    }
+  }
+
+  Q_INVOKABLE void keepSecretsInFile();
+  Q_INVOKABLE void retryKeychain();
+  Q_INVOKABLE void dismissKeychainProblem();
+  Q_INVOKABLE QString keychainName() const;
 
   // ---- Sync visibility (APP-180/186/187) ----
   bool syncing() const {
@@ -971,6 +1079,12 @@ class AppController : public QObject {
   // The longer log and recovery tails, scrubbed the same way, for the
   // clipboard.
   Q_INVOKABLE QString issueDiagnostics() const;
+  // "Report a problem" form (R2-040): a GitHub "new issue" page with the
+  // body the user saw in the preview, nothing added.
+  Q_INVOKABLE void openIssueReport(const QString& body) const;
+  // The form's preview: "lowkey <version> · <OS> · Qt <version>", then the
+  // short log and recovery tails, scrubbed.
+  Q_INVOKABLE QString issueReportPreview() const;
 
   // How much one pull actually changed. An issue that came back identical
   // counts as neither, so a quiet auto-sync writes nothing and says so.
@@ -1188,6 +1302,16 @@ class AppController : public QObject {
     return m_snoozed;
   }
 
+  // Review 2 (R3-095): the git "working on" line is off for a new profile,
+  // but data from before 0.8.1 had it on. Run once for such data (settings
+  // without `gitLineDefault`): an unset switch is written as on, a set one
+  // stays. Returns whether `app` changed.
+  static bool migrateGitWorkingLine(QJsonObject& app);
+
+  // The tray menu as the OS shows it (R3-103): [{ id, text, hint, enabled }],
+  // an empty id for a separator. For tests and capture harnesses.
+  Q_INVOKABLE QVariantList trayMenuItems();
+
   // ---- Event ops ----
   // A fresh event id. Shared by the draft and the series edits, which both
   // need one and must not invent different shapes.
@@ -1214,6 +1338,13 @@ class AppController : public QObject {
   // deadlines[], overdue[], people[], undated}. The active profile's tasks
   // and everyone's meetings; `allProfiles` adds every profile's tasks.
   Q_INVOKABLE QVariantMap todayData(const QDate& date, bool allProfiles = false) const;
+  // The first meeting of `now`'s day that has not started yet ({} = none):
+  // the tray menu's "Далее: 11:00 1:1 с Олегом" line (R3-103).
+  Q_INVOKABLE QVariantMap nextEventAfter(const QDateTime& now) const;
+
+  // "Не беспокоить 1 ч": notifications are held as in quiet hours until
+  // `now` + minutes (settings notifications.dndUntil).
+  Q_INVOKABLE void doNotDisturbFor(int minutes, const QDateTime& now);
   // The same day as a pure fact for the calendars (APP-247): load minutes.
   Q_INVOKABLE QVariantMap dayLoad(const QDate& date) const;
   // The stored event behind an occurrence: the master, or the override that
@@ -1343,6 +1474,10 @@ class AppController : public QObject {
   Q_INVOKABLE void setPersonState(const QString& id, const QString& state);
   Q_INVOKABLE QVariantMap newPersonDraft() const;
   Q_INVOKABLE QVariantMap personById(const QString& id) const;
+  // What lowkey knows links to the person (DG-002): tasks waiting on them
+  // ({id, key, title}) and their upcoming meetings ({id, date, start, allDay,
+  // title}), matched on the meeting's attendees line.
+  Q_INVOKABLE QVariantMap personLinks(const QString& id) const;
   // The person an "@handle" in a note names, or empty.
   Q_INVOKABLE QString personIdForHandle(const QString& handle) const;
   // Finding someone by what was typed (heap::text::personMatchRank): the id,
@@ -1396,7 +1531,9 @@ class AppController : public QObject {
   Q_INVOKABLE int statusArchiveDays(const QString& id) const;
   Q_INVOKABLE void setStatusArchiveDays(const QString& id, int days);
   Q_INVOKABLE void moveStatus(const QString& id, int newIndex);
-  Q_INVOKABLE void deleteStatus(const QString& id);
+  // `into`: the column its tasks move to (X-Dlg-Small "Перенести задачи в",
+  // R2-041); empty or unknown = the first remaining column.
+  Q_INVOKABLE void deleteStatus(const QString& id, const QString& into = QString());
 
   // ---- Status counts ----
   // Every status' task count, built in one pass and cached until the model
@@ -1565,6 +1702,11 @@ class AppController : public QObject {
   Q_INVOKABLE QVariantMap weeklyRecap() const;
   // The same for the week before the one `today` falls in.
   Q_INVOKABLE QVariantMap weeklyRecapFor(const QDate& today) const;
+  // The facts of the week `day` falls in, for the recap (DG-123):
+  // { weekStart, weekEnd (Monday, Sunday), closed: [{ id, title, closedAt }]
+  // oldest first, perDay: [7 counts, Monday first] } - the active profile's
+  // tasks marked done in that week.
+  Q_INVOKABLE QVariantMap weekFacts(const QDate& day) const;
 
   // Every recorded move of the active profile, oldest first.
   QVector<StatusChange> statusLog() const {
@@ -1572,6 +1714,14 @@ class AppController : public QObject {
   }
   Q_INVOKABLE QString importProfileFromJson(const QString& jsonText, bool activate = true);
   Q_INVOKABLE QString importProfileFromFile(const QUrl& fileUrl, bool activate = true);
+  // The import preview (N-Dlg-Log-Import, R3-080): what a profile export holds
+  // before anything is written — { file, name, version, tasks, notes, views,
+  // events, activeName } or { error }.
+  Q_INVOKABLE QVariantMap previewProfileImport(const QUrl& fileUrl);
+  // Merges an export into the active profile: what it has that the profile
+  // does not is added; an item whose id is already here is left as it is and
+  // named in the toast. Returns an error text, empty on success.
+  Q_INVOKABLE QString mergeProfileFromFile(const QUrl& fileUrl);
 
   Q_INVOKABLE QVariantList commandPaletteEntries() const;
   // Full text over every note and every doc page of every profile, one row per
@@ -1586,6 +1736,13 @@ class AppController : public QObject {
 
   // ---- Backups ----
   Q_INVOKABLE QVariantList listBackups() const;
+
+  // Where the backup copies are, and how many are kept (Settings → Data).
+  Q_INVOKABLE QString backupFolder() const {
+    return backupDirPath();
+  }
+
+  Q_INVOKABLE int backupRetention() const;
   Q_INVOKABLE bool restoreFromBackup(const QString& fileName);
 
   // ---- Time machine (APP-162, src/storage/Snapshots.h) ----
@@ -1603,6 +1760,8 @@ class AppController : public QObject {
   // The whole state goes back to the snapshot. The state it replaces is
   // snapshotted first (tag "pre"), so a restore is itself restorable.
   Q_INVOKABLE bool restoreSnapshot(const QString& name);
+  // The snapshot's file, shown in the file manager (DG-121 "Show file").
+  Q_INVOKABLE bool revealSnapshot(const QString& name) const;
   // The snapshot's profile `profileId` comes back as a new profile, "<name>
   // (restored HH:MM)", beside the current one. Returns the new id, "" on failure.
   Q_INVOKABLE QString restoreSnapshotProfile(const QString& name, const QString& profileId);
@@ -1614,6 +1773,8 @@ class AppController : public QObject {
   // Writes the current state into history right now under `tag`. Returns the
   // file name, "" on failure.
   QString takeSnapshotNow(const QString& tag);
+  void snapshotBeforeChange(const QString& tag);
+  bool gitLinksBranches() const;
   QString historyDirPath() const;
 
   // ---- Shortcuts (rebindable keyboard catalog) ----
@@ -1755,6 +1916,8 @@ class AppController : public QObject {
 
  signals:
   void storageStateChanged();
+  void lastExitUncleanChanged();
+  void keychainProblemChanged();
   void selectedDateChanged();
   void todayChanged();
   void themeChanged();
@@ -1868,6 +2031,15 @@ class AppController : public QObject {
   // status was not sent. The UI may offer "send anyway" behind a dialog that
   // names the issue, its status in the tracker now and the target; answering
   // it calls confirmTrackerPush (APP-204).
+  // A move of a card whose tracker is written to, held until the user says
+  // send or keep it here (trackerAskBeforeWrite).
+  void trackerWriteAsk(const QString& taskId,
+                       const QString& key,
+                       const QString& title,
+                       const QString& tracker,
+                       const QString& providerId,
+                       const QString& from,
+                       const QString& to);
   void trackerPushNeedsConfirm(const QString& taskId,
                                const QString& key,
                                const QString& title,
@@ -1979,6 +2151,9 @@ class AppController : public QObject {
   // pushKey → the write waiting on its check.
   QHash<QString, PendingCheck> m_pendingChecks;
   bool m_trackerWriteNoticeDone = false;
+  // The one-time git "working on" migration ran (or the data is new): saved
+  // as settings.gitLineDefault so it never runs again.
+  bool m_gitLineDefaultDone = false;
   // Drop the not-yet-started focus blocks planned for a task that is finished.
   void dropFutureFocusBlocks(const QString& taskId);
   void onTaskPushed(const QString& providerId,
@@ -1994,6 +2169,9 @@ class AppController : public QObject {
   QHash<QString, QString> m_pendingPushes;
   // Non-zero while a bulk move runs moveTask per card: one toast for the lot.
   int m_bulkMoveDepth = 0;
+  // toggleDone() says "Done: X" itself; the move's own "X → Done" would be a
+  // second toast for the same action (DG-140).
+  bool m_moveToastHeld = false;
   // Sound palette (APP-177): muted for CLI requests; a bulk move plays one
   // sound when the loop ends, not one per card — "done" if anything closed,
   // else "refuse" if a card was refused. -1: nothing pending.
@@ -2164,7 +2342,18 @@ class AppController : public QObject {
   void loadSentReminders();
   // Reminder buttons (APP-155): what each kind offers, what was last shown
   // under an id (so a snooze can bring the same text back), and the snoozes.
-  QVector<heap::notify::NotificationAction> reminderActions(const QString& kind) const;
+  QVector<heap::notify::NotificationAction> reminderActions(const QString& kind, bool canJoin = false) const;
+  // The link of a meeting a reminder is about, or "" (R3-025).
+  QString meetingJoinUrl(const QString& eventId) const;
+  // Rebuilds the tray menu and tooltip from the timer, the next meeting and
+  // the language (R3-027, R3-103).
+  void refreshTray();
+  // The rows refreshTray() gives the OS menu, and its tooltip.
+  QVariantList trayItemsAt(const QDateTime& now, QString* tooltip);
+  void onTrayItem(const QString& id);
+
+  // "Не беспокоить 1 ч" from the tray: notifications.dndUntil via
+  // doNotDisturbFor, the same item lifts it.
 
   struct ShownReminder {
     QString title;
@@ -2272,7 +2461,21 @@ class AppController : public QObject {
 
   // ---- Storage health + background save (PLAT-1/4/5/23) ----
   QString m_storageState = QStringLiteral("ok");
+  bool m_lastExitUnclean = false;
+  QDateTime m_lastSaveTime;
+  QString m_sessionMarkerPath;  // empty = no marker kept (CLI, tests)
   QString m_storageMessage;
+  QString m_storageReason;
+  int m_storageDamagedAt = -1;
+  // How the message is worded: string keys with their arguments, so a
+  // language switch re-words it (R2-039).
+  QVector<QPair<QString, QStringList>> m_storageSpec;
+  void setStorageStateT(const QString& state, const QVector<QPair<QString, QStringList>>& spec);
+  void recomposeStorageMessage();
+  QString classifyWriteFailure() const;
+  QJsonObject buildStateHead();
+  QVariantMap m_keychainProblem;
+  bool m_whatsNewDue = false;
   void setStorageState(const QString& state, const QString& message);
   // state.json exists but could not be read: show the newest backup (or an
   // empty workspace) read-only and never write over the file.
@@ -2706,6 +2909,9 @@ class AppController : public QObject {
   Q_PROPERTY(bool immersion READ immersion NOTIFY immersionChanged)
   Q_PROPERTY(QDateTime immersionStartedAt READ immersionStartedAt NOTIFY immersionChanged)
   Q_PROPERTY(QString immersionTaskId READ immersionTaskId NOTIFY immersionChanged)
+  // How many notifications wait for the end of focus mode (the immersion
+  // screen's "3 события подождут", DG-132).
+  Q_PROPERTY(int immersionHeldCount READ immersionHeldCountInt NOTIFY immersionChanged)
 
   bool immersion() const {
     return m_immersionStartedAt.isValid();
@@ -2721,6 +2927,10 @@ class AppController : public QObject {
 
   qsizetype immersionHeldCount() const {
     return m_immersionHeld.size();
+  }
+
+  int immersionHeldCountInt() const {
+    return static_cast<int>(m_immersionHeld.size());
   }
 
   Q_INVOKABLE void startImmersion(const QString& preferredTaskId = QString());

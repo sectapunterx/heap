@@ -329,6 +329,9 @@ QJsonObject SyncSerializer::personToJson(const Person& p) {
   o[QStringLiteral("question")] = p.question;
   o[QStringLiteral("state")] = p.state;
   o[QStringLiteral("color")] = p.color.isValid() ? p.color.name(QColor::HexRgb) : QString();
+  if(p.stateAt.isValid()) {
+    o[QStringLiteral("stateAt")] = p.stateAt.toString(Qt::ISODateWithMs);
+  }
   return o;
 }
 
@@ -341,12 +344,14 @@ Person SyncSerializer::personFromJson(const QJsonObject& o) {
   p.state = o.value(QStringLiteral("state")).toString();
   const QString c = o.value(QStringLiteral("color")).toString();
   p.color = c.isEmpty() ? QColor() : QColor(c);
+  p.stateAt = QDateTime::fromString(o.value(QStringLiteral("stateAt")).toString(), Qt::ISODateWithMs);
   static const QStringList kKnown = {QStringLiteral("id"),
                                      QStringLiteral("name"),
                                      QStringLiteral("role"),
                                      QStringLiteral("question"),
                                      QStringLiteral("state"),
-                                     QStringLiteral("color")};
+                                     QStringLiteral("color"),
+                                     QStringLiteral("stateAt")};
   p.extra = unknownKeys(o, kKnown);
   return p;
 }

@@ -59,13 +59,4 @@ TestCase {
         verify(findChild(card, "calsub-every-60").selected);
         verify(!findChild(card, "calsub-every-15").selected);
     }
-
-    function test_the_info_block_folds() {
-        const info = make('import TodoCpp; IntegrationsInfoCard { width: 860 }');
-        verify(info.open);
-        verify(findChild(info, "integrations-info-push") !== null);
-        findChild(info, "integrations-info-toggle").activated();
-        verify(!info.open);
-        tryVerify(() => findChild(info, "integrations-info-push") === null);
-    }
 }

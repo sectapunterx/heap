@@ -1,7 +1,7 @@
 // Saved views: named snapshots of the task filters, stored on the profile.
 //
 // Storage (state.json, the sync serializer, profile export/import), the
-// starter views a new profile gets exactly once, the modified/update
+// a new profile starting with none, the modified/update
 // semantics Main.qml relies on, the sidebar's count badges, undo, and the
 // Alt+N entries in the shortcut catalog.
 
@@ -190,37 +190,29 @@ class SavedViewsTest : public ::testing::Test {
   std::unique_ptr<AppController> app_;
 };
 
-TEST_F(SavedViewsTest, AFreshInstallStartsWithTheStarterViews) {
-  // The old sidebar's Focus pair first (APP-258), then the three starters.
-  EXPECT_EQ(names(),
-            (QStringList{QStringLiteral("Blocked"),
-                         QStringLiteral("In review"),
-                         QStringLiteral("Urgent"),
-                         QStringLiteral("Due this week"),
-                         QStringLiteral("Overdue")}));
-  for(const QVariant& v : app_->savedViews()) {
-    EXPECT_TRUE(v.toMap().value("problems").toStringList().isEmpty()) << v.toMap().value("query").toString().toStdString();
+TEST_F(SavedViewsTest, AFreshInstallStartsWithNoViews) {
+  // H2-First / Q-First (R2-058): "Мои виды — Появятся, когда сохраните
+  // фильтр". Nothing is listed until the user saves a filter.
+  EXPECT_TRUE(app_->savedViews().isEmpty());
+}
+
+TEST_F(SavedViewsTest, TheStarterViewsAreValidQueries) {
+  // The example profile still brings them as sample content.
+  for(const auto& v : heap::savedviews::starterViews(false)) {
+    EXPECT_TRUE(app_->searchProblems(v.query).isEmpty()) << v.query.toStdString();
   }
 }
 
-TEST_F(SavedViewsTest, ANewProfileGetsStartersButDeletedOnesNeverComeBack) {
+TEST_F(SavedViewsTest, ANewProfileStartsEmptyAndAnotherKeepsItsViews) {
+  const QString id = app_->saveView(QStringLiteral("Mine"), state(QStringLiteral("#infra"), QStringList{}, QStringLiteral("board")));
+  ASSERT_FALSE(id.isEmpty());
+  const QString first = app_->activeProfileId();
   const QString work = app_->createProfile(QStringLiteral("Work"));
   ASSERT_FALSE(work.isEmpty());
-  EXPECT_EQ(app_->savedViews().size(), 5);
-  clearViews();
-  EXPECT_TRUE(app_->savedViews().isEmpty());
-  app_->flushSave();
-
-  // Switch away and back, then reload from disk: still none.
-  const QString other = app_->createProfile(QStringLiteral("Other"));
   app_->setActiveProfileId(work);
   EXPECT_TRUE(app_->savedViews().isEmpty());
-  app_->flushSave();
-  app_ = std::make_unique<AppController>();
-  app_->setActiveProfileId(work);
-  EXPECT_TRUE(app_->savedViews().isEmpty()) << "starter views are seeded once, at creation";
-  app_->setActiveProfileId(other);
-  EXPECT_EQ(app_->savedViews().size(), 5);
+  app_->setActiveProfileId(first);
+  EXPECT_EQ(names(), QStringList{QStringLiteral("Mine")});
 }
 
 TEST_F(SavedViewsTest, ViewsBelongToTheirProfileAndSurviveARestart) {

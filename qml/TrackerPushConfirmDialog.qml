@@ -1,15 +1,14 @@
 import QtQuick
-import QtQuick.Layouts
-import QtQuick.Controls.Basic as QQC
 import TodoCpp
 
-// "Send the status anyway?" (APP-204). The check heap makes right before a
-// status write found the issue outside the user's filter — reassigned,
-// moved out of the JQL — so nothing was sent. This is the only way it still
-// goes out: the user reads which issue, where it stands in the tracker now
-// and where it would go, and says so. Cancel is the default (focus, Enter,
-// Esc), and cancelling leaves the card marked "not sent".
-QQC.Dialog {
+// The not-yours write (APP-204, X/N-Dlg-Conflict right, R2-033). The check
+// lowkey makes right before a status write found the issue is not the
+// user's any more — assigned to someone else, or out of the filter — so
+// nothing was sent. The card says whose it is and asks once; there is no
+// "don't ask again" for a ticket that is not yours. "Only here" is the
+// default (focus, Enter, Esc) and leaves the card marked "not sent"; "Send
+// anyway" is the only way the status still goes out.
+SmallDialog {
     id: root
     objectName: "trackerPushConfirm"
     property string taskId: ""
@@ -18,6 +17,7 @@ QQC.Dialog {
     property string tracker: ""
     property string remoteStatus: ""
     property string target: ""
+    property string assignee: ""
 
     function ask(taskId, key, title, tracker, remoteStatus, target) {
         root.taskId = taskId;
@@ -26,49 +26,37 @@ QQC.Dialog {
         root.tracker = tracker;
         root.remoteStatus = remoteStatus;
         root.target = target;
+        const t = AppController.taskById(taskId);
+        root.assignee = t && t.ticket && t.ticket.assignee ? String(t.ticket.assignee)
+                      : (t && t.assignee ? String(t.assignee) : "");
         root.open();
     }
 
-    modal: true
-    QQC.Overlay.modal: ModalScrim {}
-    parent: QQC.Overlay.overlay
-    anchors.centerIn: parent
-    width: Math.min(480, (parent ? parent.width : 480) - 32)
-    padding: Theme.inset
-    title: I18n.t("tracker.confirm.title")
-    header: DialogHeader { text: root.title }
-    background: ModalSurface {}
-    onOpened: cancelBtn.forceActiveFocus(Qt.TabFocusReason)
-    contentItem: ColumnLayout {
-        spacing: Theme.spMd
-        Text {
-            objectName: "trackerPushConfirmBody"
-            Layout.fillWidth: true
-            text: I18n.t("tracker.confirm.body").arg(root.key).arg(root.issueTitle).arg(root.tracker)
-                  .arg(root.remoteStatus.length > 0 ? root.remoteStatus : "—").arg(root.target)
-            textFormat: Text.PlainText
-            color: Theme.text
-            font.pixelSize: Theme.fsMd
-            wrapMode: Text.Wrap
-        }
-    }
-    footer: DialogFooter {
+    width: Math.min(428, (parent ? parent.width : 428) - 32)
+    title: root.assignee.length > 0 ? I18n.t("tracker.notMine.assigned").arg(root.assignee.replace(/\.$/, ""))
+                                    : I18n.t("tracker.notMine.outside").arg(root.tracker)
+    fact: I18n.t("tracker.notMine.body").arg(root.key).arg(root.tracker)
+    onOpened: keepBtn.forceActiveFocus(Qt.TabFocusReason)
+    onAccepted: root.close()
+
+    buttons: [
         PillButton {
-            id: cancelBtn
+            id: keepBtn
             objectName: "trackerPushConfirmCancel"
-            text: I18n.t("common.cancel")
+            text: I18n.t("tracker.notMine.keep")
+            primary: true
+            solid: Style.fills
             Keys.onReturnPressed: root.close()
             Keys.onEnterPressed: root.close()
             onClicked: root.close()
-        }
+        },
         PillButton {
             objectName: "trackerPushConfirmSend"
             text: I18n.t("tracker.confirm.send")
-            danger: true
             onClicked: {
                 root.close();
                 AppController.confirmTrackerPush(root.taskId);
             }
         }
-    }
+    ]
 }

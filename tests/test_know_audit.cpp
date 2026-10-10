@@ -8,6 +8,7 @@
 #include "CodeHighlighter.h"
 #include "Models.h"
 
+#include "notes/ChecklistItems.h"
 #include "notes/NoteGraph.h"
 
 #include <QApplication>
@@ -378,8 +379,8 @@ TEST_F(KnowAuditTest, Know6_HashAndBarTitlesLinkAndSurviveRename) {
   EXPECT_EQ(app_->notes()->items().at(row).title, QStringLiteral("A|B options"));
 }
 
-// KNOW-17 (audit 2026-09-30): quick capture into the open note while the
-// editor still holds unflushed keystrokes keeps them.
+// KNOW-17 (audit 2026-09-30): quick capture while the editor still holds
+// unflushed keystrokes keeps them.
 TEST_F(KnowAuditTest, Know17_QuickCaptureFlushesTheEditorFirst) {
   const QString id = app_->newNote(QStringLiteral("QN target"));
   // The editor's pending text, written to notesState when asked to flush.
@@ -391,9 +392,11 @@ TEST_F(KnowAuditTest, Know17_QuickCaptureFlushesTheEditorFirst) {
 
   app_->appendNoteEntry(QStringLiteral("from quick capture"));
 
+  // The typing stays in the open note; the entry goes to the Inbox (R4-073).
   const QString body = app_->noteBody(id);
   EXPECT_TRUE(body.contains(QStringLiteral("typing"))) << body.toStdString();
-  EXPECT_TRUE(body.contains(QStringLiteral("from quick capture"))) << body.toStdString();
+  const QString inbox = app_->noteBody(app_->inboxNoteId());
+  EXPECT_TRUE(inbox.contains(QStringLiteral("from quick capture"))) << inbox.toStdString();
 }
 
 TEST_F(KnowAuditTest, KnowC_TitleFollowsTheH1WhileTheyAgree) {
@@ -866,6 +869,42 @@ TEST(KnowCodeHighlight, LanguageNamesAreCaseInsensitiveWithAliases) {
     h.rehighlight();
     EXPECT_FALSE(doc.firstBlock().layout()->formats().isEmpty()) << lang;
   }
+}
+
+// ── R2-070: open checklist items of new notes become tasks, on request ──
+
+TEST(ChecklistItems, OpenItemsOnlyOutsideFences) {
+  const QStringList items =
+      heap::notes::openChecklistItems(QStringLiteral("# T\n- [ ] one\n- [x] done\n  * [ ]  two \n- [ ] \n```\n- [ ] code\n```\n"));
+  EXPECT_EQ(items, (QStringList{QStringLiteral("one"), QStringLiteral("two")}));
+}
+
+TEST_F(KnowAuditTest, R2_070_ChecklistItemsBecomeTasksOnlyWhenAsked) {
+  writeFile(QStringLiteral("vault/Plan.md"), "- [ ] write the parser\n- [ ] test it\n- [x] old\n");
+  const QVariantMap preview = app_->previewNotesFolder(url(QStringLiteral("vault")));
+  EXPECT_EQ(preview.value("checklists").toInt(), 1);
+  EXPECT_EQ(preview.value("checklistItems").toInt(), 2);
+
+  const int before = app_->tasks()->rowCount();
+  const QVariantMap r = app_->importNotesFolder(url(QStringLiteral("vault")), true);
+  EXPECT_EQ(r.value("tasksMade").toInt(), 2);
+  EXPECT_EQ(app_->tasks()->rowCount(), before + 2);
+
+  // A re-import touches no new notes, so it makes no tasks again.
+  const QVariantMap again = app_->importNotesFolder(url(QStringLiteral("vault")), true);
+  EXPECT_EQ(again.value("tasksMade").toInt(), 0);
+  EXPECT_EQ(app_->tasks()->rowCount(), before + 2);
+}
+
+TEST_F(KnowAuditTest, R2_062_ExportOneNoteToAFile) {
+  const QString id = app_->newNote(QStringLiteral("Rate limit"));
+  app_->setNoteBody(id, QStringLiteral("Retry-After in seconds"));
+  const QString path = dir_.path() + QStringLiteral("/one.md");
+  ASSERT_TRUE(app_->exportNoteToFile(id, QUrl::fromLocalFile(path)));
+  QFile f(path);
+  ASSERT_TRUE(f.open(QIODevice::ReadOnly));
+  EXPECT_TRUE(QString::fromUtf8(f.readAll()).contains(QStringLiteral("Retry-After in seconds")));
+  EXPECT_FALSE(app_->exportNoteToFile(QStringLiteral("nope"), QUrl::fromLocalFile(path)));
 }
 
 int main(int argc, char** argv) {

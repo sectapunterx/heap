@@ -39,18 +39,6 @@ TestCase {
         return false;
     }
 
-    function test_day_header_follows_language() {
-        AppController.language = "en";
-        const cal = createTemporaryQmlObject('import TodoCpp; DayCalendar { anchors.fill: parent }', host);
-        wait(0);
-        const en = AppController.humanDate(AppController.selectedDate);
-        verify(hasText(cal, en), "header shows " + en);
-        AppController.language = "ru";
-        const ru = AppController.humanDate(AppController.selectedDate);
-        verify(en !== ru);
-        tryVerify(function () { return hasText(cal, ru); }, 1000, "header did not switch to " + ru);
-    }
-
     function test_week_range_follows_language() {
         AppController.language = "en";
         const wv = createTemporaryQmlObject('import TodoCpp; WeekView { anchors.fill: parent }', host);
@@ -63,33 +51,6 @@ TestCase {
         verify(en !== ru);
         tryVerify(function () { return texts(wv).some(function (t) { return t.text.indexOf(ru) === 0; }); },
                   1000, "range did not switch to " + ru);
-    }
-
-    function test_people_badge_follows_language() {
-        AppController.language = "en";
-        // The badge counts the people waiting for a message and hides at
-        // none (APP-197), so there has to be one.
-        let made = "";
-        if (AppController.pendingPeopleCount() === 0) {
-            const d = AppController.newPersonDraft();
-            d.name = "Lang Badge Probe";
-            d.id = AppController.suggestPersonId(d.name);
-            d.state = "todo";
-            verify(AppController.savePerson(d));
-            made = d.id;
-        }
-        verify(AppController.pendingPeopleCount() > 0);
-        const pl = createTemporaryQmlObject('import TodoCpp; PeopleList { width: 400; height: 300 }', host);
-        wait(0);
-        const en = I18n.t("people.badge.pending").arg(AppController.pendingPeopleCount());
-        verify(hasText(pl, en), en);
-        // A model signal first: the handlers used to overwrite the binding.
-        AppController.activePeople.dataChanged(AppController.activePeople.index(0, 0), AppController.activePeople.index(0, 0));
-        AppController.language = "ru";
-        const ru = I18n.t("people.badge.pending").arg(AppController.pendingPeopleCount());
-        verify(en !== ru);
-        tryVerify(function () { return hasText(pl, ru); }, 1000, "badge did not switch to " + ru);
-        if (made) AppController.deletePerson(made);
     }
 
     function test_sprint_crumb_is_the_iso_week_in_the_ui_language() {

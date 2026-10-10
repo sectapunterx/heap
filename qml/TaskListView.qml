@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
 import TodoCpp
+import "QueryWords.js" as QueryWords
 import "TaskDates.js" as TaskDates
 
 // Tasks → List (APP-263, sheets H2-List / Q-List): the tasks the query lets
@@ -18,16 +19,29 @@ Item {
 
     property string searchText: ""
     property var prioritiesFilter: ({})
+    // H2-List insets rows 8px, Q-List 10px (R3-034).
+    readonly property int _rowInset: Style.fills ? Theme.spMd : Theme.spLg
     property bool showArchived: false
     // date | status | priority | profile
     property string groupBy: "date"
     signal taskClicked(string id)
+    // "сбросить фильтр · Esc" under a filter that found nothing (DG-160).
+    signal resetFilterRequested()
+    // The default "не готово" is not a search (DG-020).
+    readonly property bool _searching: root.searchText.replace(/(^|\s)is:open(?=\s|$)/gi, " ").trim().length > 0
+                                       || root.activePriorities.length > 0
 
     readonly property var activePriorities: {
         const out = [];
         for (const k in root.prioritiesFilter) if (root.prioritiesFilter[k]) out.push(k);
         return out;
     }
+
+    // The filter as words for "Ничего под «…»" (DG-160).
+    readonly property string filterLabel: QueryWords.label(root.searchText, root.activePriorities)
+    readonly property bool nothingFound: root.taskCount === 0 && root._searching
+    // The archive (X-Oth-Archive-People): the list under "is:archived".
+    readonly property bool _archive: /(^|\s)is:archived(\s|$)/i.test(root.searchText)
 
     // ── Rows ─────────────────────────────────────────────────────────
     // Built in C++ (AppController.taskListRows, views/TaskListGroups) and
@@ -44,6 +58,20 @@ Item {
         let s = {};
         try { s = JSON.parse(AppController.appSettingsJson || "{}") || {}; } catch (e) { s = {}; }
         root._folds = (s.listFolds && typeof s.listFolds === "object") ? s.listFolds : ({});
+    }
+    // "решить" on a row's tracker mark: the same here-vs-tracker dialog the
+    // card opens (R3-144). Made on first use.
+    Loader {
+        id: conflictLoader
+        active: false
+        sourceComponent: SyncConflictDialog {
+            onClosed: Qt.callLater(() => { conflictLoader.active = false; })
+        }
+    }
+    function openConflict(id) {
+        conflictLoader.active = true;
+        const dlg = conflictLoader.item as SyncConflictDialog;
+        if (dlg) dlg.showFor(AppController.taskById(id));
     }
     function isFolded(groupId) {
         const v = root._folds[groupId];
@@ -222,9 +250,12 @@ Item {
             id: list
             objectName: "task-list"
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            Layout.leftMargin: Theme.sp2xl
-            Layout.rightMargin: Theme.sp2xl
+            Layout.fillHeight: root.taskCount > 0
+            // Rows and headers sit inset from the query bar's edge (R3-034).
+            Layout.leftMargin: Theme.pagePadX
+            Layout.rightMargin: Theme.pagePadX
+            // Quiet rows keep to a reading width (Q-List: 900 px, DG-032).
+            Layout.maximumWidth: Style.fills ? -1 : Theme.px(900)
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             model: root._rows
@@ -240,6 +271,10 @@ Item {
                 required property int index
                 readonly property bool isGroup: row.modelData.kind === "group"
                 readonly property string taskId: row.isGroup ? "" : row.modelData.id
+                // A tracker task's sync facts, for its mark (R3-144); only a
+                // own row (this profile) can be one.
+                readonly property var ticket: !row.isGroup && row.modelData.own !== false
+                    ? (AppController.taskById(row.taskId).ticket || ({})) : ({})
                 width: list.width
                 height: row.isGroup ? groupHead.implicitHeight + (row.index === 0 ? Theme.spLg : Theme.sp2xl) + Theme.spMd
                                     : Theme.px(36)
@@ -252,7 +287,7 @@ Item {
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
                     anchors.bottomMargin: Theme.spMd
-                    anchors.leftMargin: Theme.spMd
+                    anchors.leftMargin: root._rowInset
                     implicitHeight: headRow.implicitHeight
                     readonly property bool folded: row.isGroup && root.isFolded(row.modelData.groupId)
                     RowLayout {
@@ -267,7 +302,12 @@ Item {
                         SectionHeader {
                             objectName: "list-group-" + (row.isGroup ? row.modelData.groupId : "")
                             title: row.isGroup ? root.groupTitle(row.modelData) : ""
-                            titleColor: row.isGroup && row.modelData.key === "today" ? Theme.signalNow
+                            // H2-List 15/600, Q-List 14/500 (R3-034).
+                            titleSize: Style.fills ? Theme.fsLg : Theme.px(14)
+                            titleWeight: Style.fills ? Theme.fwHeading : Theme.fwTitle
+                            // Quiet group titles are plain (Q-List).
+                            titleColor: !Style.fills ? Theme.textMuted
+                                      : row.isGroup && row.modelData.key === "today" ? Theme.signalNow
                                       : row.isGroup && row.modelData.key === "overdue" ? Theme.signalUrgent
                                       : Theme.text
                             note: !row.isGroup ? ""
@@ -297,6 +337,12 @@ Item {
                     radius: Theme.radiusMd
                     color: taskRow.selected || taskRow.cursored ? Theme.surfaceCard
                          : rowHover.hovered ? Theme.surfaceCardHover : "transparent"
+                    // Out of step with the tracker: the edge says so, as on
+                    // the card — amber / red in bold, a plain line in quiet.
+                    border.width: rowMark.conflict || rowMark.pending ? 1 : 0
+                    border.color: rowMark.conflict ? (Style.urgency ? Theme.danger : Theme.borderStrong)
+                                : rowMark.pending ? (Style.urgency ? Theme.warning : Theme.borderStrong)
+                                : "transparent"
                     Rectangle {
                         anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
                         anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spMd
@@ -312,9 +358,11 @@ Item {
                         }
                     }
                     RowLayout {
+                        // Over the row's MouseArea, so "вернуть" takes its own click.
+                        z: 1
                         anchors.fill: parent
-                        anchors.leftMargin: Theme.spMd
-                        anchors.rightMargin: Theme.spMd
+                        anchors.leftMargin: root._rowInset
+                        anchors.rightMargin: root._rowInset
                         spacing: Theme.spLg
                         Item {
                             Layout.preferredWidth: Theme.statusRingSize
@@ -350,7 +398,7 @@ Item {
                         // Bold: key before the title; quiet: after it (Q-List).
                         Text {
                             objectName: "list-row-key"
-                            visible: Style.chipFill
+                            visible: Style.chipFill && !root._archive
                             Layout.preferredWidth: Theme.px(68)
                             text: row.isGroup ? "" : row.modelData.key
                             textFormat: Text.PlainText
@@ -364,15 +412,28 @@ Item {
                             Layout.fillWidth: true
                             text: row.isGroup ? "" : row.modelData.title
                             textFormat: Text.PlainText
-                            color: Theme.text
+                            // An archive row is a quiet record (X/N-Oth-Archive-People).
+                            color: rowMark.gone || root._archive ? Theme.textMuted : Theme.text
+                            font.strikeout: rowMark.gone
                             font.family: Theme.fontUi
                             font.pixelSize: Theme.fsMd
-                            font.weight: Theme.fwTitle
+                            font.weight: root._archive ? Theme.fwBody : Theme.fwTaskTitle
                             elide: Text.ElideRight
+                        }
+                        TrackerMark {
+                            id: rowMark
+                            objectName: "list-row-mark"
+                            Layout.maximumWidth: Theme.px(320)
+                            elide: Text.ElideRight
+                            taskId: row.taskId
+                            ticket: row.ticket
+                            trackerName: row.ticket.provider ? String((AppController.providerBadges[row.ticket.provider] || {}).name || "") : ""
+                            writeOn: !!row.ticket.provider && AppController.trackerWriteProviders.indexOf(row.ticket.provider) >= 0
+                            onResolveRequested: root.openConflict(row.taskId)
                         }
                         Rectangle {
                             objectName: "list-row-label"
-                            visible: Style.chipFill && !row.isGroup && String(row.modelData.label || "").length > 0
+                            visible: Style.chipFill && !root._archive && !row.isGroup && String(row.modelData.label || "").length > 0
                             radius: Theme.radiusSm
                             color: Theme.chipBg
                             implicitWidth: Math.min(Theme.px(120), labelT.implicitWidth + 2 * Theme.spSm)
@@ -391,7 +452,7 @@ Item {
                         }
                         Text {
                             objectName: "list-row-key-quiet"
-                            visible: !Style.chipFill
+                            visible: !Style.chipFill && !root._archive
                             text: row.isGroup ? "" : row.modelData.key
                             textFormat: Text.PlainText
                             color: Theme.textDim
@@ -400,6 +461,7 @@ Item {
                         }
                         Text {
                             objectName: "list-row-priority"
+                            visible: !root._archive
                             readonly property string pri: row.isGroup ? "" : String(row.modelData.priority || "")
                             Layout.preferredWidth: Theme.px(24)
                             text: Theme.priorityShown(pri) ? pri : ""
@@ -408,8 +470,21 @@ Item {
                             font.pixelSize: Theme.fsXs
                             font.weight: Theme.fwTitle
                         }
+                        // The archive row's facts: "APP-111 · 6 окт", the key and the
+                        // day it left (R3-055).
+                        Text {
+                            objectName: "list-row-archived"
+                            visible: root._archive
+                            text: row.isGroup ? "" : root.archivedFacts(row.modelData)
+                            textFormat: Text.PlainText
+                            color: Theme.textDim
+                            font.family: Theme.fontUi
+                            font.features: Theme.tabularNums
+                            font.pixelSize: Theme.fsSm
+                        }
                         Text {
                             objectName: "list-row-date"
+                            visible: !root._archive
                             Layout.minimumWidth: Theme.px(110)
                             horizontalAlignment: Text.AlignRight
                             readonly property var d: row.isGroup ? null : root.rowDate(row.modelData)
@@ -420,6 +495,29 @@ Item {
                             font.family: Theme.fontUi
                             font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsSm
+                        }
+                        // The archive's main action on the current row (DG-161,
+                        // X-Oth-Archive-People): "вернуть", the same restore as
+                        // the task menu. No key hint: no key is bound to it.
+                        Text {
+                            objectName: "list-row-restore"
+                            readonly property bool shown: root._archive && !row.isGroup && !!row.modelData.archived
+                                                          && (taskRow.cursored || rowHover.hovered)
+                            Layout.preferredWidth: restoreMetrics.advanceWidth
+                            opacity: shown ? 1 : 0
+                            visible: root._archive
+                            text: I18n.t("list.restore")
+                            color: restoreCA.hovered ? Theme.text : Theme.textMuted
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsSm
+                            font.underline: restoreCA.hovered
+                            TextMetrics { id: restoreMetrics; font.family: Theme.fontUi; font.pixelSize: Theme.fsSm; text: I18n.t("list.restore") }
+                            ClickArea {
+                                id: restoreCA
+                                enabled: parent.shown
+                                label: parent.text
+                                onActivated: AppController.setArchived(row.taskId, false)
+                            }
                         }
                     }
                     MouseArea {
@@ -451,18 +549,19 @@ Item {
             }
         }
 
-        // Nothing matches the query: say so, once.
+        // Nothing matches the query: say so, once, in the middle (X-Err-Empty).
+        Item { visible: root.taskCount === 0; Layout.fillHeight: true }
         EmptyState {
             objectName: "list-empty"
             Layout.alignment: Qt.AlignHCenter
-            Layout.bottomMargin: Theme.sp3xl
             Layout.preferredWidth: Math.min(root.width - 96, 360)
             visible: root.taskCount === 0
-            title: root.searchText.trim().length > 0 || root.activePriorities.length > 0
-                   ? I18n.t("view.empty.noMatch.title") : I18n.t("list.empty")
-            line: root.searchText.trim().length > 0 || root.activePriorities.length > 0
-                  ? I18n.t("view.empty.noMatch.hint") : ""
+            title: root.nothingFound ? I18n.t("view.empty.noMatchFor").arg(root.filterLabel) : I18n.t("list.empty")
+            line: root.nothingFound ? I18n.t("view.empty.resetFilter") : I18n.t("tasks.empty.line").arg(AppController.shortcutText("task.new"))
+            lineLink: root.nothingFound
+            onLineActivated: root.resetFilterRequested()
         }
+        Item { visible: root.taskCount === 0; Layout.fillHeight: true }
 
         // The keys along the bottom (H2-List), in the bold style.
         Rectangle {
@@ -509,9 +608,17 @@ Item {
         if (g.key === "status") return g.name || g.value;
         if (g.key === "priority") return g.value.length > 0 ? g.value : I18n.t("list.group.noPriority");
         if (g.key === "profile") return g.value;
+        if (g.key === "month") {
+            if (!g.from || !g.from.getTime) return I18n.t("list.group.none");
+            const m = I18n.monthName(g.from.getMonth());
+            const name = m.charAt(0).toUpperCase() + m.slice(1);
+            return g.from.getFullYear() === new Date().getFullYear() ? name : name + " " + g.from.getFullYear();
+        }
         return I18n.t("list.group." + g.key);
     }
     function groupNote(g) {
+        // "Октябрь 6": an archive month carries its count (R3-056).
+        if (g.key === "month") return String(g.count);
         const from = g.from, to = g.to;
         if (!from || !from.getTime) return "";
         if (g.key === "today" || g.key === "tomorrow") return I18n.fmtDate(from, "weekdayDay");
@@ -521,6 +628,11 @@ Item {
             return (sameMonth ? String(from.getDate()) : I18n.fmtDate(from, "dayMonth")) + " – " + I18n.fmtDate(to, "dayMonth");
         }
         return "";
+    }
+    function archivedFacts(r) {
+        const c = r.changed;
+        const day = c && c.getTime && !isNaN(c.getTime()) ? I18n.fmtDate(c, "dayMonth") : "";
+        return day.length > 0 ? r.key + " · " + day : r.key;
     }
     // The date a row shows: when, else the deadline.
     function rowDate(r) {
@@ -532,10 +644,10 @@ Item {
     function rowDateText(r) {
         const d = root.rowDate(r);
         if (!d) return "";
-        const main = TaskDates.rowText(d.date, d.timed, AppController.today);
+        const main = TaskDates.rowText(d.date, d.timed, AppController.today, !Style.fills);
         const hasDue = r.due && r.due.getTime && !isNaN(r.due.getTime());
         if (d.date === r.when && hasDue && TaskDates.daysFrom(r.due, r.when) !== 0)
-            return main + " · " + I18n.t("list.due").arg(TaskDates.rowText(r.due, !!r.dueHasTime, AppController.today));
+            return main + " · " + I18n.t("list.due").arg(TaskDates.rowText(r.due, !!r.dueHasTime, AppController.today, !Style.fills));
         return main;
     }
 }
