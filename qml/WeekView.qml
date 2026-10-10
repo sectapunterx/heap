@@ -429,6 +429,10 @@ Item {
     property bool railWanted: true
     Timer { interval: 60000; repeat: true; running: true; onTriggered: root.now = new Date() }
     readonly property int hourH: Theme.px(50)
+    // A block's gap to its column edge: the day stands its blocks 8px
+    // in from both sides (N-Oth-DayMonth, R4-048), the week 2px.
+    readonly property int laneInset: root.dayZoom ? Theme.spMd : 2
+    readonly property int blockRadius: root.dayZoom ? Theme.radius : Theme.radiusMd
     // An event block's floor heights (APP-199): one line of small text, or
     // the time on top of a title.
     readonly property int eventOneLineH: Math.ceil(Theme.fsXs * 1.4) + 2 * Theme.sp2xs
@@ -1686,8 +1690,13 @@ Item {
                                 x: 0
                                 // Centred on its hour line, but never above the
                                 // top of the scroll area — the first label used
-                                // to be cut in half by the sticky header.
-                                y: Math.max(0, index * root.hourH - 6)
+                                // to be cut in half by the sticky header. The
+                                // same for the hour the grid is scrolled to:
+                                // its label stays whole under the day header
+                                // (Q-Calendar, R4-044/R4-050).
+                                readonly property real _line: index * root.hourH
+                                readonly property real _top: hourScroll.contentItem ? hourScroll.contentItem.contentY : 0
+                                y: _line >= _top ? Math.max(_top, _line - 6) : Math.max(0, _line - 6)
                                 width: gridHost.gutterW - 8
                                 horizontalAlignment: Text.AlignRight
                                 text: root.hourLabel(root.hoursStart + index)
@@ -1950,9 +1959,9 @@ Item {
                             readonly property int _col:  (dragDx !== 0 || dragDy !== 0) ? 0 : _slot.col
                             // Tiled, or cascaded once lanes would get
                             // narrower than a readable title (VISU-15).
-                            readonly property var _lane: Overlap.lane(weEv._col, weEv._cols, gridHost.dayW - 4)
+                            readonly property var _lane: Overlap.lane(weEv._col, weEv._cols, gridHost.dayW - 2 * root.laneInset)
 
-                            x: gridHost.gutterW + weEv.effDayIndex * gridHost.dayW + 2 + weEv._lane.x
+                            x: gridHost.gutterW + weEv.effDayIndex * gridHost.dayW + root.laneInset + weEv._lane.x
                             y: (weEv.effStart - root.hoursStart) * root.hourH + weEv.dragDy
                             width: weEv._lane.w - (weEv._cols > 1 ? 2 : 0)
                             // Half an hour or more is at least two lines high,
@@ -1965,7 +1974,7 @@ Item {
                             // A meeting is filled (DG-044): bold adds the
                             // blue bar, quiet keeps a faint ground and the
                             // calendar glyph; the type is not a colour.
-                            radius: Theme.radiusMd
+                            radius: root.blockRadius
                             color: Theme.meetingFill
                             // A later lane is drawn over an earlier one where
                             // they cascade; a dragged event above them all.
@@ -2014,7 +2023,7 @@ Item {
                                     MeetingIcon {
                                         visible: !Style.fills || root.dayZoom
                                         size: Theme.px(11)
-                                        ink: Theme.textMuted
+                                        ink: Style.fills ? Theme.meeting : Theme.textMuted
                                     }
                                     Text {
                                         id: evTime
@@ -2240,18 +2249,19 @@ Item {
                             readonly property real effEnd: !isNaN(pendingEndH) ? pendingEndH : modelData.end
                             readonly property var _slot: root.overlaps[wkBlock.modelData.key] || ({ col: 0, cols: 1 })
                             readonly property int _cols: wkBlock.moving ? 1 : Math.max(1, wkBlock._slot.cols)
-                            readonly property var _lane: Overlap.lane(wkBlock.moving ? 0 : wkBlock._slot.col, wkBlock._cols, gridHost.dayW - 4)
-                            x: gridHost.gutterW + wkBlock.effDayIndex * gridHost.dayW + 2 + wkBlock._lane.x
+                            readonly property var _lane: Overlap.lane(wkBlock.moving ? 0 : wkBlock._slot.col, wkBlock._cols, gridHost.dayW - 2 * root.laneInset)
+                            x: gridHost.gutterW + wkBlock.effDayIndex * gridHost.dayW + root.laneInset + wkBlock._lane.x
                             y: (wkBlock.effStart - root.hoursStart) * root.hourH + wkBlock.dragDy
                             width: wkBlock._lane.w - (wkBlock._cols > 1 ? 2 : 0)
                             height: Math.max(18, (wkBlock.effEnd - wkBlock.effStart) * root.hourH - 2)
-                            radius: Theme.radiusMd
+                            radius: root.blockRadius
                             // A task with a time is an outline; a meeting is
                             // filled (APP-264). The fill only answers the pointer.
-                            // Bold draws the outline bright, quiet a hairline.
+                            // Bold draws the outline bright in the week, quiet
+                            // and the day a hairline (N-Oth-DayMonth, R4-047).
                             color: wkBlockMA.hovered || wkMove.containsMouse ? Theme.panel2 : Theme.bg
-                            border.color: Style.fills ? Theme.textMuted : Theme.border
-                            border.width: Style.fills ? 1.5 : 1
+                            border.color: Style.fills && !root.dayZoom ? Theme.textMuted : Theme.border
+                            border.width: Style.fills && !root.dayZoom ? 1.5 : 1
                             readonly property bool oneLine: height < Theme.px(36)
                             readonly property string _range: Theme.fmtHour(wkBlock.effStart) + "–" + Theme.fmtHour(wkBlock.effEnd)
                             // Task blocks sit under events (4 < 5), as in the
@@ -2292,7 +2302,8 @@ Item {
                             // right and the key under it (DG-044, DG-051).
                             Column {
                                 anchors.fill: parent
-                                anchors.leftMargin: Theme.spSm; anchors.rightMargin: Theme.spSm
+                                anchors.leftMargin: root.dayZoom ? Theme.spLg : Theme.spSm
+                                anchors.rightMargin: root.dayZoom ? Theme.spLg : Theme.spSm
                                 anchors.topMargin: wkBlock.oneLine ? 0 : (root.dayZoom ? Theme.spXs : Theme.sp2xs)
                                 spacing: root.dayZoom ? Theme.sp2xs : 0
                                 clip: true
@@ -2316,12 +2327,9 @@ Item {
                                         category: AppController.statusCategory(wkBlock.modelData.status || "")
                                         size: Theme.px(10)
                                     }
-                                    Icon {
-                                        visible: !!wkBlock.modelData.due
-                                        name: "flag"
-                                        size: Theme.px(10)
-                                        color: Style.urgency ? Theme.signalNow : Theme.textMuted
-                                    }
+                                    // No deadline flag on the block: the
+                                    // deadline sits in the flag row above
+                                    // the grid (H2-Calendar, R4-043).
                                     Text {
                                         id: blkTitle
                                         objectName: "week-taskblock-title"
