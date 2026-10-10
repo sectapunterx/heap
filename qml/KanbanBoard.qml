@@ -1802,6 +1802,20 @@ Item {
         anchors.fill: parent
         z: 1000
     }
+    // A card is being dragged (it sits on the drag layer meanwhile); Esc
+    // cancels it through Main (IDIOT-TASKS-8).
+    readonly property bool dragActive: {
+        const kids = boardDragLayer.children;
+        for (let i = 0; i < kids.length; i++)
+            if (typeof kids[i].cancelDrag === "function" && kids[i].Drag.active) return true;
+        return false;
+    }
+    function cancelDrag() {
+        const kids = boardDragLayer.children;
+        for (let i = 0; i < kids.length; i++)
+            if (typeof kids[i].cancelDrag === "function" && kids[i].cancelDrag()) return true;
+        return false;
+    }
 
     // The closed card on its way to Done (APP-176): it folds into a bar
     // where it stood (the first third), then flies into the Done column's

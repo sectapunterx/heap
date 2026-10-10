@@ -124,6 +124,15 @@ Rectangle {
         }
         root._compose();
     }
+    // What is still in the field becomes chips once the keyboard leaves it:
+    // "priority:p1" without its trailing space stayed raw beside its own chip
+    // after a saved view took it (PERSONA-17).
+    function commitTyped() {
+        if (searchField.text.length > 0 && root._tokens(searchField.text).some(t => root._isClause(root._canon(t)))) {
+            root._split(root.searchText);
+            root._compose();
+        }
+    }
     function removeCondition(i) {
         const list = root._tokens(root._committed);
         list.splice(i, 1);
@@ -165,11 +174,14 @@ Rectangle {
         searchField.cursorPosition = searchField.text.length;
     }
     // Type to search (APP-117): the first letter typed on the board starts a
-    // fresh search with it, and the rest follow into the field.
+    // fresh search with it, and the rest follow into the field. The old words
+    // go through the field's own editing, so Ctrl+Z there brings them back
+    // (IDIOT-TASKS-19).
     function typeAhead(text) {
         root._queryOpened = true;
         root.editing = true;
-        searchField.text = text;
+        searchField.remove(0, searchField.text.length);
+        searchField.insert(0, text);
         searchField.forceActiveFocus();
         searchField.cursorPosition = searchField.text.length;
     }
@@ -678,7 +690,11 @@ Rectangle {
                     id: searchField
                     ContextMenu.menu: TextEditMenu { editor: searchField }
                     objectName: "topbar-search"
-                    onActiveFocusChanged: if (!activeFocus && root.searchText.length === 0) root._queryOpened = false
+                    onActiveFocusChanged: {
+                        if (activeFocus) return;
+                        if (root.searchText.length === 0) root._queryOpened = false;
+                        else root.commitTyped();
+                    }
                     Layout.fillWidth: true
                     placeholderText: I18n.t("query.placeholder")
                     color: Theme.text
@@ -696,15 +712,22 @@ Rectangle {
                         else root.leaveRequested();
                         event.accepted = true;
                     }
-                    // Backspace on an empty field takes the last condition back.
+                    // Backspace on an empty field takes the last condition back,
+                    // but not the default "status not done": mashed, it took
+                    // every chip and done tasks flooded in (IDIOT-TASKS-10).
+                    // Its × still removes it.
                     Keys.onPressed: (event) => {
                         if (event.key === Qt.Key_Backspace && searchField.text.length === 0 && root.conditions.length > 0) {
-                            root.removeCondition(root.conditions.length - 1);
+                            for (let i = root.conditions.length - 1; i >= 0; i--) {
+                                if (root.conditions[i].raw.toLowerCase() === "is:open") continue;
+                                root.removeCondition(i);
+                                break;
+                            }
                             event.accepted = true;
                         }
                     }
-                    Keys.onReturnPressed: root.leaveRequested()
-                    Keys.onEnterPressed: root.leaveRequested()
+                    Keys.onReturnPressed: { root.commitTyped(); root.leaveRequested(); }
+                    Keys.onEnterPressed: { root.commitTyped(); root.leaveRequested(); }
                     // The syntax is only discoverable if something says it out
                     // loud; the field itself is the only place the user looks.
                     QQC.ToolTip.visible: searchField.activeFocus && searchField.text.length === 0

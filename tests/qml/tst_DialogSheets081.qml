@@ -90,5 +90,8 @@ TestCase {
         compare(h.readableQuery("статус:заблокировано p0"), "Заблокировано · P0");
         compare(h.readableQuery('label:"two words" p1'), "Two words · P1");
         compare(h.readableQuery(""), "");
+        // PERSONA-18: "is:open" in the UI's language, not English.
+        const open = I18n.t("query.is.open");
+        compare(h.readableQuery("is:open priority:p1"), open.charAt(0).toUpperCase() + open.slice(1) + " · P1");
     }
 }

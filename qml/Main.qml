@@ -590,6 +590,10 @@ ApplicationWindow {
             if (p === Overlay.overlay) { inPopup = true; break; }
         if (inPopup) {
             win._focusWasInPopup = true;
+            // A card dragged while the palette opens does not land behind it
+            // (IDIOT-TASKS-8).
+            const dv = win.activeViewItem();
+            if (dv && typeof dv.cancelDrag === "function") dv.cancelDrag();
             return;
         }
         if (win._focusWasInPopup) {
@@ -1495,9 +1499,18 @@ ApplicationWindow {
     }
     // A Tasks filter that found nothing: "сбросить фильтр · Esc" (DG-160)
     // clears the query and the priority filter.
+    // Back to the plain task list: the default "status not done" stays (the
+    // reset dropped it and done tasks flooded in, IDIOT-TASKS-5), and a saved
+    // view is left rather than shown as modified.
     function resetTaskFilter() {
-        win.searchText = "";
+        savedViewsHost.leave();
+        win.searchText = win.defaultQuery("", false);
         win.prioritiesFilter = ({});
+    }
+    // Ctrl+2, g b and Esc on the board leave a saved view: only the chip's ×
+    // did, so there was no keyboard way back (PERSONA-16).
+    function leaveSavedView() {
+        if (savedViewsHost.activeView) win.resetTaskFilter();
     }
     readonly property bool _taskFilterEmpty: {
         const v = AppController.currentSection === "tasks" ? win.activeViewItem() : null;
@@ -1506,7 +1519,8 @@ ApplicationWindow {
     Shortcut {
         sequence: "Escape"
         context: Qt.ApplicationShortcut
-        enabled: win._taskFilterEmpty && !win._viewKeysBlocked && !win._focusOnControl && !AppController.immersion
+        enabled: (win._taskFilterEmpty || (!!savedViewsHost.activeView && AppController.currentSection === "tasks"))
+                 && !win._viewKeysBlocked && !win._focusOnControl && !AppController.immersion
                  && AppController.selectionCount === 0
         onActivated: win.resetTaskFilter()
     }
@@ -1765,6 +1779,7 @@ ApplicationWindow {
             return;
         }
         if (id.indexOf("section.") === 0) {
+            if (id === "section.tasks") win.leaveSavedView();
             AppController.openSection(id.slice(8));
             return;
         }
@@ -1803,6 +1818,7 @@ ApplicationWindow {
             return;
         }
         if (id.indexOf("view.") === 0) {
+            if (id === "view.board") win.leaveSavedView();
             AppController.currentView = id.slice(5);
             return;
         }
@@ -2056,6 +2072,11 @@ ApplicationWindow {
         case "selection.toggle": case "selection.range":
             return v === "board" || win._keyTaskIds().length > 0;
         case "selection.clearSel":
+            if (!!b && b.dragActive === true) return true;
+            // Nothing found and nothing selected: Esc is the empty state's
+            // "reset the filter · Esc", not a cursor on a card filtered out of
+            // sight (IDIOT-TASKS-5).
+            if (win._taskFilterEmpty && AppController.selectionCount === 0) return false;
             return AppController.selectionCount > 0 || win._rangeMode || win._boardCursorShown();
         case "selection.deleteSel":
             return AppController.selectionCount > 0 || win._cursorTaskId().length > 0;
@@ -2282,6 +2303,8 @@ ApplicationWindow {
             if (win._rangeMode && AppController.currentView === "board") call("toggleCursorSelection");
             return;
         case "selection.clearSel":
+            // Esc mid-drag cancels the drag and nothing else (IDIOT-TASKS-8).
+            if (b && typeof b.cancelDrag === "function" && b.cancelDrag()) return;
             win._rangeMode = false;
             AppController.clearSelection();
             win._clearBoardCursor();
@@ -2383,7 +2406,7 @@ ApplicationWindow {
         sequence: win._kbd("section.tasks")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: AppController.openSection("tasks")
+        onActivated: { win.leaveSavedView(); AppController.openSection("tasks"); }
     }
     Shortcut {
         sequence: win._kbd("section.knowledge")
@@ -2395,7 +2418,7 @@ ApplicationWindow {
         sequence: _kbd("view.board")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: AppController.currentView = "board"
+        onActivated: { win.leaveSavedView(); AppController.currentView = "board"; }
     }
     Shortcut {
         sequence: _kbd("view.timeline")

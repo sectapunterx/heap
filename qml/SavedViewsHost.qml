@@ -35,7 +35,7 @@ Item {
         const cur = AppController.currentView;
         const taskView = ["board", "list", "week", "month"].indexOf(cur) >= 0;
         return {
-            query: root.host.searchText,
+            query: root.uniqueClauses(root.host.searchText),
             priorities: root.host._activePriorities,
             sort: root.host.boardSortMode,
             archived: root.host.showArchived,
@@ -47,6 +47,22 @@ Item {
                               ? root.activeView.view : cur)
                            : (root.activeView ? root.activeView.view : "board")
         };
+    }
+
+    // A clause said twice is said once: a view was stored as "is:open
+    // priority:p1 priority:p1" (PERSONA-17). Words and OR queries stay as
+    // typed.
+    function uniqueClauses(q) {
+        const toks = String(q || "").match(/"[^"]*"|\S+/g) || [];
+        if (toks.indexOf("OR") >= 0 || toks.indexOf("|") >= 0) return String(q || "");
+        const seen = {};
+        return toks.filter(t => {
+            if (t.indexOf(":") <= 0) return true;
+            const k = t.toLowerCase();
+            if (seen[k]) return false;
+            seen[k] = true;
+            return true;
+        }).join(" ");
     }
 
     readonly property bool modified: {
@@ -104,6 +120,12 @@ Item {
         const words = parts.map(w => {
             let v = w.indexOf(":") > 0 && !/^https?:/i.test(w) ? w.slice(w.indexOf(":") + 1) : w;
             v = v.replace(/^"|"$/g, "");
+            // "is:open" in the language of the UI: "Open · P1" in a Russian
+            // one was English (PERSONA-18).
+            if (/^is:/i.test(w)) {
+                const said = I18n.t("query.is." + v.toLowerCase());
+                if (said.indexOf("query.") !== 0) v = said;
+            }
             return /^p[0-3]$/i.test(v) ? v.toUpperCase() : v;
         }).filter(v => v.length > 0);
         const out = words.join(" · ");

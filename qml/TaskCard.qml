@@ -956,6 +956,11 @@ Rectangle {
             didDrag = true;
             card._dropAt = card.mapToItem(null, 0, 0);
         }
+        // cancelDrag() takes the grab away: no drop, the card goes home.
+        onCanceled: {
+            card.x = card.homeX; card.y = card.homeY;
+            didDrag = false;
+        }
         onReleased: (mouse) => {
             const wasDrag = didDrag;
             card.Drag.drop();
@@ -974,6 +979,18 @@ Rectangle {
                 card.clicked();
             }
         }
+    }
+
+    // Esc mid-drag, or a popup taking the keyboard, lets go of the card
+    // without dropping it, as the calendar's drag does: it landed in the
+    // column under the pointer on release, behind the palette too
+    // (IDIOT-TASKS-8). True when there was a drag to cancel.
+    function cancelDrag() {
+        if (!dragArea.drag.active) return false;
+        card._dropAt = null;
+        dragArea.enabled = false;
+        Qt.callLater(function () { dragArea.enabled = true; });
+        return true;
     }
 
     // The task menu, shared by every view (APP-268): TaskMenuHost builds
