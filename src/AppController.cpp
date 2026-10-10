@@ -87,7 +87,6 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
-#include <QScreen>
 #include <QIcon>
 #include <QInputMethod>
 #include <QJsonArray>
@@ -105,6 +104,7 @@
 #include <QSaveFile>
 #include <QScopedValueRollback>
 #include <QScopeGuard>
+#include <QScreen>
 #include <QStandardPaths>
 #include <QStorageInfo>
 #include <QSysInfo>
