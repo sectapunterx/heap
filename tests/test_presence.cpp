@@ -403,8 +403,9 @@ TEST(LowkeyTheme, MigrationMovesBothSlotsAndKeepsCustomThemes) {
 
 // A profile already on the lowkey themes is left as it is.
 TEST(LowkeyTheme, MigrationLeavesTheLowkeyThemesAlone) {
-  QJsonObject app{{QStringLiteral("appearance"), QJsonObject{{QStringLiteral("darkPreset"), QStringLiteral("heap-ink")},
-                                                             {QStringLiteral("lightPreset"), QStringLiteral("heap-light")}}}};
+  QJsonObject app{{QStringLiteral("appearance"),
+                   QJsonObject{{QStringLiteral("darkPreset"), QStringLiteral("heap-ink")},
+                               {QStringLiteral("lightPreset"), QStringLiteral("heap-light")}}}};
   EXPECT_FALSE(AppController::migrateLowkeyTheme(app));
 }
 
