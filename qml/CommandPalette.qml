@@ -494,6 +494,12 @@ Popup {
     }
 
     // The task actions, for the task the line opened on or for what it found.
+    // A column's name as the target of "→": the default "В работе" reads
+    // "В работу" there (H2-Command, R3-106); a column the user named stays
+    // as written.
+    function _toStatus(name) {
+        return String(name) === I18n.t("cmd.status.progName") ? I18n.t("cmd.status.progTo") : String(name);
+    }
     function _taskAction(action, ids, labelKey, keyId, extra) {
         return Object.assign({ kind: "action", action: action, ids: ids, label: I18n.t(labelKey),
                                keys: keyId ? AppController.shortcutText(keyId) : "", sub: "" }, extra || {});
@@ -591,7 +597,7 @@ Popup {
                 const prog = AppController.statuses.find(st => AppController.statusCategory(st.id) === "prog");
                 if (allBlocked && prog)
                     acts.push({ kind: "action", action: "unblock", ids: found.map(e => e.taskId), status: prog.id,
-                                label: root._quiet ? I18n.t("cmd.unblockQuiet") : I18n.t("cmd.unblock").arg(prog.name), keys: "", sub: "" });
+                                label: root._quiet ? I18n.t("cmd.unblockQuiet") : I18n.t("cmd.unblock").arg(root._toStatus(prog.name)), keys: "", sub: "" });
                 if (acts.length > 0) {
                     header(root._quiet ? I18n.t(found.length === 1 ? "cmd.group.withIt" : "cmd.group.withThem")
                                        : I18n.t("cmd.group.withFound"));

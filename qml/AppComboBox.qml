@@ -14,8 +14,13 @@ ComboBox {
     // The field's text colour (a priority field colours its value).
     property color textColor: Theme.text
     property int textWeight: Theme.fwBody
+    // A stage ring before the value (a column picked for a tracker status,
+    // sheet N/X-Set-Trackers, R3-127). Empty = none.
+    property string ring: ""
+    // A pill as wide as its value with a small caret, not a field.
+    property bool compact: false
 
-    implicitHeight: 30
+    implicitHeight: box.compact ? Theme.chipH : 30
     font.family: Theme.fontUi
 
     // Type to find (APP-279): "гот" picks "Готово". The letters open the
@@ -63,24 +68,38 @@ ComboBox {
     font.pixelSize: Theme.fsMd
 
     background: FieldFrame { control: box }
-    contentItem: Text {
-        leftPadding: Theme.spLg
-        rightPadding: box.indicator.width + Theme.spMd
-        text: box.displayText
-        textFormat: Text.PlainText
-        font.family: box.font.family
-        font.pixelSize: box.font.pixelSize
-        font.weight: box.textWeight
-        color: box.enabled ? box.textColor : Theme.textDim
-        verticalAlignment: Text.AlignVCenter
-        elide: Text.ElideRight
+    contentItem: Item {
+        readonly property real _lead: box.compact ? Theme.spMd : Theme.spLg
+        implicitWidth: valueText.x + valueText.implicitWidth + box.indicator.width + Theme.spMd
+        implicitHeight: valueText.implicitHeight
+        StatusRing {
+            id: ringMark
+            visible: box.ring.length > 0
+            x: parent._lead
+            anchors.verticalCenter: parent.verticalCenter
+            category: box.ring.length > 0 ? box.ring : "todo"
+        }
+        Text {
+            id: valueText
+            x: ringMark.visible ? ringMark.x + ringMark.width + Theme.spSm : parent._lead
+            width: Math.max(0, parent.width - x - box.indicator.width - Theme.spMd)
+            height: parent.height
+            text: box.displayText
+            textFormat: Text.PlainText
+            font.family: box.font.family
+            font.pixelSize: box.font.pixelSize
+            font.weight: box.textWeight
+            color: box.enabled ? box.textColor : Theme.textDim
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+        }
     }
     indicator: Text {
-        x: box.width - width - Theme.spLg
+        x: box.width - width - (box.compact ? Theme.spMd : Theme.spLg)
         y: (box.height - height) / 2
         text: "▾"
         color: Theme.textDim
-        font.pixelSize: Theme.fsMd
+        font.pixelSize: box.compact ? Theme.fsXs : Theme.fsMd
     }
 
     delegate: ItemDelegate {
