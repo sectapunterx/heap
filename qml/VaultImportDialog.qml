@@ -149,6 +149,7 @@ QQC.Dialog {
             objectName: "vault-import-go"
             text: I18n.t("notes.vault.import")
             primary: true
+            solid: Style.fills
             enabled: !root.summary.error && (root.summary.files || 0) > 0
             onClicked: root.run()
         }

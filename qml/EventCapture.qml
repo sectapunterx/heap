@@ -29,6 +29,8 @@ Popup {
     // The slot it was opened on: { date, start, end } (hours).
     property var slot: ({ date: new Date(), start: 9, end: 10 })
     readonly property var parsed: root.read(input.text)
+    // The recognised words as offsets into the line, for the tint.
+    readonly property var marks: root.markWords(input.text, root.parsed.words)
 
     function openAt(draft) {
         const d = draft || {};
@@ -56,7 +58,8 @@ Popup {
             start: root.slot.start,
             end: root.slot.end,
             rule: x.rule || EventRule.fromChrono(p.recurrence),
-            fromLine: false
+            fromLine: false,
+            words: [x.ruleText, x.lengthText].concat((p.spans || []).map(sp => String(sp.text)))
         };
         if (root._valid(p.when)) {
             out.date = new Date(p.when.getFullYear(), p.when.getMonth(), p.when.getDate());
@@ -68,6 +71,18 @@ Popup {
             }
         }
         if (x.minutes > 0) out.end = Math.min(24, out.start + x.minutes / 60);
+        return out;
+    }
+    function markWords(raw, ws0) {
+        const low = String(raw || "").toLowerCase();
+        const out = [];
+        const ws = ws0 || [];
+        for (let i = 0; i < ws.length; i++) {
+            const w = String(ws[i] || "").toLowerCase();
+            if (w.length === 0) continue;
+            const at = low.indexOf(w);
+            if (at >= 0) out.push({ start: at, end: at + w.length, kind: i === 0 ? "repeat" : (i === 1 ? "length" : "when") });
+        }
         return out;
     }
     function whenText(r) {
@@ -94,7 +109,9 @@ Popup {
 
     contentItem: ColumnLayout {
         spacing: 0
-        TextField {
+        // A one-line text area, not a field: only a text document can colour
+        // the words it understood (R3-064, X-Dlg-Event).
+        TextArea {
             id: input
             objectName: "event-capture-input"
             Layout.fillWidth: true
@@ -107,7 +124,9 @@ Popup {
             placeholderTextColor: Theme.textDim
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsLg
-            font.weight: Theme.fwTitle
+            font.weight: Theme.fwBody
+            wrapMode: TextEdit.NoWrap
+            textFormat: TextEdit.PlainText
             selectByMouse: true
             Accessible.name: I18n.t("event.capture.ph")
             background: Rectangle {
@@ -116,7 +135,15 @@ Popup {
                 color: Theme.borderStrong
             }
             ContextMenu.menu: TextEditMenu { editor: input }
-            onAccepted: root.submit()
+            Keys.onReturnPressed: (event) => { event.accepted = true; root.submit(); }
+            Keys.onEnterPressed: (event) => { event.accepted = true; root.submit(); }
+            // A paste keeps to one line.
+            onTextChanged: if (input.text.indexOf("\n") >= 0) input.text = input.text.replace(/\n+/g, " ")
+            SpanHighlighter {
+                target: input.textDocument
+                spans: root.marks
+                colors: ({ when: Theme.info, repeat: Theme.info, length: Theme.info })
+            }
         }
         Flow {
             Layout.fillWidth: true

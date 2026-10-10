@@ -269,6 +269,7 @@ QtObject {
     // What every colour picker offers for columns, labels, people and
     // profiles (ThemePresets.SWATCHES).
     readonly property var swatches: Presets.SWATCHES
+    readonly property var profileSwatches: Presets.PROFILE_SWATCHES
 
     // Token by key, for the theme editor and alert kinds.
     function token(key) { return _c[key]; }
@@ -361,6 +362,8 @@ QtObject {
     // words carry the meaning, colour does not shout.
     readonly property color signalNow:    Style.urgency ? warning : textMuted   // now, a running timer, soon
     readonly property color signalUrgent: Style.urgency ? danger : text         // P0, due today, blocked
+    // A destructive text link ("Удалить…"): red in bold, a muted rose in quiet (R3-065).
+    readonly property color dangerLink:   Style.urgency ? danger : Presets.mix(String(danger), String(textMuted), 0.45)
     // Meetings: a calendar icon always; bold also fills the block with a bar.
     readonly property color meeting:      mStandup
     readonly property color meetingFill:  Style.chipFill ? (_c.meetingBg !== undefined ? _c.meetingBg : withAlpha(mStandup, 0.16))
