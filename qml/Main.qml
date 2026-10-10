@@ -1426,6 +1426,8 @@ ApplicationWindow {
                         onFilterConsumed: notesBridge.requestedFilter = ""
                         onTaskRequested: (id) => win.openTaskById(id)
                         onPersonRequested: (id) => personEditor.showFor(AppController.personById(id))
+                        // Its keys stand down behind a panel or a dialog (IDIOT-KNOW-4).
+                        keysLive: !win._panelOpen && !win._modalOpen
                     }
                 }
                 Component {
@@ -2031,7 +2033,10 @@ ApplicationWindow {
         // s on an empty day of the calendar: go to a date (keymap.md).
         if (base === "task.schedule" && win._keyTaskIds().length === 0)
             return ["day", "week", "month"].indexOf(v) >= 0 && !!b && b.cursorVisible === true;
-        if (base.indexOf("notes.") === 0) return v === "notes";
+        if (base.indexOf("notes.") === 0) return v === "notes" && !win._panelOpen;
+        // "/" on Today: the header search does not filter the day, so the
+        // key does nothing rather than look like it does (IDIOT-KNOW-15).
+        if (routed && base === "search.focus" && v === "today") return false;
         if (base.indexOf("savedView.") === 0) return Number(base.slice(10)) <= AppController.savedViews.length;
         if (base.indexOf("task.") === 0 && base !== "task.new")
             return win._keyTaskIds().length > 0;

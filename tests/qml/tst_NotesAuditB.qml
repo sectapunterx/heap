@@ -103,6 +103,8 @@ TestCase {
         const fresh = AppController.activeNoteId;
         tc.made.push(fresh);
         compare(AppController.notes.rowCount(), count + 1, "notes.new did not make a note");
+        // Written in, so leaving it keeps it (an untouched one goes, IDIOT-KNOW-14).
+        AppController.notesState = AppController.notesState + "typed";
 
         const shown = nv._listShown;
         nv.runNotesCommand("toggleList");
