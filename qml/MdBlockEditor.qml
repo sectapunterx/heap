@@ -407,6 +407,8 @@ Item {
         QQC.TextArea {
             id: field
             objectName: "md-block-field"
+            // It takes the caret on arrival now (IDIOT-KNOW-6): a named stop.
+            Accessible.name: root.menuTitle.length > 0 ? root.menuTitle : root.placeholder
             // Over the view, not inside it: inside, the ListView's focus
             // scope handed the keyboard to its current row on every relayout.
             parent: root

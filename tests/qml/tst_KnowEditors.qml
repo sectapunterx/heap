@@ -22,11 +22,15 @@ TestCase {
     property var seeded: []
     property var pages: []
 
+    // Ctrl+Z past a block's history is the app's undo: with the deletes of
+    // an earlier cleanup still on it, it brought those notes back.
+    function init() { AppController.clearPendingUndo(); }
     function cleanup() {
         for (let i = 0; i < tc.seeded.length; i++) AppController.deleteNote(tc.seeded[i]);
         tc.seeded = [];
         for (let i = 0; i < tc.pages.length; i++) AppController.deleteDocPage(tc.pages[i]);
         tc.pages = [];
+        AppController.clearPendingUndo();
     }
 
     function makeNotes(w) {
