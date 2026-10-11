@@ -58,10 +58,12 @@ fi
 
 # heap_qml_tests also writes its results to a file (see tests/CMakeLists.txt),
 # since its stdout is lost on Windows; name the failing cases from there.
-qml_results="$dir/heap_qml_tests.txt"
-if [[ -f $qml_results ]] && grep -q '^FAIL!' "$qml_results"; then
-  echo "::group::heap_qml_tests failures"
-  grep -A4 '^FAIL!' "$qml_results"
-  echo "::endgroup::"
-fi
+shopt -s nullglob
+for qml_results in "$dir"/qml-results/*.txt; do
+  if grep -q '^FAIL!' "$qml_results"; then
+    echo "::group::heap_qml_tests failures: $(basename "$qml_results" .txt)"
+    grep -A4 '^FAIL!' "$qml_results"
+    echo "::endgroup::"
+  fi
+done
 exit "$status"

@@ -82,6 +82,13 @@ class Setup : public QObject {
  public slots:
 
   void applicationAvailable() {
+    // ctest runs every tst_*.qml as its own process, side by side (see
+    // tests/CMakeLists.txt). Test-mode data lives under the application name,
+    // so each file gets a name of its own and none reads another's profile.
+    const QString file = qEnvironmentVariable("HEAP_QML_TEST_FILE");
+    if(!file.isEmpty()) {
+      QCoreApplication::setApplicationName(QCoreApplication::applicationName() + QLatin1Char('_') + file);
+    }
     QStandardPaths::setTestModeEnabled(true);
     g_previousHandler = qInstallMessageHandler(collectScriptErrors);
     // The same AltGr rule main() installs, so key tests see it (SHELL-2).

@@ -27,7 +27,7 @@ ColumnLayout {
     spacing: Theme.spXl
     Layout.fillWidth: true
 
-    readonly property var customs: Array.isArray(appearance.customThemes) ? appearance.customThemes : []
+    readonly property var customs: Presets.list(appearance.customThemes)
     readonly property string slot: Theme.slot
     readonly property string slotKey: slot === "light" ? "lightPreset" : "darkPreset"
     readonly property string currentId: Theme.activePresetId

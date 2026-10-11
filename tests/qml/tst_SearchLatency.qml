@@ -18,13 +18,23 @@ TestCase {
     property var win: null
 
     function initTestCase() {
+        // The board before the window: switching to it afterwards hands the
+        // keyboard to the view a tick later (Main.qml _focusSwitchedView), and
+        // on a fresh profile, where the window opens on another view, that
+        // took the search field's focus from the first test.
+        AppController.currentView = "board";
         const comp = Qt.createComponent("qrc:/qt/qml/TodoCpp/qml/Main.qml");
         tryCompare(comp, "status", Component.Ready, 5000);
         verify(comp.status === Component.Ready, comp.errorString());
         tc.win = comp.createObject(null);
         verify(tc.win !== null);
-        AppController.currentView = "board";
         tryVerify(() => tc.win.activeViewItem() !== null, 3000);
+    }
+
+    // Each test starts from an empty field. A fresh profile opens with a
+    // query in it, which the first test's keys were added to.
+    function init() {
+        tc.win.searchText = "";
     }
 
     function cleanupTestCase() {
