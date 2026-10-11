@@ -579,6 +579,7 @@ ApplicationWindow {
     // Return in a board dialog: IDIOT-TASKS-6). Return stands down for a
     // moment after focus leaves any popup.
     property real _returnGuardUntil: 0
+    property bool _focusOnMenu: false
     onActiveFocusItemChanged: {
         const it = win.activeFocusItem;
         if (!it) return;
@@ -590,6 +591,9 @@ ApplicationWindow {
         let inPopup = false;
         for (let p = it; p; p = p.parent)
             if (p === Overlay.overlay) { inPopup = true; break; }
+        // A menu holds the keyboard on its own item, a dialog in a field.
+        const wasMenu = win._focusOnMenu;
+        win._focusOnMenu = it.parent === Overlay.overlay;
         if (inPopup) {
             win._focusWasInPopup = true;
             // A card dragged while the palette opens does not land behind it
@@ -597,6 +601,10 @@ ApplicationWindow {
             const dv = win.activeViewItem();
             if (dv && typeof dv.cancelDrag === "function") dv.cancelDrag();
             return;
+        }
+        if (wasMenu) {
+            win._popupJustClosed = true;
+            popupClosedTimer.restart();
         }
         if (win._focusWasInPopup) {
             win._focusWasInPopup = false;
@@ -1442,6 +1450,8 @@ ApplicationWindow {
                         onFilterConsumed: notesBridge.requestedFilter = ""
                         onTaskRequested: (id) => win.openTaskById(id)
                         onPersonRequested: (id) => personEditor.showFor(AppController.personById(id))
+                        // Its keys stand down behind a panel or a dialog (IDIOT-KNOW-4).
+                        keysLive: !win._panelOpen && !win._modalOpen
                     }
                 }
                 Component {
@@ -2076,7 +2086,10 @@ ApplicationWindow {
         // s on an empty day of the calendar: go to a date (keymap.md).
         if (base === "task.schedule" && win._keyTaskIds().length === 0)
             return ["day", "week", "month"].indexOf(v) >= 0 && !!b && b.cursorVisible === true;
-        if (base.indexOf("notes.") === 0) return v === "notes";
+        if (base.indexOf("notes.") === 0) return v === "notes" && !win._panelOpen;
+        // "/" on Today: the header search does not filter the day, so the
+        // key does nothing rather than look like it does (IDIOT-KNOW-15).
+        if (routed && base === "search.focus" && v === "today") return false;
         if (base.indexOf("savedView.") === 0)
             return Number(base.slice(10)) <= AppController.savedViews.length && !win._typing;  // IDIOT-SHELL-7
         if (base === "profile.next" || base === "profile.prev") return !win._typing;
@@ -2773,9 +2786,14 @@ ApplicationWindow {
     // confirm, Alt+← moved the day from the header search (SHELL-3).
     component DayKey: Shortcut {
         context: Qt.ApplicationShortcut
-        enabled: sequences.length > 0 && !win._viewKeysBlocked
+        enabled: sequences.length > 0 && !win._viewKeysBlocked && !win._popupJustClosed
             && ["today", "board", "list", "day", "week", "month"].indexOf(AppController.currentView) >= 0
     }
+    // The Alt of Alt+← closes an open menu on its own, and the ← that
+    // followed paged the day behind it (IDIOT-KNOW-12): a day key just after
+    // a menu let the keyboard go waits a moment.
+    property bool _popupJustClosed: false
+    Timer { id: popupClosedTimer; interval: 400; onTriggered: win._popupJustClosed = false }
     DayKey {
         sequences: [_kbd("cal.today")]
         onActivated: AppController.selectedDate = AppController.today

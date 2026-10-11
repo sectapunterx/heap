@@ -1932,6 +1932,12 @@ void AppController::setActiveNoteId(const QString& id) {
   adoptOrphanNotesState();
   // The note being left keeps what was typed into it.
   syncActiveNoteBody();
+  // A "+" nobody wrote in leaves no "Untitled note" behind (IDIOT-KNOW-14).
+  // Not an undoable delete: nothing was in it.
+  if(m_activeNoteId == m_freshNoteId && freshNoteUntouched()) {
+    m_notes.removeById(m_freshNoteId);
+  }
+  m_freshNoteId.clear();
   m_activeNoteId = id;
   const int row = m_notes.indexOfId(id);
   m_notesState = row >= 0 ? m_notes.items().at(row).body : QString();
@@ -1945,7 +1951,22 @@ QString AppController::noteBody(const QString& id) const {
   return row >= 0 ? m_notes.items().at(row).body : QString();
 }
 
+bool AppController::freshNoteUntouched() const {
+  const int row = m_notes.indexOfId(m_freshNoteId);
+  if(m_freshNoteId.isEmpty() || row < 0) {
+    return false;
+  }
+  const Note& n = m_notes.items().at(row);
+  const QString body = n.id == m_activeNoteId ? m_notesState : n.body;
+  return !n.pinned && n.folder.isEmpty() && isPlaceholderNoteTitle(n.title) && body == QStringLiteral("# %1\n\n").arg(n.title);
+}
+
 QString AppController::newNote(const QString& title, const QString& folder) {
+  // Ctrl+Alt+N pressed again over the empty note it just made: that note,
+  // not another "Untitled note" (IDIOT-KNOW-14).
+  if(title.trimmed().isEmpty() && folder.isEmpty() && m_activeNoteId == m_freshNoteId && freshNoteUntouched()) {
+    return m_activeNoteId;
+  }
   Note n;
   n.id = QStringLiteral("note-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
   n.title = title.trimmed().isEmpty() ? tr_("notes.untitled") : title.trimmed();
@@ -1956,15 +1977,36 @@ QString AppController::newNote(const QString& title, const QString& folder) {
   n.body = QStringLiteral("# %1\n\n").arg(n.title);
   m_notes.upsert(n);
   setActiveNoteId(n.id);
+  if(title.trimmed().isEmpty() && folder.isEmpty()) {
+    m_freshNoteId = n.id;
+  }
   scheduleSave();
   return n.id;
 }
 
-void AppController::renameNote(const QString& id, const QString& title) {
+bool AppController::noteTitleTaken(const QString& title, const QString& folder, const QString& exceptId) const {
+  const QString wanted = title.trimmed();
+  for(const Note& n : m_notes.items()) {
+    if(n.id != exceptId && n.folder == folder && n.title.trimmed().compare(wanted, Qt::CaseInsensitive) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool AppController::renameNote(const QString& id, const QString& title) {
   const int row = m_notes.indexOfId(id);
   const QString next = title.trimmed();
-  if(row < 0 || next.isEmpty() || m_notes.items().at(row).title == next) {
-    return;
+  if(row < 0 || next.isEmpty()) {
+    return false;
+  }
+  if(m_notes.items().at(row).title == next) {
+    return true;
+  }
+  // Two notes of one name in a folder: every [[Name]] there would be
+  // retargeted onto this one, silently (IDIOT-KNOW-3).
+  if(noteTitleTaken(next, m_notes.items().at(row).folder, id)) {
+    return false;
   }
   // The open note's pending keystrokes belong to it before its heading moves.
   emit aboutToChangeActiveNote();
@@ -1998,9 +2040,36 @@ void AppController::renameNote(const QString& id, const QString& title) {
         m_notes.upsert(changed);
       }
     }
+    // Tasks and doc pages name notes too: their [[Old]] went dead and the
+    // task fell out of the note's "tasks linking here" (KNOW-4). They are
+    // written in no folder, so a link reads the way a task's does.
+    const auto retarget = [&](const QString& text) {
+      return text.contains(QStringLiteral("[[")) ? heap::notes::retargetLinksTo(text, QString(), before, id, old, next) : text;
+    };
+    const QVector<Task> tasks = m_tasks.items();
+    for(const Task& t : tasks) {
+      const QString desc = retarget(t.desc);
+      const QString local = retarget(t.local.notes);
+      if(desc != t.desc || local != t.local.notes) {
+        Task changed = t;
+        changed.desc = desc;
+        changed.local.notes = local;
+        m_tasks.upsert(changed);
+      }
+    }
+    const QVector<DocPage> pages = m_docPages.items();
+    for(const DocPage& p : pages) {
+      const QString body = retarget(p.body);
+      if(body != p.body) {
+        DocPage changed = p;
+        changed.body = body;
+        m_docPages.upsert(changed);
+      }
+    }
   }
   reconcileActiveNote();
   scheduleSave();
+  return true;
 }
 void AppController::deleteNote(const QString& id) {
   if(m_notes.indexOfId(id) < 0) {
@@ -2496,11 +2565,16 @@ QVariantList AppController::tasksLinkingToNote(const QString& noteId) const {
   if(title.isEmpty()) {
     return out;
   }
+  // Read as a link is followed: [[C\# basics]] names "C# basics", which
+  // splitting on '#' missed (KNOW-12).
+  const QVector<Note>& notes = m_notes.items();
   const auto links = [&](const QString& text) {
+    if(!text.contains(QStringLiteral("[["))) {
+      return false;
+    }
     for(const QString& t : wikiTargetsOf(text)) {
-      // [[Note]] or [[Note#Heading]]
-      const QString name = t.section(QChar('#'), 0, 0).trimmed();
-      if(name.compare(title, Qt::CaseInsensitive) == 0) {
+      const heap::notes::LinkTarget hit = heap::notes::resolveLink(t, notes, QString());
+      if(hit.kind != heap::notes::LinkTarget::Missing && hit.noteId == noteId) {
         return true;
       }
     }
@@ -6359,6 +6433,12 @@ void AppController::setDocPageBody(const QString& id, const QString& body) {
 }
 
 void AppController::deleteDocPage(const QString& id) {
+  if(m_docPages.indexOfId(id) < 0) {
+    return;
+  }
+  // The open page's last words go in before the undo records it, so Undo
+  // brings the page back with them (KNOW-15).
+  emit flushEditorsRequested();
   if(m_docPages.indexOfId(id) < 0) {
     return;
   }

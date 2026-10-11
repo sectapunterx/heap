@@ -32,6 +32,14 @@ Item {
     // caret on the clicked line (the task document): block by block, the
     // text opened in pieces and read as not editable.
     property bool wholeDocument: false
+    // A printable key on the drawn document opens the block the caret was
+    // last in and is typed there (the Knowledge editors).
+    property bool typeToEdit: false
+    // A key of the open block, offered to the caller first (an autocomplete
+    // list over it): accepting the event takes it.
+    signal blockKey(var event)
+    // Ctrl+V with a file or an image on the clipboard stores and links it.
+    property bool attachOnPaste: false
     // Drawn under the last block, inside the scroll (the task document's
     // plan and hint, DG-062): the item gets `width` set to the text column.
     property Component tail: null
@@ -49,13 +57,45 @@ Item {
 
     property bool _loading: false
     onTextChanged: {
-        if (root.text === src.text) return;
+        if (root.text === src.text || root.text === root.rawText) return;
         root._leave(false);
-        root._loading = true;
-        src.text = root.text;
-        root._loading = false;
+        root._lastLine = -1;
+        root._setSource(root.text);
     }
-    Component.onCompleted: { root._loading = true; src.text = root.text; root._loading = false; }
+    Component.onCompleted: root._setSource(root.text)
+
+    // The source as it was given, with only the edits applied (KNOW-5).
+    // The text area normalises what it holds — CRLF to LF, a no-break space
+    // to a space, U+2028 to a line break — and handing its text back
+    // rewrote a whole document for a one-letter edit. `edited` carries this.
+    property string rawText: ""
+    property string _rawLF: ""
+    property bool _crlf: false
+    property string _srcSeen: ""
+    function _setSource(t) {
+        root._crlf = t.indexOf("\r\n") >= 0;
+        root._rawLF = root._crlf ? t.replace(/\r\n/g, "\n") : t;
+        root._loading = true;
+        src.text = root._rawLF;
+        root._loading = false;
+        root._srcSeen = src.text;
+        // Positions map one to one only when the normalising kept lengths.
+        if (root._srcSeen.length !== root._rawLF.length) root._rawLF = root._srcSeen;
+        root.rawText = root._crlf ? root._rawLF.replace(/\n/g, "\r\n") : root._rawLF;
+    }
+    // An edit of the text area, spliced into the raw source: only the span
+    // that differs, the rest kept as it was.
+    function _takeEdit() {
+        const o = root._srcSeen, n = src.text;
+        let p = 0;
+        const max = Math.min(o.length, n.length);
+        while (p < max && o.charCodeAt(p) === n.charCodeAt(p)) p++;
+        let sfx = 0;
+        while (sfx < max - p && o.charCodeAt(o.length - 1 - sfx) === n.charCodeAt(n.length - 1 - sfx)) sfx++;
+        root._rawLF = root._rawLF.substring(0, p) + n.substring(p, n.length - sfx) + root._rawLF.substring(o.length - sfx);
+        root._srcSeen = n;
+        root.rawText = root._crlf ? root._rawLF.replace(/\n/g, "\r\n") : root._rawLF;
+    }
 
     // Another text in: a document switched under the editor. Assigning
     // `text` changed nothing when the new text equalled the old *loaded*
@@ -63,17 +103,72 @@ Item {
     // saved into the next (IDIOT-DOC-1).
     function load(t) {
         root._leave(false);
-        root._loading = true;
-        src.text = t;
-        root._loading = false;
+        root._lastLine = -1;
+        root._setSource(t);
         root.text = t;
     }
     // Take what is in the open block now (before a save, a switch).
     function flush() { root._commit(); }
-    // The caret into the document: the first block, or a new one if empty.
+    // The caret into the document: the block it was last in, else the
+    // first block, or a new one if empty. Not into a hidden editor: Return
+    // there wrote into a note nobody could see (IDIOT-KNOW-2).
     function focusEditor() {
+        if (!root.visible) return;
         if (root.editing) { field.forceActiveFocus(); return; }
+        root.editLine(root._lastLine >= 0 ? root._lastLine : 0, false);
+    }
+    // The caret back where it was, else at the end of the text. A document
+    // that ends on its heading gets a line under it: the caret at the end of
+    // "# Title" made the first words typed part of the title (IDIOT-KNOW-6/9).
+    function focusEnd() {
+        if (!root.visible) return;
+        if (root.editing) { field.forceActiveFocus(); return; }
+        if (root._lastLine >= 0) { root.editLine(root._lastLine, false); return; }
+        const t = src.text;
+        let line = root._lineCount(t) - 1;
+        while (line > 0 && t.substring(root._lineStart(t, line), root._lineEnd(t, line)).trim().length === 0) line--;
+        const last = t.substring(root._lineStart(t, line), root._lineEnd(t, line));
+        if (last.trim().length === 0 || /^#{1,6}\s/.test(last)) root.appendBlock();
+        else root.editLine(line, false);
+    }
+    // A new document: its heading open with the title selected, so what is
+    // typed names it; "/" or ↓ go to the line under it (PERSONA-20).
+    function editTitle() {
+        if (!root.visible) return;
         root.editLine(0, false);
+        const m = /^(#{1,6}\s+)(.*)$/.exec(field.text.split("\n")[0]);
+        if (m && m[2].length > 0) field.select(m[1].length, m[1].length + m[2].length);
+    }
+    // The heading's title is what is selected (editTitle's state).
+    function _titleSelected() {
+        if (view.editFirst !== 0 || field.selectionStart === field.selectionEnd) return false;
+        const m = /^(#{1,6}\s+)(.*)$/.exec(field.text.split("\n")[0]);
+        return !!m && field.selectionStart === m[1].length && field.selectionEnd === m[1].length + m[2].length;
+    }
+    // Enter inside a [[link]] being typed closes it instead of breaking the
+    // line inside the brackets; a task's title becomes its id, as no note
+    // answers to it (PERSONA-21). False when the caret is not in one.
+    function _completeLink() {
+        const pos = field.cursorPosition;
+        const t = field.text;
+        const lineStart = t.lastIndexOf("\n", pos - 1) + 1;
+        const before = t.substring(lineStart, pos);
+        const open = before.lastIndexOf("[[");
+        if (open < 0 || before.indexOf("]]", open) >= 0) return false;
+        const lineEnd = t.indexOf("\n", pos) < 0 ? t.length : t.indexOf("\n", pos);
+        const closeAt = t.substring(pos, lineEnd).indexOf("]]");
+        const qStart = lineStart + open + 2;
+        const qEnd = closeAt >= 0 ? pos + closeAt : pos;
+        const query = t.substring(qStart, qEnd).trim();
+        let name = query;
+        if (query.length > 0 && AppController.resolveNoteLink(query).kind === "missing") {
+            const hit = AppController.matchTasks(query, 1);
+            if (hit.length > 0) name = hit[0].id;
+        }
+        field.remove(qStart, closeAt >= 0 ? qEnd + 2 : qEnd);
+        field.insert(qStart, name + "]]");
+        field.cursorPosition = qStart + name.length + 2;
+        return true;
     }
 
     // ── source helpers ──
@@ -105,7 +200,7 @@ Item {
     // Open the block that holds `line` for editing; the caret at its end, or
     // at its start with `atStart`.
     function editLine(line, atStart) {
-        if (root.readOnly) return;
+        if (root.readOnly || !root.visible) return;
         root._commit();
         const t = src.text;
         const last = Math.max(0, root._lineCount(t) - 1);
@@ -122,6 +217,7 @@ Item {
         // Not the blank lines after the block: they part it from the next.
         while (lastLine > first && t.substring(root._lineStart(t, lastLine), root._lineEnd(t, lastLine)).trim().length === 0)
             lastLine--;
+        root._lastLine = line;
         view.editRow = row;
         view.editFirst = first;
         view.editLast = lastLine;
@@ -150,6 +246,9 @@ Item {
         view.editRow = -1;
     }
     property bool _fieldLoading: false
+    // The line the caret was last on, opened again when the keyboard comes
+    // back from a dialog or the list (IDIOT-KNOW-6). -1: none in this text.
+    property int _lastLine: -1
     // The open block's text into the source, replacing its lines.
     function _commit() {
         commitTimer.stop();
@@ -157,7 +256,9 @@ Item {
         const t = src.text;
         const s = root._lineStart(t, view.editFirst);
         const e = root._lineEnd(t, view.editLast);
-        if (t.substring(s, e) !== field.text) {
+        // One edit, one undo step: as a remove and an insert, Ctrl+Z took
+        // back only the insert and saved the block blank (KNOW-1).
+        if (t.substring(s, e) !== field.text && !doc.replaceRange(src.textDocument, s, e, field.text)) {
             src.remove(s, e);
             src.insert(s, field.text);
         }
@@ -180,6 +281,22 @@ Item {
         slashMenu.slashAt = at;
         slashMenu.popup(field, field.cursorRectangle.x, field.cursorRectangle.y + field.cursorRectangle.height);
         slashMenu.currentIndex = 0;
+    }
+    // Links to stored files, each in a paragraph of its own: at the caret of
+    // the open block, else in a new block at the end. Dropped files went to
+    // the top of the note, above its title (KNOW-7).
+    function insertRefs(refs) {
+        if (root.readOnly || refs.length === 0) return;
+        if (!root.editing) root.appendBlock();
+        if (!root.editing) return;
+        const pos = field.cursorPosition;
+        const t = field.text;
+        let before = "";
+        if (pos > 0 && t.charAt(pos - 1) !== "\n") before = "\n\n";
+        else if (pos > 1 && t.charAt(pos - 2) !== "\n") before = "\n";
+        const after = pos < t.length && t.charAt(pos) !== "\n" ? "\n\n" : "";
+        field.insert(pos, before + refs + after);
+        field.cursorPosition = pos + before.length + refs.length;
     }
     // A new block after the last one (a click below the text).
     function appendBlock() {
@@ -206,7 +323,11 @@ Item {
         id: src
         visible: false
         textFormat: TextEdit.PlainText
-        onTextChanged: if (!root._loading) root.edited(src.text)
+        onTextChanged: {
+            if (root._loading) return;
+            root._takeEdit();
+            root.edited(root.rawText);
+        }
     }
 
     MdDocument {
@@ -286,6 +407,8 @@ Item {
         QQC.TextArea {
             id: field
             objectName: "md-block-field"
+            // It takes the caret on arrival now (IDIOT-KNOW-6): a named stop.
+            Accessible.name: root.menuTitle.length > 0 ? root.menuTitle : root.placeholder
             // Over the view, not inside it: inside, the ListView's focus
             // scope handed the keyboard to its current row on every relayout.
             parent: root
@@ -328,8 +451,14 @@ Item {
                 if (mdEditor.claimsShortcut(event.key, event.modifiers)) event.accepted = true;
             }
             Keys.onPressed: (event) => {
+                // The caller's list over the caret (Notes' @ # [[) first.
+                event.accepted = false;
+                root.blockKey(event);
+                if (event.accepted) return;
                 const mods = event.modifiers & ~Qt.KeypadModifier;
                 // Ctrl+Z past what the block itself can undo: the document's.
+                // Past the document's too: the app's (a deleted note or page,
+                // which the toast offers Ctrl+Z for, IDIOT-KNOW-10).
                 if (event.matches(StandardKey.Undo) && !field.canUndo) {
                     root._commit();
                     if (src.canUndo) {
@@ -338,8 +467,11 @@ Item {
                         src.undo();
                         doc.flush();
                         root.editLine(line, false);
+                        event.accepted = true;
+                    } else if (AppController.hasPendingUndo) {
+                        AppController.undo();
+                        event.accepted = true;
                     }
-                    event.accepted = true;
                     return;
                 }
                 if (event.matches(StandardKey.Redo) && !field.canRedo) {
@@ -350,7 +482,23 @@ Item {
                         src.redo();
                         doc.flush();
                         root.editLine(line, false);
+                        event.accepted = true;
+                    } else if (AppController.canRedo) {
+                        AppController.redo();
+                        event.accepted = true;
                     }
+                    return;
+                }
+                // A file or a bare image on the clipboard is stored and linked
+                // (the Knowledge editors); anything else pastes as text.
+                if (root.attachOnPaste && event.matches(StandardKey.Paste) && AppController.clipboardHasAttachment()) {
+                    const added = AppController.importClipboardAttachments();
+                    root.insertRefs((added || []).map(a => a.ref).join("\n\n"));
+                    event.accepted = true;
+                    return;
+                }
+                if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && mods === Qt.NoModifier
+                        && root._completeLink()) {
                     event.accepted = true;
                     return;
                 }
@@ -393,6 +541,14 @@ Item {
                     event.accepted = true;
                     return;
                 }
+                // "/" over a new note's selected title is the insert menu on
+                // the line under it, not a note called "/" (IDIOT-KNOW-9).
+                if (event.text === "/" && root._titleSelected()) {
+                    root.appendBlock();
+                    root.openSlashMenu();
+                    event.accepted = true;
+                    return;
+                }
                 mdEditor.setSelection(field.selectionStart, field.selectionEnd);
                 if (mdEditor.handleKey(event.key, event.modifiers)) event.accepted = true;
             }
@@ -400,6 +556,40 @@ Item {
     }
     // Esc on the drawn document: back to whoever opened it.
     Keys.onEscapePressed: root.escaped()
+    // A letter typed with no block open goes into the text, where the caret
+    // was last (or at the end), instead of nowhere (IDIOT-KNOW-6).
+    // Ctrl+Z on the drawn document (after a tick) is the document's own
+    // undo while it has one; it fell through to the app's and took back an
+    // unseen change on the board instead (KNOW-2).
+    Keys.onShortcutOverride: (event) => {
+        if (!root.editing && !root.readOnly && ((event.matches(StandardKey.Undo) && src.canUndo)
+                                                || (event.matches(StandardKey.Redo) && src.canRedo)))
+            event.accepted = true;
+    }
+    Keys.onPressed: (event) => {
+        if (!root.editing && !root.readOnly && event.matches(StandardKey.Undo) && src.canUndo) {
+            src.undo();
+            doc.flush();
+            event.accepted = true;
+            return;
+        }
+        if (!root.editing && !root.readOnly && event.matches(StandardKey.Redo) && src.canRedo) {
+            src.redo();
+            doc.flush();
+            event.accepted = true;
+            return;
+        }
+        if (!root.typeToEdit || root.readOnly || root.editing || !root.visible) return;
+        const mods = event.modifiers & ~(Qt.ShiftModifier | Qt.KeypadModifier);
+        const c = event.text.length > 0 ? event.text.charCodeAt(0) : 0;
+        if (mods !== Qt.NoModifier || c < 32 || c === 127) return;
+        root.focusEnd();
+        if (!root.editing) return;
+        const at = field.cursorPosition;
+        if (event.text === "/" && (at === 0 || field.text.charAt(at - 1) === "\n")) root.openSlashMenu();
+        else field.insert(at, event.text);
+        event.accepted = true;
+    }
 
     MarkdownEditorController {
         id: mdEditor
@@ -430,6 +620,20 @@ Item {
                 field.cursorPosition = at;
             }
         }
+        // A table is a block of its own: under a line of text it read as
+        // that paragraph's pipes. The caret goes into the first cell, not
+        // under the table where typing made a row (KNOW-6).
+        function putTable() {
+            slashMenu._dropSlash();
+            const at = field.cursorPosition;
+            const t = field.text;
+            const prev = at > 0 ? t.substring(t.lastIndexOf("\n", at - 2) + 1, at - 1) : "";
+            const lead = prev.trim().length > 0 ? "\n" : "";
+            const s = lead + "|  |  |\n|---|---|\n|  |  |";
+            field.insert(at, s);
+            field.cursorPosition = at + lead.length + 2;
+            field.forceActiveFocus();
+        }
         function put(s, back) {
             slashMenu._dropSlash();
             const at = field.cursorPosition;
@@ -437,7 +641,11 @@ Item {
             field.cursorPosition = at + s.length - (back || 0);
             field.forceActiveFocus();
         }
-        // Closed without a pick (Esc): the caret goes back after the "/".
+        // Closed without a pick (Esc): the "/" it was opened by goes too
+        // (IDIOT-KNOW-16) — as it starts to close, before the Esc reaches
+        // the block. A pick has already cleared slashAt.
+        onAboutToHide: if (!fileDialog.visible && root.editing) slashMenu._dropSlash()
+        // The caret back where it was.
         onClosed: Qt.callLater(() => {
             if (fileDialog.visible) return;
             slashMenu.slashAt = -1;
@@ -455,7 +663,7 @@ Item {
                 fileDialog.open();
             }
         }
-        AppMenuItem { objectName: "md-slash-table"; text: I18n.t("md.slash.table"); onTriggered: slashMenu.put("| | |\n|---|---|\n| | |\n", 0) }
+        AppMenuItem { objectName: "md-slash-table"; text: I18n.t("md.slash.table"); onTriggered: slashMenu.putTable() }
         // A reference: a titled link (the knowledge base's "RFC 6585 ·
         // 429 Too Many Requests ↗"); the caret on the title.
         AppMenuItem { objectName: "md-slash-ref"; text: I18n.t("md.slash.reference"); onTriggered: slashMenu.put("[](https://)", 11) }

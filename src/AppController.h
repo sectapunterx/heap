@@ -453,7 +453,13 @@ class AppController : public QObject {
 
   // Creating one returns its id so a caller can open it straight away.
   Q_INVOKABLE QString newNote(const QString& title = QString(), const QString& folder = QString());
-  Q_INVOKABLE void renameNote(const QString& id, const QString& title);
+  // False when nothing changed: an empty title, or one another note in the
+  // same folder already has — [[links]] to that one would have changed
+  // meaning (IDIOT-KNOW-3).
+  Q_INVOKABLE bool renameNote(const QString& id, const QString& title);
+  // Whether a note other than `exceptId` in `folder` is called `title`
+  // (case-insensitive, as [[links]] read titles).
+  Q_INVOKABLE bool noteTitleTaken(const QString& title, const QString& folder, const QString& exceptId) const;
   Q_INVOKABLE void deleteNote(const QString& id);
   // APP-116: appends note `sourceId`'s text below note `targetId`'s and
   // removes the source; links to the source now point at the target. One
@@ -2145,6 +2151,10 @@ class AppController : public QObject {
   QString m_notesState;
   NoteModel m_notes;
   QString m_activeNoteId;
+  // The note the last bare newNote() made; left untouched, it is dropped when
+  // another note opens, and a second "+" opens it again (IDIOT-KNOW-14).
+  QString m_freshNoteId;
+  bool freshNoteUntouched() const;
   DocPageModel m_docPages;
   QString m_activeDocPageId;
 

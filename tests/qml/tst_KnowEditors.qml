@@ -22,11 +22,15 @@ TestCase {
     property var seeded: []
     property var pages: []
 
+    // Ctrl+Z past a block's history is the app's undo: with the deletes of
+    // an earlier cleanup still on it, it brought those notes back.
+    function init() { AppController.clearPendingUndo(); }
     function cleanup() {
         for (let i = 0; i < tc.seeded.length; i++) AppController.deleteNote(tc.seeded[i]);
         tc.seeded = [];
         for (let i = 0; i < tc.pages.length; i++) AppController.deleteDocPage(tc.pages[i]);
         tc.pages = [];
+        AppController.clearPendingUndo();
     }
 
     function makeNotes(w) {
@@ -195,5 +199,269 @@ TestCase {
         compare(head.text, "Before probe");
         AppController.renameDocPage(id, "After probe");
         compare(head.text, "After probe");
+    }
+
+    // ── 0.8.4 idiot test + functional audit (Knowledge) ──
+    function typeStr(t) {
+        for (let i = 0; i < t.length; i++) {
+            if (t[i] === " ") keyClick(Qt.Key_Space);
+            else keyClick(t[i]);
+        }
+    }
+    function liveNotes(id, w) {
+        AppController.activeNoteId = id;
+        const nv = makeNotes(w || 900);
+        nv.viewMode = "live";
+        return nv;
+    }
+    function focusedField() {
+        const w = tc.Window.window;
+        const f = w ? w.activeFocusItem : null;
+        return f && f.objectName === "md-block-field" ? f : null;
+    }
+
+    // IDIOT-KNOW-1: words typed in a page block reach the page when another
+    // page opens within the 400 ms the block waits.
+    function test_page_text_survives_a_quick_switch() {
+        const p1 = AppController.newDocPage("Quick one"); tc.pages.push(p1);
+        const p2 = AppController.newDocPage("Quick two"); tc.pages.push(p2);
+        const nv = makeNotes(1200);
+        nv.openPage(p1);
+        const live = findChild(findChild(nv, "knowledge-page"), "docpage-live");
+        live.editLine(0, false);
+        typeStr(" FAST");
+        nv.openPage(p2);
+        verify(AppController.docPageBody(p1).indexOf("Quick one FAST") >= 0, AppController.docPageBody(p1));
+        // A profile switch announces itself the same way.
+        live.editLine(0, false);
+        typeStr(" PROF");
+        AppController.aboutToChangeActiveNote();
+        verify(AppController.docPageBody(p2).indexOf("Quick two PROF") >= 0, AppController.docPageBody(p2));
+    }
+
+    // IDIOT-KNOW-2: the keyboard goes with the page; nothing typed reaches the
+    // hidden note.
+    function test_typing_after_opening_a_page_goes_to_the_page() {
+        const n = note("Ghost probe", "# Ghost probe\n\n");
+        const p = AppController.newDocPage("Ghost page"); tc.pages.push(p);
+        const nv = liveNotes(n, 1200);
+        nv.openPage(p);
+        tryVerify(function () { return focusedField() !== null; });
+        typeStr("x");
+        nv._flushPending();
+        compare(AppController.noteBody(n), "# Ghost probe\n\n");
+        verify(AppController.docPageBody(p).indexOf("x") >= 0, AppController.docPageBody(p));
+        // Return routed to the view opens the page, not the hidden note.
+        keyClick(Qt.Key_Escape);
+        nv.openCursor();
+        tryVerify(function () { return focusedField() !== null; });
+        compare(findChild(nv, "notes-live").editing, false);
+    }
+
+    // IDIOT-KNOW-4: no notes keys behind a panel; F2 on a page renames the page.
+    function test_notes_keys_stand_down_and_f2_renames_the_page() {
+        const n = note("Keys probe", "# Keys probe\n\n");
+        const p = AppController.newDocPage("Keys page"); tc.pages.push(p);
+        const nv = liveNotes(n, 1200);
+        nv.keysLive = false;
+        keyClick(Qt.Key_F2);
+        verify(!findChild(nv, "note-rename").opened, "F2 behind a panel");
+        nv.keysLive = true;
+        nv.openPage(p);
+        keyClick(Qt.Key_F2);
+        const pr = findChild(nv, "knowledge-page-rename");
+        tryVerify(function () { return pr.opened; });
+        verify(!findChild(nv, "note-rename").opened);
+        pr.close();
+    }
+
+    // IDIOT-KNOW-5/6: arriving puts the caret in the text; a letter typed on
+    // the drawn note (after Esc) lands in it.
+    function test_take_focus_and_typing_land_in_the_note() {
+        const n = note("Caret probe", "# Caret probe\n\nfirst para");
+        const nv = liveNotes(n);
+        nv.takeFocus();
+        const f = focusedField();
+        verify(f !== null, "the caret is in a block");
+        compare(f.text, "first para", "at the end of the text, not in the title");
+        keyClick(Qt.Key_Escape);
+        verify(focusedField() === null);
+        typeStr("Z");
+        verify(focusedField() !== null);
+        nv._flushPending();
+        compare(AppController.noteBody(n), "# Caret probe\n\nfirst paraZ");
+    }
+
+    // IDIOT-KNOW-9 / PERSONA-20: a new note opens on its selected title; "/"
+    // there is the insert menu on the line below.
+    function test_new_note_opens_on_its_title() {
+        const nv = liveNotes(note("Before new", "# Before new\n\n"));
+        nv.newNoteAndEdit();
+        const id = AppController.activeNoteId;
+        tc.seeded.push(id);
+        tryVerify(function () { return focusedField() !== null; });
+        compare(focusedField().selectedText, nv._activeTitle);
+        typeStr("Standup");
+        nv._flushPending();
+        verify(AppController.noteBody(id).indexOf("# Standup") === 0, AppController.noteBody(id));
+        nv.newNoteAndEdit();
+        tc.seeded.push(AppController.activeNoteId);
+        tryVerify(function () { return focusedField() !== null && focusedField().selectedText.length > 0; });
+        keyClick(Qt.Key_Slash);
+        const menu = findChild(findChild(nv, "notes-live"), "md-slash-menu");
+        tryVerify(function () { return menu.opened; });
+        keyClick(Qt.Key_Escape);
+        tryVerify(function () { return !menu.opened; });
+        wait(50);
+        nv._flushPending();
+        compare(AppController.noteBody(AppController.activeNoteId), "# " + nv._activeTitle + "\n\n",
+                "the title kept; Esc took the '/' back too (IDIOT-KNOW-16)");
+    }
+
+    // IDIOT-KNOW-10: Ctrl+Z in a block past its own history is the app's: a
+    // deleted note comes back.
+    function test_ctrl_z_in_a_block_restores_a_deleted_note() {
+        const keep = note("Keeper", "# Keeper\n\nbody");
+        const gone = note("Goner", "# Goner\n\n");
+        const nv = liveNotes(gone);
+        AppController.deleteNote(gone);
+        nv.takeFocus();
+        verify(focusedField() !== null);
+        keyClick(Qt.Key_Z, Qt.ControlModifier);
+        verify(AppController.notes.indexOfId(gone) >= 0, "the note is back");
+        verify(keep.length > 0);
+    }
+
+    // KNOW-1: Ctrl+Z past the block never saves it blank.
+    function test_undo_never_blanks_the_block() {
+        const n = note("Undo probe", "# Undo probe\n\npara");
+        const nv = liveNotes(n);
+        const live = findChild(nv, "notes-live");
+        live.editLine(2, false);
+        typeStr(" abc");
+        wait(600);
+        keyClick(Qt.Key_Escape);
+        live.editLine(2, false);
+        for (let i = 0; i < 4; i++) keyClick(Qt.Key_Z, Qt.ControlModifier);
+        nv._flushPending();
+        compare(AppController.noteBody(n), "# Undo probe\n\npara");
+    }
+
+    // KNOW-2: Ctrl+Z after a tick undoes the tick, not something unseen.
+    function test_ctrl_z_on_the_drawn_note_undoes_a_tick() {
+        const n = note("Tick probe", "- [ ] alpha");
+        const nv = liveNotes(n);
+        const live = findChild(nv, "notes-live");
+        verify(live.document.toggleTask(live.source.textDocument, 0));
+        live.forceActiveFocus();
+        nv._flushPending();
+        compare(AppController.noteBody(n), "- [x] alpha");
+        keyClick(Qt.Key_Z, Qt.ControlModifier);
+        nv._flushPending();
+        compare(AppController.noteBody(n), "- [ ] alpha");
+    }
+
+    // KNOW-3: a heading link opens that block; nothing goes to the hidden
+    // source field.
+    function test_heading_jump_opens_the_block() {
+        const n = note("Jump probe", "# Jump probe\n\nsee\n\n## Bottom\n\nend");
+        const nv = liveNotes(n);
+        nv._followLink("note", "Jump probe#Bottom");
+        const f = focusedField();
+        verify(f !== null, "the block of the heading is open");
+        compare(f.text, "## Bottom");
+        verify(!findChild(nv, "notesEditor").activeFocus);
+    }
+
+    // KNOW-5: a one-letter edit keeps CRLF and no-break spaces elsewhere.
+    function test_a_page_edit_keeps_line_endings() {
+        const p = AppController.newDocPage("Raw page"); tc.pages.push(p);
+        AppController.setDocPageBody(p, "# Raw page\r\n\r\nkeep this\r\n\r\nline two");
+        const nv = makeNotes(1200);
+        nv.openPage(p);
+        const live = findChild(findChild(nv, "knowledge-page"), "docpage-live");
+        live.editLine(4, false);
+        typeStr("Q");
+        nv._flushPending();
+        compare(AppController.docPageBody(p), "# Raw page\r\n\r\nkeep this\r\n\r\nline twoQ");
+    }
+
+    // KNOW-6: the table is a block of its own, the caret in its first cell.
+    function test_slash_table_is_its_own_block() {
+        const n = note("Table probe", "# Table probe\n\npara");
+        const nv = liveNotes(n);
+        const live = findChild(nv, "notes-live");
+        live.editLine(2, false);
+        keyClick(Qt.Key_Return);
+        keyClick(Qt.Key_Slash);
+        const menu = findChild(live, "md-slash-menu");
+        tryVerify(function () { return menu.opened; });
+        findChild(live, "md-slash-table").triggered();
+        typeStr("cell");
+        nv._flushPending();
+        compare(AppController.noteBody(n), "# Table probe\n\npara\n\n| cell |  |\n|---|---|\n|  |  |");
+    }
+
+    // KNOW-8 / PERSONA-21: [[ in a block offers notes; Enter takes the hit.
+    // Enter on a typed task title links the task's id.
+    function test_wiki_autocomplete_in_a_block() {
+        note("Autocomplete target", "# Autocomplete target\n\n");
+        const n = note("Autocomplete probe", "# Autocomplete probe\n\npara");
+        const nv = liveNotes(n);
+        findChild(nv, "notes-live").editLine(2, false);
+        typeStr(" [[Autocomplete ta");
+        tryVerify(function () { return nv.acMatches.length > 0; });
+        keyClick(Qt.Key_Return);
+        nv._flushPending();
+        compare(AppController.noteBody(n), "# Autocomplete probe\n\npara [[Autocomplete target]] ");
+    }
+
+    // IDIOT-KNOW-3/13: the rename dialog says why and stays open.
+    function test_rename_dialog_refuses_taken_and_empty_names() {
+        note("Taken name", "# Taken name\n\n");
+        const n = note("Renamed one", "# Renamed one\n\n");
+        const nv = liveNotes(n);
+        findChild(nv, "notes-list-pane").renameActive();
+        const dlg = findChild(nv, "note-rename");
+        tryVerify(function () { return dlg.opened; });
+        const field = findChild(nv, "note-rename-title");
+        field.text = "taken NAME";
+        dlg.commit();
+        verify(dlg.opened, "a taken name keeps the dialog open");
+        verify(findChild(nv, "note-rename-error").visible);
+        field.text = "  ";
+        dlg.commit();
+        verify(dlg.opened, "an empty name keeps it open");
+        field.text = "Fresh name";
+        dlg.commit();
+        verify(!dlg.opened);
+    }
+
+    // IDIOT-KNOW-7/8: Esc clears the filter then leaves it; Return opens the
+    // first hit; Return on the list opens the note to write in.
+    function test_filter_and_list_keys() {
+        const a = note("Filter alpha", "# Filter alpha\n\n");
+        note("Filter beta", "# Filter beta\n\n");
+        const nv = liveNotes(a);
+        nv.focusSearch();
+        typeStr("Filter beta");
+        keyClick(Qt.Key_Return);
+        tryVerify(function () { return focusedField() !== null; });
+        compare(nv._activeTitle, "Filter beta");
+        nv.focusSearch();
+        keyClick(Qt.Key_Escape);
+        compare(findChild(nv, "note-filter").text, "");
+        keyClick(Qt.Key_Escape);
+        tryVerify(function () { return focusedField() !== null; });
+        findChild(nv, "notes-list-pane").focusList();
+        keyClick(Qt.Key_Return);
+        tryVerify(function () { return focusedField() !== null; });
+    }
+
+    // PERSONA-25: the "+" names its key in the tooltip.
+    function test_plus_tooltip_names_ctrl_alt_n() {
+        const nv = makeNotes();
+        const plus = findChild(nv, "notes-new");
+        verify(plus._tipText.indexOf(AppController.shortcutText("notes.new")) > 0, plus._tipText);
     }
 }
