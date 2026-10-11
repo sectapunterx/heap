@@ -26,7 +26,14 @@ QVariantList AppController::taskListRows(const QString& query,
   v.priorities = priorities;
   v.archived = showArchived;
   const QDate today = m_today.isValid() ? m_today : QDate::currentDate();
-  const heap::savedviews::CompiledView c = heap::savedviews::compile(v, today, m_statuses);
+  heap::savedviews::CompiledView c = heap::savedviews::compile(v, today, m_statuses);
+  // `is:blocked` is a fact about other rows, as on the board: without the set
+  // the list showed nothing the board did (IDIOT-TASKS-13).
+  if(c.query.usesBlocked()) {
+    c.query.setBlockedIds(heap::query::openlyBlockedIds(m_tasks.items(), [&c](const Task& t) {
+      return c.query.isDone(t);
+    }));
+  }
 
   QStringList order;
   for(const QVariant& s : m_statuses) {

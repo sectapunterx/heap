@@ -86,7 +86,9 @@ Item {
             radius: root.quiet ? 0 : Theme.radiusXl
             color: root.quiet ? "transparent" : Theme.bg2
             border.width: root.quiet ? 0 : 1
-            border.color: input.activeFocus ? Theme.focusRing : Theme.text
+            // Only real focus looks active: the brightest edge at rest read
+            // as a caret that was not there (PERSONA-2).
+            border.color: input.activeFocus ? Theme.focusRing : Theme.borderStrong
             Rectangle {
                 visible: root.quiet
                 anchors.bottom: parent.bottom

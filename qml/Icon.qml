@@ -70,6 +70,8 @@ Item {
         "doc":           { s: "M3 2.5h7l3 3v8H3zM10 2.5v3h3M5.5 8.5h5M5.5 11h5" },
         "person":        { s: _c(8, 5.5, 2.5) + "M3 13.5c.8-2.4 2.7-3.5 5-3.5s4.2 1.1 5 3.5" },
         "archive":       { s: "M2.5 3h11v3.5h-11zM3.5 6.5v6.5h9V6.5M6.5 9.5h3" },
+        // Delete a column (IDIOT-TASKS-21): a cross read as close.
+        "trash":         { s: "M2.5 4.5h11M6.5 4.5V2.5h3v2M4 4.5l.7 9h6.6l.7-9M7 7v4M9 7v4" },
         "bolt":          { s: "M9 1.5 3.5 9H8l-1 5.5L12.5 7H8z" },
         "undo":          { s: "M5.5 3.5 2.5 6.5l3 3M2.5 6.5h7a3.5 3.5 0 0 1 0 7H7" },
         "sidebar":       { s: "M3.5 2.5h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zM6.5 2.5v11" },

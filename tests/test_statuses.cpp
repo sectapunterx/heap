@@ -405,3 +405,137 @@ TEST_F(StatusTest, DoneCountsTheUntickedItemsWithoutAsking) {
   EXPECT_EQ(r.value("count").toInt(), 1);
   EXPECT_EQ(r.value("unchecked").toInt(), 2);
 }
+
+// ── A column of the Done kind finishes a task as "Done" does ──
+
+namespace {
+QString addShipped(AppController& app) {
+  app.addStatus(QStringLiteral("Shipped"), QStringLiteral("#00aa00"));
+  app.setStatusCategory(QStringLiteral("shipped"), QStringLiteral("done"));
+  return QStringLiteral("shipped");
+}
+}  // namespace
+
+TEST_F(StatusTest, ARecurringTaskFinishedInAUserDoneColumnSpawnsTheNextCopy) {
+  // IDIOT-CAL-4: only the column with the id "done" used to spawn it.
+  const QString shipped = addShipped(*app_);
+  ASSERT_EQ(app_->statusCategory(shipped), QStringLiteral("done"));
+  Task t = makeTask(QStringLiteral("R-1"), QStringLiteral("todo"));
+  t.recurrence = QStringLiteral("every:week");
+  t.dueAt = QDateTime(QDate::currentDate().addDays(3), QTime(10, 0));
+  app_->tasks()->upsert(t);
+  app_->moveTask(QStringLiteral("R-1"), shipped);
+  const QVariantMap copy = app_->taskById(QStringLiteral("R-1-r1"));
+  ASSERT_FALSE(copy.isEmpty());
+  EXPECT_EQ(app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("R-1-r1"))).dueAt.date(), QDate::currentDate().addDays(10));
+  // Shipped → Done is the same completion: no second copy.
+  app_->moveTask(QStringLiteral("R-1"), QStringLiteral("done"));
+  EXPECT_LT(app_->tasks()->indexOfId(QStringLiteral("R-1-r2")), 0);
+}
+
+TEST_F(StatusTest, FinishingATaskStopsItsTimer) {
+  // IDIOT-CAL-6.
+  app_->tasks()->upsert(makeTask(QStringLiteral("T-1"), QStringLiteral("prog")));
+  app_->startTaskTimer(QStringLiteral("T-1"));
+  ASSERT_TRUE(app_->tasks()->items().at(0).timerStartedAt.isValid());
+  app_->moveTask(QStringLiteral("T-1"), addShipped(*app_));
+  EXPECT_FALSE(app_->tasks()->items().at(0).timerStartedAt.isValid());
+}
+
+TEST_F(StatusTest, EndOfDayCountsAUserDoneColumnAsClosed) {
+  // IDIOT-CAL-13: a Shipped card dated today was offered as carry-over.
+  const QString shipped = addShipped(*app_);
+  Task t = makeTask(QStringLiteral("E-1"), QStringLiteral("todo"));
+  t.scheduledAt = QDateTime(QDate::currentDate(), QTime(9, 0));
+  app_->tasks()->upsert(t);
+  app_->moveTask(QStringLiteral("E-1"), shipped);
+  const QVariantMap s = app_->endOfDaySummaryAt(QDateTime::currentDateTime());
+  const QVariantList closed = s.value(QStringLiteral("closed")).toList();
+  const QVariantList carry = s.value(QStringLiteral("carryOver")).toList();
+  ASSERT_EQ(closed.size(), 1);
+  EXPECT_EQ(closed.first().toMap().value(QStringLiteral("id")).toString(), QStringLiteral("E-1"));
+  EXPECT_TRUE(carry.isEmpty());
+}
+
+TEST_F(StatusTest, TheListLensSeesBlockedAndDoneByTheColumnsKind) {
+  // IDIOT-TASKS-13 / IDIOT-TASKS-10.
+  const QString shipped = addShipped(*app_);
+  app_->tasks()->upsert(makeTask(QStringLiteral("B-1"), QStringLiteral("todo")));
+  app_->tasks()->upsert(makeTask(QStringLiteral("B-2"), QStringLiteral("todo")));
+  app_->tasks()->upsert(makeTask(QStringLiteral("B-3"), shipped));
+  ASSERT_TRUE(app_->addBlockLink(QStringLiteral("B-1"), QStringLiteral("B-2"), true));
+  const auto ids = [this](const QString& query) {
+    QStringList out;
+    for(const QVariant& r : app_->taskListRows(query, {}, false, QString())) {
+      const QString id = r.toMap().value(QStringLiteral("id")).toString();
+      if(!id.isEmpty() && r.toMap().value(QStringLiteral("kind")).toString() != QStringLiteral("group")) {
+        out << id;
+      }
+    }
+    return out;
+  };
+  EXPECT_TRUE(ids(QStringLiteral("is:blocked")).contains(QStringLiteral("B-2")));
+  EXPECT_FALSE(ids(QStringLiteral("is:open")).contains(QStringLiteral("B-3")));
+  EXPECT_TRUE(ids(QStringLiteral("is:done")).contains(QStringLiteral("B-3")));
+}
+
+// ── Renaming the id prefix (IDIOT-TASKS-1, TASKS-2) ──
+
+TEST_F(StatusTest, ThePrefixRenameRefusesAnIdAnotherTaskHolds) {
+  app_->tasks()->upsert(makeTask(QStringLiteral("APP-1"), QStringLiteral("todo")));
+  app_->tasks()->upsert(makeTask(QStringLiteral("APP-2"), QStringLiteral("todo")));
+  app_->tasks()->upsert(makeTask(QStringLiteral("WEB-2"), QStringLiteral("todo")));
+  EXPECT_EQ(app_->renameTaskIdPrefix(QStringLiteral("APP"), QStringLiteral("WEB")), 0);
+  EXPECT_GE(app_->tasks()->indexOfId(QStringLiteral("APP-2")), 0);
+  int web2 = 0;
+  for(const Task& t : app_->tasks()->items()) {
+    web2 += t.id == QStringLiteral("WEB-2") ? 1 : 0;
+  }
+  EXPECT_EQ(web2, 1) << "never two rows with one id";
+}
+
+TEST_F(StatusTest, ThePrefixRenameCarriesTheLinksAndIsOneUndo) {
+  Task a = makeTask(QStringLiteral("APP-1"), QStringLiteral("todo"));
+  a.links.append({QStringLiteral("blocks"), QStringLiteral("APP-2")});
+  LocalCheckItem item;
+  item.id = QStringLiteral("c1");
+  item.text = QStringLiteral("part");
+  item.cardId = QStringLiteral("APP-3");
+  a.local.checklist.append(item);
+  app_->tasks()->upsert(a);
+  app_->tasks()->upsert(makeTask(QStringLiteral("APP-2"), QStringLiteral("todo")));
+  app_->tasks()->upsert(makeTask(QStringLiteral("APP-3"), QStringLiteral("todo")));
+  Task ext = makeTask(QStringLiteral("APP-9"), QStringLiteral("todo"));
+  ext.externalProvider = QStringLiteral("jira");
+  app_->tasks()->upsert(ext);
+
+  EXPECT_EQ(app_->renameTaskIdPrefix(QStringLiteral("APP"), QStringLiteral("WEB")), 3);
+  const int row = app_->tasks()->indexOfId(QStringLiteral("WEB-1"));
+  ASSERT_GE(row, 0);
+  const Task& w = app_->tasks()->items().at(row);
+  ASSERT_EQ(w.links.size(), 1);
+  EXPECT_EQ(w.links.first().targetId, QStringLiteral("WEB-2"));
+  EXPECT_EQ(w.local.checklist.first().cardId, QStringLiteral("WEB-3"));
+  EXPECT_GE(app_->tasks()->indexOfId(QStringLiteral("APP-9")), 0) << "a tracker ticket keeps its key";
+
+  app_->undo();
+  EXPECT_GE(app_->tasks()->indexOfId(QStringLiteral("APP-1")), 0);
+  EXPECT_GE(app_->tasks()->indexOfId(QStringLiteral("APP-3")), 0);
+  EXPECT_LT(app_->tasks()->indexOfId(QStringLiteral("WEB-1")), 0);
+}
+
+TEST_F(StatusTest, AMonthlyTaskOnThe31stKeepsTheMonthEnd) {
+  // IDIOT-CAL-5: Jan 31 → Feb 28 → Mar 28 for good.
+  Task t = makeTask(QStringLiteral("M-1"), QStringLiteral("todo"));
+  t.recurrence = QStringLiteral("every:month");
+  t.dueAt = QDateTime(QDate(2030, 1, 31), QTime(9, 0));
+  app_->tasks()->upsert(t);
+  app_->moveTask(QStringLiteral("M-1"), QStringLiteral("done"));
+  const auto due = [this](const QString& id) {
+    const int row = app_->tasks()->indexOfId(id);
+    return row >= 0 ? app_->tasks()->items().at(row).dueAt.date() : QDate();
+  };
+  EXPECT_EQ(due(QStringLiteral("M-1-r1")), QDate(2030, 2, 28));
+  app_->moveTask(QStringLiteral("M-1-r1"), QStringLiteral("done"));
+  EXPECT_EQ(due(QStringLiteral("M-1-r2")), QDate(2030, 3, 31));
+}

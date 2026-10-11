@@ -41,7 +41,7 @@ Popup {
         root.open();
         return true;
     }
-    onOpened: okBtn.forceActiveFocus()
+    onOpened: okBtn.forceActiveFocus(Qt.TabFocusReason)
 
     contentItem: ColumnLayout {
         spacing: 0
@@ -135,7 +135,6 @@ Popup {
                 objectName: "whats-new-ok"
                 text: I18n.t("whatsnew.ok")
                 primary: true
-                solid: Style.fills
                 Keys.onReturnPressed: root.close()
                 Keys.onEnterPressed: root.close()
                 onClicked: root.close()

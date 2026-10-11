@@ -60,7 +60,15 @@ class TaskQuery {
   // without it only ids match.
   // `newIds` is what `is:new` matches: the cards the latest sync brought in
   // (APP-180). The caller owns that set; a CLI run has none.
-  static TaskQuery compile(const QString& text, const QDate& today, const QVariantList& statuses = {}, const QStringList& newIds = {});
+  // `strictStatus` is for a saved view's stored query: a `status:` naming a
+  // column that no longer exists matches nothing instead of being dropped, so
+  // a view on a deleted column is empty rather than every task
+  // (IDIOT-TASKS-11). It is reported in unknownClauses() either way.
+  static TaskQuery compile(const QString& text,
+                           const QDate& today,
+                           const QVariantList& statuses = {},
+                           const QStringList& newIds = {},
+                           bool strictStatus = false);
 
   // True when at least one clause (or a negated word) was recognised. False
   // means the text was ordinary search terms and `freeText()` is all of it.
@@ -99,6 +107,20 @@ class TaskQuery {
     m_blocked = std::move(ids);
   }
 
+  // `is:archived` asks for the archived cards the callers otherwise drop
+  // before the query sees them; the board lets them through (IDIOT-TASKS-9).
+  bool asksArchived() const {
+    return m_asksArchived;
+  }
+
+  // Is the task in a column of the Done kind, as `statuses` told compile()?
+  bool isDone(const Task& t) const {
+    return m_doneIds.contains(t.status);
+  }
+
+  // Every column id a `status:` clause named, negated ones included.
+  QSet<QString> statusIds() const;
+
  private:
   struct Clause {
     QString field;
@@ -122,8 +144,11 @@ class TaskQuery {
   QDate m_today;
   QSet<QString> m_newIds;
   QSet<QString> m_blocked;
+  // The board's columns of the Done kind (IDIOT-TASKS-10).
+  QSet<QString> m_doneIds{QStringLiteral("done")};
   bool m_isQuery = false;
   bool m_usesBlocked = false;
+  bool m_asksArchived = false;
 };
 
 // The fields a clause may name, for the UI to hint with. Sorted.

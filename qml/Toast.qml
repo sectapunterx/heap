@@ -96,6 +96,14 @@ Item {
 
     function _push(entry) {
         const now = Date.now();
+        // An Undo toast names what Ctrl+Z takes back — the newest action. One
+        // waiting behind an older Undo named the older action while Ctrl+Z
+        // undid the newest (PERSONA-7): the newest replaces it.
+        if (entry.undo) {
+            _queue = _queue.filter(function (q) { return !q.undo; });
+            const kept = _items.filter(function (it) { return !it.undo; });
+            if (kept.length !== _items.length) _items = kept;
+        }
         // The same plain notice twice in a row (a sync that keeps saying it is
         // running) refreshes the one on screen instead of stacking a copy.
         for (let i = 0; i < _items.length; i++) {
@@ -134,6 +142,29 @@ Item {
         _push({ id: ++_seq, message: String(s), kind: k || "info", actionLabel: label || "",
                 actionFn: fn, action2Label: "", action2Fn: null, key: key || "",
                 ms: _duration(k || "info", seconds, !!label) });
+    }
+    // An Undo for the action just done (Main.onUndoableToast): replaces an
+    // older Undo on screen, and loses its action when the history goes.
+    function showUndo(s, label, seconds, fn, k, key) {
+        _push({ id: ++_seq, message: String(s), kind: k || "info", actionLabel: label || "",
+                actionFn: fn, action2Label: "", action2Fn: null, key: key || "", undo: true,
+                ms: _duration(k || "info", seconds, !!label) });
+    }
+    // The undo history is gone (a profile switch, the action undone with
+    // Ctrl+Z): an Undo toast that stays up offered a button that did nothing
+    // (IDIOT-SHELL-4). It keeps its words and drops the action.
+    function dropUndo() {
+        let changed = false;
+        const strip = function (e) {
+            if (!e.undo || !e.actionLabel) return;
+            e.actionLabel = "";
+            e.actionFn = null;
+            e.key = "";
+            changed = true;
+        };
+        _items.forEach(strip);
+        _queue.forEach(strip);
+        if (changed) _items = _items.slice();
     }
     // Up to three actions side by side ([{label, fn}, …]): "Open in
     // tracker" / "Archive" for a refused move (APP-204); open / in 15 min /

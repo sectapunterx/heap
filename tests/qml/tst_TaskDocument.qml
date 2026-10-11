@@ -41,6 +41,10 @@ TestCase {
         doc.open(id);
         verify(doc.opened);
         const title = findChild(doc, "task-doc-title");
+        // A task with a title opens on the document, where its keys work
+        // (d, /, i); i or a click puts the caret in the title.
+        tryVerify(() => doc.activeFocus && !title.activeFocus, 1000, "the document did not get the keyboard");
+        doc.focusTitle();
         tryVerify(() => title.activeFocus, 1000, "the title did not get the keyboard");
         typeText(" two");
         tryVerify(() => AppController.taskById(id).title === "doc probe two", 3000, "the title was not saved");
@@ -129,5 +133,43 @@ TestCase {
         tryVerify(() => menu.opened, 1000, "/ did not open the insert menu");
         menu.itemAt(0).triggered();
         compare(field.text, "- [ ] ");
+    }
+
+    // IDIOT-DOC-15: an emptied title is not "Saved", the stored one stays and
+    // comes back when the field is left.
+    function test_an_empty_title_is_not_saved() {
+        const id = mkTask("keep me");
+        const doc = make();
+        doc.open(id);
+        const title = findChild(doc, "task-doc-title");
+        doc.focusTitle();
+        tryVerify(() => title.activeFocus);
+        title.text = "  ";
+        wait(800);
+        compare(AppController.taskById(id).title, "keep me");
+        const saved = findChild(doc, "task-doc-saved");
+        compare(saved.text, I18n.t("taskdoc.needsTitle"));
+        findChild(doc, "task-doc-body").focusEditor();
+        tryVerify(() => !title.activeFocus);
+        tryCompare(title, "text", "keep me");
+        doc.close();
+    }
+
+    // IDIOT-DOC-17: undo in the document never takes back the step that made
+    // the open task.
+    function test_undo_in_the_document_keeps_the_task() {
+        AppController.clearPendingUndo();
+        const d = AppController.newTaskDraft("todo");
+        d._isNew = true;
+        d.title = "undo probe";
+        AppController.saveTask(d);
+        tc.made.push(d.id);
+        verify(AppController.undoWouldRemoveTask(d.id));
+        const doc = make();
+        doc.open(d.id);
+        doc.undo();
+        compare(AppController.taskById(d.id).id, d.id, "undo in the document deleted the open task");
+        verify(doc.opened);
+        doc.close();
     }
 }

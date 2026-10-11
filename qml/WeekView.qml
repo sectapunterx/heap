@@ -481,7 +481,8 @@ Item {
     function yToHour(y)   { return root.hoursStart + y / root.hourH; }
     function clampHour(h) { return Math.max(root.hoursStart, Math.min(root.hoursEnd, h)); }
     function passesFilter(t) {
-        if (t.status === "done") return false;
+        // Any column of the Done kind, not only "done" (IDIOT-CAL-4).
+        if (AppController.statusCategory(t.status) === "done") return false;
         // Clauses filter structurally, leftover words stay a substring test.
         if (!Search.accepts(AppController, root.searchText, root.taskRev + ":" + AppController.today, t)) return false;
         let any = false;
@@ -778,12 +779,18 @@ Item {
     // for, like the editor does; anything else applies at once.
     SeriesScopeDialog { id: scopeAsk }
     readonly property alias scopePrompt: scopeAsk
-    function _commitMove(occ, deltaHours, cancel) {
+    // `done` runs once the move is made, after the scope answer for a series.
+    function _commitMove(occ, deltaHours, cancel, done) {
         if (!occ || Math.abs(deltaHours) < 1e-9) { if (cancel) cancel(); return; }
-        if (String(occ.masterId || "").length > 0)
-            scopeAsk.ask("move", (scope) => AppController.moveOccurrence(occ, deltaHours, scope), cancel);
-        else
+        if (String(occ.masterId || "").length > 0) {
+            scopeAsk.ask("move", (scope) => {
+                AppController.moveOccurrence(occ, deltaHours, scope);
+                if (done) done();
+            }, cancel);
+        } else {
             AppController.moveOccurrence(occ, deltaHours, "this");
+            if (done) done();
+        }
     }
     function _commitResize(occ, start, end, cancel) {
         if (!occ) { if (cancel) cancel(); return; }
@@ -1062,9 +1069,31 @@ Item {
     function _moveCursorEvent(deltaHours) {
         const it = root._cursorItem();
         if (!it || it.kind !== "event" || Math.abs(deltaHours) < 1e-9) return false;
-        root._commitMove(it.ev.occ, deltaHours, null);
-        if (Math.abs(deltaHours) >= 24) root._follow(Math.round(deltaHours / 24));
+        // The cursor follows once the scope is answered, not before
+        // (IDIOT-CAL-14): Esc left it a day off, on the series' next
+        // occurrence, and the next Return opened another meeting.
+        const occ = it.ev.occ;
+        const days = Math.abs(deltaHours) >= 24 ? Math.round(deltaHours / 24) : 0;
+        root._commitMove(occ, deltaHours, null, () => {
+            if (days !== 0) root._follow(days);
+            Qt.callLater(root._findMoved, occ);
+        });
         return true;
+    }
+    // After a move the occurrence may have a new id (an override): the cursor
+    // goes on it in its day by its series and name.
+    function _findMoved(occ) {
+        const items = root._dayItems(root.cursorDay);
+        const series = String(occ.masterId || occ.id);
+        for (let i = 0; i < items.length; i++) {
+            const e = items[i].ev;
+            if (!e || !e.occ) continue;
+            if ((String(e.occ.masterId || e.occ.id) === series || e.occ.id === occ.id) && e.occ.title === occ.title) {
+                root.cursorKey = items[i].key;
+                root._cursorIdx = i;
+                return;
+            }
+        }
     }
     // Ctrl Shift J / K (APP-278): the block under the cursor a grid step
     // longer or shorter — what stretching its lower edge does.
@@ -1343,9 +1372,16 @@ Item {
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: AppController.selectedDate = headCol.modelData.date
-                                ToolTip.visible: (headMA.containsMouse || headMA.cursorHere) && headMA.loadText.length > 0
-                                ToolTip.delay: 400
-                                ToolTip.text: headMA.loadText
+                                // Below the day header, inside the grid: above
+                                // it, it covered the День/Неделя/Месяц switch
+                                // (EYES-7).
+                                ToolTip {
+                                    objectName: "week-load-tip"
+                                    visible: (headMA.containsMouse || headMA.cursorHere) && headMA.loadText.length > 0
+                                    delay: 400
+                                    text: headMA.loadText
+                                    y: headMA.height + Theme.spXs
+                                }
                             }
                             Row {
                                 id: headLine
@@ -1874,9 +1910,14 @@ Item {
                                     pressY = mouse.y; currentY = mouse.y; dragging = false;
                                 }
                                 onPositionChanged: (mouse) => {
+                                    if (pressY < 0) return;
                                     currentY = mouse.y;
-                                    if (!dragging && !root.armedTaskId && Math.abs(currentY - pressY) >= 5) dragging = true;
+                                    if (!dragging && !root.armedTaskId && Math.abs(currentY - pressY) >= 5) {
+                                        dragging = true;
+                                        root._activeDrag = createArea;
+                                    }
                                 }
+                                function cancel() { pressY = -1; currentY = -1; dragging = false; }
                                 onReleased: {
                                     if (pressY < 0) return;
                                     const h = root.clampHour(root.snapHour(root.yToHour(pressY)));
@@ -1892,8 +1933,9 @@ Item {
                                         root.createRequested(h, dayCol.modelData.date);
                                     }
                                     pressY = -1; currentY = -1; dragging = false;
+                                    if (root._activeDrag === createArea) root._activeDrag = null;
                                 }
-                                onCanceled: { pressY = -1; currentY = -1; dragging = false; }
+                                onCanceled: { pressY = -1; currentY = -1; dragging = false; if (root._activeDrag === createArea) root._activeDrag = null; }
                             }
                             Rectangle {
                                 objectName: "week-create-ghost"
@@ -1979,6 +2021,10 @@ Item {
                             // calendar glyph; the type is not a colour.
                             radius: root.blockRadius
                             color: Theme.meetingFill
+                            // Quiet fills a meeting with the card colour: on the
+                            // light ground it needs the edge to show its length (EYES-4).
+                            border.width: Style.chipFill ? 0 : 1
+                            border.color: Theme.cardBorder
                             // A later lane is drawn over an earlier one where
                             // they cascade; a dragged event above them all.
                             z: (weEv.dragDx !== 0 || weEv.dragDy !== 0) ? 7 : 5 + weEv._col / Math.max(1, weEv._cols)
@@ -2119,6 +2165,8 @@ Item {
                                 property real baseX: 0
                                 property real baseY: 0
                                 property bool didDrag: false
+                                property bool cancelled: false
+                                function cancel() { cancelled = true; didDrag = false; weEv.dragDx = 0; weEv.dragDy = 0; }
                                 // A click that did not drag, and Return on the
                                 // ClickArea below.
                                 function open() { root.eventClicked(weEv.modelData.id, weEv.modelData.occ); }
@@ -2127,6 +2175,7 @@ Item {
                                     grabX = mouse.x; grabY = mouse.y;
                                     baseX = weEv.x; baseY = weEv.y;
                                     didDrag = false;
+                                    cancelled = false;
                                     weEv.dragDx = 0; weEv.dragDy = 0;
                                 }
                                 onPositionChanged: (mouse) => {
@@ -2139,13 +2188,19 @@ Item {
                                     const wantY = pt.y - grabY - weMove.anchors.topMargin;
                                     const dx = wantX - baseX;
                                     const dy = wantY - baseY;
-                                    if (!didDrag && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) didDrag = true;
+                                    if (cancelled) return;
+                                    if (!didDrag && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
+                                        didDrag = true;
+                                        root._activeDrag = weMove;
+                                    }
                                     if (didDrag) {
                                         weEv.dragDx = dx;
                                         weEv.dragDy = dy;
                                     }
                                 }
                                 onReleased: {
+                                    if (root._activeDrag === weMove) root._activeDrag = null;
+                                    if (cancelled) { cancelled = false; return; }
                                     if (didDrag) {
                                         // A shift of the whole event by what
                                         // this piece moved: hours, plus whole
@@ -2166,7 +2221,7 @@ Item {
                                     weEv.dragDx = 0; weEv.dragDy = 0;
                                     didDrag = false;
                                 }
-                                onCanceled: { weEv.dragDx = 0; weEv.dragDy = 0; didDrag = false; }
+                                onCanceled: { weEv.dragDx = 0; weEv.dragDy = 0; didDrag = false; if (root._activeDrag === weMove) root._activeDrag = null; }
                             }
 
                             // Top resize handle.
@@ -2551,6 +2606,22 @@ Item {
                         : I18n.t("calendar.empty.hint").arg(AppController.shortcutText("task.schedule"))
         lineLink: searching
         onLineActivated: root.resetFilterRequested()
+    }
+
+    // A sweep to create or a meeting being moved: Esc puts everything back,
+    // as on the board, and Main calls cancelDrag() when a popup takes the
+    // keyboard mid-drag (IDIOT-TASKS-8).
+    property var _activeDrag: null
+    function cancelDrag() {
+        if (!root._activeDrag) return false;
+        root._activeDrag.cancel();
+        root._activeDrag = null;
+        return true;
+    }
+    Shortcut {
+        sequence: "Escape"
+        enabled: root.visible && root._activeDrag !== null
+        onActivated: root.cancelDrag()
     }
 
     // What a drag would set, at the pointer; Esc cancels it (APP-249).

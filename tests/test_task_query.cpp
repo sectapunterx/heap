@@ -311,6 +311,27 @@ TEST(TaskQuery, NonsenseIsReportedNotSilentlySearched) {
   EXPECT_TRUE(qc(QStringLiteral("https://x/y")).unknownClauses().isEmpty());
 }
 
+// IDIOT-TASKS-11: a saved view's stored query is strict about columns. A
+// typed query drops a status that names no column; a saved one matches
+// nothing for it, and still reports it.
+TEST(TaskQuery, AStrictQueryMatchesNothingForAGoneColumn) {
+  QVariantList cols;
+  cols << QVariantMap{{"id", "todo"}, {"name", "To Do"}} << QVariantMap{{"id", "done"}, {"name", "Done"}};
+  const Task open = mk(QStringLiteral("A"), QStringLiteral("todo"));
+  const TaskQuery typed = TaskQuery::compile(QStringLiteral("status:review"), kToday, cols);
+  EXPECT_TRUE(typed.matches(open)) << "a typed typo narrowed to nothing";
+  EXPECT_TRUE(typed.unknownClauses().contains(QStringLiteral("status:review")));
+  const TaskQuery strict = TaskQuery::compile(QStringLiteral("status:review"), kToday, cols, {}, true);
+  EXPECT_FALSE(strict.matches(open)) << "a view on a deleted column showed every task";
+  EXPECT_TRUE(strict.unknownClauses().contains(QStringLiteral("status:review")));
+  // A column it still names keeps matching; the gone one adds nothing.
+  const TaskQuery partly = TaskQuery::compile(QStringLiteral("status:review,todo"), kToday, cols, {}, true);
+  EXPECT_TRUE(partly.matches(open));
+  EXPECT_FALSE(partly.matches(mk(QStringLiteral("B"), QStringLiteral("done"))));
+  // Negated, a gone column excludes nothing.
+  EXPECT_TRUE(TaskQuery::compile(QStringLiteral("-status:review"), kToday, cols, {}, true).matches(open));
+}
+
 // ─── APP-250: planning clauses ───
 
 TEST(TaskQueryPlanning, ScheduledReadsLikeDue) {
@@ -399,4 +420,43 @@ TEST(TaskQueryPlanning, MyTagsAndMyLayer) {
   for(const char* f : {"scheduled", "estimate", "branch", "has"}) {
     EXPECT_TRUE(heap::query::queryFields().contains(QLatin1String(f))) << f;
   }
+}
+
+// ─── Done is a kind of column (IDIOT-TASKS-10) ───
+
+TEST(TaskQuery, AUserDoneKindColumnIsDoneForIsOpenIsDoneAndOverdue) {
+  const QVariantList statuses{
+      QVariantMap{{"id", "todo"}, {"name", "To Do"}, {"category", "todo"}},
+      QVariantMap{{"id", "shipped"}, {"name", "Shipped"}, {"category", "done"}},
+  };
+  Task shipped = mk(QStringLiteral("S"), QStringLiteral("shipped"));
+  shipped.dueAt = QDateTime(kToday.addDays(-3), QTime(12, 0));
+  Task open = mk(QStringLiteral("O"), QStringLiteral("todo"));
+  open.dueAt = QDateTime(kToday.addDays(-3), QTime(12, 0));
+
+  const TaskQuery isOpen = TaskQuery::compile(QStringLiteral("is:open"), kToday, statuses);
+  EXPECT_FALSE(isOpen.matches(shipped));
+  EXPECT_TRUE(isOpen.matches(open));
+  const TaskQuery isDone = TaskQuery::compile(QStringLiteral("is:done"), kToday, statuses);
+  EXPECT_TRUE(isDone.matches(shipped));
+  EXPECT_FALSE(isDone.matches(open));
+  const TaskQuery overdue = TaskQuery::compile(QStringLiteral("is:overdue"), kToday, statuses);
+  EXPECT_FALSE(overdue.matches(shipped));
+  EXPECT_TRUE(overdue.matches(open));
+  const TaskQuery dl = TaskQuery::compile(QStringLiteral("deadline:overdue"), kToday, statuses);
+  EXPECT_FALSE(dl.matches(shipped));
+}
+
+TEST(TaskQuery, TheDoneIdGivenAnotherStageIsNotDone) {
+  const QVariantList statuses{QVariantMap{{"id", "done"}, {"name", "Done?"}, {"category", "review"}}};
+  const TaskQuery isDone = TaskQuery::compile(QStringLiteral("is:done"), kToday, statuses);
+  EXPECT_FALSE(isDone.matches(mk(QStringLiteral("D"), QStringLiteral("done"))));
+  // With no board at all "done" still reads as done.
+  EXPECT_TRUE(q(QStringLiteral("is:done")).matches(mk(QStringLiteral("D"), QStringLiteral("done"))));
+}
+
+TEST(TaskQuery, IsArchivedAsksForTheArchivedCards) {
+  EXPECT_TRUE(q(QStringLiteral("is:archived")).asksArchived());
+  EXPECT_FALSE(q(QStringLiteral("-is:archived")).asksArchived());
+  EXPECT_FALSE(q(QStringLiteral("is:open")).asksArchived());
 }

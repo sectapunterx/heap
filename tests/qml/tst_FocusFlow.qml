@@ -101,12 +101,12 @@ TestCase {
         wait(50);
     }
 
-    // PERA-5: Notes takes the keyboard into the editor; back on the board it
-    // is the board's.
+    // PERA-5: Notes takes the keyboard into the editor (into the text, not
+    // onto the drawn note, IDIOT-KNOW-6); back on the board it is the board's.
     function test_view_switch_hands_the_keyboard_to_the_view() {
         tc.win.focusActiveView();
         switchTo("notes");
-        tryVerify(function () { const f = tc.win.activeFocusItem; return f && (f.objectName === "notesEditor" || f.objectName === "notes-live"); },
+        tryVerify(function () { const f = tc.win.activeFocusItem; return f && (f.objectName === "notesEditor" || f.objectName === "md-block-field"); },
                   2000, "focus after switching to Notes: " + typeName(tc.win.activeFocusItem));
         switchTo("board");
         tryVerify(focusIsInView, 2000, "focus after switching to the board: " + typeName(tc.win.activeFocusItem));
@@ -177,4 +177,31 @@ TestCase {
         compare(Qt.formatDate(AppController.selectedDate, "yyyy-MM-dd"), "2031-05-13", "Alt+Left from the view");
     }
 
+
+    // IDIOT-KNOW-12: the Alt of Alt+Left closes an open card menu by itself;
+    // the Left that follows does not page the day behind it.
+    function test_alt_left_over_a_card_menu_keeps_the_day() {
+        const d = AppController.newTaskDraft("todo");
+        d._isNew = true;
+        d.id = "FOCUSFLOW-1";
+        d.title = "focusflow menu probe";
+        AppController.saveTask(d);
+        const td = AppController.today;
+        AppController.rescheduleTask(d.id, "scheduled", new Date(td.getFullYear(), td.getMonth(), td.getDate(), 15, 0), true);
+        AppController.selectedDate = td;
+        switchTo("today");
+        tc.win.focusActiveView();
+        const v = tc.win.activeViewItem();
+        for (let i = 0; i < 20 && String(v.cursorKey) !== "task:" + d.id; i++) keyClick(Qt.Key_J);
+        compare(String(v.cursorKey), "task:" + d.id);
+        keyClick(Qt.Key_M);
+        tryVerify(function () { return tc.win._focusInPopup; }, 2000, "the card menu has the keyboard");
+        keyPress(Qt.Key_Alt, Qt.AltModifier);
+        keyPress(Qt.Key_Left, Qt.AltModifier);
+        keyRelease(Qt.Key_Left, Qt.AltModifier);
+        keyRelease(Qt.Key_Alt);
+        compare(Qt.formatDate(AppController.selectedDate, "yyyy-MM-dd"), Qt.formatDate(td, "yyyy-MM-dd"));
+        AppController.deleteTask(d.id);
+        AppController.clearPendingUndo();
+    }
 }

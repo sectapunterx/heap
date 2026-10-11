@@ -83,8 +83,21 @@ Rectangle {
 
     function _tokens(t) { return String(t || "").match(/"[^"]*"|\S+/g) || []; }
     function _isClause(tok) { return /^-?[a-z]+:\S+$/i.test(tok); }
+    // The placeholder's shorthands as the clauses they mean, so "p1 " becomes
+    // a chip like "priority:p1 " does (PERSONA-14). Search reads them too.
+    readonly property var _whenWords: ({ "week": "week", "неделя": "week", "неделе": "week", "today": "today",
+                                         "сегодня": "today", "tomorrow": "1d", "завтра": "1d" })
+    function _canon(tok) {
+        const neg = tok.charAt(0) === "-" && tok.length > 1 ? "-" : "";
+        const t = neg ? tok.substring(1) : tok;
+        if (/^p[0-3]$/i.test(t)) return neg + "priority:" + t.toLowerCase();
+        if (t.charAt(0) === "@" && root._whenWords[t.substring(1).toLowerCase()] !== undefined)
+            return neg + "scheduled:" + root._whenWords[t.substring(1).toLowerCase()];
+        if (/^#(?!\d+$)\S+$/.test(t)) return neg + "tag:" + t.substring(1);
+        return tok;
+    }
     function _split(t) {
-        const toks = root._tokens(t);
+        const toks = root._tokens(t).map(root._canon);
         // An OR query stays as typed: its parts belong together.
         const chips = toks.indexOf("OR") >= 0 ? [] : toks.filter(root._isClause);
         const rest = toks.indexOf("OR") >= 0 ? toks : toks.filter(x => !root._isClause(x));
@@ -101,14 +114,24 @@ Rectangle {
     // A finished "key:value " moves out of the field into a chip.
     function _onTyped() {
         if (root._sync) return;
-        const m = /^(.*?)(-?[a-z]+:\S+)\s$/i.exec(searchField.text);
-        if (m && searchField.text.indexOf(" OR ") < 0) {
+        const m = /^(.*?)(\S+)\s$/.exec(searchField.text);
+        const clause = m ? root._canon(m[2]) : "";
+        if (m && root._isClause(clause) && searchField.text.indexOf(" OR ") < 0) {
             root._sync = true;
-            root._committed = [root._committed, m[2]].filter(x => x.length > 0).join(" ");
+            root._committed = [root._committed, clause].filter(x => x.length > 0).join(" ");
             searchField.text = m[1].trim();
             root._sync = false;
         }
         root._compose();
+    }
+    // What is still in the field becomes chips once the keyboard leaves it:
+    // "priority:p1" without its trailing space stayed raw beside its own chip
+    // after a saved view took it (PERSONA-17).
+    function commitTyped() {
+        if (searchField.text.length > 0 && root._tokens(searchField.text).some(t => root._isClause(root._canon(t)))) {
+            root._split(root.searchText);
+            root._compose();
+        }
     }
     function removeCondition(i) {
         const list = root._tokens(root._committed);
@@ -151,11 +174,14 @@ Rectangle {
         searchField.cursorPosition = searchField.text.length;
     }
     // Type to search (APP-117): the first letter typed on the board starts a
-    // fresh search with it, and the rest follow into the field.
+    // fresh search with it, and the rest follow into the field. The old words
+    // go through the field's own editing, so Ctrl+Z there brings them back
+    // (IDIOT-TASKS-19).
     function typeAhead(text) {
         root._queryOpened = true;
         root.editing = true;
-        searchField.text = text;
+        searchField.remove(0, searchField.text.length);
+        searchField.insert(0, text);
         searchField.forceActiveFocus();
         searchField.cursorPosition = searchField.text.length;
     }
@@ -664,7 +690,11 @@ Rectangle {
                     id: searchField
                     ContextMenu.menu: TextEditMenu { editor: searchField }
                     objectName: "topbar-search"
-                    onActiveFocusChanged: if (!activeFocus && root.searchText.length === 0) root._queryOpened = false
+                    onActiveFocusChanged: {
+                        if (activeFocus) return;
+                        if (root.searchText.length === 0) root._queryOpened = false;
+                        else root.commitTyped();
+                    }
                     Layout.fillWidth: true
                     placeholderText: I18n.t("query.placeholder")
                     color: Theme.text
@@ -682,15 +712,22 @@ Rectangle {
                         else root.leaveRequested();
                         event.accepted = true;
                     }
-                    // Backspace on an empty field takes the last condition back.
+                    // Backspace on an empty field takes the last condition back,
+                    // but not the default "status not done": mashed, it took
+                    // every chip and done tasks flooded in (IDIOT-TASKS-10).
+                    // Its × still removes it.
                     Keys.onPressed: (event) => {
                         if (event.key === Qt.Key_Backspace && searchField.text.length === 0 && root.conditions.length > 0) {
-                            root.removeCondition(root.conditions.length - 1);
+                            for (let i = root.conditions.length - 1; i >= 0; i--) {
+                                if (root.conditions[i].raw.toLowerCase() === "is:open") continue;
+                                root.removeCondition(i);
+                                break;
+                            }
                             event.accepted = true;
                         }
                     }
-                    Keys.onReturnPressed: root.leaveRequested()
-                    Keys.onEnterPressed: root.leaveRequested()
+                    Keys.onReturnPressed: { root.commitTyped(); root.leaveRequested(); }
+                    Keys.onEnterPressed: { root.commitTyped(); root.leaveRequested(); }
                     // The syntax is only discoverable if something says it out
                     // loud; the field itself is the only place the user looks.
                     QQC.ToolTip.visible: searchField.activeFocus && searchField.text.length === 0

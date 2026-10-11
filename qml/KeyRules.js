@@ -16,10 +16,11 @@ function baseId(id) {
     return String(id).replace(/\.alt\d*$/, "");
 }
 
-// A second d on the same tasks within half a second is Vim's "dd" habit,
-// not "take Done back" (keymap rule 6).
+// A second d within half a second is Vim's "dd" habit, not "take Done
+// back" (keymap rule 6) — nor Done for the card that slid under the cursor
+// or the pointer once the first one left (IDIOT-TASKS-18).
 function isRepeatedDone(key, now, lastKey, lastAt) {
-    return key.length > 0 && key === lastKey && now - lastAt >= 0 && now - lastAt < 500;
+    return key.length > 0 && lastKey.length > 0 && now - lastAt >= 0 && now - lastAt < 500;
 }
 
 // Type-ahead in a menu or a drop-down (APP-279): the first row from `from`

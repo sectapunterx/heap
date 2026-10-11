@@ -323,9 +323,31 @@ QVariantMap AppController::previewSnapshot(const QString& name) {
       }
     }
   }
+  // A profile made since the snapshot goes with the restore, whole: the
+  // preview walked only the snapshot's profiles and said "no changes" over
+  // a restore that removed one (IDIOT-SHELL-5).
+  QSet<QString> thenIds;
+  for(const Profile& then : m_snapProfiles) {
+    thenIds.insert(then.id);
+  }
+  QVariantList removedProfiles;
+  for(const Profile& p : m_profiles) {
+    if(thenIds.contains(p.id)) {
+      continue;
+    }
+    const Profile now = current.value(p.id);
+    totalTasks.added += static_cast<int>(now.tasks.size());
+    totalNotes.added += static_cast<int>(now.notes.size());
+    totalDocs.added += static_cast<int>(now.docPages.size());
+    removedProfiles.append(QVariantMap{{QStringLiteral("id"), p.id},
+                                       {QStringLiteral("name"), p.name},
+                                       {QStringLiteral("tasks"), static_cast<int>(now.tasks.size())},
+                                       {QStringLiteral("notes"), static_cast<int>(now.notes.size() + now.docPages.size())}});
+  }
   out[QStringLiteral("ok")] = true;
   out[QStringLiteral("name")] = name;
   out[QStringLiteral("at")] = at.toString(Qt::ISODate);
+  out[QStringLiteral("removedProfiles")] = removedProfiles;
   out[QStringLiteral("profiles")] = profiles;
   out[QStringLiteral("totals")] = QVariantMap{{QStringLiteral("tasksAdded"), totalTasks.added},
                                               {QStringLiteral("tasksRemoved"), totalTasks.removed},

@@ -207,7 +207,10 @@ Popup {
                 }
                 PillButton {
                     objectName: "damaged-file-restore"
-                    text: I18n.t("storage.damaged.restore")
+                    // "Restore" only when a snapshot is picked; keeping what is
+                    // open restores nothing and says so (DATA-18).
+                    text: (root.options[root.picked] || {}).kind === "snapshot"
+                          ? I18n.t("storage.damaged.restore") : I18n.t("storage.damaged.continue")
                     primary: true
                     solid: Style.fills
                     onClicked: root.restore()

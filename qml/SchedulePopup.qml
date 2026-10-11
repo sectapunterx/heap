@@ -156,12 +156,11 @@ Popup {
             font.pixelSize: Theme.fsMd
             font.weight: Theme.fwBody
             selectByMouse: true
-            // Clearly outlined, focused or not (R3-071).
-            background: Rectangle {
-                radius: Theme.radiusMd
+            // Clearly outlined, focused or not (R3-071); with the keyboard,
+            // the focus ring as the sheet draws it (EYES-13).
+            background: FieldFrame {
                 color: "transparent"
-                border.color: Theme.borderStrong
-                border.width: 1
+                border.color: focused ? Theme.focusRing : Theme.borderStrong
             }
             Accessible.name: root.due ? I18n.t("schedule.label.due") : I18n.t("schedule.label.when")
             onAccepted: root.apply()

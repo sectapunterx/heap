@@ -65,4 +65,10 @@ QString displayKeys(const QString& portable, bool mac);
 // Returns a stable code ("system", "navigation"), not text.
 QString reservedReason(const QString& portable);
 
+// Whether holding the key of a catalogue action may run it again and again:
+// walking, moving, growing a selection, paging. Everything else runs once per
+// press — a held e archived a whole column, a held Del every saved view
+// (IDIOT-TASKS-2/3/18).
+bool isRepeatableAction(const QString& id);
+
 }  // namespace heap::keys

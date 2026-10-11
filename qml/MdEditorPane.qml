@@ -24,6 +24,18 @@ Item {
     // "edit", "split" or "live" (drawn, the block under the caret edited
     // in place — how Knowledge shows a page, DG-070).
     property string mode: "split"
+
+    // Links to stored files into the page (a drop on Knowledge, KNOW-7).
+    function insertRefs(refs) {
+        if (root.mode === "live") live.insertRefs(refs);
+        else area.insert(area.cursorPosition, refs);
+    }
+    // The caret into the page (IDIOT-KNOW-2): where it was, else at the end.
+    function focusEditor() {
+        if (root.pageId.length === 0) return;
+        if (root.mode === "live") live.focusEnd();
+        else area.forceActiveFocus();
+    }
     // No head row (title, word count, mode chips): the page sits in the
     // Knowledge document, which has no toolbar (DG-071).
     property bool bare: false
@@ -39,17 +51,29 @@ Item {
     function load() {
         root._loading = true;
         root._loadedId = root.pageId;
-        area.text = root.pageId.length > 0 ? AppController.docPageBody(root.pageId) : "";
+        const body = root.pageId.length > 0 ? AppController.docPageBody(root.pageId) : "";
+        // The drawn page is switched with load(): a page whose text equals
+        // the last one's kept that one's open block and undo (IDIOT-DOC-1).
+        live.load(body);
+        area.text = body;
+        live.text = Qt.binding(() => area.text);
         root._loading = false;
         root._dirty = false;
     }
 
+    // What is saved: the drawn page keeps the text as it was written (line
+    // endings, no-break spaces); the text field normalises it (KNOW-5).
+    function _body() { return root.mode === "live" ? live.rawText : area.text; }
+
     // Write now rather than in 250 ms. Called before anything that changes
-    // which document is open, and on destruction.
+    // which document is open, and on destruction. The block open in the drawn
+    // page goes in first: its text reaches the field only on a 400 ms pause,
+    // and a page switched sooner lost it (IDIOT-KNOW-1).
     function flush() {
+        if (live) live.flush();
         saveTimer.stop();
         if (!root._dirty || root._loadedId.length === 0) return;
-        AppController.setDocPageBody(root._loadedId, area.text);
+        AppController.setDocPageBody(root._loadedId, root._body());
         root._dirty = false;
     }
 
@@ -76,6 +100,9 @@ Item {
     Connections {
         target: AppController
         function onFlushEditorsRequested() { root.flush() }
+        // A profile switch announces itself here, before the pages are
+        // swapped: the onModelReset below is too late to write (IDIOT-KNOW-1).
+        function onAboutToChangeActiveNote() { root.flush() }
     }
 
     // The body may change under us — an undo, a profile switch, an import.
@@ -86,7 +113,7 @@ Item {
             root._titleRev++;
             if (root._dirty || root.pageId.length === 0) return;
             const fresh = AppController.docPageBody(root.pageId);
-            if (fresh !== area.text) root.load();
+            if (fresh !== root._body()) root.load();
         }
         function onRowsInserted() { root._titleRev++ }
         function onRowsRemoved() { root._titleRev++ }
@@ -98,7 +125,7 @@ Item {
         interval: 250
         onTriggered: {
             if (root._loadedId.length === 0) return;
-            AppController.setDocPageBody(root._loadedId, area.text);
+            AppController.setDocPageBody(root._loadedId, root._body());
             root._dirty = false;
         }
     }
@@ -278,6 +305,8 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 text: area.text
+                typeToEdit: true
+                attachOnPaste: true
                 onEdited: (t) => { if (t !== area.text) area.text = t; }
                 onInternalLinkActivated: (kind, target) => root.internalLinkActivated(kind, target)
             }

@@ -98,8 +98,10 @@ TestCase {
         keyClick(Qt.Key_Minus, Qt.ControlModifier);
         compare(Theme.scale, 1.25);
         keyClick(Qt.Key_0, Qt.ControlModifier);
-        compare(Theme.scale, 1);
-        compare(storedScale(), 1);
+        compare(Theme.scale, AppController.defaultUiScale(Theme.scaleSteps));
+        // Reset is the default size (the system's), not a pick of 100 %
+        // (IDIOT-SHELL-14).
+        compare(storedScale(), undefined);
         keyClick(Qt.Key_Minus, Qt.ControlModifier);
         keyClick(Qt.Key_Minus, Qt.ControlModifier);
         compare(Theme.scale, 0.9, "the bottom end stays put");
@@ -115,7 +117,7 @@ TestCase {
         keyClick(Qt.Key_Minus, Qt.ControlModifier | Qt.KeypadModifier);
         compare(Theme.scale, 1.25, "numpad Ctrl+-");
         keyClick(Qt.Key_0, Qt.ControlModifier | Qt.KeypadModifier);
-        compare(Theme.scale, 1, "numpad Ctrl+0");
+        compare(Theme.scale, AppController.defaultUiScale(Theme.scaleSteps), "numpad Ctrl+0");
     }
 
     function test_between_steps_snaps_that_way() {
@@ -160,7 +162,7 @@ TestCase {
         tryCompare(seg, "value", "150");
         compare(storedScale(), 1.5);
         keyClick(Qt.Key_0, Qt.ControlModifier);
-        tryCompare(seg, "value", "100");
+        tryCompare(seg, "value", String(Math.round(AppController.defaultUiScale(Theme.scaleSteps) * 100)));
     }
 
     function test_live_in_a_text_field() {
@@ -175,7 +177,7 @@ TestCase {
         compare(Theme.scale, 1.1);
         compare(search.text, "", "the key did not type into the field");
         keyClick(Qt.Key_0, Qt.ControlModifier);
-        compare(Theme.scale, 1);
+        compare(Theme.scale, AppController.defaultUiScale(Theme.scaleSteps));
     }
 
     function test_not_while_recording_a_key() {
@@ -226,6 +228,20 @@ TestCase {
         tc.win.runCommand("zoom.in");
         compare(Theme.scale, 1.1);
         tc.win.runCommand("zoom.reset");
-        compare(Theme.scale, 1);
+        compare(Theme.scale, AppController.defaultUiScale(Theme.scaleSteps));
+    }
+
+    // SHELL-3: unset, the first Ctrl+= steps from the scale on screen — it
+    // stored the 110 % already shown and did nothing.
+    function test_unset_steps_from_the_default() {
+        tc.win.runCommand("zoom.reset");
+        const def = Theme.scale;
+        compare(def, AppController.defaultUiScale(Theme.scaleSteps));
+        keyClick(Qt.Key_Equal, Qt.ControlModifier);
+        verify(Theme.scale > def, "the first Ctrl+= did nothing");
+        tc.win.runCommand("zoom.reset");
+        keyClick(Qt.Key_Minus, Qt.ControlModifier);
+        const steps = Theme.scaleSteps;
+        compare(Theme.scale, steps[Math.max(0, steps.indexOf(def) - 1)], "Ctrl+- skipped a step");
     }
 }

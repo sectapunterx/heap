@@ -70,7 +70,8 @@ Item {
         return p === "P0" ? Theme.p0 : p === "P1" ? Theme.p1 : p === "P2" ? Theme.p2 : Theme.p3;
     }
     function passesFilter(t) {
-        if (t.status === "done") return false;
+        // Any column of the Done kind, not only "done" (IDIOT-CAL-4).
+        if (AppController.statusCategory(t.status) === "done") return false;
         // Clauses filter structurally, leftover words stay a substring test.
         if (!Search.accepts(AppController, root.searchText, root.taskRev + ":" + AppController.today, t)) return false;
         let any = false;
@@ -456,11 +457,17 @@ Item {
         const it = root._cursorItem();
         if (!it || it.kind !== "event" || days === 0) return false;
         const occ = it.ev;
-        if (String(occ.masterId || "").length > 0)
-            scopeAsk.ask("move", (scope) => AppController.moveOccurrence(occ, days * 24, scope), null);
-        else
+        // The day changes once the scope is answered; Esc leaves the cursor
+        // where it was (IDIOT-CAL-14).
+        if (String(occ.masterId || "").length > 0) {
+            scopeAsk.ask("move", (scope) => {
+                AppController.moveOccurrence(occ, days * 24, scope);
+                root._shiftDay(days);
+            }, null);
+        } else {
             AppController.moveOccurrence(occ, days * 24, "this");
-        root._shiftDay(days);
+            root._shiftDay(days);
+        }
         return true;
     }
 

@@ -250,7 +250,7 @@ class ChronoParser::Impl {
     if(tryNumericDate(toks, i, ref, dm)) {
       return true;
     }
-    if(tryMonthNameDate(toks, i, primary, fallback, dm)) {
+    if(tryMonthNameDate(toks, i, ref, primary, fallback, dm)) {
       return true;
     }
     if(tryAgoPhrase(toks, i, ref, primary, fallback, dm)) {
@@ -266,6 +266,9 @@ class ChronoParser::Impl {
       return true;
     }
     if(tryRelativeAdjective(toks, i, ref, primary, fallback, dm)) {
+      return true;
+    }
+    if(tryOrdinalDay(toks, i, ref, dm)) {
       return true;
     }
     if(tryBareWeekday(toks, i, ref, primary, fallback, dm)) {
@@ -619,7 +622,7 @@ class ChronoParser::Impl {
       } else if(i >= 1 && toks[i - 1].kind == TokenKind::Word && namesVersion(toks[i - 1].lower)) {
         version = true;
       }
-      const QDate d(year, month, day);
+      const QDate d = nextIfPast(QDate(year, month, day), last == i + 2, ref);
       if(twoDigitYear && d.isValid() && d < ref.date().addYears(-1)) {
         version = true;
       }
@@ -645,11 +648,49 @@ class ChronoParser::Impl {
         }
         last = i + 4;
       }
-      const QDate d = makeSlashDate(a, b, year, /*dotted=*/false);
+      const QDate d = nextIfPast(makeSlashDate(a, b, year, /*dotted=*/false), last == i + 2, ref);
       if(d.isValid()) {
         out.date = d;
         out.firstTok = i;
         out.lastTok = last;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // A day and month typed without a year mean the next such day: "25.10" on
+  // New Year's Eve was born overdue (IDIOT-TASKS-6), while weekdays already
+  // rolled forward.
+  static QDate nextIfPast(const QDate& d, bool noYear, const QDateTime& ref) {
+    if(!noYear || !d.isValid() || d >= ref.date()) {
+      return d;
+    }
+    const QDate next = d.addYears(1);
+    // Feb 29 has no next year of its own; addYears clamps it to the 28th.
+    return next.isValid() ? next : d;
+  }
+
+  // "the 15th", "on the 3rd": the next such day of the month (IDIOT-TASKS-5).
+  // "th" was read as Thursday, so "pay rent on the 15th" went to a Thursday.
+  bool tryOrdinalDay(const QVector<Token>& toks, int i, const QDateTime& ref, DateMatch& out) const {
+    int j = i;
+    if(j < toks.size() && toks[j].kind == TokenKind::Word && toks[j].lower == QStringLiteral("the")) {
+      ++j;
+    }
+    int end = -1;
+    const int day = dayOfMonthAt(toks, j, /*needMarker=*/true, end);
+    if(day <= 0 || end != j + 1 || !adjacent(toks[j], toks[end])) {
+      return false;
+    }
+    const QDate today = ref.date();
+    for(int k = 0; k < 13; ++k) {
+      const QDate first = QDate(today.year(), today.month(), 1).addMonths(k);
+      const QDate cand(first.year(), first.month(), day);
+      if(cand.isValid() && cand >= today) {
+        out.date = cand;
+        out.firstTok = i;
+        out.lastTok = end;
         return true;
       }
     }
@@ -684,8 +725,12 @@ class ChronoParser::Impl {
   }
 
   // ── Month-name date ("22 May" / "May 22" / "22 мая [2026]") ───────────
-  bool tryMonthNameDate(
-      const QVector<Token>& toks, int i, const ChronoLocale* primary, const ChronoLocale* fallback, DateMatch& out) const {
+  bool tryMonthNameDate(const QVector<Token>& toks,
+                        int i,
+                        const QDateTime& ref,
+                        const ChronoLocale* primary,
+                        const ChronoLocale* fallback,
+                        DateMatch& out) const {
     if(i >= toks.size()) {
       return false;
     }
@@ -695,7 +740,7 @@ class ChronoParser::Impl {
       const int m = lookupHashAny(toks[i + 1].lower, primary->monthNames, fallback->monthNames, &found);
       if(found) {
         const int day = toks[i].value;
-        int year = QDate::currentDate().year();
+        int year = ref.date().year();
         int last = i + 1;
         if(i + 2 < toks.size() && toks[i + 2].kind == TokenKind::Number) {
           year = toks[i + 2].value;
@@ -704,7 +749,7 @@ class ChronoParser::Impl {
           }
           last = i + 2;
         }
-        const QDate d(year, m, day);
+        const QDate d = nextIfPast(QDate(year, m, day), last == i + 1, ref);
         if(d.isValid()) {
           out.date = d;
           out.firstTok = i;
@@ -719,13 +764,13 @@ class ChronoParser::Impl {
       const int m = lookupHashAny(toks[i].lower, primary->monthNames, fallback->monthNames, &found);
       if(found) {
         const int day = toks[i + 1].value;
-        int year = QDate::currentDate().year();
+        int year = ref.date().year();
         int last = i + 1;
         if(i + 2 < toks.size() && toks[i + 2].kind == TokenKind::Number && toks[i + 2].value >= 1000) {
           year = toks[i + 2].value;
           last = i + 2;
         }
-        const QDate d(year, m, day);
+        const QDate d = nextIfPast(QDate(year, m, day), last == i + 1, ref);
         if(d.isValid()) {
           out.date = d;
           out.firstTok = i;
@@ -1067,8 +1112,17 @@ class ChronoParser::Impl {
     if(i >= toks.size() || toks[i].kind != TokenKind::Word) {
       return false;
     }
+    // Glued to a number it is an ordinal's tail, "15th", not Thursday.
+    if(i > 0 && toks[i - 1].kind == TokenKind::Number && adjacent(toks[i - 1], toks[i])) {
+      return false;
+    }
+    // "this sat" is the weekday, "this" included: it stayed in the title
+    // (IDIOT-TASKS-8).
+    const bool withThis = inListAny(toks[i].lower, primary->thisAdjectives, fallback->thisAdjectives) && i + 1 < toks.size() &&
+                          toks[i + 1].kind == TokenKind::Word;
+    const int w = withThis ? i + 1 : i;
     bool found = false;
-    const int iso = lookupHashAny(toks[i].lower, primary->weekdayNames, fallback->weekdayNames, &found);
+    const int iso = lookupHashAny(toks[w].lower, primary->weekdayNames, fallback->weekdayNames, &found);
     if(!found) {
       return false;
     }
@@ -1076,7 +1130,7 @@ class ChronoParser::Impl {
     const int delta = (iso - curIso + 7) % 7;
     out.date = ref.date().addDays(delta);
     out.firstTok = i;
-    out.lastTok = i;
+    out.lastTok = w;
     return true;
   }
 
@@ -1310,6 +1364,12 @@ class ChronoParser::Impl {
         pm = true;
         ++last;
       } else if(inListAny(w, primary->hourSuffixes, fallback->hourSuffixes)) {
+        // "2h" is a length ("estimate 2h"), not two at night, unless "at"
+        // says so (IDIOT-TASKS-8); "16h" and "14ч" stay clock times.
+        if(w == QStringLiteral("h") && hour <= 12 && minute == 0 &&
+           !(i > 0 && toks[i - 1].kind == TokenKind::Word && inListAny(toks[i - 1].lower, primary->atWords, fallback->atWords))) {
+          return false;
+        }
         explicitMarker = true;
         ++last;
       }
@@ -1343,6 +1403,19 @@ class ChronoParser::Impl {
     // validate, not a "13-01" time range.
     if(i >= 2 && toks[i - 1].kind == TokenKind::Dash && toks[i - 2].kind == TokenKind::Number) {
       return false;
+    }
+    // A number glued to a word ("v1-2") or hanging off one by a glued dash
+    // ("feature-12-3", "fix-2-4") is part of an identifier, not a time (DATA-4).
+    if(i >= 1 && i < toks.size() && toks[i].kind == TokenKind::Number) {
+      const auto glued = [&](int a, int b) {
+        return toks[a].pos + toks[a].len == toks[b].pos;
+      };
+      if(toks[i - 1].kind == TokenKind::Word && glued(i - 1, i)) {
+        return false;
+      }
+      if(i >= 2 && toks[i - 1].kind == TokenKind::Dash && glued(i - 1, i) && glued(i - 2, i - 1) && toks[i - 2].kind != TokenKind::Punct) {
+        return false;
+      }
     }
     if(i + 4 < toks.size() && toks[i].kind == TokenKind::Number && toks[i + 1].kind == TokenKind::Dash &&
        toks[i + 2].kind == TokenKind::Number && toks[i + 3].kind == TokenKind::Dash && toks[i + 4].kind == TokenKind::Number) {

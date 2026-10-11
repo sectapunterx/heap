@@ -96,6 +96,32 @@ TestCase {
         compare(t._queue.length, 2);
     }
 
+    // PERSONA-7: the Undo on screen is the one Ctrl+Z takes back — the newest.
+    function test_newest_undo_replaces_an_older_one() {
+        const t = make();
+        let which = "";
+        t.showUndo("Created A", "Undo", 10, function () { which = "A"; });
+        t.showUndo("Moved B", "Undo", 10, function () { which = "B"; });
+        compare(t.count, 1);
+        compare(t.message, "Moved B");
+        compare(t._queue.length, 0, "the older Undo waits behind the newer one");
+        t._items[0].actionFn();
+        compare(which, "B");
+    }
+
+    // IDIOT-SHELL-4: no history behind it — the toast keeps its words and
+    // stops offering Undo.
+    function test_drop_undo_strips_the_action() {
+        const t = make();
+        t.showUndo("Deleted: A", "Undo", 10, function () {}, "success", "Ctrl Z");
+        compare(t.actionLabel, "Undo");
+        t.dropUndo();
+        compare(t.count, 1);
+        compare(t.message, "Deleted: A");
+        compare(t.actionLabel, "");
+        compare(t._items[0].key, "");
+    }
+
     function test_width_is_capped_and_long_text_wraps() {
         const t = make();
         let longText = "";

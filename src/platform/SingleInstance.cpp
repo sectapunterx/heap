@@ -4,6 +4,7 @@
 #include <QCryptographicHash>
 #include <QDeadlineTimer>
 #include <QDir>
+#include <QFileInfo>
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QLockFile>
@@ -33,6 +34,12 @@ SingleInstance::~SingleInstance() = default;
 
 QString SingleInstance::serverName(const QString& dataDir) {
   QString key = QDir::cleanPath(QDir(dataDir).absolutePath());
+  // One folder by any of its names: an 8.3 short path, a junction or a
+  // subst drive named a second instance otherwise (DATA-16).
+  const QString canonical = QFileInfo(key).canonicalFilePath();
+  if(!canonical.isEmpty()) {
+    key = canonical;
+  }
 #ifdef Q_OS_WIN
   key = key.toLower();  // C:\Users and c:\users are one folder
 #endif
@@ -56,8 +63,6 @@ SingleInstance::Result SingleInstance::acquire(const QByteArray& message) {
     m_lock.reset();
     return Result::Primary;
   }
-  m_lock.reset();
-
 #ifdef Q_OS_WIN
   // The running instance may only take the foreground if the launching
   // process (which the user just started, so it owns the foreground) lets it.
@@ -67,10 +72,18 @@ SingleInstance::Result SingleInstance::acquire(const QByteArray& message) {
   const QString name = serverName(m_dataDir);
   while(!deadline.hasExpired()) {
     if(forward(name, message)) {
+      m_lock.reset();
       return Result::Forwarded;
+    }
+    // A headless `lowkey-cli` command holds the lock for a moment and never
+    // listens: once it lets go, this is the window (DATA-10).
+    if(m_lock->tryLock(0)) {
+      listen();
+      return Result::Primary;
     }
     QThread::msleep(100);
   }
+  m_lock.reset();
   return Result::Busy;
 }
 

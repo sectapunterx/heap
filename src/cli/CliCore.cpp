@@ -608,6 +608,13 @@ QString doneStatus(const QVariantList& statuses) {
   if(!findStatus(statuses, QStringLiteral("done")).isEmpty() || statuses.isEmpty()) {
     return QStringLiteral("done");
   }
+  // Else a column of the "done" kind, whatever its id (DATA-6).
+  for(const QVariant& v : statuses) {
+    const QVariantMap m = v.toMap();
+    if(m.value(QStringLiteral("category")).toString() == QLatin1String("done")) {
+      return m.value(QStringLiteral("id")).toString();
+    }
+  }
   return statuses.constLast().toMap().value(QStringLiteral("id")).toString();
 }
 

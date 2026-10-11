@@ -55,7 +55,7 @@ Popup {
         root._onCancel = onCancel || null;
         root._answered = false;
         root.open();
-        okBtn.forceActiveFocus();
+        okBtn.forceActiveFocus(Qt.TabFocusReason);
     }
     function answer(scope) {
         root._answered = true;

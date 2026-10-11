@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic as QQC
 import TodoCpp
+import "ArmGuard.js" as ArmGuard
 
 // Settings → Integrations → Calendars by link (APP-118). Paste Outlook's
 // published ICS address (or Google's / iCloud's) once; heap fetches it on its
@@ -145,10 +146,12 @@ Rectangle {
                         id: removeBtn
                         objectName: "calsub-remove-" + subRow.modelData.id
                         property bool armed: false
+                        property real armedAt: 0
                         danger: true
                         text: armed ? I18n.t("calsub.removeConfirm") : I18n.t("calsub.remove")
                         onClicked: {
-                            if (!armed) { armed = true; disarm.restart(); return; }
+                            if (!armed) { armed = true; armedAt = Date.now(); disarm.restart(); return; }
+                            if (ArmGuard.tooSoon(armedAt)) return;  // a double-click (IDIOT-SHELL-5)
                             AppController.removeCalendarSubscription(subRow.modelData.id);
                         }
                         Timer { id: disarm; interval: 3000; onTriggered: removeBtn.armed = false }

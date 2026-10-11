@@ -98,6 +98,10 @@ class AppController : public QObject {
   // view id → how many tasks opening it shows. One pass for all views, cached
   // until a task, a column, the day or the views change.
   Q_PROPERTY(QVariantMap savedViewCounts READ savedViewCounts NOTIFY savedViewCountsChanged)
+  // The applied saved view's stored query, "" when none (SavedViewsHost sets
+  // it). A search that is exactly this compiles strictly: a `status:` on a
+  // deleted column matches nothing, in every view and count (IDIOT-TASKS-11).
+  Q_PROPERTY(QString strictQuery READ strictQuery WRITE setStrictQuery NOTIFY strictQueryChanged)
   // Moves at local midnight, on resume and on a clock or zone change: every
   // "today" in the UI binds to this, so after midnight T goes to the new day.
   Q_PROPERTY(QDate today READ today NOTIFY todayChanged)
@@ -449,7 +453,13 @@ class AppController : public QObject {
 
   // Creating one returns its id so a caller can open it straight away.
   Q_INVOKABLE QString newNote(const QString& title = QString(), const QString& folder = QString());
-  Q_INVOKABLE void renameNote(const QString& id, const QString& title);
+  // False when nothing changed: an empty title, or one another note in the
+  // same folder already has — [[links]] to that one would have changed
+  // meaning (IDIOT-KNOW-3).
+  Q_INVOKABLE bool renameNote(const QString& id, const QString& title);
+  // Whether a note other than `exceptId` in `folder` is called `title`
+  // (case-insensitive, as [[links]] read titles).
+  Q_INVOKABLE bool noteTitleTaken(const QString& title, const QString& folder, const QString& exceptId) const;
   Q_INVOKABLE void deleteNote(const QString& id);
   // APP-116: appends note `sourceId`'s text below note `targetId`'s and
   // removes the source; links to the source now point at the target. One
@@ -1516,8 +1526,8 @@ class AppController : public QObject {
   }
 
   // ---- Status (kanban column) ops ----
-  Q_INVOKABLE void addStatus(const QString& name, const QString& color = QString());
-  Q_INVOKABLE void renameStatus(const QString& id, const QString& name);
+  Q_INVOKABLE void addStatus(const QString& typedName, const QString& color = QString());
+  Q_INVOKABLE void renameStatus(const QString& id, const QString& typedName);
   Q_INVOKABLE void setStatusColor(const QString& id, const QString& color);
   // A column's stage (APP-259): backlog / todo / prog / half / blocked /
   // review / done. It is the shape of the status mark and where Done goes.
@@ -1556,6 +1566,12 @@ class AppController : public QObject {
   // is one undo step with a toast. Names are made unique ("Name (2)").
   QVariantList savedViews() const;
   QVariantMap savedViewCounts() const;
+
+  QString strictQuery() const {
+    return m_strictQuery;
+  }
+
+  void setStrictQuery(const QString& q);
   // Returns the new view's id; "" when there is no profile.
   Q_INVOKABLE QString saveView(const QString& name, const QVariantMap& state);
   Q_INVOKABLE bool renameSavedView(const QString& id, const QString& name);
@@ -1569,6 +1585,9 @@ class AppController : public QObject {
   Q_INVOKABLE QVariantMap savedView(const QString& id) const;
   // True when `state` no longer matches the view — what shows it as modified.
   Q_INVOKABLE bool savedViewDiffers(const QString& id, const QVariantMap& state) const;
+  // The names of the views whose query filters on the column `statusId`:
+  // deleting the column drops that clause and widens them (IDIOT-TASKS-11).
+  Q_INVOKABLE QStringList savedViewsUsingStatus(const QString& statusId) const;
 
   // settingsMap() is private and also cached; this exists so a test can prove
   // the cache does not outlive the settings it was built from.
@@ -1683,6 +1702,11 @@ class AppController : public QObject {
   Q_INVOKABLE void deleteProfile(const QString& id);
   Q_INVOKABLE QString duplicateProfile(const QString& id, const QString& newName);
   Q_INVOKABLE QVariantMap profileById(const QString& id) const;
+  // Whether a profile other than `exceptId` is already called `name`
+  // (ignoring case): the editor says so inline (IDIOT-SHELL-12).
+  Q_INVOKABLE bool profileNameTaken(const QString& name, const QString& exceptId) const;
+  // The longest profile name kept (IDIOT-SHELL-16).
+  static constexpr int kMaxProfileName = 64;
 
   // Rewrite every task id that starts with `oldPrefix-<digits>` to use
   // `newPrefix-<digits>`. CalEvent.taskId backlinks are kept in sync so
@@ -1829,6 +1853,11 @@ class AppController : public QObject {
   // How much the system already scales the primary screen (1 at 100 %,
   // 1.25 at 125 %): the default interface scale is not stacked on top.
   Q_INVOKABLE double systemPixelRatio() const;
+  // The scale the app is drawn at while the user has not picked one — what
+  // Theme.scale shows and what the zoom keys step from (SHELL-3): 110 % on a
+  // screen that does not scale itself, 100 % where it does, or the system's
+  // text size when that is larger.
+  Q_INVOKABLE double defaultUiScale(const QVariantList& steps) const;
   // Paints a window's own title bar dark or light to match the theme; the
   // OS otherwise follows its own app mode (a white bar over a dark heap).
   Q_INVOKABLE void setWindowFrameDark(QObject* window, bool dark) const;
@@ -1848,6 +1877,9 @@ class AppController : public QObject {
   // Undo/redo the last recorded operation. undoLastDeletion() is the old name,
   // kept because QML and several tests call it.
   Q_INVOKABLE void undo();
+  // Whether the step Ctrl+Z would take back next is the one that made task
+  // \p id — undoing it deletes the task (IDIOT-DOC-17).
+  Q_INVOKABLE bool undoWouldRemoveTask(const QString& id) const;
   Q_INVOKABLE void redo();
 
   Q_INVOKABLE void undoLastDeletion() {
@@ -1974,6 +2006,7 @@ class AppController : public QObject {
   void taskTitlesChanged();
   void savedViewsChanged();
   void savedViewCountsChanged();
+  void strictQueryChanged();
   // `routeId` ("meeting:<event id>") makes it a reminder with buttons
   // (APP-155); empty for a plain heads-up.
   void notification(const QString& title, const QString& body, const QString& kind, const QString& routeId = QString());
@@ -2118,6 +2151,10 @@ class AppController : public QObject {
   QString m_notesState;
   NoteModel m_notes;
   QString m_activeNoteId;
+  // The note the last bare newNote() made; left untouched, it is dropped when
+  // another note opens, and a second "+" opens it again (IDIOT-KNOW-14).
+  QString m_freshNoteId;
+  bool freshNoteUntouched() const;
   DocPageModel m_docPages;
   QString m_activeDocPageId;
 
@@ -2187,6 +2224,7 @@ class AppController : public QObject {
   bool m_soundMuted = false;
   int m_soundPending = -1;
   void completionSoundOnMove_(const QString& fromStatus, const QString& toStatus);
+  bool stopTimersInOtherProfiles_(const QString& onlyId = {});
   // Plays `cue` (a heap::platform::SoundCue) if the Sound settings, quiet
   // hours (judged at `at`, the wall clock when invalid), focus mode and the
   // system allow it.
@@ -2420,6 +2458,9 @@ class AppController : public QObject {
   // TaskQuery::compile with this board's statuses and new ids, and the
   // blocked set when the query asks `is:blocked` (APP-250).
   heap::query::TaskQuery compileTaskQuery_(const QString& text) const;
+  // Whether `text` is the applied saved view's own query (strictQuery).
+  bool isStrictQuery_(const QString& text) const;
+  QString m_strictQuery;
   bool m_followingCards = false;
   // Keeps a task's scheduledAt on the focus block it came from: moved with
   // it, cleared when it is deleted (after == nullptr).
@@ -2528,10 +2569,10 @@ class AppController : public QObject {
   // `profileId`'s own: each gets a fresh id, and an override follows its
   // series to the copy's (PLAT-10, TM-1).
   void addEventsAsCopies(const QVector<CalEvent>& events, const QString& profileId);
+  static bool isSampleEvent(const CalEvent& e);
   int statusIndexOf(const QString& id) const;
   // Whether another column (not `exceptId`) already carries `name`, ignoring case.
   bool statusNameTaken(const QString& name, const QString& exceptId) const;
-  bool profileNameTaken(const QString& name, const QString& exceptId) const;
   // `base`, or "base (N)" with the first N no profile uses.
   QString uniqueProfileName(const QString& base) const;
   // moveTask(), with the card's rank in its new column set in the same model
@@ -2614,6 +2655,9 @@ class AppController : public QObject {
   void applyUndoEntry(const heap::undo::Entry& entry, bool backward);
   // Hands the open note's unsaved keystrokes to it before an undo or redo.
   void flushNotesForUndo();
+  // Drops the undo history of the workspace being left; a profile removal
+  // stays (IDIOT-SHELL-2).
+  void clearWorkspaceUndo();
 
   // Selection state
   QSet<QString> m_selectedTaskIds;

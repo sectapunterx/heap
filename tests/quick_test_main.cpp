@@ -12,8 +12,11 @@
 #include "platform/BundledFonts.h"
 
 #include <QCoreApplication>
+#include <QKeyEvent>
 #include <QMutex>
 #include <QObject>
+#include <QQmlContext>
+#include <QQmlEngine>
 #include <QStandardPaths>
 #include <QStringList>
 #include <QtPlugin>
@@ -53,6 +56,27 @@ void collectScriptErrors(QtMsgType type, const QMessageLogContext& context, cons
 
 }  // namespace
 
+// What TestCase.keyPress cannot do: a key the keyboard repeats while it is
+// held (isAutoRepeat), as the window sees it — ShortcutOverride, then the
+// press unless that was taken (IDIOT-TASKS-2).
+class KeyTest : public QObject {
+  Q_OBJECT
+ public:
+  using QObject::QObject;
+
+  Q_INVOKABLE void press(QObject* window, int key, int modifiers, const QString& text, bool autoRepeat) {
+    if(window == nullptr) {
+      return;
+    }
+    const auto mods = Qt::KeyboardModifiers(modifiers);
+    QKeyEvent over(QEvent::ShortcutOverride, key, mods, text, autoRepeat);
+    over.ignore();
+    QCoreApplication::sendEvent(window, &over);
+    QKeyEvent down(QEvent::KeyPress, key, mods, text, autoRepeat);
+    QCoreApplication::sendEvent(window, &down);
+  }
+};
+
 class Setup : public QObject {
   Q_OBJECT
  public slots:
@@ -75,6 +99,10 @@ class Setup : public QObject {
     heap::platform::useBundledUiFontByDefault();
     // HEAP_FRAME_LOG works here too, for scripted jank scenarios (APP-203).
     heap::frame::installFromEnvironment();
+  }
+
+  void qmlEngineAvailable(QQmlEngine* engine) {
+    engine->rootContext()->setContextProperty(QStringLiteral("KeyTest"), new KeyTest(engine));
   }
 
   void cleanupTestCase() {

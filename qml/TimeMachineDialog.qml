@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import TodoCpp
+import "ArmGuard.js" as ArmGuard
 
 // The time machine (APP-162, X-Dlg-TimeMachine): the snapshots in
 // <dataDir>/history, and a way back to any of them. First what would change,
@@ -91,6 +92,7 @@ Popup {
     function kindText(tag) {
         if (!tag) return I18n.t("tm.kind.hourly");
         if (tag === "pre") return I18n.t("tm.tag.pre");
+        if (tag === "profile") return I18n.t("tm.tag.profile");
         return tag;
     }
     function rowText(s) {
@@ -138,13 +140,19 @@ Popup {
         if ((t.notesChanged || 0) > 0) parts.push(I18n.count(t.notesChanged, "tm.diff.notesChanged"));
         return parts.length > 0 ? parts.join(", ") : I18n.t("tm.diff.same");
     }
-    readonly property var diffRows: [
+    // Profiles made since then go with the restore (IDIOT-SHELL-5).
+    function profilesGoneText() {
+        return (root.preview.removedProfiles || []).map(p => I18n.t("tm.diff.profileGone").arg(p.name)
+                                                            .arg(I18n.count(p.tasks, "tm.diff.profileTasks"))).join(", ");
+    }
+    readonly property var diffRows: ((root.preview.removedProfiles || []).length > 0
+            ? [{ k: I18n.t("tm.diff.k.profiles"), v: root.profilesGoneText(), links: false }] : []).concat([
         { k: I18n.t("tm.diff.k.tasks"), v: root.tasksText(), links: true },
         { k: I18n.t("tm.diff.k.changes"), v: root.changesText(), links: false },
         { k: I18n.t("tm.diff.k.notes"), v: root.notesText(), links: false },
         { k: I18n.t("tm.diff.k.events"), v: I18n.t("tm.diff.events"), links: false },
         { k: I18n.t("tm.diff.k.settings"), v: I18n.t("tm.diff.settings"), links: false }
-    ]
+    ])
     // One deleted task back, from its id in the diff.
     function restoreTask(id) {
         if (!root.current) return;
@@ -462,16 +470,18 @@ Popup {
                     id: restoreAllBtn
                     objectName: "time-machine-restore-all"
                     property bool armed: false
+                    property real armedAt: 0
                     primary: true
-                    solid: Style.fills
                     text: restoreAllBtn.armed ? I18n.t("tm.restoreAll.confirm") : I18n.t("tm.restoreAll")
                     onClicked: {
                         if (!root.current) return;
                         if (!restoreAllBtn.armed) {
                             restoreAllBtn.armed = true;
+                            restoreAllBtn.armedAt = Date.now();
                             disarm.restart();
                             return;
                         }
+                        if (ArmGuard.tooSoon(restoreAllBtn.armedAt)) return;  // a double-click (IDIOT-SHELL-5)
                         restoreAllBtn.armed = false;
                         if (AppController.restoreSnapshot(root.current.name)) root.close();
                     }

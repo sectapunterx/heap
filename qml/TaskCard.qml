@@ -49,7 +49,7 @@ Rectangle {
     // `visible`, not `opened`: opened only turns true once the fade-in ends,
     // and a key pressed during it would still reach the board.
     readonly property bool menuOpen: menuHost.menuOpen
-    readonly property bool _done: !!(card.task && card.task.status === "done")
+    readonly property bool _done: !!(card.task && AppController.statusCategory(card.task.status) === "done")
     signal clicked()
 
     // Open the card's menu from the keyboard (board key M, or the Menu key),
@@ -152,7 +152,9 @@ Rectangle {
                 // amber / red in bold, a plain line in quiet.
                 : markT.conflict ? (Style.urgency ? Theme.danger : Theme.borderStrong)
                 : markT.pending ? (Style.urgency ? Theme.warning : Theme.borderStrong)
-                : "transparent"
+                // A white card on the light ground had no edge at all (1.06:1,
+                // EYES-4): the light themes keep a hairline, dark ones none.
+                : Theme.cardBorder
     border.width: _isStuck && !dragArea.drag.active ? 2 : 1
     opacity: dragArea.drag.active ? 1.0 : (_isArchived ? 0.7 : 1.0)
     scale: dragArea.drag.active ? 1.03 : 1.0
@@ -534,6 +536,11 @@ Rectangle {
                 readonly property bool near: dlText.length > 0 && (days === 0 || days === 1)
                 visible: dlText.length > 0
                 text: dlText
+                // Never under the card edge: the Russian overdue text ran past
+                // it with the number cut off (EYES-2).
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                elide: Text.ElideRight
                 color: overdue ? Theme.signalUrgent : near ? Theme.signalNow : Theme.textDim
                 font.family: Theme.fontUi
                 font.features: Theme.tabularNums
@@ -949,6 +956,11 @@ Rectangle {
             didDrag = true;
             card._dropAt = card.mapToItem(null, 0, 0);
         }
+        // cancelDrag() takes the grab away: no drop, the card goes home.
+        onCanceled: {
+            card.x = card.homeX; card.y = card.homeY;
+            didDrag = false;
+        }
         onReleased: (mouse) => {
             const wasDrag = didDrag;
             card.Drag.drop();
@@ -967,6 +979,18 @@ Rectangle {
                 card.clicked();
             }
         }
+    }
+
+    // Esc mid-drag, or a popup taking the keyboard, lets go of the card
+    // without dropping it, as the calendar's drag does: it landed in the
+    // column under the pointer on release, behind the palette too
+    // (IDIOT-TASKS-8). True when there was a drag to cancel.
+    function cancelDrag() {
+        if (!dragArea.drag.active) return false;
+        card._dropAt = null;
+        dragArea.enabled = false;
+        Qt.callLater(function () { dragArea.enabled = true; });
+        return true;
     }
 
     // The task menu, shared by every view (APP-268): TaskMenuHost builds

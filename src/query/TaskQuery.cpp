@@ -1,8 +1,10 @@
+#include "board/ColumnCategory.h"
 #include "chrono/ChronoParser.h"
 #include "local/Effective.h"
 #include "query/TaskQuery.h"
 
 #include <QDateTime>
+#include <QHash>
 #include <QJsonObject>
 #include <QRegularExpression>
 #include <QSet>
@@ -114,6 +116,22 @@ Op takeOp(QString& spec) {
 // Resolve a `deadline:` value to a date. Accepts what the app's own date
 // parser accepts ("friday", "tomorrow", "in 2 days", "2026-09-24") plus the
 // bare "3d" shorthand a query language is expected to have.
+// "@week", "@today", "@tomorrow" and their Russian words: the plan they name,
+// as a scheduled: value; empty for any other token.
+QString shorthandWhen(const QString& token) {
+  if(token.size() < 2 || !token.startsWith(QLatin1Char('@'))) {
+    return {};
+  }
+  static const QHash<QString, QString> kWhen = {{QStringLiteral("week"), QStringLiteral("week")},
+                                                {QStringLiteral("неделя"), QStringLiteral("week")},
+                                                {QStringLiteral("неделе"), QStringLiteral("week")},
+                                                {QStringLiteral("today"), QStringLiteral("today")},
+                                                {QStringLiteral("сегодня"), QStringLiteral("today")},
+                                                {QStringLiteral("tomorrow"), QStringLiteral("1d")},
+                                                {QStringLiteral("завтра"), QStringLiteral("1d")}};
+  return kWhen.value(token.mid(1).toLower());
+}
+
 QDate resolveDate(const QString& raw, const QDate& today, bool& ok) {
   ok = false;
   const QString v = raw.trimmed();
@@ -215,10 +233,24 @@ QStringList queryFields() {
   return out;
 }
 
-TaskQuery TaskQuery::compile(const QString& text, const QDate& today, const QVariantList& statuses, const QStringList& newIds) {
+QSet<QString> TaskQuery::statusIds() const {
+  QSet<QString> out;
+  for(const QVector<Clause>& group : m_groups) {
+    for(const Clause& c : group) {
+      out.unite(c.statusIds);
+    }
+  }
+  return out;
+}
+
+TaskQuery TaskQuery::compile(
+    const QString& text, const QDate& today, const QVariantList& statuses, const QStringList& newIds, bool strictStatus) {
   TaskQuery q;
   q.m_today = today;
   q.m_newIds = QSet<QString>(newIds.cbegin(), newIds.cend());
+  // Done is a kind of column, not the id "done": is:open listed the cards of
+  // a user's "Shipped" column (IDIOT-TASKS-10).
+  q.m_doneIds = heap::board::doneColumnIds(statuses);
   q.m_groups.append(QVector<Clause>());
   // The search words of each OR group, parallel to m_groups. Without an OR
   // they are the one free text the caller substring-matches; with one, each
@@ -245,9 +277,19 @@ TaskQuery TaskQuery::compile(const QString& text, const QDate& today, const QVar
     }
     QString field;
     QString spec;
+    // The shorthands the filter's placeholder offers, as quick capture reads
+    // them (PERSONA-14): "p1" is a priority, "@week" / "@неделя" a plan.
+    static const QRegularExpression kPriority(QStringLiteral("^[pP][0-3]$"));
+    const QString when = shorthandWhen(token);
     // "#infra" is a label; "#42" is an issue number, searched for as text.
     static const QRegularExpression kIssueNo(QStringLiteral("^#\\d+$"));
-    if(token.size() > 1 && token.startsWith(QLatin1Char('#')) && !kIssueNo.match(token).hasMatch()) {
+    if(kPriority.match(token).hasMatch()) {
+      field = QStringLiteral("priority");
+      spec = token.toLower();
+    } else if(!when.isEmpty()) {
+      field = QStringLiteral("scheduled");
+      spec = when;
+    } else if(token.size() > 1 && token.startsWith(QLatin1Char('#')) && !kIssueNo.match(token).hasMatch()) {
       field = QStringLiteral("tag");
       spec = token.mid(1);
     } else if(!looksLikeFieldToken(token, &field, &spec)) {
@@ -344,6 +386,7 @@ TaskQuery TaskQuery::compile(const QString& text, const QDate& today, const QVar
       for(const QString& v : cl.values) {
         ok = ok && kIs.contains(v);
         q.m_usesBlocked = q.m_usesBlocked || v == QLatin1String("blocked");
+        q.m_asksArchived = q.m_asksArchived || (v == QLatin1String("archived") && !cl.negate);
       }
     } else if(cl.field == QLatin1String("has")) {
       static const QSet<QString> kHas = {
@@ -380,7 +423,11 @@ TaskQuery TaskQuery::compile(const QString& text, const QDate& today, const QVar
       // nothing — "deadline:banana" is a typo, not a request for an empty
       // board — and reported.
       q.m_unknown << typed;
-      continue;
+      // A saved view's column that is gone is not a typo: its clause stays
+      // and matches only the columns it still names (IDIOT-TASKS-11).
+      if(!(strictStatus && cl.field == QLatin1String("status"))) {
+        continue;
+      }
     }
     q.m_groups.last().append(cl);
   }
@@ -493,7 +540,7 @@ bool TaskQuery::clauseMatches(const Clause& c, const Task& t, const QString& hay
     return false;
   }
   if(c.field == QLatin1String("is")) {
-    const bool done = t.status == QStringLiteral("done");
+    const bool done = m_doneIds.contains(t.status);
     for(const QString& v : c.values) {
       bool hit = false;
       if(v == QLatin1String("open")) {
@@ -537,7 +584,7 @@ bool TaskQuery::clauseMatches(const Clause& c, const Task& t, const QString& hay
       return false;
     }
     if(c.special == QLatin1String("overdue")) {
-      return due < m_today && t.status != QStringLiteral("done");
+      return due < m_today && !m_doneIds.contains(t.status);
     }
     if(c.special == QLatin1String("range")) {
       return due >= c.date && due <= c.dateTo;

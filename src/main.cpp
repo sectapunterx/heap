@@ -5,6 +5,7 @@
 #include "cli/CliCore.h"
 #include "cli/CliExecutor.h"
 #include "cli/CliMain.h"
+#include "cli/CliQuery.h"
 #include "diag/FrameLog.h"
 #include "diag/PerfLog.h"
 #include "notify/NotificationCenter.h"
@@ -220,6 +221,13 @@ int smokeVerdict(const QQmlApplicationEngine& engine, const QList<QQmlError>& qm
   // to whatever the system has (Segoe UI / Consolas on Windows).
   for(const QString& missing : heap::platform::missingBundledFonts()) {
     problems << QStringLiteral("bundled font not available: ") + missing;
+  }
+  // A profile that did not load (damaged, newer, read-only) is not "OK"
+  // (DATA-15): the window opened, but on something else.
+  if(auto* controller = const_cast<QQmlApplicationEngine&>(engine).singletonInstance<AppController*>("TodoCpp", "AppController")) {
+    if(controller->storageState() != QLatin1String("ok")) {
+      problems << QStringLiteral("data: ") + controller->storageMessage();
+    }
   }
 
   for(const QString& problem : problems) {
@@ -535,7 +543,22 @@ int main(int argc, char* argv[]) {
     if(controller == nullptr) {
       return heap::cli::encodeResponse({heap::cli::kExitData, QString(), QStringLiteral("lowkey: the window is not ready\n")});
     }
-    return heap::cli::encodeResponse(heap::cli::execute(*controller, *request, QDateTime::currentDateTime()));
+    // A window that cannot save (a newer or damaged file, a read-only
+    // folder) must not answer "Added": nothing would reach the disk (DATA-2).
+    const bool writes = heap::cli::changesData(request->verb);
+    if(writes && controller->storageState() != QLatin1String("ok")) {
+      return heap::cli::encodeResponse(
+          {heap::cli::kExitData, QString(), QStringLiteral("lowkey: nothing changed: %1\n").arg(controller->storageMessage())});
+    }
+    heap::cli::Response response = heap::cli::execute(*controller, *request, QDateTime::currentDateTime());
+    if(writes) {
+      controller->flushSave();
+      if(controller->storageState() != QLatin1String("ok")) {
+        response.exitCode = heap::cli::kExitData;
+        response.err += QStringLiteral("lowkey: the change was not saved: %1\n").arg(controller->storageMessage());
+      }
+    }
+    return heap::cli::encodeResponse(response);
   });
 
   // Started by `heap open <id>` with no window open: show that task.

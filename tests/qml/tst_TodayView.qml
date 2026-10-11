@@ -168,4 +168,74 @@ TestCase {
         compare(AppController.todayData(new Date(2026, 9, 8), false).recapDay, false, "Thursday");
         compare(AppController.todayData(new Date(2026, 9, 10), false).recapDay, false, "Saturday");
     }
+
+    // IDIOT-CAL-1: Return on a meeting of a series hands its day's occurrence
+    // up, not null (which opened the whole series on its first day).
+    function test_a_series_meeting_opens_its_occurrence() {
+        const day = tc.probeDay();
+        const first = new Date(day); first.setDate(first.getDate() - 3);
+        const ev = AppController.newEventDraft(8, first);
+        ev.title = "today series probe";
+        ev.end = 8.5;
+        ev.date = first;
+        ev.rrule = "FREQ=DAILY";
+        AppController.saveEvent(ev);
+        tc.events.push(ev.id);
+        AppController.selectedDate = day;
+        const v = createTemporaryQmlObject('import TodoCpp; TodayView { anchors.fill: parent }', host);
+        const spy = createTemporaryQmlObject('import QtTest; SignalSpy { signalName: "eventClicked" }', host);
+        spy.target = v;
+        v.moveCursor(0, 0);
+        const items = v._items();
+        const at = items.findIndex(it => it.id === ev.id);
+        verify(at >= 0, "the meeting is a cursor stop");
+        v._placeIdx(at);
+        v.openCursor();
+        compare(spy.count, 1);
+        compare(spy.signalArguments[0][1], Qt.formatDate(day, "yyyy-MM-dd"));
+    }
+
+    // IDIOT-CAL-7: the two parts of an overnight meeting are two cursor stops;
+    // j walks down to the evening part and stops there.
+    function test_j_reaches_the_evening_part_of_an_overnight_meeting() {
+        const day = tc.probeDay();
+        const first = new Date(day); first.setDate(first.getDate() - 3);
+        const ev = AppController.newEventDraft(23, first);
+        ev.title = "overnight probe";
+        ev.start = 23;
+        ev.end = 1;
+        ev.date = first;
+        ev.endDate = new Date(first.getFullYear(), first.getMonth(), first.getDate() + 1);
+        ev.rrule = "FREQ=DAILY";
+        AppController.saveEvent(ev);
+        tc.events.push(ev.id);
+        AppController.selectedDate = day;
+        const v = createTemporaryQmlObject('import TodoCpp; TodayView { anchors.fill: parent }', host);
+        const parts = v._items().filter(it => it.id === ev.id);
+        compare(parts.length, 2, "the 00:00 part and the 23:00 one");
+        verify(parts[0].key !== parts[1].key);
+        v.moveCursor(0, 0);
+        for (let i = 0; i < v._items().length + 2; i++) v.moveCursor(0, 1);
+        compare(v.cursorKey, v._items()[v._items().length - 1].key, "the walk ends on the last row");
+    }
+
+    // IDIOT-CAL-10: a task planned for the day without a time is on that
+    // day's Today, as on the week's column, and the cursor reaches it.
+    function test_a_date_only_task_is_on_its_day() {
+        const day = tc.probeDay();
+        const d = AppController.newTaskDraft("todo");
+        d._isNew = true;
+        d.title = "date only probe";
+        d.scheduledAt = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0);
+        d.scheduledHasTime = false;
+        verify(AppController.saveTask(d));
+        tc.tasks.push(d.id);
+        const data = AppController.todayData(day, false);
+        verify((data.dayOnly || []).some(t => t.id === d.id), "listed for the day");
+        compare(data.facts.planned, 1);
+        AppController.selectedDate = day;
+        const v = createTemporaryQmlObject('import TodoCpp; TodayView { anchors.fill: parent }', host);
+        verify(!v.dayEmpty);
+        verify(v._items().some(it => it.kind === "task" && it.id === d.id), "a cursor stop");
+    }
 }

@@ -326,6 +326,12 @@ Popup {
         Qt.callLater(function () {
             if (entry.kind === "profile") {
                 // already switched above
+            } else if (entry.commandId === "goto-date") {
+                // The calendar on that day; Today and the calendar views
+                // just move to it.
+                AppController.selectedDate = entry.date;
+                if (["today", "week", "month"].indexOf(AppController.currentView) < 0)
+                    AppController.currentView = "week";
             } else if (entry.kind === "command" || entry.kind === "setting") {
                 // Closed first: a command often opens a popup of its own.
                 root.close();
@@ -545,6 +551,14 @@ Popup {
         return out;
     }
 
+    // A command's `sub` is its key; a setting's is a description. Both went
+    // to the key column, where a setting's sentence pushed its title out to
+    // nothing (PERSONA-19).
+    function _cmdRow(e) {
+        return Object.assign({}, e, { keys: e.kind === "command" ? (e.sub || "") : "",
+                                      sub: e.kind === "command" ? "" : (e.sub || "") });
+    }
+
     function _rebuild() {
         const raw = searchField.text;
         const rows = [];
@@ -556,9 +570,15 @@ Popup {
             const cmds = (q.length > 0 ? root._filterAndScore(q) : root._entries)
                 .filter(e => e.kind === "command" || e.kind === "setting");
             const extra = root._unavailable(q);
+            // ":" and a date goes to that date (HOTKEYS.md): ":fri",
+            // ":20.10", ":завтра" found a setting or nothing (SHELL-1).
+            const when = q.length > 0 ? AppController.parseDateTime(q, new Date()) : null;
+            if (when && when.ok && when.start && !isNaN(when.start.getTime()))
+                extra.unshift({ kind: "command", commandId: "goto-date", date: when.start, keys: "", sub: "",
+                                label: I18n.t("palette.cmd.goToDate").arg(I18n.fmtDate(when.start, "weekdayDay")) });
             if (cmds.length + extra.length > 0) header(I18n.t("cmd.group.commands"));
             for (const e of extra) rows.push(e);
-            for (const e of cmds) rows.push(Object.assign({}, e, { keys: e.sub || "", sub: "" }));
+            for (const e of cmds) rows.push(root._cmdRow(e));
         } else if (free.length === 0 && root.chips.length === 0) {
             root._parse = { tokens: [], text: "", tasks: [], total: 0, query: "" };
             const ctx = root._contextActions("");
@@ -568,12 +588,22 @@ Popup {
             }
             const rest = root._filterAndScore("");
             if (rest.length > 0) header(I18n.t("cmd.group.recent"));
-            for (const e of rest) rows.push(Object.assign({}, e, { keys: e.kind === "command" ? (e.sub || "") : "",
-                                                                   sub: e.kind === "command" ? "" : e.sub }));
+            for (const e of rest) rows.push(root._cmdRow(e));
         } else {
             const p = AppController.commandLine(root._fullText(), 50);
             root._parse = p;
             const words = p.text;
+            const scored = words.length > 0 ? root._filterAndScore(words) : [];
+            const cmds = scored.filter(e => (e.kind === "command" || e.kind === "setting") && root._nameHit(words, e)).slice(0, 8);
+            // A command whose name starts with what was typed is what was
+            // asked for: "save" opened a task that mentions saving, the
+            // command "Save current view" third (PERSONA-24).
+            const lw = String(words).trim().toLowerCase();
+            const leadCmds = lw.length >= 2 ? cmds.filter(e => String(e.label).toLowerCase().indexOf(lw) === 0) : [];
+            if (leadCmds.length > 0) {
+                header(I18n.t("cmd.group.commands"));
+                for (const e of leadCmds) rows.push(root._cmdRow(e));
+            }
             // The tasks found.
             const found = [];
             for (const t of p.tasks) {
@@ -634,12 +664,11 @@ Popup {
                 header(I18n.t("cmd.group.selected").arg(root._context.length === 1 ? root._context[0] : root._context.length));
                 for (const a of ctx) rows.push(a);
             }
-            const scored = words.length > 0 ? root._filterAndScore(words) : [];
-            const cmds = scored.filter(e => (e.kind === "command" || e.kind === "setting") && root._nameHit(words, e)).slice(0, 8);
+            const restCmds = cmds.filter(e => leadCmds.indexOf(e) < 0);
             const extra = root._unavailable(words);
-            if (cmds.length + extra.length > 0) header(I18n.t("cmd.group.commands"));
+            if (restCmds.length + extra.length > 0) header(I18n.t("cmd.group.commands"));
             for (const e of extra) rows.push(e);
-            for (const e of cmds) rows.push(Object.assign({}, e, { keys: e.sub || "", sub: "" }));
+            for (const e of restCmds) rows.push(root._cmdRow(e));
             const shownTasks = {};
             for (const e of found) shownTasks[e.taskId] = true;
             // Only what matches by name (DG-081): a word met somewhere in a
@@ -663,7 +692,12 @@ Popup {
         }
         root._rows = rows;
         root._matches = matches;
-        root._selectedIdx = 0;
+        // On an empty line the actions for the task under the cursor come
+        // first, and an impatient Enter marked it Done (IDIOT-SHELL-8): the
+        // selection starts below them, on a recent or a command.
+        const ctxCount = free.length === 0 && root.chips.length === 0 && !root._commandsOnly()
+                         ? matches.filter(m => m.kind === "action").length : 0;
+        root._selectedIdx = ctxCount > 0 ? (ctxCount < matches.length ? ctxCount : -1) : 0;
     }
 
     function _move(step) {

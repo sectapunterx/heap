@@ -18,6 +18,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMimeData>
+#include <QSignalSpy>
 #include <QStandardPaths>
 
 #include <gtest/gtest.h>
@@ -195,6 +196,30 @@ TEST_F(LocalFeatures, AnItemBecomesACardThatTicksWithItsDone) {
   EXPECT_TRUE(app_->checklistCardBack(QStringLiteral("T-1"), itemId));
   EXPECT_EQ(task(cardId), nullptr);
   EXPECT_EQ(app_->taskChecklistText(QStringLiteral("T-1")), QString("- migrate\n-- dump\n--- verify\n- deploy"));
+}
+
+TEST_F(LocalFeatures, BackToListKeepsWhatWasWrittenOnTheCard) {
+  // IDIOT-TASKS-4: "Back to list" deleted the card's text without a word.
+  addLocal(QStringLiteral("T-1"));
+  app_->addChecklistItems(QStringLiteral("T-1"), QString(), QStringLiteral("- migrate"));
+  const QString itemId = app_->taskChecklist(QStringLiteral("T-1")).at(0).toMap().value(QStringLiteral("id")).toString();
+  const QString cardId = app_->checklistItemToCard(QStringLiteral("T-1"), itemId);
+  ASSERT_FALSE(cardId.isEmpty());
+  Task card = *task(cardId);
+  card.desc = QStringLiteral("Important design notes");
+  app_->tasks()->upsert(card);
+  QSignalSpy toasts(app_.get(), &AppController::toast);
+  EXPECT_FALSE(app_->checklistCardBack(QStringLiteral("T-1"), itemId));
+  EXPECT_NE(task(cardId), nullptr) << "the card and its text stay";
+  EXPECT_EQ(toasts.count(), 1) << "and the refusal is said";
+
+  // A card with nothing but a new title goes back under that title.
+  card.desc.clear();
+  card.title = QStringLiteral("migrate the db");
+  app_->tasks()->upsert(card);
+  EXPECT_TRUE(app_->checklistCardBack(QStringLiteral("T-1"), itemId));
+  EXPECT_EQ(task(cardId), nullptr);
+  EXPECT_EQ(app_->taskChecklistText(QStringLiteral("T-1")), QString("- migrate the db"));
 }
 
 TEST_F(LocalFeatures, AChecklistOnATrackerCardSurvivesAPullThatRewritesTheBody) {
@@ -384,4 +409,17 @@ int main(int argc, char** argv) {
   }
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
+}
+
+TEST_F(LocalFeatures, ABlockingLoopIsRefused) {
+  // IDIOT-TASKS-14.
+  addLocal(QStringLiteral("B-1"));
+  addLocal(QStringLiteral("B-2"));
+  addLocal(QStringLiteral("B-3"));
+  ASSERT_TRUE(app_->addBlockLink(QStringLiteral("B-1"), QStringLiteral("B-2"), true));
+  ASSERT_TRUE(app_->addBlockLink(QStringLiteral("B-2"), QStringLiteral("B-3"), true));
+  QSignalSpy toasts(app_.get(), &AppController::toast);
+  EXPECT_FALSE(app_->addBlockLink(QStringLiteral("B-3"), QStringLiteral("B-1"), true));
+  EXPECT_EQ(toasts.count(), 1);
+  EXPECT_TRUE(task("B-3")->links.isEmpty());
 }

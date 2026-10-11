@@ -398,6 +398,51 @@ TEST_F(StorageSafety, UndoProfileDeleteGivesItsEventsBack) {
   }
 }
 
+// IDIOT-SHELL-2: the delete dialog promises a snapshot in the Time Machine,
+// and the in-memory undo of a deleted profile outlives a profile switch.
+TEST_F(StorageSafety, DeleteProfileLeavesASnapshotAndSurvivesASwitch) {
+  writeRaw(statePath(), stateDoc({profileJson("a", {}), profileJson("b", {}), profileJson("gone", {})}, "a"));
+  AppController app;
+  app.deleteProfile(QStringLiteral("gone"));
+  bool tagged = false;
+  for(const QVariant& v : app.listSnapshots()) {
+    const QVariantMap m = v.toMap();
+    if(m.value(QStringLiteral("tag")).toString() == QStringLiteral("profile")) {
+      tagged = true;
+      EXPECT_EQ(m.value(QStringLiteral("profiles")).toInt(), 3) << "the snapshot is taken before the removal";
+    }
+  }
+  EXPECT_TRUE(tagged);
+  EXPECT_EQ(app.profiles().size(), 2);
+  app.setActiveProfileId(QStringLiteral("b"));
+  app.setActiveProfileId(QStringLiteral("a"));
+  EXPECT_TRUE(app.hasPendingUndo());
+  app.undo();
+  EXPECT_EQ(app.profiles().size(), 3);
+}
+
+// IDIOT-SHELL-5: the Time Machine preview names a profile the restore would
+// remove (made after the snapshot) instead of saying "no changes".
+TEST_F(StorageSafety, SnapshotPreviewNamesProfilesMadeSince) {
+  writeRaw(statePath(), stateDoc({profileJson("a", {}), profileJson("old", {})}, "a"));
+  AppController app;
+  app.deleteProfile(QStringLiteral("old"));  // leaves a snapshot with a + old
+  QString snap;
+  for(const QVariant& v : app.listSnapshots()) {
+    if(v.toMap().value(QStringLiteral("tag")).toString() == QStringLiteral("profile")) {
+      snap = v.toMap().value(QStringLiteral("name")).toString();
+    }
+  }
+  ASSERT_FALSE(snap.isEmpty());
+  const QString fresh = app.createProfile(QStringLiteral("Fresh"));
+  ASSERT_FALSE(fresh.isEmpty());
+  const QVariantMap preview = app.previewSnapshot(snap);
+  ASSERT_TRUE(preview.value(QStringLiteral("ok")).toBool());
+  const QVariantList gone = preview.value(QStringLiteral("removedProfiles")).toList();
+  ASSERT_EQ(gone.size(), 1);
+  EXPECT_EQ(gone.at(0).toMap().value(QStringLiteral("id")).toString(), fresh);
+}
+
 TEST_F(StorageSafety, UndoProfileDeleteNeverDuplicatesAnId) {
   writeRaw(statePath(), stateDoc({profileJson("a", {})}, "a"));
   AppController app;

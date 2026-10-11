@@ -221,9 +221,9 @@ ApplicationWindow {
     readonly property int _sideRailMinWidth: Theme.compactWindowWidth
     property bool _sideRailWanted: _settingsObject().sideRailExpanded !== false
     property bool _sideRailOnNarrow: false
-    readonly property bool sideRailExpanded: win.width < _sideRailMinWidth ? _sideRailOnNarrow : _sideRailWanted
+    readonly property bool sideRailExpanded: Theme.compactAt(win.width) ? _sideRailOnNarrow : _sideRailWanted
     function toggleSideRail() {
-        if (win.width < _sideRailMinWidth) {
+        if (Theme.compactAt(win.width)) {
             _sideRailOnNarrow = !_sideRailOnNarrow;
             return;
         }
@@ -573,27 +573,58 @@ ApplicationWindow {
     // focus still sits where Qt dropped it.
     property Item _focusHome: null
     property bool _focusWasInPopup: false
+    // A popup that closed on Return leaves the rest of that key press — a
+    // hurried second Enter — to the view, where board.open opened the card
+    // under the cursor with the caret in its title (IDIOT-SHELL-1, the second
+    // Return in a board dialog: IDIOT-TASKS-6). Return stands down for a
+    // moment after focus leaves any popup.
+    property real _returnGuardUntil: 0
+    property bool _focusOnMenu: false
     onActiveFocusItemChanged: {
         const it = win.activeFocusItem;
         if (!it) return;
         // The region frame (APP-277) goes once the keyboard leaves the region.
         if (win.regionShown.length > 0 && win._regionOf(it) !== win.regionShown) win.regionShown = "";
-        if (win._focusInPopup) {
+        // Walked here, not read from _focusInPopup: that binding is stale at
+        // this moment, and the popup's own item became the place to go back
+        // to (IDIOT-DOC-4).
+        let inPopup = false;
+        for (let p = it; p; p = p.parent)
+            if (p === Overlay.overlay) { inPopup = true; break; }
+        // A menu holds the keyboard on its own item, a dialog in a field.
+        const wasMenu = win._focusOnMenu;
+        win._focusOnMenu = it.parent === Overlay.overlay;
+        if (inPopup) {
             win._focusWasInPopup = true;
+            // A card dragged while the palette opens does not land behind it
+            // (IDIOT-TASKS-8).
+            const dv = win.activeViewItem();
+            if (dv && typeof dv.cancelDrag === "function") dv.cancelDrag();
             return;
+        }
+        if (wasMenu) {
+            win._popupJustClosed = true;
+            popupClosedTimer.restart();
         }
         if (win._focusWasInPopup) {
             win._focusWasInPopup = false;
-            if (it !== win._focusHome) {
+            win._returnGuardUntil = Date.now() + 400;
+            // Back on an empty header search is not "home" either (PERO-1):
+            // returnFocusHome() sends the keyboard on to the view.
+            if (it !== win._focusHome || win._isIdleSearch(it)) {
                 const landed = it;
+                // Qt may pass through the window's root on its way back to
+                // the empty search; either place is handed on.
                 Qt.callLater(function () {
-                    if (win.activeFocusItem === landed && !win._focusInPopup) win.returnFocusHome();
+                    const f = win.activeFocusItem;
+                    if ((f === landed || win._isIdleSearch(f)) && !win._focusInPopup) win.returnFocusHome();
                 });
             }
             return;
         }
         win._focusHome = it;
     }
+    function _isIdleSearch(it) { return !!it && it.objectName === "topbar-search" && (it.text || "").length === 0; }
     function returnFocusHome() {
         const h = win._focusHome;
         // An empty header search is not where anyone was working: it only
@@ -655,7 +686,9 @@ ApplicationWindow {
         if (!f) return false;
         const v = win.activeViewItem();
         for (let p = f; p; p = p.parent) {
-            if (p === v) return false;
+            // A panel handles its own Esc (IDIOT-DOC-5): a chip in the task
+            // document is not a stray control of the view.
+            if (p === v || p === taskDoc || p === eventEditor) return false;
             // A view's own keyboard surface (the month grid) is the view:
             // it claims the keys it uses itself and leaves the rest.
             if (p.activeFocusOnTab === true) return p.viewSurface !== true;
@@ -665,7 +698,24 @@ ApplicationWindow {
     // A view-local key (board cursor, calendar paging, Esc on the selection,
     // Delete, the bare-letter shortcuts) stands down while any of this holds.
     readonly property bool _viewKeysBlocked: hotkeys.isCapturing || _overlayOpen || _typing || _focusInPopup || _dimmerShown
-                                             || _focusOnControl
+                                             || _focusOnControl || _panelOpen
+    // A side panel — the task document or a meeting — is open over the view.
+    // The view behind it is under a scrim and takes no keys: Delete deleted
+    // the open task, e archived it, Ctrl+A then Delete took every card, and
+    // j/k/Space moved a cursor nobody could see (IDIOT-DOC-2/3, PERSONA-9).
+    // The keys of the task itself (d, t, 1-4, s, i, y…) act on the open task.
+    readonly property bool _panelOpen: taskDoc.opened || eventEditor.opened
+    readonly property bool _focusInPanel: {
+        for (let p = win.activeFocusItem; p; p = p.parent)
+            if (p === taskDoc || p === eventEditor) return true;
+        return false;
+    }
+    // The keys that belong to the open task while the keyboard is in its
+    // document; the rest of the keymap waits until it closes.
+    readonly property var _docTaskKeys: ["task.done", "task.timer", "task.priority0", "task.priority1", "task.priority2",
+                                         "task.priority3", "task.schedule", "task.due", "task.copyId", "task.copyBranch",
+                                         "task.copyLink", "task.openExternal", "task.rename", "task.createBranch",
+                                         "search.focus"]
     // Global shortcuts (switch view, new task, palette, undo…) stand down
     // behind a modal: Ctrl+3 used to switch the view under an open task
     // editor, Ctrl+K opened the palette over a dialog. The side-rail
@@ -682,6 +732,11 @@ ApplicationWindow {
     // A view that knows better where typing should go (the note editor, a
     // list's current row) says so with takeFocus().
     function focusActiveView() {
+        // An open panel is where the keyboard goes back to, not the view
+        // under its scrim: after any menu or popup the keys landed on the
+        // board and Esc could no longer close the document (IDIOT-DOC-4/7/8).
+        if (eventEditor.opened) { eventEditor.takeFocus(); return; }
+        if (taskDoc.opened) { taskDoc.takeFocus(); return; }
         const v = win.activeViewItem();
         if (v && typeof v.takeFocus === "function") v.takeFocus();
         else if (v) v.forceActiveFocus();
@@ -948,9 +1003,14 @@ ApplicationWindow {
             // Undo takes back the action this toast names — not whatever was
             // done last, which after a silent reorder is something else.
             const serial = AppController.undoSerialForToast();
-            toast.showWithAction(msg, I18n.t("undo.action"), secs, function () {
+            toast.showUndo(msg, I18n.t("undo.action"), secs, function () {
                 AppController.undoEntry(serial)
             }, "success", AppController.shortcutText("undo"));
+        }
+        // No history left behind an Undo toast: it stops offering the button
+        // (IDIOT-SHELL-4).
+        function onPendingUndoChanged() {
+            if (!AppController.hasPendingUndo) toast.dropUndo();
         }
         // "Done" with no column of that stage: a card with the two ways out
         // (APP-268, R3-137).
@@ -1255,6 +1315,8 @@ ApplicationWindow {
                             // The document belongs to the section it was
                             // opened in: another section closes it (DG-064).
                             if (AppController.currentSection !== win._docSection && taskDoc.opened) taskDoc.close();
+                            // The meeting panel too: it stayed over Knowledge (IDIOT-DOC-18).
+                            if (AppController.currentSection !== win._docSection && eventEditor.opened) eventEditor.close();
                             win._docSection = AppController.currentSection;
                             win.activateCurrentView();
                             Qt.callLater(win._focusSwitchedView);
@@ -1358,7 +1420,7 @@ ApplicationWindow {
                         prioritiesFilter: win.prioritiesFilter
                         showArchived: win.tasksShowArchived
                         onTaskClicked: (id) => win.showTask(AppController.taskById(id))
-                        onEventClicked: (id, occurrence) => occurrence ? eventEditor.showForOccurrence(occurrence) : eventEditor.showForId(id)
+                        onEventClicked: (id, occurrence) => win.openEvent(id, occurrence)
                         // An empty slot or a dragged stretch opens the editor on
                         // a draft: the meeting is named before it exists.
                         onCreateRequested: (startHour, endHour, day) => {
@@ -1388,6 +1450,8 @@ ApplicationWindow {
                         onFilterConsumed: notesBridge.requestedFilter = ""
                         onTaskRequested: (id) => win.openTaskById(id)
                         onPersonRequested: (id) => personEditor.showFor(AppController.personById(id))
+                        // Its keys stand down behind a panel or a dialog (IDIOT-KNOW-4).
+                        keysLive: !win._panelOpen && !win._modalOpen
                     }
                 }
                 Component {
@@ -1452,9 +1516,18 @@ ApplicationWindow {
     }
     // A Tasks filter that found nothing: "сбросить фильтр · Esc" (DG-160)
     // clears the query and the priority filter.
+    // Back to the plain task list: the default "status not done" stays (the
+    // reset dropped it and done tasks flooded in, IDIOT-TASKS-5), and a saved
+    // view is left rather than shown as modified.
     function resetTaskFilter() {
-        win.searchText = "";
+        savedViewsHost.leave();
+        win.searchText = win.defaultQuery("", false);
         win.prioritiesFilter = ({});
+    }
+    // Ctrl+2, g b and Esc on the board leave a saved view: only the chip's ×
+    // did, so there was no keyboard way back (PERSONA-16).
+    function leaveSavedView() {
+        if (savedViewsHost.activeView) win.resetTaskFilter();
     }
     readonly property bool _taskFilterEmpty: {
         const v = AppController.currentSection === "tasks" ? win.activeViewItem() : null;
@@ -1463,7 +1536,8 @@ ApplicationWindow {
     Shortcut {
         sequence: "Escape"
         context: Qt.ApplicationShortcut
-        enabled: win._taskFilterEmpty && !win._viewKeysBlocked && !win._focusOnControl && !AppController.immersion
+        enabled: (win._taskFilterEmpty || (!!savedViewsHost.activeView && AppController.currentSection === "tasks"))
+                 && !win._viewKeysBlocked && !win._focusOnControl && !AppController.immersion
                  && AppController.selectionCount === 0
         onActivated: win.resetTaskFilter()
     }
@@ -1578,6 +1652,9 @@ ApplicationWindow {
     property string _docSection: AppController.currentSection
     function showTask(t) {
         if (!t) return;
+        // Made just now from a capture (Tab): the title is what was being
+        // typed, so the caret stays in it.
+        const fresh = !!t._isNew;
         if (t._isNew) {
             const d = Object.assign({}, t);
             if (String(d.title || "").trim().length === 0 || !AppController.saveTask(d)) {
@@ -1586,7 +1663,7 @@ ApplicationWindow {
             }
             t = d;
         }
-        if (t.id) taskDoc.open(t.id);
+        if (t.id) taskDoc.open(t.id, fresh);
     }
     // The example profile (APP-271): opened, it is the active profile and
     // Today shows its day; a second "Open the example" only switches to it.
@@ -1639,8 +1716,24 @@ ApplicationWindow {
     }
     // The day's hands, for Today and the day panel.
     function openEvent(id, occurrence) {
+        // Today hands the occurrence over as its ISO date (IDIOT-CAL-1): the
+        // series' row opened instead, and a change moved every past day too.
+        if (typeof occurrence === "string") occurrence = win._occurrenceOf(id, occurrence);
         if (occurrence) eventEditor.showForOccurrence(occurrence);
         else eventEditor.showForId(id);
+    }
+    // The occurrence of series `id` (master or override) on ISO day `iso`;
+    // null for a meeting that does not repeat.
+    function _occurrenceOf(id, iso) {
+        const p = String(iso).split("-");
+        if (p.length !== 3) return null;
+        const day = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+        const list = AppController.eventOccurrences(day, day);
+        for (let i = 0; i < list.length; i++) {
+            const o = list[i];
+            if (String(o.masterId || "").length > 0 && (o.id === id || o.masterId === id)) return o;
+        }
+        return null;
     }
     function createEventAt(startHour, endHour, day) {
         eventCapture.openAt({ date: day, start: startHour, end: endHour });
@@ -1651,6 +1744,8 @@ ApplicationWindow {
     // The tasks a key acts on: the selection, else the one under the
     // cursor or the pointer in the open view.
     function _keyTaskIds() {
+        // With a panel open, never a card behind it: the open task, or none.
+        if (win._panelOpen) return taskDoc.opened && win._focusInPanel ? [taskDoc.taskId] : [];
         if (AppController.selectionCount > 0) return AppController.selectedTaskIds;
         const v = win.activeViewItem();
         if (v && typeof v._actionCardId === "function") {
@@ -1660,11 +1755,11 @@ ApplicationWindow {
         if (v && v.hoveredTaskId) return [v.hoveredTaskId];
         return [];
     }
-    // D (APP-268): nothing under the key, nothing happens. A second d on the
-    // same tasks within half a second is Vim's "dd" habit, not "take it
-    // back" (keymap rule 6).
+    // D (APP-268): nothing under the key, nothing happens. A second d within
+    // half a second is Vim's "dd" habit, not "take it back" (keymap rule 6),
+    // whichever card is under the key by then (IDIOT-TASKS-18).
     function markDone() {
-        const ids = taskDoc.opened && taskDoc.activeFocus ? [taskDoc.taskId] : win._keyTaskIds();
+        const ids = win._keyTaskIds();
         if (ids.length === 0) return;
         const key = ids.join(",");
         const now = Date.now();
@@ -1717,6 +1812,7 @@ ApplicationWindow {
             return;
         }
         if (id.indexOf("section.") === 0) {
+            if (id === "section.tasks") win.leaveSavedView();
             AppController.openSection(id.slice(8));
             return;
         }
@@ -1755,6 +1851,7 @@ ApplicationWindow {
             return;
         }
         if (id.indexOf("view.") === 0) {
+            if (id === "view.board") win.leaveSavedView();
             AppController.currentView = id.slice(5);
             return;
         }
@@ -1807,6 +1904,7 @@ ApplicationWindow {
         case "event.new":            eventCapture.openAt(null); break;
         case "welcome.replay":       win.openGuide(); break;
         case "recap.open":           weeklyRecap.showNow(); break;
+        case "example.open":         win.openExample(); break;
         case "focus.immersion":      win.toggleImmersion(); break;
         case "standup.draft":        standupDraft.showNow(); break;
         case "timeMachine.open":     timeMachine.showNow(); break;
@@ -1912,7 +2010,7 @@ ApplicationWindow {
         "view.timeline", "view.week", "view.month", "view.docs", "view.notes", "view.settings", "view.archive",
         "theme.toggle", "person.new", "profile.new", "profile.next", "profile.prev", "profile.exportMd",
         "profile.weeklyReport", "sync.all", "focus.immersion", "timeMachine.open", "standup.draft", "recap.open",
-        "endOfDay.open", "welcome.replay", "zoom.in", "zoom.out", "zoom.reset", "tweaks.open", "log.open",
+        "endOfDay.open", "welcome.replay", "example.open", "zoom.in", "zoom.out", "zoom.reset", "tweaks.open", "log.open",
         "hotkeys.open", "undo", "redo", "search.focus", "selection.selectAll", "selection.clearSel",
         "selection.deleteSel", "cal.today", "cal.prevDay", "cal.nextDay", "cal.newEvent", "cal.prev", "cal.next",
         "cal.goToDate", "cal.taskEarlier", "cal.taskLater", "cal.taskEarlierWeek", "cal.taskLaterWeek",
@@ -1967,8 +2065,12 @@ ApplicationWindow {
         // F6 leaves a text field too: that is how one gets out of it.
         if (id === "region.next" || id === "region.prev") return !win._modalOpen;
         const routed = KeyRules.isRouterSequence(AppController.shortcutFor(id));
-        if (routed ? win._viewKeysBlocked : !win._globalKeysOn) return false;
         const base = KeyRules.baseId(id);
+        if (base === "board.open" && Date.now() < win._returnGuardUntil) return false;
+        if (routed && win._panelOpen && win._docTaskKeys.indexOf(base) >= 0)
+            return taskDoc.opened && win._focusInPanel && !win._typing && !win._focusInPopup && !win._overlayOpen
+                && !hotkeys.isCapturing;
+        if (routed ? win._viewKeysBlocked : !win._globalKeysOn) return false;
         const v = AppController.currentView;
         const b = win.activeViewItem();
         // Column move: only on a column header that holds the keyboard
@@ -1984,17 +2086,24 @@ ApplicationWindow {
         // s on an empty day of the calendar: go to a date (keymap.md).
         if (base === "task.schedule" && win._keyTaskIds().length === 0)
             return ["day", "week", "month"].indexOf(v) >= 0 && !!b && b.cursorVisible === true;
-        if (base.indexOf("notes.") === 0) return v === "notes";
-        if (base.indexOf("savedView.") === 0) return Number(base.slice(10)) <= AppController.savedViews.length;
+        if (base.indexOf("notes.") === 0) return v === "notes" && !win._panelOpen;
+        // "/" on Today: the header search does not filter the day, so the
+        // key does nothing rather than look like it does (IDIOT-KNOW-15).
+        if (routed && base === "search.focus" && v === "today") return false;
+        if (base.indexOf("savedView.") === 0)
+            return Number(base.slice(10)) <= AppController.savedViews.length && !win._typing;  // IDIOT-SHELL-7
+        if (base === "profile.next" || base === "profile.prev") return !win._typing;
         if (base.indexOf("task.") === 0 && base !== "task.new")
-            return win._keyTaskIds().length > 0 || (base === "task.done" && taskDoc.opened && taskDoc.activeFocus);
+            return win._keyTaskIds().length > 0;
         switch (base) {
         case "cal.prev": case "cal.next":
             return ["today", "week", "month"].indexOf(v) >= 0;
         case "cal.today": case "cal.prevDay": case "cal.nextDay": case "cal.goToDate":
             return win._dayViews.indexOf(v) >= 0;
+        // No view defines setZoom: the catalogue's z d did nothing while the
+        // CalKey under it was shadowed (IDIOT-CAL-3). It switches, as z w does.
         case "cal.zoomDay":
-            return (v === "week" || v === "month") && !!b && typeof b.setZoom === "function";
+            return v === "week" || v === "month";
         case "cal.newEvent":
             return !win._overlayOpen;
         case "cal.taskEarlier": case "cal.taskLater": case "cal.taskEarlierWeek": case "cal.taskLaterWeek":
@@ -2003,6 +2112,11 @@ ApplicationWindow {
         case "selection.toggle": case "selection.range":
             return v === "board" || win._keyTaskIds().length > 0;
         case "selection.clearSel":
+            if (!!b && b.dragActive === true) return true;
+            // Nothing found and nothing selected: Esc is the empty state's
+            // "reset the filter · Esc", not a cursor on a card filtered out of
+            // sight (IDIOT-TASKS-5).
+            if (win._taskFilterEmpty && AppController.selectionCount === 0) return false;
             return AppController.selectionCount > 0 || win._rangeMode || win._boardCursorShown();
         case "selection.deleteSel":
             return AppController.selectionCount > 0 || win._cursorTaskId().length > 0;
@@ -2189,15 +2303,23 @@ ApplicationWindow {
             return;
         }
         case "task.rename": {
+            if (win._panelOpen) { if (taskDoc.opened) taskDoc.focusTitle(); return; }
             const ids = win._keyTaskIds();
             if (ids.length > 0) win.openTask(ids[0]);
             return;
         }
+        case "search.focus":
+            // "/" in the document does what its hint says: a new line and
+            // the insert menu, not the board's filter behind it.
+            if (win._panelOpen) { if (taskDoc.opened) taskDoc.slashInsert(); return; }
+            win._focusSearch();
+            return;
         case "task.due": win.openSchedule("due"); return;
         case "task.schedule": win.openSchedule("scheduled"); return;
         case "task.priority0": case "task.priority1": case "task.priority2": case "task.priority3": {
-            const p = "P" + base.slice(13);
-            win._eachKeyTask(function (t) { AppController.setTaskPriority(t.id, p); });
+            // One bulk edit, one undo step (IDIOT-TASKS-3): a step per card
+            // filled the undo stack and froze on a thousand cards.
+            win.priorityKeyTasks("P" + base.slice(13));
             return;
         }
         case "task.timer":
@@ -2222,6 +2344,8 @@ ApplicationWindow {
             if (win._rangeMode && AppController.currentView === "board") call("toggleCursorSelection");
             return;
         case "selection.clearSel":
+            // Esc mid-drag cancels the drag and nothing else (IDIOT-TASKS-8).
+            if (b && typeof b.cancelDrag === "function" && b.cancelDrag()) return;
             win._rangeMode = false;
             AppController.clearSelection();
             win._clearBoardCursor();
@@ -2242,7 +2366,7 @@ ApplicationWindow {
             return;
         }
         case "cal.goToDate": goToDatePopup.openAt(AppController.selectedDate, win.contentItem); return;
-        case "cal.zoomDay": call("setZoom", "day"); return;
+        case "cal.zoomDay": AppController.currentView = "day"; return;
         case "cal.newEvent": {
             const day = AppController.selectedDate;
             eventCapture.openAt({ date: day });
@@ -2254,7 +2378,7 @@ ApplicationWindow {
         case "cal.taskLaterWeek": win._moveViewTask(7, 0); return;
         case "cal.taskTimeEarlier": win._moveViewTask(0, -1); return;
         case "cal.taskTimeLater": win._moveViewTask(0, 1); return;
-        case "undo": AppController.undo(); return;
+        case "undo": if (taskDoc.opened && win._focusInPanel) taskDoc.undo(); else AppController.undo(); return;
         case "redo": AppController.redo(); return;
         }
         win.runCommand(base);
@@ -2267,6 +2391,7 @@ ApplicationWindow {
         enabled: !hotkeys.isCapturing && !win._captureActive
         bindings: AppController.shortcuts
         qtOwned: win._qtOwned
+        holdUnlive: boardTypeAhead.enabled
         handler: function (ids, dry) { return win._routeKey(ids, dry); }
         // The old keys of 0.7 say once where their action went (APP-281 A4).
         onChordPressed: (chord) => { if (AppController.hasKeymapNotice()) AppController.noteKeyPressed(chord); }
@@ -2322,7 +2447,7 @@ ApplicationWindow {
         sequence: win._kbd("section.tasks")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: AppController.openSection("tasks")
+        onActivated: { win.leaveSavedView(); AppController.openSection("tasks"); }
     }
     Shortcut {
         sequence: win._kbd("section.knowledge")
@@ -2334,7 +2459,7 @@ ApplicationWindow {
         sequence: _kbd("view.board")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: AppController.currentView = "board"
+        onActivated: { win.leaveSavedView(); AppController.currentView = "board"; }
     }
     Shortcut {
         sequence: _kbd("view.timeline")
@@ -2396,17 +2521,27 @@ ApplicationWindow {
         enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: profileEditor.showCreate()
     }
+    // Ctrl+[ is Esc to a Vim hand, and the keymap is Vim-based: while a field
+    // takes typed text it leaves the field, and neither profile key switches
+    // the workspace under the caret (IDIOT-SHELL-7).
     Shortcut {
         sequence: _kbd("profile.next")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && win._globalKeysOn
+        enabled: sequence.length > 0 && win._globalKeysOn && !win._typing
         onActivated: win._cycleProfile(1)
     }
     Shortcut {
         sequence: _kbd("profile.prev")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && win._globalKeysOn
+        enabled: sequence.length > 0 && win._globalKeysOn && !win._typing
         onActivated: win._cycleProfile(-1)
+    }
+    Shortcut {
+        objectName: "vim-escape"
+        sequence: "Ctrl+["
+        context: Qt.ApplicationShortcut
+        enabled: win._typing && !win._focusInPopup && !win._modalOpen && !hotkeys.isCapturing
+        onActivated: win.focusActiveView()
     }
     Shortcut {
         sequence: _kbd("profile.exportMd")
@@ -2456,6 +2591,12 @@ ApplicationWindow {
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: win.runCommand("welcome.replay")
+    }
+    Shortcut {
+        sequence: win._kbd("example.open")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: win.runCommand("example.open")
     }
     Shortcut {
         sequence: "Escape"
@@ -2545,7 +2686,8 @@ ApplicationWindow {
         // field Ctrl+Z belongs to the field, which takes it first.
         enabled: sequence.length > 0 && win._globalKeysOn && AppController.hasPendingUndo && !win._overlayOpen
             && !(boardLoader.item && boardLoader.item.dialogOpen === true)
-        onActivated: AppController.undo()
+        // In the open document it is the document's undo (IDIOT-DOC-17).
+        onActivated: if (taskDoc.opened && win._focusInPanel) taskDoc.undo(); else AppController.undo()
     }
     Shortcut {
         sequence: _kbd("redo")
@@ -2557,7 +2699,8 @@ ApplicationWindow {
     Shortcut {
         sequence: _kbd("search.focus")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && win._globalKeysOn
+        // Not behind a panel: the filter is under the scrim (IDIOT-DOC-4).
+        enabled: sequence.length > 0 && win._globalKeysOn && !win._panelOpen
         onActivated: win._focusSearch()
     }
 
@@ -2599,6 +2742,16 @@ ApplicationWindow {
                  && !hotkeys.isCapturing
         onActivated: win.focusActiveView()
     }
+    // A panel is open and the keyboard is somewhere else, with nothing on
+    // top: Esc brings it back into the panel, whose own Esc then closes it.
+    // "Esc back" is never a dead key (IDIOT-DOC-4).
+    Shortcut {
+        sequence: "Escape"
+        context: Qt.ApplicationShortcut
+        enabled: win._panelOpen && !win._focusInPanel && !win._typing && !win._focusInPopup && !win._overlayOpen
+                 && !win._dimmerShown && !hotkeys.isCapturing
+        onActivated: win.focusActiveView()
+    }
     Shortcut {
         sequence: _kbd("selection.deleteSel")
         context: Qt.ApplicationShortcut
@@ -2633,9 +2786,14 @@ ApplicationWindow {
     // confirm, Alt+← moved the day from the header search (SHELL-3).
     component DayKey: Shortcut {
         context: Qt.ApplicationShortcut
-        enabled: sequences.length > 0 && !win._viewKeysBlocked
+        enabled: sequences.length > 0 && !win._viewKeysBlocked && !win._popupJustClosed
             && ["today", "board", "list", "day", "week", "month"].indexOf(AppController.currentView) >= 0
     }
+    // The Alt of Alt+← closes an open menu on its own, and the ← that
+    // followed paged the day behind it (IDIOT-KNOW-12): a day key just after
+    // a menu let the keyboard go waits a moment.
+    property bool _popupJustClosed: false
+    Timer { id: popupClosedTimer; interval: 400; onTriggered: win._popupJustClosed = false }
     DayKey {
         sequences: [_kbd("cal.today")]
         onActivated: AppController.selectedDate = AppController.today
@@ -3044,8 +3202,10 @@ ApplicationWindow {
             AppController.scheduleTaskAtNextFreeSlot(ids[i], AppController.selectedDate);
     }
     function priorityKeyTasks(p) {
-        if (AppController.selectionCount > 0) { AppController.setSelectedTasksPriority(p); return; }
         const ids = win._keyTaskIds();
+        // The selection only when it is what the key acts on: with the panel
+        // open that is the open task alone.
+        if (!win._panelOpen && AppController.selectionCount > 0) { AppController.setSelectedTasksPriority(p); return; }
         if (ids.length > 0) AppController.setTaskPriority(ids[0], p);
     }
     readonly property bool _taskKeysOn: win._boardKeysOn
@@ -3224,7 +3384,9 @@ ApplicationWindow {
     }
     KeyCheatSheet {
         id: cheatSheet
-        onEditRequested: Qt.callLater(function () { rail.openHotkeys(rail.hotkeysAnchor); })
+        // "Change a key — Settings > Keys" lands there, as it says
+        // (IDIOT-SHELL-15); it opened the sidebar popover.
+        onEditRequested: Qt.callLater(function () { win.runCommand("settings:shortcuts"); })
     }
 
     // "g …": the first key of a sequence waits for its second (keymap rule 3).
@@ -3260,6 +3422,10 @@ ApplicationWindow {
         onFinished: {
             if (Theme.reducedMotion) splash.visible = false;
             else splashFade.start();
+            // The view takes the keyboard at launch — on the first run that
+            // is the one input on screen, which looked ready and was not
+            // (IDIOT-SHELL-9). A key or a dialog that got there first keeps it.
+            if (!win._focusInPopup && !win._typing) win.focusActiveView();
         }
         onReportRequested: reportIssue.showNow()
         // The first frame is on screen: the scene is ready.

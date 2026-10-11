@@ -238,6 +238,24 @@ bool MdDocument::toggleTask(QQuickTextDocument* target, int row) {
   return true;
 }
 
+bool MdDocument::replaceRange(QQuickTextDocument* target, int start, int end, const QString& text) {
+  if(target == nullptr || target->textDocument() == nullptr) {
+    return false;
+  }
+  QTextDocument* document = target->textDocument();
+  const int last = document->characterCount() - 1;
+  if(start < 0 || end < start || end > last) {
+    return false;
+  }
+  QTextCursor cursor(document);
+  cursor.beginEditBlock();
+  cursor.setPosition(start);
+  cursor.setPosition(end, QTextCursor::KeepAnchor);
+  cursor.insertText(text);
+  cursor.endEditBlock();
+  return true;
+}
+
 QVariantMap MdDocument::taskToggleForRow(int row) {
   flush();
   const int line = m_model.data(m_model.index(row), MdBlockModel::TaskLineRole).toInt();

@@ -43,6 +43,9 @@ Rectangle {
     }
     // After "+": the view puts the cursor in the new note.
     signal noteCreated(string id)
+    // Return on the list, Esc on an empty filter: the caret into the
+    // document on screen (IDIOT-KNOW-7/8).
+    signal editRequested()
     // Knowledge (APP-269): Docs live in the same list — the reference links
     // pinned at the top, the doc pages and the snippets below the notes.
     signal refActivated(string url)
@@ -279,6 +282,14 @@ Rectangle {
         renamePopup.openFor(AppController.activeNoteId, String(m.data(idx, m.roleOf("title")) || ""),
                             String(m.data(idx, m.roleOf("folder")) || ""));
     }
+    // F2 over a doc page renames the page, not the note behind it
+    // (IDIOT-KNOW-4).
+    function renamePage(id) {
+        const m = AppController.docPages;
+        const row = m.indexOfId(id);
+        if (row < 0) return;
+        pageRenamePopup.openFor(id, String(m.data(m.index(row, 0), m.roleOf("title")) || ""));
+    }
     function takeFocus() { list.forceActiveFocus(); }
     function focusFilter() {
         filterField.forceActiveFocus();
@@ -312,6 +323,13 @@ Rectangle {
             return loader ? loader.item : null;
         }
         return null;
+    }
+
+    function _openFirstHit() {
+        const ids = root.visibleIds();
+        if (ids.length === 0) return;
+        if (ids.indexOf(AppController.activeNoteId) < 0 || root.openPageId.length > 0) root.noteActivated(ids[0]);
+        root.editRequested();
     }
 
     // Open the note `delta` places from the open one. Headers are skipped
@@ -412,6 +430,16 @@ Rectangle {
                 }
             }
             onTextChanged: root.filter = text
+            // Esc clears, then goes back to the note; Return opens the first
+            // hit to write in, ↓ walks the hits (IDIOT-KNOW-7).
+            Keys.onEscapePressed: (event) => {
+                if (filterField.text.length > 0) root.setFilter("");
+                else root.editRequested();
+                event.accepted = true;
+            }
+            Keys.onReturnPressed: (event) => { root._openFirstHit(); event.accepted = true; }
+            Keys.onEnterPressed: (event) => { root._openFirstHit(); event.accepted = true; }
+            Keys.onDownPressed: (event) => { root.focusList(); event.accepted = true; }
         }
 
         EmptyState {
@@ -446,6 +474,18 @@ Rectangle {
                 if (event.key === Qt.Key_Menu || (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier))) {
                     const r = root._activeRowItem();
                     if (r) r.openMenu();
+                    event.accepted = true;
+                    return;
+                }
+                // The row menu says "Open ↵"; j / k are ↓ / ↑ as in every
+                // list with a cursor (IDIOT-KNOW-8).
+                const mods = event.modifiers & ~Qt.KeypadModifier;
+                if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && mods === Qt.NoModifier) {
+                    root.editRequested();
+                    event.accepted = true;
+                } else if ((event.key === Qt.Key_J || event.key === Qt.Key_K) && mods === Qt.NoModifier) {
+                    root.step(event.key === Qt.Key_J ? 1 : -1);
+                    Qt.callLater(root._activeRowItem);
                     event.accepted = true;
                 }
             }
@@ -909,19 +949,34 @@ Rectangle {
         width: 380
         title: I18n.t("notes.rename")
 
+        // Why Save did nothing: an empty name, a name taken (IDIOT-KNOW-3/13).
+        property string error: ""
         function openFor(id, title, folder) {
             renamePopup.noteId = id;
             titleField.text = title;
             folderField.text = folder;
+            renamePopup.error = "";
             renamePopup.open();
             titleField.forceActiveFocus();
             titleField.selectAll();
         }
 
+        // The dialog stays open with a word why instead of closing on a
+        // name that was not taken.
         function commit() {
-            AppController.renameNote(renamePopup.noteId, titleField.text);
-            AppController.moveNoteToFolder(renamePopup.noteId, folderField.text);
-            renamePopup.close();
+            const title = titleField.text.trim();
+            if (title.length === 0) {
+                renamePopup.error = I18n.t("notes.rename.err.empty");
+            } else if (AppController.noteTitleTaken(title, folderField.text.trim(), renamePopup.noteId)) {
+                renamePopup.error = I18n.t("notes.rename.err.taken").arg(title);
+            } else {
+                AppController.renameNote(renamePopup.noteId, title);
+                AppController.moveNoteToFolder(renamePopup.noteId, folderField.text);
+                renamePopup.close();
+                return;
+            }
+            titleField.forceActiveFocus();
+            titleField.selectAll();
         }
 
         background: ModalSurface {}
@@ -937,6 +992,18 @@ Rectangle {
                 color: Theme.text
                 background: FieldFrame {}
                 onAccepted: renamePopup.commit()
+                onTextChanged: renamePopup.error = ""
+            }
+            Text {
+                objectName: "note-rename-error"
+                visible: renamePopup.error.length > 0
+                Layout.fillWidth: true
+                Layout.preferredWidth: 320
+                text: renamePopup.error
+                color: Theme.danger
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsSm
+                wrapMode: Text.Wrap
             }
             QQC.TextField {
                 id: folderField

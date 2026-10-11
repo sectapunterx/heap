@@ -104,6 +104,33 @@ TestCase {
         AppController.clearPendingUndo();
     }
 
+    // ── IDIOT-TASKS-12: Enter on the last done column's delete reopens nothing ──
+    function test_deleting_the_done_column_needs_a_pick() {
+        const done = statusIds().filter(id => AppController.statusCategory(id) === "done");
+        if (done.length !== 1) skip("the test profile has " + done.length + " done columns");
+        addTask(done[0], { title: "finished" });
+        const b = makeBoard();
+        b.requestDeleteColumn(done[0], "Done");
+        const dlg = findChild(b, "confirm-delete-column");
+        tryCompare(dlg, "opened", true);
+        const inDlg = function (name) {
+            const walk = function (it) {
+                if (!it) return null;
+                if (it.objectName === name) return it;
+                const k = it.children || [];
+                for (let i = 0; i < k.length; i++) { const r = walk(k[i]); if (r) return r; }
+                return null;
+            };
+            return walk(dlg.contentItem);
+        };
+        compare(inDlg("confirm-delete-target").currentIndex, -1, "a column of another stage was preselected");
+        verify(!dlg.canDelete);
+        dlg.deleteNow();
+        verify(statusIds().indexOf(done[0]) >= 0, "deleted without a pick");
+        verify(inDlg("confirm-delete-reopens").visible);
+        dlg.close();
+    }
+
     // ── TASKS-32: collapsible columns, and the cursor walks past a folded one ──
     function test_a_folded_column_is_skipped_by_the_cursor() {
         const ids = statusIds();
@@ -265,12 +292,20 @@ TestCase {
         keyClick(Qt.Key_Escape);
         const prompt = findChild(te, "te-discard-prompt");
         tryVerify(() => prompt.opened);
+        // IDIOT-DOC-19: typing on — a word starting with d, then s — decides
+        // nothing, and a key in the burst the prompt opened in is ignored.
+        keyClick(Qt.Key_Escape);
+        verify(prompt.opened, "a key in the opening burst answered the prompt");
+        wait(450);
+        keyClick(Qt.Key_D); keyClick(Qt.Key_E); keyClick(Qt.Key_S);
+        verify(prompt.opened && te.opened, "a bare letter answered the prompt");
         keyClick(Qt.Key_Escape);
         tryVerify(() => !prompt.opened);
         verify(te.opened, "Esc in the prompt keeps editing");
         fields[0].forceActiveFocus();
         keyClick(Qt.Key_Escape);
         tryVerify(() => prompt.opened);
+        wait(450);
         keyClick(Qt.Key_Return);
         tryVerify(() => !te.opened);
         compare(AppController.taskById(id).title, tc.probe + " keyed", "Enter in the prompt saves");

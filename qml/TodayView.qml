@@ -47,6 +47,9 @@ FocusScope {
         if (root.firstRun) firstRunHero.focusInput();
         else root.forceActiveFocus();
     }
+    // Main hands the keyboard to a view through takeFocus(): on the first
+    // run that is the input, which looked focused and was not (PERSONA-2).
+    function takeFocus() { root.focusView(); }
 
     readonly property date day: AppController.selectedDate
     readonly property bool isToday: root._sameDay(root.day, AppController.today)
@@ -56,7 +59,7 @@ FocusScope {
 
     // A small window (X-Oth-Small, DG-008): the side goes under the day, its
     // blocks side by side in three columns, the rows one line each.
-    readonly property bool stacked: Window.width > 0 && Window.width < Theme.compactWindowWidth
+    readonly property bool stacked: Theme.compactAt(Window.width)
     // The quiet drawing of the day and of the side (DG-012, DG-013).
     readonly property bool plain: Style.plainRows || root.stacked
     readonly property bool cards: Style.sideCards && !root.stacked
@@ -107,7 +110,7 @@ FocusScope {
             // "встреча · 30 мин · Zoom", "APP-105 · 1 ч"
             if (meeting) parts.push(b.eventType === "focus" ? I18n.t("today.q.withSelf") : I18n.t("today.q.meeting"));
             else parts.push(b.id);
-            if (kind !== "allday") parts.push(root._len(b.start || 0, b.end || 0));
+            if (kind !== "allday" && !b.dayOnly) parts.push(root._len(b.start || 0, b.end || 0));
             if (!meeting && b.waiting) parts.push(I18n.t("today.waitingOn").arg(b.waiting));
         } else {
             if (meeting) parts.push(b.eventType === "focus" ? I18n.t("today.withSelf") : I18n.t("event.kind.meeting"));
@@ -128,6 +131,8 @@ FocusScope {
         const out = [];
         if (!d.blocks) return out;
         for (const b of d.allDay || []) out.push({ kind: "allday", start: -1, block: b });
+        // Planned for the day with no time, under the all-day row (IDIOT-CAL-10).
+        for (const b of d.dayOnly || []) out.push({ kind: "task", start: -0.5, block: b });
         for (const b of d.blocks) out.push({ kind: b.kind, start: b.start, block: b });
         for (const g of d.free || []) out.push({ kind: "free", start: g.start, end: g.end });
         if (root.isToday && root.nowHour >= d.fromHour && root.nowHour <= Math.max(d.toHour, d.workEnd))
@@ -137,7 +142,8 @@ FocusScope {
         out.sort((a, b) => a.start - b.start || order[a.kind] - order[b.kind]);
         return out;
     }
-    readonly property bool dayEmpty: !root.dayData.blocks || (root.dayData.blocks.length === 0 && (root.dayData.allDay || []).length === 0)
+    readonly property bool dayEmpty: !root.dayData.blocks || (root.dayData.blocks.length === 0 && (root.dayData.allDay || []).length === 0
+                                                               && (root.dayData.dayOnly || []).length === 0)
 
     // The one in-progress task the bold card shows (DG-014): the one with
     // the timer, else the one whose branch is checked out, else the first.
@@ -150,6 +156,11 @@ FocusScope {
     }
     readonly property var lead: root._leadIdx >= 0 ? root.inProgress[root._leadIdx] : null
     readonly property var otherInProgress: root.inProgress.filter((t, i) => i !== root._leadIdx)
+    readonly property var _ipLines: root.cards ? root.otherInProgress : root.inProgress
+    readonly property int _ipCap: 5
+    property bool _ipAll: false
+    readonly property int _dlCap: 8
+    property bool _dlAll: false
     // Quiet keeps only today's deadlines (H2-Today-Calm "Срок сегодня").
     readonly property var deadlines: (root.dayData.deadlines || []).filter(t => root.cards || !t.tomorrow)
     readonly property var people: Style.todayExtras === "hidden" ? [] : (root.dayData.people || [])
@@ -168,7 +179,10 @@ FocusScope {
     readonly property bool cardMenuOpen: menuHost.menuOpen
     function _rowKey(r) {
         if (!r || !r.block) return "";
-        return (r.kind === "task" ? "task:" : "event:") + r.block.id;
+        // One key per row (IDIOT-CAL-7): the two parts of a meeting across
+        // midnight share an id, and j looped back to the first of them.
+        const b = r.block;
+        return (r.kind === "task" ? "task:" : "event:") + b.id + (b.fromPrevDay ? ":prev" : "") + (b.toNextDay ? ":next" : "");
     }
     function _items() {
         const out = [];
@@ -238,7 +252,9 @@ FocusScope {
         const it = root._cursorItem();
         if (!it) { root.moveCursor(0, 0); return; }
         if (it.kind === "task") root.taskClicked(it.id);
-        else root.eventClicked(it.id, null);
+        // The day's occurrence, not the series (IDIOT-CAL-1): Main finds it
+        // by the ISO date the block carries.
+        else root.eventClicked(it.id, it.block.occurrence || null);
     }
     function toggleCursorSelection() {
         const it = root._cursorItem();
@@ -271,7 +287,7 @@ FocusScope {
     }
     function resizeCursor(steps) {
         const it = root._cursorItem();
-        if (!it || it.kind !== "task" || it.block.fromPrevDay || it.block.toNextDay) return false;
+        if (!it || it.kind !== "task" || it.block.dayOnly || it.block.fromPrevDay || it.block.toNextDay) return false;
         const step = Theme.snapMinutes / 60;
         const end = Math.min(24, it.block.end + steps * step);
         if (end - it.block.start < step - 1e-9) return false;
@@ -315,7 +331,9 @@ FocusScope {
                 // H2-Today-Calm): the date alone heads the day.
                 RowLayout {
                     visible: !Style.plainRows && (!root.stacked || !root.isToday || root.dayData.workday === false)
-                    spacing: Theme.spMd
+                    // One space's width before the dot, as after it: spMd
+                    // plus the "· " read as a double gap (EYES-9).
+                    spacing: Theme.spXs
                     Text {
                         objectName: "today-label"
                         text: root.isToday ? I18n.t("sidebar.today")
@@ -566,7 +584,7 @@ FocusScope {
                         // The others in progress, as lines; quiet draws all
                         // of them this way.
                         Repeater {
-                            model: root.cards ? root.otherInProgress : root.inProgress
+                            model: root._ipAll ? root._ipLines : root._ipLines.slice(0, root._ipCap)
                             delegate: RowLayout {
                                 id: ipRow
                                 required property var modelData
@@ -589,6 +607,17 @@ FocusScope {
                                 TimerMark { visible: !!ipRow.modelData.isTiming; taskId: ipRow.modelData.id }
                             }
                         }
+                        // The rest on request: eighty lines pushed the deadlines
+                        // off the screen (EYES-3).
+                        Text {
+                            objectName: "today-inprogress-more"
+                            visible: !root._ipAll && root._ipLines.length > root._ipCap
+                            text: I18n.t("week.more").arg(root._ipLines.length - root._ipCap)
+                            color: Theme.textMuted
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsSm
+                            ClickArea { label: parent.text; onActivated: root._ipAll = true }
+                        }
                     }
 
                     // Deadlines; overdue apart, never in red (DG-013).
@@ -605,7 +634,9 @@ FocusScope {
                             text: I18n.t(root.cards ? "today.deadlines" : "today.q.dueToday")
                         }
                         Repeater {
-                            model: root.deadlines
+                            // Capped like the work in progress: thousands of rows
+                            // froze the day on every change (DATA-11, EYES-3).
+                            model: root._dlAll ? root.deadlines : root.deadlines.slice(0, root._dlCap)
                             delegate: TaskLine {
                                 required property var modelData
                                 task: modelData
@@ -625,6 +656,15 @@ FocusScope {
                                 when: !root.cards ? "" : modelData.tomorrow ? I18n.t("quick.day.tomorrow") : I18n.t("quick.day.today")
                                 whenSignal: !modelData.tomorrow
                             }
+                        }
+                        Text {
+                            objectName: "today-deadlines-more"
+                            visible: !root._dlAll && root.deadlines.length > root._dlCap
+                            text: I18n.t("week.more").arg(root.deadlines.length - root._dlCap)
+                            color: Theme.textMuted
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsSm
+                            ClickArea { label: parent.text; onActivated: root._dlAll = true }
                         }
                         Text {
                             objectName: "today-overdue"
@@ -984,7 +1024,8 @@ FocusScope {
             return Theme.px(30);
         }
         visible: implicitHeight > 0
-        opacity: dr.b.past ? 0.55 : 1
+        // Past: the title steps down to muted; the time and the line under it
+        // stay at textDim, which holds AA (a 0.55 opacity read 2.2:1, EYES-6).
 
         Text {
             id: timeT
@@ -995,6 +1036,7 @@ FocusScope {
             anchors.topMargin: dr.item ? (root.stacked ? 0 : root.plain ? Theme.spMd + Theme.spXs / 2 : Theme.spMd + Theme.spXs) : 0
             anchors.verticalCenter: dr.item && !root.stacked ? undefined : parent.verticalCenter
             text: dr.modelData.kind === "allday" ? I18n.t("today.allDay")
+                : dr.b.dayOnly ? I18n.t("today.noTime")
                 : dr.b.fromPrevDay ? I18n.t("today.fromPrev")
                 : root._hm(dr.modelData.start)
             elide: Text.ElideRight
@@ -1046,7 +1088,7 @@ FocusScope {
                         Layout.fillWidth: true
                         text: dr.b.title || ""
                         elide: Text.ElideRight
-                        color: Theme.text
+                        color: dr.b.past ? Theme.textMuted : Theme.text
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsMd
                         // The sheets set day rows at 500 (R4-003).
@@ -1063,7 +1105,7 @@ FocusScope {
                 }
                 Text {
                     Layout.alignment: Qt.AlignTop
-                    visible: dr.modelData.kind !== "allday"
+                    visible: dr.modelData.kind !== "allday" && !dr.b.dayOnly
                     text: root._len(dr.b.start || 0, dr.b.end || 0)
                     color: Theme.textDim
                     font.family: Theme.fontUi
@@ -1100,7 +1142,7 @@ FocusScope {
                     Layout.fillWidth: true
                     text: dr.b.title || ""
                     elide: Text.ElideRight
-                    color: Theme.text
+                    color: dr.b.past ? Theme.textMuted : Theme.text
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsLg
                 }
@@ -1142,7 +1184,7 @@ FocusScope {
             width: parent.width - x
             height: parent.height
             label: dr.b.title || ""
-            onActivated: dr.meeting ? root.eventClicked(dr.b.id, null) : root.taskClicked(dr.b.id)
+            onActivated: dr.meeting ? root.eventClicked(dr.b.id, dr.b.occurrence || null) : root.taskClicked(dr.b.id)
         }
 
         // Bold: a free window and the end of the day, facts beside a line.

@@ -9,7 +9,9 @@ function clause(raw) {
     const neg = raw.startsWith("-");
     const body = neg ? raw.slice(1) : raw;
     const at = body.indexOf(":");
-    if (at <= 0) return null;
+    // "status:" not finished yet stays as typed: it read "status Backlog",
+    // the first column (IDIOT-TASKS-22).
+    if (at <= 0 || at === body.length - 1) return null;
     // The chips' Russian keys typed back ("статус:заблок", "приоритет:p0")
     // are the same clauses (DG-080, R3-136).
     const ruKeys = { "статус": "status", "приоритет": "priority" };

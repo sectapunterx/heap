@@ -195,6 +195,10 @@ TestCase {
         panel._pressResetAll();
         compare(AppController.shortcutFor("view.archive"), "Ctrl+Shift+Y", "one press reset everything");
         verify(panel.resetAllArmed);
+        // The second click of a double-click is ignored (IDIOT-SHELL-5).
+        panel._pressResetAll();
+        compare(AppController.shortcutFor("view.archive"), "Ctrl+Shift+Y", "a double-click reset everything");
+        wait(650);
         panel._pressResetAll();
         verify(AppController.shortcutFor("view.archive") !== "Ctrl+Shift+Y");
         verify(!panel.resetAllArmed);

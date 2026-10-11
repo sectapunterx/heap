@@ -56,6 +56,9 @@ Item {
         root.openPage(requestedPage);
         Qt.callLater(root.pageConsumed);
     }
+    // A filter left behind showed "No matches" beside an open note on the
+    // way back (IDIOT-KNOW-7).
+    onVisibleChanged: if (!visible && requestedFilter.length === 0) notesList.setFilter("")
     property string requestedFilter: ""
     signal filterConsumed()
     onRequestedFilterChanged: _consumeFilter()
@@ -81,6 +84,9 @@ Item {
     property string acFilter: ""
     property var    acMatches: []
     property int    acSelected: 0
+    // The field the list serves: the source editor, or the open block of
+    // the drawn note — where nothing came up at all (KNOW-8).
+    property var    _acField: editor
 
     // ── Links pane (HEAP-79) ─────────────────────────────────────────
     // Two lists: the notes that link here (what "backlinks" means — it used to
@@ -152,6 +158,18 @@ Item {
     function insertAttachmentRefs(added) {
         if (!added || added.length === 0) return 0;
         const refs = added.map(a => a.ref).join("\n\n");
+        // Into the document on screen, not the hidden source field, whose
+        // caret sat at 0: files landed above the title (KNOW-7).
+        if (root.pageId.length > 0) {
+            pageEditor.insertRefs(refs);
+            return added.length;
+        }
+        if (root.viewMode === "live") {
+            liveEditor.insertRefs(refs);
+            liveEditor.flush();
+            root._refreshAttachments();
+            return added.length;
+        }
         editor.remove(editor.selectionStart, editor.selectionEnd);
         const pos = editor.cursorPosition;
         const text = editor.text;
@@ -267,9 +285,12 @@ Item {
     // ── A page of the former Docs catalogue, open in the document ────
     // Empty: the active note is shown. Set from the list or from Ctrl+K.
     property string pageId: ""
+    // The keyboard goes with the page: it stayed on the hidden note, and
+    // Return then typing wrote into that note (IDIOT-KNOW-2).
     function openPage(id) {
         root._flushPending();
         root.pageId = id;
+        Qt.callLater(pageEditor.focusEditor);
     }
     property var _pageUpdated: null
     function _refreshPage() {
@@ -340,7 +361,7 @@ Item {
         case "new":        root.newNoteAndEdit(); break;
         case "next":       notesList.step(1); break;
         case "prev":       notesList.step(-1); break;
-        case "rename":     if (AppController.activeNoteId.length > 0) notesList.renameActive(); break;
+        case "rename":     root.renameShown(); break;
         case "toggleList": root.toggleList(); break;
         default:           console.warn("notes: no command", cmd);
         }
@@ -368,15 +389,41 @@ Item {
         return true;
     }
 
+    // F2: the document on screen, a page or the note (IDIOT-KNOW-4).
+    function renameShown() {
+        if (root.pageId.length > 0) notesList.renamePage(root.pageId);
+        else if (AppController.activeNoteId.length > 0) notesList.renameActive();
+    }
+
     function newNoteAndEdit() {
         root._flushPending();
         AppController.newNote();
-        root._focusEditorAtEnd();
+        root._focusNewNote();
     }
-    function _focusEditorAtEnd() {
+    // A new note opens on its title, selected: what is typed names it, and
+    // the caret after "# Untitled note" made it "Untitled noteStandup"
+    // (PERSONA-20, IDIOT-KNOW-9).
+    function _focusNewNote() {
         Qt.callLater(function () {
             if (root.viewMode === "live") {
-                liveEditor.focusEditor();
+                liveEditor.editTitle();
+                return;
+            }
+            editor.forceActiveFocus();
+            const m = /^(#{1,6}\s+)(.*)$/.exec(editor.text.split("\n")[0]);
+            if (m && m[2].length > 0) editor.select(m[1].length, m[1].length + m[2].length);
+            else editor.cursorPosition = editor.length;
+        });
+    }
+    // The document on screen: an open page, else the note (IDIOT-KNOW-2).
+    function _focusEditorAtEnd() {
+        Qt.callLater(function () {
+            if (root.pageId.length > 0) {
+                pageEditor.focusEditor();
+                return;
+            }
+            if (root.viewMode === "live") {
+                liveEditor.focusEnd();
                 return;
             }
             editor.forceActiveFocus();
@@ -393,15 +440,23 @@ Item {
         while (p < max && old.charCodeAt(p) === next.charCodeAt(p)) p++;
         let s = 0;
         while (s < max - p && old.charCodeAt(old.length - 1 - s) === next.charCodeAt(next.length - 1 - s)) s++;
-        if (old.length - s > p) editor.remove(p, old.length - s);
         const inserted = next.substring(p, next.length - s);
+        // One edit: as a remove then an insert, the drawn note was handed
+        // the text in between, reloaded it and lost its undo — a tick could
+        // not be taken back (KNOW-2).
+        if (mdDocument.replaceRange(editor.textDocument, p, old.length - s, inserted)) return;
+        if (old.length - s > p) editor.remove(p, old.length - s);
         if (inserted.length > 0) editor.insert(p, inserted);
     }
     // Where the keyboard goes when the view is switched to (PERA-5): the
     // editor, caret where it was left; in preview there is nothing to type
     // into, so the notes list.
+    // Into the text, not onto the drawn document: there letters went
+    // nowhere and a bare "u" undid something on a hidden board
+    // (IDIOT-KNOW-5/6). An open page is the document on screen.
     function takeFocus() {
-        if (root.viewMode === "live") liveEditor.forceActiveFocus();
+        if (root.pageId.length > 0) pageEditor.focusEditor();
+        else if (root.viewMode === "live") liveEditor.focusEnd();
         else if (root.viewMode !== "preview") editor.forceActiveFocus();
         else if (root._listShown) notesList.takeFocus();
         else root.forceActiveFocus();
@@ -491,6 +546,13 @@ Item {
         }
         return out;
     }
+    function _linkTaskEntries(filter) {
+        const hits = AppController.matchTasks(filter, 4);
+        const out = [];
+        for (let i = 0; i < hits.length; i++)
+            out.push({ kind: "task", id: hits[i].id, label: hits[i].title, sub: hits[i].id, color: Theme.accent });
+        return out;
+    }
     function _taskEntries() {
         const out = [];
         const m = AppController.tasks;
@@ -551,13 +613,15 @@ Item {
             acSelected = 0;
             return;
         }
+        // [[ offers tasks too, after the notes: "/ Link to a task" put an
+        // empty [[]] with nothing to pick from (PERSONA-21).
         const source = acTrigger === "#"  ? _taskEntries()
-                     : acTrigger === "[[" ? _headingEntries()
+                     : acTrigger === "[[" ? _headingEntries().concat(acFilter.trim().length > 0 ? _linkTaskEntries(acFilter) : [])
                      : [];
         const scored = [];
         for (let i = 0; i < source.length; i++) {
             const e = source[i];
-            const hay = (acTrigger === "#") ? (e.id + " " + e.label) : e.label;
+            const hay = (acTrigger === "#" || e.kind === "task") ? (e.id + " " + e.label) : e.label;
             const sc = _fuzzyScore(acFilter, hay);
             if (sc < 0) continue;
             scored.push({ entry: e, score: sc });
@@ -565,6 +629,28 @@ Item {
         scored.sort(function (a, b) { return b.score - a.score; });
         acMatches = scored.slice(0, 8).map(function (x) { return x.entry; });
         acSelected = 0;
+    }
+
+    // ↑ ↓ Enter Tab Esc while the list is up, for whichever field it serves.
+    function _acKey(event) {
+        if (!acPopup.opened || acMatches.length === 0) return false;
+        if (event.key === Qt.Key_Down) {
+            root.acSelected = Math.min(root.acMatches.length - 1, root.acSelected + 1);
+            return true;
+        }
+        if (event.key === Qt.Key_Up) {
+            root.acSelected = Math.max(0, root.acSelected - 1);
+            return true;
+        }
+        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Tab) {
+            root._commitAutocomplete();
+            return true;
+        }
+        if (event.key === Qt.Key_Escape) {
+            root._hideAutocomplete();
+            return true;
+        }
+        return false;
     }
 
     function _hideAutocomplete() {
@@ -584,20 +670,22 @@ Item {
 
     function _openAcPopup() {
         if (acMatches.length === 0) { acPopup.close(); return; }
-        const cr = editor.cursorRectangle;
-        const p  = editor.mapToItem(root, cr.x, cr.y + cr.height);
+        const cr = root._acField.cursorRectangle;
+        const p  = root._acField.mapToItem(root, cr.x, cr.y + cr.height);
         acPopup.x = Math.min(p.x, root.width - acPopup.width - 8);
         acPopup.y = Math.max(0, Math.min(p.y + 4, root.height - acPopup.height - 8));
         if (!acPopup.opened) acPopup.open();
     }
 
-    function _detectAutocomplete() {
-        const pos = editor.cursorPosition;
+    function _detectAutocomplete(field) {
+        root._acField = field || editor;
+        if (!root._acField.activeFocus && root._acField !== editor) { _hideAutocomplete(); return; }
+        const pos = root._acField.cursorPosition;
         if (pos <= 0) { _hideAutocomplete(); return; }
         // Only the text just before the caret. Reading `editor.text` here
         // copied the whole note on every keystroke and every caret move.
         const base = Math.max(0, pos - 512);
-        const txt = editor.getText(base, pos);
+        const txt = root._acField.getText(base, pos);
         const end = txt.length;
 
         // [[wiki-link]] trigger (HEAP-79) — filter may contain spaces, so scan
@@ -657,13 +745,16 @@ Item {
             return;
         }
         const e = acMatches[acSelected];
+        const f = root._acField;
         const insert = (acTrigger === "@")  ? "@" + _slugifyName(e.label) + " "
-                     : (acTrigger === "[[") ? "[[" + root._escapeLinkName(e.label) + "]] "
+                     : (acTrigger === "[[") ? "[[" + (e.kind === "task" ? e.id : root._escapeLinkName(e.label)) + "]] "
                      : "#" + e.id + " ";
-        const pos = editor.cursorPosition;
+        let pos = f.cursorPosition;
+        // The "]]" the "/" menu put after the caret is part of the link.
+        if (acTrigger === "[[" && f.getText(pos, pos + 2) === "]]") pos += 2;
         // Replace the "@filter" / "#filter" span in place (remove + insert) so
         // the caret stays at the edit point instead of resetting to 0. (HEAP-65)
-        Mention.commit(editor, acTriggerPos, pos, insert);
+        Mention.commit(f, acTriggerPos, pos, insert);
         _hideAutocomplete();
     }
 
@@ -709,6 +800,14 @@ Item {
     // Move the caret to `off` and scroll the editor so it is visible.
     function _jumpToOffset(off) {
         if (off < 0) return;
+        // Live: the block of that line opens, caret at its start. The hidden
+        // source field took the focus, and what was typed went in unseen,
+        // breaking the heading (KNOW-3).
+        if (root.viewMode === "live") {
+            root.pageId = "";
+            liveEditor.editLine(editor.text.substring(0, off).split("\n").length - 1, true);
+            return;
+        }
         if (root.viewMode === "preview") root.viewMode = "split";
         editor.forceActiveFocus();
         editor.cursorPosition = off;
@@ -752,7 +851,9 @@ Item {
                 AppController.activeNoteId = id;
             }
             // "+" makes a note to write in: the cursor goes there.
-            onNoteCreated: (id) => root._focusEditorAtEnd()
+            onNoteCreated: (id) => root._focusNewNote()
+            // Return on the list, Esc on an empty filter (IDIOT-KNOW-7/8).
+            onEditRequested: root._focusEditorAtEnd()
             // A reference opens under the link rules, a page opens here in
             // the document, a snippet is copied, a contact's handle too.
             onRefActivated: (url) => preview.openExternal(url)
@@ -869,11 +970,11 @@ Item {
                         background: Item {}
                         onTextChanged: {
                             root._scheduleSave();
-                            root._detectAutocomplete();
+                            if (editor.activeFocus) root._detectAutocomplete();
                             statsTimer.restart();
                             if (root.showBacklinks) linksTimer.restart();
                         }
-                        onCursorPositionChanged: root._detectAutocomplete()
+                        onCursorPositionChanged: if (editor.activeFocus) root._detectAutocomplete()
                         Keys.priority: Keys.BeforeItem
 
                         // Qt delivers shortcut events before key presses, so a
@@ -888,25 +989,7 @@ Item {
                         Keys.onPressed: (event) => {
                             // Autocomplete navigation (when popup is open) takes
                             // priority over markdown continuation.
-                            if (acPopup.opened && acMatches.length > 0) {
-                                if (event.key === Qt.Key_Down) {
-                                    root.acSelected = Math.min(root.acMatches.length - 1, root.acSelected + 1);
-                                    event.accepted = true; return;
-                                }
-                                if (event.key === Qt.Key_Up) {
-                                    root.acSelected = Math.max(0, root.acSelected - 1);
-                                    event.accepted = true; return;
-                                }
-                                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter
-                                    || event.key === Qt.Key_Tab) {
-                                    root._commitAutocomplete();
-                                    event.accepted = true; return;
-                                }
-                                if (event.key === Qt.Key_Escape) {
-                                    root._hideAutocomplete();
-                                    event.accepted = true; return;
-                                }
-                            }
+                            if (root._acKey(event)) { event.accepted = true; return; }
 
                             // Tab indents here, so it cannot also be the way out
                             // (SHELL-18). Esc steps out to the list of notes;
@@ -1026,9 +1109,19 @@ Item {
                     wikiTargets: root._wiki
                     headingRules: false
                     noteType: true
+                    typeToEdit: true
+                    attachOnPaste: true
+                    onBlockKey: (event) => { if (root._acKey(event)) event.accepted = true; }
                     onEdited: (t) => root._applyFromLive(t)
                     onInternalLinkActivated: (kind, target) => root._followLink(kind, target)
                     onEscaped: if (root._listShown) notesList.focusList()
+                }
+                // @ # [[ in the open block (KNOW-8).
+                Connections {
+                    target: liveEditor.editor
+                    function onTextChanged() { if (liveEditor.editor.activeFocus) root._detectAutocomplete(liveEditor.editor) }
+                    function onCursorPositionChanged() { if (liveEditor.editor.activeFocus) root._detectAutocomplete(liveEditor.editor) }
+                    function onActiveFocusChanged() { if (!liveEditor.editor.activeFocus && root._acField === liveEditor.editor) root._hideAutocomplete() }
                 }
 
 
@@ -1228,34 +1321,40 @@ Item {
 
     // Notes navigation from the keyboard. step() existed and nothing was bound
     // to it; a new note needed the mouse. Rebindable in Settings → Hotkeys.
+    // Not behind the task document or a dialog: there they switched and
+    // renamed a note nobody could see (IDIOT-KNOW-4). Main sets keysLive.
+    property bool keysLive: true
+    readonly property bool _keysOn: root.visible && root.keysLive
     Shortcut {
         sequence: root._kbd("notes.new")
         context: Qt.WindowShortcut
-        enabled: root.visible && sequence.length > 0
+        enabled: root._keysOn && sequence.length > 0
+        // Held down, it made a note per repeat (IDIOT-KNOW-14).
+        autoRepeat: false
         onActivated: root.newNoteAndEdit()
     }
     Shortcut {
         sequence: root._kbd("notes.next")
         context: Qt.WindowShortcut
-        enabled: root.visible && sequence.length > 0
+        enabled: root._keysOn && sequence.length > 0
         onActivated: notesList.step(1)
     }
     Shortcut {
         sequence: root._kbd("notes.prev")
         context: Qt.WindowShortcut
-        enabled: root.visible && sequence.length > 0
+        enabled: root._keysOn && sequence.length > 0
         onActivated: notesList.step(-1)
     }
     Shortcut {
         sequence: root._kbd("notes.rename")
         context: Qt.WindowShortcut
-        enabled: root.visible && sequence.length > 0 && AppController.activeNoteId.length > 0
-        onActivated: notesList.renameActive()
+        enabled: root._keysOn && sequence.length > 0 && (AppController.activeNoteId.length > 0 || root.pageId.length > 0)
+        onActivated: root.renameShown()
     }
     Shortcut {
         sequence: root._kbd("notes.toggleList")
         context: Qt.WindowShortcut
-        enabled: root.visible && sequence.length > 0
+        enabled: root._keysOn && sequence.length > 0
         onActivated: root.toggleList()
     }
 
@@ -1563,6 +1662,9 @@ Item {
     // every view switch — without a flush the last keystrokes are lost.
     function _flushPending() {
         liveEditor.flush();
+        // The open page's last words too: a profile switch flushes through
+        // here (IDIOT-KNOW-1).
+        pageEditor.flush();
         if (!persistTimer.running) return;
         persistTimer.stop();
         _persistNow();
@@ -1608,11 +1710,23 @@ Item {
         function openFor(target) {
             missingLinkPopup.wanted = target;
             missingLinkPopup.open();
+            missingBody.forceActiveFocus();
+        }
+        function create() {
+            missingLinkPopup.close();
+            root._flushPending();
+            AppController.createNoteForLink(missingLinkPopup.wanted);
         }
 
         background: ModalSurface {}
 
+        // Enter writes the note, as the primary button says; it needed the
+        // mouse (KNOW-9).
         contentItem: Text {
+            id: missingBody
+            focus: true
+            Keys.onReturnPressed: missingLinkPopup.create()
+            Keys.onEnterPressed: missingLinkPopup.create()
             text: I18n.t("notes.link.missingBody").arg(missingLinkPopup.wanted)
             color: Theme.textMuted
             font.pixelSize: Theme.fsMd
@@ -1628,11 +1742,7 @@ Item {
                 objectName: "missing-link-create"
                 text: I18n.t("notes.link.create")
                 primary: true
-                onClicked: {
-                    missingLinkPopup.close();
-                    root._flushPending();
-                    AppController.createNoteForLink(missingLinkPopup.wanted);
-                }
+                onClicked: missingLinkPopup.create()
             }
         }
     }

@@ -53,15 +53,47 @@ FocusScope {
     readonly property var _badge: root._isTicket ? (AppController.providerBadges[root._ticket.provider] || ({})) : ({})
 
     // ── opening and closing ──
-    function open(id) {
+    function open(id, intoTitle) {
         if (root.opened && id !== root.taskId) root.flush();
         root._loadedId = "";
         root._profileId = AppController.activeProfileId;
         root.taskId = id;
         root._load();
-        root.forceActiveFocus();
+        if (intoTitle === true) root.focusTitle();
+        else root.takeFocus();
+    }
+    // Where the keyboard goes in the document: a task with no title yet into
+    // its title; any other onto the document, where its keys work at once —
+    // d is Done, / the insert menu, i the title, Esc back. Opened into the
+    // title, "/" from the hint and "d" from the button were typed into it
+    // (IDIOT-DOC-10, the owner's "/" report).
+    function takeFocus() {
+        if (String(titleField.text).trim().length === 0) root.focusTitle();
+        else root.focusDocument();
+    }
+    // The document itself, not whatever field inside it had focus last: a
+    // FocusScope hands the keyboard back to that child, a hidden chip field
+    // included (IDIOT-DOC-6). The sink sits in the scope; the keys it takes
+    // travel up to the document's own handlers.
+    function focusDocument() {
+        docFocus.forceActiveFocus();
+    }
+    Item {
+        id: docFocus
+        objectName: "task-doc-focus"
+        width: 0
+        height: 0
+    }
+    function focusTitle() {
         titleField.forceActiveFocus();
         titleField.cursorPosition = titleField.length;
+    }
+    // "/" on the document: a new line at the end and the insert menu on it,
+    // as the hint under the text says.
+    function slashInsert() {
+        if (root._isTicket && body.readOnly) return;
+        body.appendBlock();
+        Qt.callLater(body.openSlashMenu);
     }
     // A linked card, or a checklist item that became one: opened here.
     function openOther(id) {
@@ -110,7 +142,7 @@ FocusScope {
         if (!root._exists) return;
         root._loading = true;
         titleField.text = root.task.title;
-        body.text = root._isTicket ? AppController.taskLocalNotes(root.taskId) : String(root.task.desc || "");
+        body.load(root._isTicket ? AppController.taskLocalNotes(root.taskId) : String(root.task.desc || ""));
         root._loadedId = root.taskId;
         root._dirtyTitle = false;
         root._dirtyBody = false;
@@ -124,12 +156,13 @@ FocusScope {
             root._loading = true; titleField.text = root.task.title; root._loading = false;
         }
         const fresh = root._isTicket ? AppController.taskLocalNotes(root.taskId) : String(root.task.desc || "");
-        if (!body.editing && !root._dirtyBody && body.text !== fresh) {
-            root._loading = true; body.text = fresh; root._loading = false;
+        if (!body.editing && !root._dirtyBody && body.source.text !== fresh) {
+            root._loading = true; body.load(fresh); root._loading = false;
         }
         root._changedUnder = body.editing && body.source.text !== fresh && !root._dirtyBody;
     }
     property bool _changedUnder: false
+    property real _doneClickAt: 0
     function _save() {
         if (!root._exists) return;
         saveTimer.stop();
@@ -140,15 +173,23 @@ FocusScope {
         if (root._dirtyTitle || root._dirtyBody) {
             const d = Object.assign({}, root.task);
             d._originalId = root.taskId;
-            if (root._dirtyTitle && titleField.text.trim().length > 0) d.title = titleField.text.trim();
+            // One line, and not a pasted page (IDIOT-DOC-14): line breaks
+            // become spaces, the title stops at 500 characters.
+            const title = root._cleanTitle(titleField.text);
+            // An emptied title is not saved, and stays "not saved": the
+            // indicator said "Saved" over an empty field (IDIOT-DOC-15).
+            const titleOk = title.length > 0;
+            if (!root._dirtyBody && !titleOk) return;
+            if (root._dirtyTitle && titleOk) d.title = title;
             if (root._dirtyBody) d.desc = body.source.text;
             if (AppController.saveTask(d)) {
-                root._dirtyTitle = false;
+                if (titleOk) root._dirtyTitle = false;
                 root._dirtyBody = false;
             }
         }
     }
     Timer { id: saveTimer; interval: 600; onTriggered: root._save() }
+    function _cleanTitle(t) { return String(t || "").replace(/\s*\n\s*/g, " ").trim().substring(0, 500); }
     Connections {
         target: Qt.application
         function onAboutToQuit() { root.flush(); }
@@ -241,6 +282,22 @@ FocusScope {
         }
         const r = AppController.parseDateTime(s, new Date());
         if (r && r.ok) AppController.rescheduleTask(root.taskId, field, r.start, r.hasTime);
+        else AppController.showToast(I18n.t("taskdoc.date.unknown").arg(s));  // it said nothing (IDIOT-DOC-15)
+    }
+    // Ctrl+Z with the keyboard in the document: the body's own steps first;
+    // never the app's step that made this task — that deleted the task
+    // under the caret (IDIOT-DOC-17).
+    function undo() {
+        if (body.source.canUndo) {
+            body.source.undo();
+            body.flush();
+            return;
+        }
+        if (AppController.undoWouldRemoveTask(root.taskId)) {
+            AppController.showToast(I18n.t("taskdoc.undo.wouldDelete"));
+            return;
+        }
+        AppController.undo();
     }
     // A single-letter key reads as the keymap writes it ("d", "t").
     function _keyOf(id) {
@@ -369,9 +426,11 @@ FocusScope {
                 // Saved, or saving while the typing settles.
                 Text {
                     objectName: "task-doc-saved"
+                    readonly property bool noTitle: root._cleanTitle(titleField.text).length === 0
                     readonly property bool pending: saveTimer.running || root._dirtyTitle || root._dirtyBody
-                    text: pending ? I18n.t("taskdoc.saving") : (root._quiet ? I18n.t("taskdoc.saved").toLowerCase() : I18n.t("taskdoc.saved"))
-                    color: pending || root._quiet ? Theme.textMuted : Theme.success
+                    text: noTitle ? I18n.t("taskdoc.needsTitle")
+                        : pending ? I18n.t("taskdoc.saving") : (root._quiet ? I18n.t("taskdoc.saved").toLowerCase() : I18n.t("taskdoc.saved"))
+                    color: noTitle ? Theme.warning : pending || root._quiet ? Theme.textMuted : Theme.success
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsSm
                 }
@@ -451,8 +510,18 @@ FocusScope {
                 placeholderText: I18n.t("taskdoc.titlePh")
                 placeholderTextColor: Theme.textDim
                 onTextChanged: if (!root._loading) { root._dirtyTitle = true; saveTimer.restart(); }
+                // Left empty, the stored title comes back into view rather
+                // than silently on the next open (IDIOT-DOC-15).
+                onActiveFocusChanged: if (!activeFocus && root.opened && root._exists && root._cleanTitle(titleField.text).length === 0) {
+                    root._loading = true; titleField.text = root.task.title; root._loading = false;
+                    root._dirtyTitle = false;
+                }
                 Keys.onReturnPressed: (e) => { body.focusEditor(); e.accepted = true; }
                 Keys.onEnterPressed: (e) => { body.focusEditor(); e.accepted = true; }
+                // Tab moves on, as in any form; it typed a tab into the
+                // title (IDIOT-DOC-13).
+                Keys.onTabPressed: (e) => { titleField.nextItemInFocusChain(true).forceActiveFocus(Qt.TabFocusReason); e.accepted = true; }
+                Keys.onBacktabPressed: (e) => { titleField.nextItemInFocusChain(false).forceActiveFocus(Qt.BacktabFocusReason); e.accepted = true; }
                 Keys.onEscapePressed: root.close()
                 Keys.onDownPressed: (e) => {
                     if (titleField.text.indexOf("\n", titleField.cursorPosition) < 0
@@ -1083,7 +1152,13 @@ FocusScope {
         shortcutId: "task.done"
         keyHint: root._quiet ? "" : root._keyOf("task.done")
         solid: !root._quiet
-        onClicked: AppController.toggleDone([root.taskId])
+        // A double click is one Done, not Done and back (IDIOT-DOC-20).
+        onClicked: {
+            const now = Date.now();
+            if (now - root._doneClickAt < 500) return;
+            root._doneClickAt = now;
+            AppController.toggleDone([root.taskId]);
+        }
     }
     // A section head of the meta column: 12 px, muted.
     component MetaHead: Text {
@@ -1110,9 +1185,13 @@ FocusScope {
             font.pixelSize: Theme.fsSm
             color: Theme.text
             background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.focusRing; border.width: 1 }
-            onAccepted: { tc._editing = false; tc.committed(tcField.text); }
+            onAccepted: { tc._editing = false; tc.committed(tcField.text); root.focusDocument(); }
             onActiveFocusChanged: if (!activeFocus && tc._editing) { tc._editing = false; tc.committed(tcField.text); }
-            Keys.onEscapePressed: tc._editing = false
+            // Hidden, the field kept the keyboard: what was typed went
+            // nowhere and Esc no longer closed the document (IDIOT-DOC-6).
+            Keys.onEscapePressed: (e) => { tc._editing = false; root.focusDocument(); e.accepted = true; }
+            Keys.onReturnPressed: (e) => { tcField.accepted(); e.accepted = true; }
+            Keys.onEnterPressed: (e) => { tcField.accepted(); e.accepted = true; }
         }
     }
     // A date chip: typed words ("завтра 15:00", "пт"), read like the input.

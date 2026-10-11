@@ -73,6 +73,9 @@ TestCase {
         compare(spy.count, 0);
         verify(row.armed);
         mouseClick(button);
+        compare(spy.count, 0, "a double-click committed (IDIOT-SHELL-5)");
+        wait(650);
+        mouseClick(button);
         compare(spy.count, 1);
         verify(!row.armed);
     }
