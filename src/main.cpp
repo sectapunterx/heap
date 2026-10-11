@@ -548,8 +548,7 @@ int main(int argc, char* argv[]) {
     const bool writes = heap::cli::changesData(request->verb);
     if(writes && controller->storageState() != QLatin1String("ok")) {
       return heap::cli::encodeResponse(
-          {heap::cli::kExitData, QString(),
-           QStringLiteral("lowkey: nothing changed: %1\n").arg(controller->storageMessage())});
+          {heap::cli::kExitData, QString(), QStringLiteral("lowkey: nothing changed: %1\n").arg(controller->storageMessage())});
     }
     heap::cli::Response response = heap::cli::execute(*controller, *request, QDateTime::currentDateTime());
     if(writes) {

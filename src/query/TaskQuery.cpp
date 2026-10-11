@@ -122,11 +122,13 @@ QString shorthandWhen(const QString& token) {
   if(token.size() < 2 || !token.startsWith(QLatin1Char('@'))) {
     return {};
   }
-  static const QHash<QString, QString> kWhen = {
-      {QStringLiteral("week"), QStringLiteral("week")},     {QStringLiteral("неделя"), QStringLiteral("week")},
-      {QStringLiteral("неделе"), QStringLiteral("week")},   {QStringLiteral("today"), QStringLiteral("today")},
-      {QStringLiteral("сегодня"), QStringLiteral("today")}, {QStringLiteral("tomorrow"), QStringLiteral("1d")},
-      {QStringLiteral("завтра"), QStringLiteral("1d")}};
+  static const QHash<QString, QString> kWhen = {{QStringLiteral("week"), QStringLiteral("week")},
+                                                {QStringLiteral("неделя"), QStringLiteral("week")},
+                                                {QStringLiteral("неделе"), QStringLiteral("week")},
+                                                {QStringLiteral("today"), QStringLiteral("today")},
+                                                {QStringLiteral("сегодня"), QStringLiteral("today")},
+                                                {QStringLiteral("tomorrow"), QStringLiteral("1d")},
+                                                {QStringLiteral("завтра"), QStringLiteral("1d")}};
   return kWhen.value(token.mid(1).toLower());
 }
 

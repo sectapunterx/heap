@@ -468,8 +468,7 @@ TEST(TaskBlockReminder, SaidOnceWithItsButtonsAndNoTimer) {
   // a minute of its own each run, so a second run is not "already said" —
   // drawn from ten years of minutes: one taken from the clock repeated within
   // the same minute and failed every rerun.
-  const QDateTime at =
-      QDateTime(QDate(2031, 3, 5), QTime(0, 0)).addSecs(60LL * QRandomGenerator::global()->bounded(10 * 365 * 24 * 60));
+  const QDateTime at = QDateTime(QDate(2031, 3, 5), QTime(0, 0)).addSecs(60LL * QRandomGenerator::global()->bounded(10 * 365 * 24 * 60));
   app.tasks()->reset({plannedAt(QStringLiteral("BLK-ON"), at)});
   QSignalSpy toasts(&app, &AppController::reminderToast);
   app.runAutomationAt(at.addSecs(-4 * 60));

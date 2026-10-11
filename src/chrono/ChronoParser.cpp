@@ -1407,12 +1407,13 @@ class ChronoParser::Impl {
     // A number glued to a word ("v1-2") or hanging off one by a glued dash
     // ("feature-12-3", "fix-2-4") is part of an identifier, not a time (DATA-4).
     if(i >= 1 && i < toks.size() && toks[i].kind == TokenKind::Number) {
-      const auto glued = [&](int a, int b) { return toks[a].pos + toks[a].len == toks[b].pos; };
+      const auto glued = [&](int a, int b) {
+        return toks[a].pos + toks[a].len == toks[b].pos;
+      };
       if(toks[i - 1].kind == TokenKind::Word && glued(i - 1, i)) {
         return false;
       }
-      if(i >= 2 && toks[i - 1].kind == TokenKind::Dash && glued(i - 1, i) && glued(i - 2, i - 1) &&
-         toks[i - 2].kind != TokenKind::Punct) {
+      if(i >= 2 && toks[i - 1].kind == TokenKind::Dash && glued(i - 1, i) && glued(i - 2, i - 1) && toks[i - 2].kind != TokenKind::Punct) {
         return false;
       }
     }
