@@ -1910,9 +1910,14 @@ Item {
                                     pressY = mouse.y; currentY = mouse.y; dragging = false;
                                 }
                                 onPositionChanged: (mouse) => {
+                                    if (pressY < 0) return;
                                     currentY = mouse.y;
-                                    if (!dragging && !root.armedTaskId && Math.abs(currentY - pressY) >= 5) dragging = true;
+                                    if (!dragging && !root.armedTaskId && Math.abs(currentY - pressY) >= 5) {
+                                        dragging = true;
+                                        root._activeDrag = createArea;
+                                    }
                                 }
+                                function cancel() { pressY = -1; currentY = -1; dragging = false; }
                                 onReleased: {
                                     if (pressY < 0) return;
                                     const h = root.clampHour(root.snapHour(root.yToHour(pressY)));
@@ -1928,8 +1933,9 @@ Item {
                                         root.createRequested(h, dayCol.modelData.date);
                                     }
                                     pressY = -1; currentY = -1; dragging = false;
+                                    if (root._activeDrag === createArea) root._activeDrag = null;
                                 }
-                                onCanceled: { pressY = -1; currentY = -1; dragging = false; }
+                                onCanceled: { pressY = -1; currentY = -1; dragging = false; if (root._activeDrag === createArea) root._activeDrag = null; }
                             }
                             Rectangle {
                                 objectName: "week-create-ghost"
@@ -2159,6 +2165,8 @@ Item {
                                 property real baseX: 0
                                 property real baseY: 0
                                 property bool didDrag: false
+                                property bool cancelled: false
+                                function cancel() { cancelled = true; didDrag = false; weEv.dragDx = 0; weEv.dragDy = 0; }
                                 // A click that did not drag, and Return on the
                                 // ClickArea below.
                                 function open() { root.eventClicked(weEv.modelData.id, weEv.modelData.occ); }
@@ -2167,6 +2175,7 @@ Item {
                                     grabX = mouse.x; grabY = mouse.y;
                                     baseX = weEv.x; baseY = weEv.y;
                                     didDrag = false;
+                                    cancelled = false;
                                     weEv.dragDx = 0; weEv.dragDy = 0;
                                 }
                                 onPositionChanged: (mouse) => {
@@ -2179,13 +2188,19 @@ Item {
                                     const wantY = pt.y - grabY - weMove.anchors.topMargin;
                                     const dx = wantX - baseX;
                                     const dy = wantY - baseY;
-                                    if (!didDrag && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) didDrag = true;
+                                    if (cancelled) return;
+                                    if (!didDrag && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
+                                        didDrag = true;
+                                        root._activeDrag = weMove;
+                                    }
                                     if (didDrag) {
                                         weEv.dragDx = dx;
                                         weEv.dragDy = dy;
                                     }
                                 }
                                 onReleased: {
+                                    if (root._activeDrag === weMove) root._activeDrag = null;
+                                    if (cancelled) { cancelled = false; return; }
                                     if (didDrag) {
                                         // A shift of the whole event by what
                                         // this piece moved: hours, plus whole
@@ -2206,7 +2221,7 @@ Item {
                                     weEv.dragDx = 0; weEv.dragDy = 0;
                                     didDrag = false;
                                 }
-                                onCanceled: { weEv.dragDx = 0; weEv.dragDy = 0; didDrag = false; }
+                                onCanceled: { weEv.dragDx = 0; weEv.dragDy = 0; didDrag = false; if (root._activeDrag === weMove) root._activeDrag = null; }
                             }
 
                             // Top resize handle.
@@ -2591,6 +2606,22 @@ Item {
                         : I18n.t("calendar.empty.hint").arg(AppController.shortcutText("task.schedule"))
         lineLink: searching
         onLineActivated: root.resetFilterRequested()
+    }
+
+    // A sweep to create or a meeting being moved: Esc puts everything back,
+    // as on the board, and Main calls cancelDrag() when a popup takes the
+    // keyboard mid-drag (IDIOT-TASKS-8).
+    property var _activeDrag: null
+    function cancelDrag() {
+        if (!root._activeDrag) return false;
+        root._activeDrag.cancel();
+        root._activeDrag = null;
+        return true;
+    }
+    Shortcut {
+        sequence: "Escape"
+        enabled: root.visible && root._activeDrag !== null
+        onActivated: root.cancelDrag()
     }
 
     // What a drag would set, at the pointer; Esc cancels it (APP-249).
